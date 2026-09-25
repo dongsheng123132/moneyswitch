@@ -1,0 +1,142 @@
+/* Money Keys page: list, create drawer, key-created view. docs/ux-audit.md A-8..A-12, B-1, D-6. */
+
+.keys-intro {
+  color: var(--text-faint);
+  font-size: 13px;
+  margin: -4px 0 14px;
+}
+
+.keys-revoke-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.keys-revoke-confirm span {
+  color: var(--text-faint);
+  max-width: 220px;
+}
+
+.sentence-form {
+  font-size: 15px;
+  line-height: 2.1;
+  padding: 14px 16px;
+  background: var(--panel-2);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  margin-bottom: 4px;
+}
+
+.sentence-input {
+  display: inline-block;
+  width: 5.5em;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: var(--text);
+  font-size: 14px;
+  text-align: right;
+  margin: 0 2px;
+}
+
+.sentence-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sentence-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin: 8px 0 16px;
+}
+
+.threshold-hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin: -6px 0 14px;
+}
+
+.preview-box {
+  background: var(--panel-2);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+}
+
+.preview-title {
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.preview-line {
+  margin: 2px 0;
+}
+
+.preview-note {
+  margin-top: 6px;
+}
+
+.model-chip {
+  border: none;
+  cursor: pointer;
+}
+
+.model-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.advanced-details {
+  margin: 4px 0 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.advanced-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.advanced-details[open] summary {
+  margin-bottom: 10px;
+}
+
+.field-error {
+  color: var(--red);
+  font-size: 11.5px;
+  margin-top: 4px;
+}
+
+.next-heading {
+  font-weight: 650;
+  font-size: 14px;
+  margin: 20px 0 10px;
+}
+
+.connect-source-note {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin: -4px 0 10px;
+}
+
+.tab-note {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin: 10px 0;
+}
+
+.employee-toggle {
+  margin-bottom: 10px;
+}

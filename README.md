@@ -34,14 +34,17 @@ Point an existing MoneySwitch server + MoneyKey at your local Claude Code /
 Codex:
 
 ```bash
-npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply
+npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch connect \n  --server http://127.0.0.1:4020 --key mk_live_xxx --apply
 ```
 
 This detects Claude Code / Codex on your machine and wires up the
-MoneySwitch MCP server for you (dry-run by default — drop `--apply` first
-to see what it would do). `npx moneyswitch status --server ... --key ...`
-checks a MoneyKey's remaining budget; `npx moneyswitch remove --apply`
-undoes it.
+MoneySwitch MCP server for you (without `--apply` it only prints the planned
+changes). The `moneyswitch` client CLI is not on the npm registry yet, so
+every MoneySwitch server serves the same package at `/dl/moneyswitch.tgz`
+(built by `pnpm build`); the Dashboard's *Connect agent* page and the
+"send to employee" message generate this command with the right address.
+`… moneyswitch status --server … --key …` checks a MoneyKey's remaining
+budget; `… moneyswitch remove --apply` undoes it.
 
 To self-host the server:
 
@@ -50,6 +53,10 @@ pnpm install
 pnpm build
 pnpm demo:local
 ```
+
+On first start it prints a one-time setup link (`http://127.0.0.1:4020/setup#ms_setup_…`)
+that signs you in and walks you through wallet → channel → first key →
+connecting an agent.
 
 `pnpm demo:local` starts a mock x402 facilitator, a demo x402 seller, and
 the MoneySwitch server (with the Dashboard UI) together, entirely offline —

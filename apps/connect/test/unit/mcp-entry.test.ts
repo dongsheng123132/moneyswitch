@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolveMcpCommand } from "../../src/lib/mcp-entry.js";
+import { resolveMcpCommand, resolvePortableMcpCommand, isNpmRegistryFallback } from "../../src/lib/mcp-entry.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -53,5 +53,29 @@ describe("resolveMcpCommand (portable vs in-repo MCP launch command)", () => {
     const res = spawnSync(process.execPath, [fakeFile], { encoding: "utf8", env: envWithoutNodePath });
     expect(res.status, res.stderr).toBe(0);
     expect(JSON.parse(res.stdout.trim())).toEqual({ command: "npx", args: ["-y", "moneyswitch", "mcp"] });
+  });
+});
+
+describe("resolvePortableMcpCommand (server-hosted CLI tarball)", () => {
+  it("uses the server's /dl/moneyswitch.tgz when it answers HEAD 200", async () => {
+    const calls: Array<[string, RequestInit | undefined]> = [];
+    const fakeFetch = async (url: string, init?: RequestInit) => {
+      calls.push([url, init]);
+      return new Response(null, { status: 200 });
+    };
+    const cmd = await resolvePortableMcpCommand("http://10.0.0.5:4020/", fakeFetch);
+    expect(calls).toEqual([["http://10.0.0.5:4020/dl/moneyswitch.tgz", { method: "HEAD" }]]);
+    expect(cmd).toEqual({ command: "npx", args: ["-y", "--package=http://10.0.0.5:4020/dl/moneyswitch.tgz", "moneyswitch", "mcp"] });
+    expect(isNpmRegistryFallback(cmd)).toBe(false);
+  });
+
+  it("falls back to the npm registry name on 404 or network error", async () => {
+    const notFound = await resolvePortableMcpCommand("http://x:1", async () => new Response(null, { status: 404 }));
+    expect(notFound).toEqual({ command: "npx", args: ["-y", "moneyswitch", "mcp"] });
+    expect(isNpmRegistryFallback(notFound)).toBe(true);
+    const down = await resolvePortableMcpCommand("http://x:1", async () => {
+      throw new Error("ECONNREFUSED");
+    });
+    expect(isNpmRegistryFallback(down)).toBe(true);
   });
 });

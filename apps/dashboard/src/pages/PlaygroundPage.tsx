@@ -1,14 +1,21 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { usePolling } from "../usePolling";
 import { listKeys } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
 import ProgressBar from "../components/ProgressBar";
 import Avatar from "../components/Avatar";
 import PlaygroundChat from "../components/PlaygroundChat";
+import Callout from "../components/Callout";
+import Term from "../components/Term";
+import { useT } from "../i18n";
+import { playgroundStrings } from "../i18n/strings/playground";
+import "../styles/playground.css";
 
 const PLAYGROUND_KEY_STORAGE = "moneyswitch_playground_key";
 
 export default function PlaygroundPage() {
+  const t = useT(playgroundStrings);
   const [apiKey, setApiKey] = useState<string>(() => sessionStorage.getItem(PLAYGROUND_KEY_STORAGE) ?? "");
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -30,38 +37,58 @@ export default function PlaygroundPage() {
   const ratio = ratioMicros(usedMicros, limitMicros);
 
   return (
-    <PlaygroundChat
-      apiKey={apiKey}
-      onApiKeyChange={setApiKey}
-      approvalsLinkTo="/approvals"
-      onMessageSettled={() => setRefreshTick((t) => t + 1)}
-      rightPanel={
-        <div className="card">
-          <div className="card-header">
-            <h3>Key status</h3>
-          </div>
-          {!matchedKey ? (
-            <div className="empty-state">Paste a known Money Key above to see live budget.</div>
-          ) : (
-            <div>
-              <div className="agent-row" style={{ marginBottom: 12 }}>
-                <Avatar name={matchedKey.name} />
-                <div>
-                  <div className="agent-name">{matchedKey.name}</div>
-                  <div className="stat-sub" style={{ marginTop: 0 }}>
-                    {matchedKey.key_prefix}••••
+    <div>
+      {!apiKey.trim() && (
+        <Callout tone="info" title={t("emptyKeyTitle")} action={<Link to="/keys?new=1" className="btn small">{t("goToKeys")}</Link>}>
+          {t("emptyKeyBody")}
+        </Callout>
+      )}
+      <PlaygroundChat
+        apiKey={apiKey}
+        onApiKeyChange={setApiKey}
+        audience="admin"
+        approvalsLinkTo="/approvals"
+        onMessageSettled={() => setRefreshTick((tk) => tk + 1)}
+        rightPanel={
+          <div className="card">
+            <div className="card-header">
+              <h3>{t("keyStatusTitle")}</h3>
+            </div>
+            {!matchedKey ? (
+              <div className="empty-state">{t("pasteKnownKey")}</div>
+            ) : (
+              <div>
+                <div className="agent-row">
+                  <Avatar name={matchedKey.name} />
+                  <div>
+                    <div className="agent-name">{matchedKey.name}</div>
+                    <div className="stat-sub" style={{ marginTop: 0 }}>
+                      {matchedKey.key_prefix}••••
+                    </div>
                   </div>
                 </div>
+                <div className="stat-label">
+                  <Term k="dailyBudget">{t("todayUsedLimit")}</Term>
+                </div>
+                <div className="num" style={{ fontSize: 13, marginBottom: 4 }}>
+                  {formatUsdc(matchedKey.used_today, { maxDecimals: 4 })} / {formatUsdc(matchedKey.daily_budget, { maxDecimals: 4 })} USDC
+                </div>
+                <ProgressBar ratio={ratio} />
+                <div className="stat-label" style={{ marginTop: 14 }}>
+                  <Term k="perRequestLimit">{t("perRequestLimit")}</Term>
+                </div>
+                <div className="num">{formatUsdc(matchedKey.per_request_limit, { maxDecimals: 4 })} USDC</div>
+                <div className="stat-label" style={{ marginTop: 14 }}>
+                  <Term k="approvalThreshold">{t("approvalThresholdLabel")}</Term>
+                </div>
+                <div className="num">
+                  {matchedKey.approval_threshold ? `${formatUsdc(matchedKey.approval_threshold, { maxDecimals: 4 })} USDC` : t("approvalThresholdNone")}
+                </div>
               </div>
-              <div className="stat-label">Today used / daily limit</div>
-              <div className="num" style={{ fontSize: 13, marginBottom: 4 }}>
-                {formatUsdc(matchedKey.used_today, { maxDecimals: 4 })} / {formatUsdc(matchedKey.daily_budget, { maxDecimals: 4 })} USDC
-              </div>
-              <ProgressBar ratio={ratio} />
-            </div>
-          )}
-        </div>
-      }
-    />
+            )}
+          </div>
+        }
+      />
+    </div>
   );
 }

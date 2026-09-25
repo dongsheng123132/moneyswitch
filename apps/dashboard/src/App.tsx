@@ -1,6 +1,9 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
+import { LangProvider } from "./i18n";
+import SetupPage from "./pages/SetupPage";
+import "./styles/shell.css";
 import Layout from "./Layout";
 import EmployeeLayout from "./EmployeeLayout";
 import LoginPage from "./pages/LoginPage";
@@ -35,6 +38,10 @@ function Routed() {
 
   return (
     <Routes>
+      {/* First-run wizard (docs/ux-audit.md A-1/A-2). Not behind RequireAdmin: it
+          handles the one-time /setup#ms_setup_… claim itself, and redirects
+          to /login when there is neither a setup token nor an admin session. */}
+      <Route path="/setup" element={<SetupPage />} />
       <Route path="/login" element={loggedInPath ? <Navigate to={loggedInPath} replace /> : <LoginPage />} />
       <Route
         path="/"
@@ -78,8 +85,10 @@ function Routed() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Routed />
-    </AuthProvider>
+    <LangProvider>
+      <AuthProvider>
+        <Routed />
+      </AuthProvider>
+    </LangProvider>
   );
 }

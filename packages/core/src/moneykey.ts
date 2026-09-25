@@ -41,3 +41,10 @@ export function verifySecretAgainstHash(candidate: string, storedHashHex: string
   if (candidateHash.length !== storedHash.length) return false;
   return timingSafeEqual(candidateHash, storedHash);
 }
+
+export const SETUP_TOKEN_PREFIX = "ms_setup_";
+
+/** Generates a one-time first-run setup token: `ms_setup_` + 32 chars of base62 randomness. */
+export function generateSetupToken(): string {
+  return SETUP_TOKEN_PREFIX + randomBase62(32);
+}

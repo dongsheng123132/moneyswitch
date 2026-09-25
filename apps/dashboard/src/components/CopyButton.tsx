@@ -1,7 +1,17 @@
 import React, { useState } from "react";
+import { Copy, Check } from "lucide-react";
+import { useT } from "../i18n";
+import { common } from "../i18n/strings/common";
 
-export default function CopyButton({ text, className = "" }: { text: string; className?: string }) {
+/**
+ * Copy-to-clipboard button. `className="icon-only"` renders a compact icon
+ * button (still labelled for screen readers). Feedback text is localized and
+ * announced via aria-live.
+ */
+export default function CopyButton({ text, className = "", label }: { text: string; className?: string; label?: string }) {
+  const t = useT(common);
   const [copied, setCopied] = useState(false);
+  const iconOnly = className.split(" ").includes("icon-only");
 
   async function copy() {
     try {
@@ -19,9 +29,17 @@ export default function CopyButton({ text, className = "" }: { text: string; cla
     setTimeout(() => setCopied(false), 1500);
   }
 
+  const shown = copied ? t("copied") : label ?? t("copy");
   return (
-    <button type="button" className={`btn small secondary copy-btn ${className}`} onClick={copy}>
-      {copied ? "Copied" : "Copy"}
+    <button
+      type="button"
+      className={`btn small secondary copy-btn ${copied ? "is-copied" : ""} ${className}`}
+      onClick={copy}
+      aria-label={iconOnly ? shown : undefined}
+      title={iconOnly ? shown : undefined}
+    >
+      {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+      {!iconOnly && <span aria-live="polite">{shown}</span>}
     </button>
   );
 }

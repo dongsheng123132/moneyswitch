@@ -291,3 +291,51 @@ describe("GET /v1/admin/channels/probe-models (SPEC-v0.2 addendum: Dashboard 'pu
     expect(res.status).toBe(403);
   });
 });
+
+describe("Gateway approval round-trip (docs/ux-audit.md B-3)", () => {
+  async function chat(key: string, extra: Record<string, unknown> = {}) {
+    const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model: DEMO_MODEL, messages: [{ role: "user", content: "needs approval" }], ...extra }),
+    });
+    return { status: res.status, body: await res.json() };
+  }
+
+  it("APPROVAL_REQUIRED -> admin approves -> re-send with approval_id succeeds exactly once", async () => {
+    await createChannel();
+    const created = await createKey({ approval_threshold: "0.005" });
+
+    const first = await chat(created.key);
+    expect(first.status).toBe(409);
+    expect(first.body.error.code).toBe("APPROVAL_REQUIRED");
+    const approvalId = first.body.error.approval_id as string;
+    expect(approvalId).toBeTruthy();
+
+    const approve = await fetch(`http://127.0.0.1:${SERVER_PORT}/v1/approvals/${approvalId}/approve`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(approve.status).toBe(200);
+
+    const retry = await chat(created.key, { approval_id: approvalId });
+    expect(retry.status).toBe(200);
+    expect(retry.body.moneyswitch.cost).toBe("0.01");
+    expect(String(retry.body.moneyswitch.tx_hash)).toMatch(/^0xmock/);
+    // approval_id is MoneySwitch's own field and must not leak to the upstream (echo seller reflects the prompt only)
+    expect(JSON.stringify(retry.body.choices)).not.toContain(approvalId);
+
+    const replay = await chat(created.key, { approval_id: approvalId });
+    expect(replay.status).toBe(409);
+    expect(replay.body.error.code).toBe("APPROVAL_INVALID");
+  });
+
+  it("re-sending with a still-pending approval_id is refused with 409, not a 500", async () => {
+    await createChannel();
+    const created = await createKey({ approval_threshold: "0.005" });
+    const first = await chat(created.key);
+    const pending = await chat(created.key, { approval_id: first.body.error.approval_id });
+    expect(pending.status).toBe(409);
+    expect(pending.body.error.code).toBe("APPROVAL_INVALID");
+  });
+});

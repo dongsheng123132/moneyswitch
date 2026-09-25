@@ -3,7 +3,7 @@ import { fetchStatus, type FetchLike } from "./status.js";
 import { detectClaude, detectCodex, codexConfigPath } from "./detect.js";
 import { applyClaude, removeClaude } from "./claude.js";
 import { applyCodexConfig, removeCodexConfig } from "./codex.js";
-import { resolveMcpCommand, type McpCommand } from "./mcp-entry.js";
+import { resolveMcpCommand, resolvePortableMcpCommand, isNpmRegistryFallback, type McpCommand } from "./mcp-entry.js";
 import { RealCommandRunner, type CommandRunner } from "./runner.js";
 
 export interface CliDeps {
@@ -59,7 +59,7 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
     return 0;
   }
 
-  const mcpCommand = deps.mcpCommand ?? resolveMcpCommand();
+  let mcpCommand = deps.mcpCommand ?? resolveMcpCommand();
 
   if (parsed.command === "status") {
     const server = parsed.server!;
@@ -136,6 +136,9 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<number
     return 1;
   }
   const statusBody = statusResult.body as Record<string, unknown>;
+  if (!deps.mcpCommand && isNpmRegistryFallback(mcpCommand)) {
+    mcpCommand = await resolvePortableMcpCommand(server, fetchImpl);
+  }
   if (!jsonMode) {
     stdout(`Key: ${statusBody.key_name ?? "(unnamed)"} (${statusBody.key_prefix ?? maskKey(key)})`);
     stdout(`Remaining today: ${statusBody.remaining_today} ${statusBody.currency}`);

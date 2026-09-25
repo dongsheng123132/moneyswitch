@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MoneySwitch · Monad Metropolis 深圳 Hacker House</title>
+<link rel="stylesheet" href="deck.css">
+</head>
+<body>
+<div id="progress"></div>
+<div id="stage">
+
+<!-- ============================ 01 封面 ============================ -->
+<section class="slide s-cover" data-title="封面">
+  <div class="halo"></div>
+  <div class="hdr a fade" style="--d:200ms"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>MONAD METROPOLIS · 深圳 HACKER HOUSE</span></div>
+  <div class="kicker a" style="--d:150ms">API keys for money</div>
+  <h1 class="title grad a blur" style="--d:300ms">MoneySwitch</h1>
+  <div class="tag-en a" style="--d:750ms">Give your AI an API key for money.</div>
+  <div class="tag-zh a" style="--d:950ms">让 AI 像用 API Key 一样花钱——而不是把钱包交给 AI</div>
+  <div class="chips a" style="--d:1150ms">
+    <span class="chip g"><span class="dot"></span>USDC</span>
+    <span class="chip p">Monad</span>
+    <span class="chip p">x402</span>
+    <span class="chip">Monad Metropolis 2026 · 深圳 · 2026.09.26</span>
+  </div>
+  <div class="mkcard a" style="--d:500ms;width:560px;right:110px;top:360px">
+    <div class="shine"></div>
+    <div class="row1"><span>MONEYKEY</span><span class="chipgold"></span></div>
+    <div class="num">mk_live_•••• ••••</div>
+    <div class="meta"><div>今日额度<b>$0.50</b></div><div>单笔上限<b>$0.20</b></div><div>状态<b class="lime">可撤销</b></div></div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · API keys for money</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>大家好，我们是 MoneySwitch。一句话：给你的 AI 一把花钱的 API Key。</p>
+    <p>让 AI 像用 API Key 一样花 USDC，而不是把钱包私钥交给它。底层是 x402 协议，结算在 Monad 上。</p>
+  </aside>
+</section>
+
+<!-- ============================ 02 问题 ============================ -->
+<section class="slide s-problem" data-title="问题">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>01 · 问题</span></div>
+  <div class="kicker a">问题</div>
+  <h2 class="a" style="--d:120ms">AI 已经能付钱了，<br>但没人敢<span class="red">把钱包交给它</span>。</h2>
+  <div class="term danger a" id="pkterm" style="--d:350ms">
+    <div class="bar"><i></i><i></i><i></i><span>.env · 今天的 x402 客户端示例</span></div>
+    <pre class="type" data-delay="800" data-speed="55" data-after="#pkterm"><span class="c-comment"># 常见写法：私钥直接塞给程序</span>
+<span class="pk">PRIVATE_KEY=0x3f9a…</span></pre>
+  </div>
+  <div class="wallet a scale" id="wallet" style="--d:600ms"><svg width="230" height="230" viewBox="0 0 24 24" fill="none" stroke="#ff5c7a" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H18v3"/><rect x="3" y="7.5" width="18" height="12" rx="2.5"/><path d="M21 11.5h-4a2 2 0 0 0 0 4h4"/><circle cx="17.2" cy="13.5" r=".6" fill="#ff5c7a"/></svg><span>钱包私钥 = 全部余额</span></div>
+  <div class="problems">
+    <div class="card a" style="--d:1500ms"><div class="n">01</div><h3>x402 已是现实</h3><p>Agent 按次付 USDC：<br>HTTP 402 → 签名 → 结算。</p></div>
+    <div class="card hot a" style="--d:1650ms"><div class="n">02</div><h3>一次注入，钱包转空</h3><p>私钥在程序里，一次 Prompt Injection 就够了。</p></div>
+    <div class="card a" style="--d:1800ms"><div class="n">03</div><h3>规模没有答案</h3><p>10 个、100 个 Agent 的钱怎么管？</p></div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>x402 已经让 Agent 按次付 USDC 成为现实：HTTP 402 报价、签名、结算。</p>
+    <p>但今天的客户端示例，普遍是把 PRIVATE_KEY 直接塞给程序——一次 Prompt Injection 就能把钱包转空。</p>
+    <p>再往前想一步：10 个、100 个 Agent 的钱怎么管？今天没有答案。</p>
+  </aside>
+</section>
+
+<!-- ============================ 03 洞察 ============================ -->
+<section class="slide s-insight" data-title="洞察">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>02 · 洞察</span></div>
+  <div class="kicker a">洞察</div>
+  <div class="quote a blur" style="--d:150ms">AI 已经把用户教育好了——<br>不是钱包，是 <span class="em">API Key</span>。</div>
+  <div class="chain">
+    <span class="k" style="--d:900ms">Key</span><span class="arr a fade" style="--d:950ms">→</span>
+    <span class="k" style="--d:1050ms">Quota</span><span class="arr a fade" style="--d:1100ms">→</span>
+    <span class="k" style="--d:1200ms">Used</span><span class="arr a fade" style="--d:1250ms">→</span>
+    <span class="k" style="--d:1350ms">Remaining</span><span class="arr a fade" style="--d:1400ms">→</span>
+    <span class="k" style="--d:1500ms">Expire</span><span class="arr a fade" style="--d:1550ms">→</span>
+    <span class="k" style="--d:1650ms">Revoke</span><span class="arr a fade" style="--d:1700ms">→</span>
+    <span class="k" style="--d:1800ms">Logs</span>
+  </div>
+  <p class="lead a" style="--d:2100ms">NewAPI / OpenRouter 把这套管理 token 的方式变成了常识。<br><span style="color:#fff">我们把它搬到真钱上。</span></p>
+  <div class="flip a fade" style="--d:600ms">
+    <div class="inner">
+      <div class="face front"><small>API KEY · 管 token</small>sk-••••••••</div>
+      <div class="face back"><small>MONEYKEY · 管 USDC</small>mk_live_••••••••</div>
+    </div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>我们的洞察是：AI 行业已经把用户教育好了——大家会管的不是钱包，是 API Key。</p>
+    <p>开 Key、给额度、看用量、看剩余、过期、撤销、查日志，NewAPI 和 OpenRouter 让这套流程成了常识。</p>
+    <p>MoneySwitch 做的事很简单：把这套管 token 的方式原样搬到真钱上。</p>
+  </aside>
+</section>
+
+<!-- ============================ 04 方案 ============================ -->
+<section class="slide s-solution" data-title="方案 MoneyKey">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>03 · 方案</span></div>
+  <div class="kicker a">方案</div>
+  <h2 class="a" style="--d:120ms"><span class="em">MoneyKey</span> <span class="neq">≠</span> 钱，<span class="neq">≠</span> 私钥</h2>
+  <p class="lead a" style="--d:300ms">钱在金库，AI 只拿一段可控的花钱权限。</p>
+  <div class="cols3">
+    <div class="card a" style="--d:550ms">
+      <div class="ic"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="13" cy="12" r="3.2"/><path d="M13 8.8V7.5M13 16.5v-1.3M16.2 12h1.3M3 9h2M3 15h2"/></svg></div>
+      <div class="n">01 · 金库</div>
+      <h3>钱始终是 USDC</h3>
+      <p>放在你自己的低余额金库里，私钥从不离开 MoneySwitch。</p>
+    </div>
+    <div class="card mid a" style="--d:750ms">
+      <div class="ic"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2 2M14 9l2 2"/></svg></div>
+      <div class="n">02 · 授权</div>
+      <h3>AI 只拿 <span class="mono lime">mk_live_…</span></h3>
+      <p>一段有额度、可撤销的花钱权限，形状和它早已会用的 API Key 一样。</p>
+    </div>
+    <div class="card a" style="--d:950ms">
+      <div class="ic"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+      <div class="n">03 · 审计</div>
+      <h3>每一分钱都可见</h3>
+      <p>像 token 用量一样可查、可审计：谁、何时、付给谁、多少。</p>
+    </div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>我们的方案叫 MoneyKey：它不是钱，也不是私钥。</p>
+    <p>钱始终是 USDC，放在你自己的低余额金库里；AI 拿到的只是一串 mk_live 开头的 Key——有额度、可撤销。</p>
+    <p>每花一分钱，都像 token 用量一样可见、可审计。</p>
+  </aside>
+</section>
+
+<!-- ============================ 05 支付链路 ============================ -->
+<section class="slide s-flow" data-title="支付链路">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>04 · 怎么工作</span></div>
+  <div class="kicker a">怎么工作</div>
+  <h2 class="a" style="--d:120ms">签名之前，<span class="em">先过策略</span>。</h2>
+  <div class="counter a fade" style="--d:400ms">用量<b class="count" data-to="0.01" data-dec="2" data-pre="$" data-delay="3200" data-dur="600">$0.01</b></div>
+  <div class="flow">
+    <div class="node a" style="--d:400ms"><div class="st">STEP 01</div><h4>Agent 调用</h4><p>带着 MoneyKey 调用付费接口</p><span class="tagc">mk_live_…</span></div>
+    <div class="link"><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path class="draw" style="--d:700ms" pathLength="1" d="M2 20 H98" stroke="#836ef9" stroke-width="2.5" fill="none" vector-effect="non-scaling-stroke"/></svg><span class="pkt" style="--d:0ms"></span></div>
+    <div class="node a" style="--d:800ms"><div class="st">STEP 02</div><h4>402 报价</h4><p>卖方返回 HTTP 402 与价格</p><span class="tagc">HTTP 402</span></div>
+    <div class="link"><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path class="draw" style="--d:1100ms" pathLength="1" d="M2 20 H98" stroke="#836ef9" stroke-width="2.5" fill="none" vector-effect="non-scaling-stroke"/></svg><span class="pkt" style="--d:400ms"></span></div>
+    <div class="node policy a scale" style="--d:1200ms"><div class="st">STEP 03 · 签名之前</div><h4>策略引擎</h4><p style="margin-top:6px">MoneySwitch 逐项检查</p>
+      <ul class="checks">
+        <li style="--d:1700ms"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>单笔 / 日额度</li>
+        <li style="--d:1950ms"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>服务白名单</li>
+        <li style="--d:2200ms"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>审批阈值</li>
+      </ul>
+    </div>
+    <div class="link"><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path class="draw" style="--d:2400ms" pathLength="1" d="M2 20 H98" stroke="#b4ff4a" stroke-width="2.5" fill="none" vector-effect="non-scaling-stroke"/></svg><span class="pkt" style="--d:1400ms"></span></div>
+    <div class="node a" style="--d:2500ms"><div class="st">STEP 04</div><h4>签名 + 结算</h4><p>本地签 USDC 授权，facilitator 在 Monad 结算</p><span class="tagc">EIP-3009</span></div>
+    <div class="link"><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path class="draw" style="--d:2800ms" pathLength="1" d="M2 20 H98" stroke="#b4ff4a" stroke-width="2.5" fill="none" vector-effect="non-scaling-stroke"/></svg><span class="pkt" style="--d:1800ms"></span></div>
+    <div class="node a" style="--d:2900ms"><div class="st">STEP 05</div><h4>返回 + 记账</h4><p>返回内容，用量实时入账</p><span class="tagc" style="color:#b4ff4a">+$0.01</span></div>
+  </div>
+  <div class="basebar a" style="--d:3300ms"><span>底层全用现成的：</span><span class="chip p">x402 官方 SDK</span><span class="chip p">Monad</span><span class="chip p">Circle USDC</span><span class="sep">·</span><span style="color:#fff">我们不发币、不造协议。</span></div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>链路是这样的：Agent 用 MoneyKey 调用付费接口，卖方返回 HTTP 402 报价。</p>
+    <p>关键在第三步——在任何签名发生之前，MoneySwitch 的策略引擎先查额度、白名单和审批。</p>
+    <p>通过后本地签 USDC 授权，facilitator 在 Monad 上结算，内容返回，用量加一分钱。私钥从头到尾不离开 MoneySwitch。</p>
+    <p>底层全是现成的：x402 官方 SDK、Monad、Circle USDC。我们不发币，也不造协议。</p>
+  </aside>
+</section>
+
+<!-- ============================ 06 OpenAI / NewAPI ============================ -->
+<section class="slide s-compat" data-title="兼容 OpenAI / NewAPI">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>05 · OpenAI / NewAPI 兼容</span></div>
+  <div class="kicker a">OpenAI / NewAPI 兼容</div>
+  <h2 class="a" style="--d:120ms"><span class="em">MoneyKey</span> 直接当 OpenAI API Key 用</h2>
+  <div class="compat">
+    <div class="diff">
+      <div class="row a left" style="--d:350ms"><small>BASE URL</small><div class="old">api.openai.com</div><div class="new"><span class="lime">127.0.0.1:4020/v1</span></div></div>
+      <div class="row a left" style="--d:500ms"><small>API KEY</small><div class="old">sk-…</div><div class="new"><span class="lime">mk_live_…</span></div></div>
+      <div class="row last a left" style="--d:650ms"><small>计费</small><div class="old" style="font-family:var(--sans)">按 token 扣虚拟额度</div><div class="new">每次调用在 Monad 上真实结算 USDC</div></div>
+      <div class="a" style="--d:850ms">
+        <div style="font-size:21px;color:var(--faint);letter-spacing:.14em;margin:10px 0 12px">零改造接入</div>
+        <div class="clients"><span class="chip">openai SDK</span><span class="chip">Cherry Studio</span><span class="chip">Open WebUI</span><span class="chip">Claude Code (MCP)</span><span class="chip p">NewAPI 上游渠道</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="codewin a right" style="--d:400ms">
+        <div class="bar"><i></i><i></i><i></i><span>chat.mjs · openai SDK</span></div>
+<pre class="type" data-delay="900" data-speed="22"><span class="t-k">import</span> OpenAI <span class="t-k">from</span> <span class="t-s">"openai"</span>;
+<span class="t-k">const</span> client = <span class="t-k">new</span> <span class="t-p">OpenAI</span>({
+  baseURL: <span class="t-s">"http://127.0.0.1:4020/v1"</span>,
+  apiKey:  <span class="t-s">"mk_live_…"</span>,
+});</pre>
+      </div>
+      <div class="chat">
+        <div class="bubble me a right" style="--d:4200ms">用一句话解释什么是 x402 协议</div>
+        <div class="bubble ai a left" style="--d:4700ms">x402 是一种基于 HTTP 402 的开放链上支付协议……</div>
+        <div class="receipt a" style="--d:5200ms"><span class="chip g">0.01 USDC</span><span class="chip p">tx 0xd3697c…80ad</span><span class="chip">326 tokens</span><span>已上链核对</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="ftr"><span>真实对话付款 · openai SDK · Monad 测试网</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>MoneyKey 直接当 OpenAI API Key 用：Base URL 换成 MoneySwitch，Key 填 mk_live，其他都不用改。</p>
+    <p>右边是一次真实调用：用 openai SDK 问“用一句话解释什么是 x402 协议”，这一条付了 0.01 USDC，326 个 token，tx 0xd3697c…80ad，已经上链核对。</p>
+    <p>Cherry Studio、Open WebUI、Claude Code 走 MCP 都能零改造接入，NewAPI 还可以把它当上游渠道。</p>
+  </aside>
+</section>
+
+<!-- ============================ 07 护栏 ============================ -->
+<section class="slide s-guard" data-title="护栏">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>06 · 护栏</span></div>
+  <div class="kicker a">护栏</div>
+  <h2 class="a" style="--d:120ms">签名之前先拦，<span class="em">六道防线</span>。</h2>
+  <div class="guards">
+    <div class="card first a" style="--d:350ms"><div class="gi"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M17 7.5c0-1.7-2.2-3-5-3s-5 1.3-5 3 2.2 2.6 5 3 5 1.3 5 3-2.2 3-5 3-5-1.3-5-3"/></svg></div><div><h4>单笔上限</h4><p>超出在签名前直接拒绝</p></div></div>
+    <div class="card a" style="--d:470ms"><div class="gi"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 4"/></svg></div><div><h4>日 / 总预算</h4><p>并发下原子预留</p></div></div>
+    <div class="card a" style="--d:590ms"><div class="gi"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6l1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/></svg></div><div><h4>服务白名单</h4><p>只允许名单内的服务</p></div></div>
+    <div class="card a" style="--d:710ms"><div class="gi"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7 1.6 0 3 .5 4.2 1.4M15 18l2 2 4-4"/></svg></div><div><h4>人工审批阈值</h4><p>超线需人工一键批准</p></div></div>
+    <div class="card a" style="--d:830ms"><div class="gi"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></div><div><h4>一键撤销</h4><p>Revoke 立即生效</p></div></div>
+    <div class="card a" style="--d:950ms"><div class="gi"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div><h4>防 SSRF / 重定向</h4><p>防止付款被劫持</p></div></div>
+  </div>
+  <div class="inject a" style="--d:1300ms">
+    <p>Prompt Injection 让它转 <span class="red">$500</span>？<br>单笔上限 <span class="lime">$0.20</span>，签名都不会发生。</p>
+    <div class="stamp a" style="--d:1900ms">BLOCKED · PER_REQUEST_LIMIT_EXCEEDED</div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>护栏一共六道：单笔上限、日和总预算、服务白名单、人工审批阈值、一键撤销、防 SSRF 和重定向劫持。</p>
+    <p>所有检查都在签名之前完成，预算在并发下原子预留，不会超支。</p>
+    <p>所以就算网页里的 Prompt Injection 让它转 500 美元，单笔上限只有 0.2 美元——签名根本不会发生。</p>
+  </aside>
+</section>
+
+<!-- ============================ 08 四个角色 ============================ -->
+<section class="slide s-roles" data-title="四个角色">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>07 · 谁在用</span></div>
+  <div class="kicker a">谁在用</div>
+  <h2 class="a" style="--d:120ms;font-size:72px">四个角色，<span class="em">围着 MoneyKey</span></h2>
+  <div class="roles" style="height:640px;margin-top:30px">
+    <svg class="wires" viewBox="0 0 1664 640" preserveAspectRatio="none">
+      <path class="draw" style="--d:900ms" pathLength="1" d="M520 102 C 600 102, 560 236, 604 246" stroke="#836ef9" stroke-width="2.5" fill="none"/>
+      <path class="draw" style="--d:1000ms" pathLength="1" d="M1144 102 C 1064 102, 1104 236, 1060 246" stroke="#836ef9" stroke-width="2.5" fill="none"/>
+      <path class="draw" style="--d:1100ms" pathLength="1" d="M520 458 C 600 458, 560 352, 604 342" stroke="#b4ff4a" stroke-width="2.5" fill="none"/>
+      <path class="draw" style="--d:1200ms" pathLength="1" d="M1144 458 C 1064 458, 1104 352, 1060 342" stroke="#b4ff4a" stroke-width="2.5" fill="none"/>
+    </svg>
+    <div class="hub a" style="--d:300ms;top:46%">
+      <h3>MoneySwitch</h3>
+      <p>一个 USDC 资金池<br>分给每个员工的每个 Agent</p>
+    </div>
+    <div class="role r1 card a left" style="--d:600ms;top:20px">
+      <div class="rt"><span class="av"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span><h4>管理员</h4><span class="tok">ms_admin_</span></div>
+      <p>控制台：钱包 / 渠道 / 发 Key / 审批</p>
+    </div>
+    <div class="role r2 card a right" style="--d:700ms;top:20px">
+      <div class="rt"><span class="av"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#a896ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span><h4>员工</h4><span class="tok">mk_live_</span></div>
+      <p>「我的额度」：额度 / 对话 / 流水</p>
+    </div>
+    <div class="role r3 card a left" style="--d:800ms;bottom:100px">
+      <div class="rt"><span class="av"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 7V4M9 12h.01M15 12h.01M9 16h6"/></svg></span><h4>Agent</h4><span class="tok">MCP / OpenAI</span></div>
+      <p>Claude Code / Codex 等，按策略花钱</p>
+    </div>
+    <div class="role r4 card a right" style="--d:900ms;bottom:100px">
+      <div class="rt"><span class="av"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9h18v11H3zM9 20v-6h6v6"/></svg></span><h4>卖方</h4><span class="tok">x402</span></div>
+      <p>无需注册，挂上 x402 直接收 USDC</p>
+    </div>
+    <div class="a" style="--d:1500ms;position:absolute;left:0;right:0;bottom:0;text-align:center">
+      <div class="cli"><span class="ps">$</span><span class="type" data-delay="1900" data-speed="30">npx moneyswitch connect --server … --key mk_live_… --apply</span></div>
+    </div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>围着 MoneyKey 有四个角色：管理员拿 ms_admin 在控制台管钱包、渠道、发 Key 和审批。</p>
+    <p>员工拿 mk_live，在“我的额度”里看额度、对话和流水；Agent 通过 MCP 或 OpenAI 兼容接口花钱；卖方不用注册，挂上 x402 就能收 USDC。</p>
+    <p>公司一个 USDC 资金池，给每个员工的每个 Agent 发一把 Key；员工一条命令就能把本机的 Claude Code、Codex 接上。</p>
+  </aside>
+</section>
+
+<!-- ============================ 09 真实数据 ============================ -->
+<section class="slide s-data" data-title="真实数据">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>08 · 真实数据</span></div>
+  <div class="kicker a">Monad 测试网实测 · 截至 2026-09-26</div>
+  <h2 class="a" style="--d:120ms">真实数据，<span class="em">全部链上可查</span>。</h2>
+  <div class="stats">
+    <div class="stat card hero a" style="--d:350ms">
+      <div class="v count" data-to="11" data-delay="600">11</div>
+      <div class="u">笔已结算</div>
+      <div class="c">真实 x402 付款<br><span class="lime">0 笔 mock</span></div>
+      <div class="foot"><span class="chip g" style="font-size:19px">链上可查</span></div>
+    </div>
+    <div class="stat card a" style="--d:500ms">
+      <div class="vs"><div class="v sm">$0.01</div></div>
+      <div class="u">每次调用收费</div>
+      <div class="c">上游推理成本仅 <b class="lime count" data-to="0.000126" data-dec="6" data-pre="$" data-delay="900" data-dur="1400">$0.000126</b></div>
+      <div class="bars">
+        <div class="b"><i style="--d:900ms;width:100%;background:linear-gradient(90deg,#836ef9,#a896ff)"></i></div>
+        <div class="b"><i style="--d:1100ms;width:1.26%;min-width:4px;background:#b4ff4a"></i></div>
+      </div>
+      <div class="foot"><span class="chip p" style="font-size:19px">按次收 USDC 成立</span></div>
+    </div>
+    <div class="stat card a" style="--d:650ms">
+      <div class="v">0</div>
+      <div class="u">MON gas</div>
+      <div class="c">Agent 金库不需要 gas<br>facilitator 代付</div>
+      <div class="foot"><span class="chip p" style="font-size:19px">EIP-3009</span></div>
+    </div>
+    <div class="stat card a" style="--d:800ms">
+      <div class="v count" data-to="92" data-delay="1000">92</div>
+      <div class="u">个自动化测试</div>
+      <div class="c">72 单元 + 20 端到端</div>
+      <div class="foot"><span class="chip g" style="font-size:19px">全绿</span></div>
+    </div>
+  </div>
+  <div class="txline a" style="--d:1300ms"><span>首笔 tx</span><span class="chip g mono">0x1c83a4…4d4d</span><span>·</span><span>网络</span><span class="chip mono">eip155:10143</span><span>·</span><span>全部链上可查</span></div>
+  <div class="ftr"><span>数据来源：MoneySwitch 数据库 settled=11 / mock=0 · 链上核对</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>这些都是 Monad 测试网上的实测数字：11 笔真实 x402 付款已结算，0 笔 mock，全部链上可查，首笔 tx 是 0x1c83a4…4d4d。</p>
+    <p>每次调用收 0.01 美元，而上游推理成本只有 0.000126 美元——AI 服务用 USDC 按次收钱，账是算得过来的。</p>
+    <p>Agent 金库里 0 MON，gas 由 facilitator 代付；92 个自动化测试全绿。</p>
+  </aside>
+</section>
+
+<!-- ============================ 10 现场演示 ============================ -->
+<section class="slide s-demo" data-title="现场演示流程">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>09 · 现场演示</span></div>
+  <div class="kicker a">现场演示</div>
+  <h2 class="a" style="--d:120ms;font-size:72px">从开 Key 到撤销，<span class="em">六步走完</span></h2>
+  <div class="demo">
+    <div class="tl">
+      <div class="it a left" style="--d:350ms"><span class="t">0:00</span><h4>开一把 MoneyKey</h4><p>Dashboard：给 Claude 开 <code>$0.50/天</code> 额度</p></div>
+      <div class="it a left" style="--d:500ms"><span class="t">0:20</span><h4>Claude Code 自付报告</h4><p>付 <code>$0.01</code>，Usage 实时出现链上 tx</p></div>
+      <div class="it a left" style="--d:650ms"><span class="t">0:40</span><h4>Playground 对话</h4><p>MoneyKey 当 OpenAI Key，每条 <code>$0.01</code></p></div>
+      <div class="it hot a left" style="--d:800ms"><span class="t">0:55</span><h4>恶意请求 $5</h4><p>被拦：<code>PER_REQUEST_LIMIT_EXCEEDED</code></p></div>
+      <div class="it ok a left" style="--d:950ms"><span class="t">1:10</span><h4>超审批线</h4><p>Dashboard 一键批准放行</p></div>
+      <div class="it hot a left" style="--d:1100ms"><span class="t">1:25</span><h4>Revoke</h4><p>一键撤销：<code>KEY_REVOKED</code></p></div>
+    </div>
+    <div>
+      <div class="shot a right" style="--d:600ms">
+        <div class="bar"><i></i><i></i><i></i><span>MoneySwitch Dashboard · Overview</span></div>
+        <span class="mockflag">模拟实例 · MOCK</span><img src="assets/dashboard-overview-mock.png" alt="MoneySwitch Dashboard 概览（模拟实例，带 MOCK 标记）">
+      </div>
+      <div class="mocknote a" style="--d:1000ms"><span class="chip">MOCK</span><span>界面截图来自本地模拟实例，列表中的 MOCK 标记为原样保留，非链上数据</span></div>
+    </div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>接下来现场演示，六步：先在 Dashboard 给 Claude 开一把每天 0.5 美元的 MoneyKey，然后让 Claude Code 自己买一份付费报告，付一分钱，Usage 里实时出现链上 tx。</p>
+    <p>再在 Playground 把 MoneyKey 当 OpenAI Key 对话，每条一分钱；接着发一个 5 美元的恶意请求，会被 PER_REQUEST_LIMIT_EXCEEDED 拦下。</p>
+    <p>超过审批线的请求在 Dashboard 一键批准；最后 Revoke，Key 立刻失效，返回 KEY_REVOKED。右边截图是本地模拟实例，带 MOCK 标记，现场以真实操作为准。</p>
+  </aside>
+</section>
+
+<!-- ============================ 11 路线图 ============================ -->
+<section class="slide s-road" data-title="路线图">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>10 · 路线图</span></div>
+  <div class="kicker a">路线图</div>
+  <h2 class="a" style="--d:120ms">从今天到<span class="em">企业版</span>。</h2>
+  <div class="road">
+    <div class="rail a fade" style="--d:300ms"><i style="width:30%"></i></div>
+    <div class="phases">
+      <div class="ph now a" style="--d:500ms">
+        <div class="pin"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#b4ff4a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg></div>
+        <div class="card">
+          <div class="per">今天 · v0.1 – v0.3</div>
+          <h4>已上线</h4>
+          <ul>
+            <li>MoneyKey · 策略引擎 · x402 · MCP · Dashboard</li>
+            <li>OpenAI / NewAPI 兼容网关 · 渠道 · Playground</li>
+            <li>员工视图 · 一键桌面接入 CLI</li>
+          </ul>
+        </div>
+      </div>
+      <div class="ph a" style="--d:800ms">
+        <div class="pin">v0.4</div>
+        <div class="card">
+          <div class="per">v0.4</div>
+          <h4>按 token 计价</h4>
+          <ul>
+            <li>x402 <span class="mono">upto</span> 按量计费</li>
+            <li>MetaMask / OKX 钱包驱动</li>
+            <li>一键给本机 Agent 配 Key</li>
+          </ul>
+        </div>
+      </div>
+      <div class="ph a" style="--d:1100ms">
+        <div class="pin">v0.5</div>
+        <div class="card">
+          <div class="per">v0.5</div>
+          <h4>企业版</h4>
+          <ul>
+            <li>多用户 · 部门额度</li>
+            <li>审批流 · 审计</li>
+            <li>一个 USDC 资金池，分给每个 Agent</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>今天已经上线 v0.1 到 v0.3：MoneyKey、策略引擎、x402、MCP、Dashboard，OpenAI/NewAPI 兼容网关和 Playground，以及员工视图和一键桌面接入。</p>
+    <p>v0.4 做按 token 计价，用 x402 的 upto 方案，再接 MetaMask、OKX 钱包驱动。</p>
+    <p>v0.5 是企业版：多用户、部门额度、审批流和审计——一个 USDC 资金池，分给每个员工的每个 Agent。</p>
+  </aside>
+</section>
+
+<!-- ============================ 12 开源与生态 ============================ -->
+<section class="slide s-oss" data-title="开源与生态">
+  <div class="hdr"><div class="brand"><span class="logo">M</span>MoneySwitch</div><span>11 · 开源与生态</span></div>
+  <div class="kicker a">开源与生态</div>
+  <h2 class="a" style="--d:120ms">开源打底，<span class="em">长在现成生态上</span>。</h2>
+  <div class="oss">
+    <div class="card repo a left" style="--d:350ms">
+      <div style="font-size:22px;color:#cfc6ff;letter-spacing:.16em">GITHUB</div>
+      <div class="url">github.com/<b>dongsheng123132/moneyswitch</b></div>
+      <div class="lic">
+        <div class="l"><span class="badge ap">Apache-2.0</span><span>接入层：MCP、CLI、适配器、卖方示例<br>嵌进你自己的进程，放心用</span></div>
+        <div class="l"><span class="badge ag">AGPL-3.0</span><span>服务端：Server、Dashboard、核心包<br>托管分叉的改进回馈社区</span></div>
+      </div>
+    </div>
+    <div class="eco">
+      <div class="a right" style="--d:500ms">
+        <h4>三种接入</h4>
+        <div class="ways">
+          <div class="card"><b>MCP</b><span><code>paid_fetch</code><br><code>money_status</code><br><code>money_history</code></span></div>
+          <div class="card"><b>OpenAI 兼容</b><span><code>/v1/chat/completions</code><br><code>/v1/models</code></span></div>
+          <div class="card"><b>REST</b><span><code>POST /v1/fetch</code><br>任意 x402 收费 URL</span></div>
+        </div>
+      </div>
+      <div class="gap"></div>
+      <div class="a right" style="--d:700ms">
+        <h4>站在现成的基础设施上</h4>
+        <div class="stack"><span class="chip p">x402 官方 SDK</span><span class="chip p">Monad</span><span class="chip g">Circle USDC</span></div>
+        <p class="nocoin">不发币、不造协议——只做 AI 和钱之间那一层。</p>
+      </div>
+    </div>
+  </div>
+  <div class="quick a" style="--d:900ms"><span class="qk">本地复现</span><code><span class="lime">$</span> pnpm install &amp;&amp; pnpm build &amp;&amp; pnpm demo:local</code><span class="qn">离线 mock facilitator + demo 卖方 + Dashboard，不产生真实付款</span></div>
+  <div class="ftr"><span>MoneySwitch · Monad Metropolis 深圳</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>MoneySwitch 完全开源，在 github.com/dongsheng123132/moneyswitch。</p>
+    <p>许可证分层：Agent 和卖方嵌进自己进程的接入层用 Apache-2.0；服务端用 AGPL-3.0，托管分叉的改进要回馈社区。</p>
+    <p>接入有三种方式：MCP、OpenAI 兼容接口和 REST；底层全部是 x402、Monad 和 Circle USDC 这些现成生态。</p>
+  </aside>
+</section>
+
+<!-- ============================ 13 结尾 ============================ -->
+<section class="slide s-close" data-title="结尾">
+  <div class="ghost a fade" style="--d:0ms">MoneySwitch</div>
+  <div class="kicker a" style="--d:100ms">MoneySwitch</div>
+  <div class="big a blur" style="--d:300ms;margin-top:40px">Your AI gets <span class="lime">pocket money.</span></div>
+  <div class="big a blur" style="--d:900ms">You keep the <span class="em">bank account.</span></div>
+  <div class="zh a" style="--d:1500ms">给 AI 零花钱，银行卡留在你手里。</div>
+  <div class="repo-l a" style="--d:1800ms">github.com/dongsheng123132/moneyswitch</div>
+  <div class="sig a" style="--d:2000ms"><span class="chip">API keys for money</span><span class="chip g"><span class="dot"></span>USDC</span><span class="chip p">Monad</span><span class="chip p">x402</span></div>
+  <div class="ftr"><span>Monad Metropolis · 深圳 Hacker House · 2026.09.26</span><span class="pg"></span></div>
+  <aside class="notes">
+    <p>最后一句话：Your AI gets pocket money. You keep the bank account.</p>
+    <p>给 AI 零花钱，银行卡留在你手里。我们是 MoneySwitch，谢谢大家，欢迎来 GitHub 看代码。</p>
+  </aside>
+</section>
+
+</div>
+<div id="pageno"></div>
+<div id="hint">← / → / 空格 翻页 · F 全屏 · N 讲稿 · R 重放</div>
+<div id="notes"></div>
+<script src="deck.js"></script>
+</body>
+</html>

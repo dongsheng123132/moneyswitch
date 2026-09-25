@@ -30,13 +30,15 @@ token 和链上 USDC 转账之间，用发 API Key 的平台早就熟悉的那�
 把已有的 MoneySwitch 服务器 + MoneyKey 接进本机的 Claude Code / Codex：
 
 ```bash
-npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply
+npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch connect \n  --server http://127.0.0.1:4020 --key mk_live_xxx --apply
 ```
 
 这条命令会探测本机的 Claude Code / Codex 并自动接好 MoneySwitch 的 MCP
-服务器（默认 dry-run——先去掉 `--apply` 看看它打算做什么）。
-`npx moneyswitch status --server ... --key ...` 查一把 Key 的剩余额度；
-`npx moneyswitch remove --apply` 撤销接入。
+服务器（不带 `--apply` 时只打印打算做的改动）。`moneyswitch` 客户端 CLI
+还没有发布到 npm，所以每台 MoneySwitch 服务器都在 `/dl/moneyswitch.tgz`
+提供同一个包（由 `pnpm build` 生成）；Dashboard 的「接入 Agent」页和「发给员工」
+消息会用正确的服务器地址生成这条命令。`… moneyswitch status --server … --key …`
+查一把 Key 的剩余额度；`… moneyswitch remove --apply` 撤销接入。
 
 自托管服务器：
 
@@ -45,6 +47,9 @@ pnpm install
 pnpm build
 pnpm demo:local
 ```
+
+首次启动会打印一条一次性设置链接（`http://127.0.0.1:4020/setup#ms_setup_…`），
+打开即登录，并带你走完 钱包 → 渠道 → 第一把 Key → 接入 Agent。
 
 `pnpm demo:local` 会同时起一个离线 mock 的 x402 facilitator、一个 demo x402
 卖方、和带 Dashboard 界面的 MoneySwitch 服务器——全程离线，不会发生真实付

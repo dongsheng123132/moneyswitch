@@ -1,51 +1,52 @@
 import React from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Gauge, MessageSquare, KeyRound, Radio, Activity, ShieldAlert, Wallet, Plug, LogOut } from "lucide-react";
+import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
+import { Gauge, MessageSquare, KeyRound, Radio, Activity, ShieldAlert, Wallet, Plug, LogOut, Compass, Lock } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { getWallet, listApprovals } from "./api";
 import { shortAddr, formatUsdc } from "./money";
 import CopyButton from "./components/CopyButton";
+import LangSwitch from "./components/LangSwitch";
+import { useT } from "./i18n";
+import { shellStrings } from "./i18n/strings/shell";
+import { common } from "./i18n/strings/common";
 
-const NAV = [
-  { to: "/", label: "Overview", end: true, icon: Gauge },
-  { to: "/playground", label: "Playground", end: false, icon: MessageSquare },
-  { to: "/keys", label: "Money Keys", end: false, icon: KeyRound },
-  { to: "/channels", label: "Channels", end: false, icon: Radio },
-  { to: "/usage", label: "Usage", end: false, icon: Activity },
-  { to: "/approvals", label: "Approvals", end: false, icon: ShieldAlert },
-  { to: "/wallet", label: "Wallet", end: false, icon: Wallet },
-  { to: "/connect", label: "Connect Agent", end: false, icon: Plug },
+type NavKey = "nav_overview" | "nav_playground" | "nav_keys" | "nav_channels" | "nav_usage" | "nav_approvals" | "nav_wallet" | "nav_connect";
+
+const NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof Gauge }> = [
+  { to: "/", label: "nav_overview", end: true, icon: Gauge },
+  { to: "/playground", label: "nav_playground", end: false, icon: MessageSquare },
+  { to: "/keys", label: "nav_keys", end: false, icon: KeyRound },
+  { to: "/channels", label: "nav_channels", end: false, icon: Radio },
+  { to: "/usage", label: "nav_usage", end: false, icon: Activity },
+  { to: "/approvals", label: "nav_approvals", end: false, icon: ShieldAlert },
+  { to: "/wallet", label: "nav_wallet", end: false, icon: Wallet },
+  { to: "/connect", label: "nav_connect", end: false, icon: Plug },
 ];
 
-const TITLES: Record<string, string> = {
-  "/": "Overview",
-  "/playground": "Playground",
-  "/keys": "Money Keys",
-  "/channels": "Channels",
-  "/usage": "Usage",
-  "/approvals": "Approvals",
-  "/wallet": "Wallet",
-  "/connect": "Connect Agent",
-};
-
 export default function Layout() {
+  const t = useT(shellStrings);
+  const tc = useT(common);
   const { logout } = useAuth();
   const location = useLocation();
   const { data: wallet, loading: walletLoading } = usePolling(getWallet);
   const { data: pending } = usePolling(() => listApprovals("pending"), 3000);
   const pendingCount = pending?.length ?? 0;
 
-  const title = TITLES[location.pathname] ?? "MoneySwitch";
+  const current = NAV.find((n) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)));
+  const title = current ? t(current.label) : "MoneySwitch";
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main">
+        {t("skipToContent")}
+      </a>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">M</div>
           <div>
             <div className="brand-name">MoneySwitch</div>
-            <div className="brand-sub">API keys for money</div>
+            <div className="brand-sub">{t("brandSub")}</div>
           </div>
         </div>
         <nav>
@@ -53,16 +54,24 @@ export default function Layout() {
             const Icon = item.icon;
             return (
               <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? "active" : "")}>
-                <Icon size={16} strokeWidth={2} />
-                <span>{item.label}</span>
-                {item.to === "/approvals" && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
+                <Icon size={16} strokeWidth={2} aria-hidden />
+                <span>{t(item.label)}</span>
+                {item.to === "/approvals" && pendingCount > 0 && (
+                  <span className="nav-badge" aria-label={`${pendingCount}`}>
+                    {pendingCount}
+                  </span>
+                )}
               </NavLink>
             );
           })}
         </nav>
+        <NavLink to="/setup" className={({ isActive }) => `sidebar-secondary ${isActive ? "active" : ""}`}>
+          <Compass size={16} strokeWidth={2} aria-hidden />
+          <span>{t("nav_setup")}</span>
+        </NavLink>
         <button className="logout" onClick={logout}>
-          <LogOut size={16} strokeWidth={2} />
-          <span>Sign out</span>
+          <LogOut size={16} strokeWidth={2} aria-hidden />
+          <span>{tc("signOut")}</span>
         </button>
       </aside>
       <div className="app-main-col">
@@ -71,24 +80,33 @@ export default function Layout() {
           <div className="topbar-right">
             <span className="network-badge">
               <span className="network-dot" />
-              Monad Testnet
+              {tc("networkTestnet")}
             </span>
             {walletLoading && !wallet ? (
-              <span className="wallet-chip dim">Loading…</span>
-            ) : wallet?.address ? (
+              <span className="wallet-chip dim">{t("walletLoading")}</span>
+            ) : !wallet?.has_keystore ? (
+              <Link className="wallet-chip warn" to="/wallet">
+                {t("walletNone")}
+              </Link>
+            ) : !wallet.unlocked ? (
+              <Link className="wallet-chip warn" to="/wallet">
+                <Lock size={12} aria-hidden /> {t("walletLocked")}
+              </Link>
+            ) : wallet.address ? (
               <span className="wallet-chip">
                 <span className="mono">{shortAddr(wallet.address)}</span>
-                <CopyButton text={wallet.address} className="chip-copy" />
+                <CopyButton text={wallet.address} className="chip-copy icon-only" />
               </span>
-            ) : (
-              <span className="wallet-chip dim">No wallet</span>
+            ) : null}
+            {wallet?.has_keystore && (
+              <span className="wallet-balance" title={wallet.usdc_balance == null ? t("walletBalanceUnknown") : undefined}>
+                {wallet.usdc_balance != null ? `${formatUsdc(wallet.usdc_balance, { maxDecimals: 2 })} USDC` : "—"}
+              </span>
             )}
-            <span className="wallet-balance">
-              {walletLoading && !wallet ? "…" : wallet?.usdc_balance != null ? `${formatUsdc(wallet.usdc_balance, { maxDecimals: 2 })} USDC` : "-"}
-            </span>
+            <LangSwitch />
           </div>
         </header>
-        <main className="main">
+        <main className="main" id="main" tabIndex={-1}>
           <Outlet />
         </main>
       </div>

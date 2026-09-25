@@ -1,0 +1,22 @@
+/* Channels page (docs/ux-audit.md A-6, A-7) */
+
+.channels-intro {
+  margin: 0 0 14px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.channels-models-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  white-space: normal;
+  max-width: 320px;
+}
+
+.channels-delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}

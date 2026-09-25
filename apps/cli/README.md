@@ -15,11 +15,15 @@ server's HTTP API.
 
 ## Install
 
-No install needed — use `npx`:
+No install needed. Until this package is published to the npm registry,
+every MoneySwitch server (after `pnpm build`) serves it at
+`/dl/moneyswitch.tgz`, so `npx` can run it straight from your server:
 
 ```bash
-npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply
+npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch connect \n  --server http://127.0.0.1:4020 --key mk_live_xxx --apply
 ```
+
+Once published, the short form is `npx moneyswitch connect …`.
 
 ## Commands
 

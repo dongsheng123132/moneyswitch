@@ -474,10 +474,11 @@ export async function listModelsForKey(key: string): Promise<string[]> {
 }
 
 /** POST /v1/chat/completions (non-streaming) — a real, paid call once the backend exists. */
-export async function sendChatCompletion(key: string, model: string, messages: ChatMessage[]): Promise<ChatCompletionResponse> {
+export async function sendChatCompletion(key: string, model: string, messages: ChatMessage[], approvalId?: string | null): Promise<ChatCompletionResponse> {
   return keyAuthedRequest<ChatCompletionResponse>("/v1/chat/completions", key, {
     method: "POST",
-    body: JSON.stringify({ model, messages, stream: false }),
+    // approval_id: re-send after an admin approved an APPROVAL_REQUIRED payment (gateway reads it from the body).
+    body: JSON.stringify({ model, messages, stream: false, ...(approvalId ? { approval_id: approvalId } : {}) }),
   });
 }
 
@@ -535,4 +536,57 @@ export interface HistoryRow {
 export async function getHistory(key: string): Promise<HistoryRow[]> {
   const res = await keyAuthedRequest<{ history: HistoryRow[] }>("/v1/history", key);
   return res.history ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// First-run setup + metadata (docs/ux-audit.md A-1/A-7/A-11)
+// ---------------------------------------------------------------------------
+
+/** GET /v1/setup/status — unauthenticated; only says whether a one-time setup link is still claimable. */
+export async function getSetupStatus(): Promise<{ setup_link_active: boolean }> {
+  const res = await fetch("/v1/setup/status");
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return res.json();
+}
+
+/** POST /v1/setup/claim — exchanges the one-time setup token from the startup log for the admin token. */
+export async function claimSetupToken(setupToken: string): Promise<string> {
+  const res = await fetch("/v1/setup/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ setup_token: setupToken }),
+  });
+  const body = (await res.json().catch(() => null)) as { admin_token?: string; error?: string } | null;
+  if (!res.ok || !body?.admin_token) {
+    throw new ApiError(res.status, body?.error ?? res.statusText, body?.error ?? null);
+  }
+  return body.admin_token;
+}
+
+export interface AdminMeta {
+  network: string;
+  chain_id: number | null;
+  usdc_address: string;
+  explorer_base: string;
+  faucet_url: string;
+  demo_seller_url: string | null;
+  cli_tarball_available: boolean;
+  cli_local_path: string | null;
+  mcp_local_path: string | null;
+  wallet_password_from_env: boolean;
+}
+
+/** GET /v1/admin/meta — admin only. */
+export async function getAdminMeta(): Promise<AdminMeta> {
+  return request<AdminMeta>("/v1/admin/meta");
+}
+
+/** HEAD /dl/moneyswitch.tgz — is the packed client CLI downloadable from this server? (no auth; works for employees too) */
+export async function isCliTarballAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch("/dl/moneyswitch.tgz", { method: "HEAD" });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

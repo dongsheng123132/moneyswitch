@@ -1,32 +1,54 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CircleDollarSign, MessageSquare, History, Plug, LogOut } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
-import { getStatus } from "./api";
+import { getStatus, ChatApiError } from "./api";
 import { shortAddr } from "./money";
+import { useT } from "./i18n";
+import { common } from "./i18n/strings/common";
+import { employeeStrings } from "./i18n/strings/employee";
+import LangSwitch from "./components/LangSwitch";
+import Callout from "./components/Callout";
+import "./styles/employee.css";
 
 const NAV = [
-  { to: "/me/budget", label: "我的额度", icon: CircleDollarSign },
-  { to: "/me/playground", label: "对话", icon: MessageSquare },
-  { to: "/me/history", label: "流水", icon: History },
-  { to: "/me/connect", label: "接入", icon: Plug },
+  { to: "/me/budget", key: "navBudget" as const, icon: CircleDollarSign },
+  { to: "/me/playground", key: "navChat" as const, icon: MessageSquare },
+  { to: "/me/history", key: "navHistory" as const, icon: History },
+  { to: "/me/connect", key: "navConnect" as const, icon: Plug },
 ];
 
-const TITLES: Record<string, string> = {
-  "/me/budget": "我的额度",
-  "/me/playground": "对话",
-  "/me/history": "流水",
-  "/me/connect": "接入",
-};
+const KEY_ERROR_CODES = ["KEY_REVOKED", "KEY_EXPIRED", "KEY_INVALID"] as const;
+type KeyErrorCode = (typeof KEY_ERROR_CODES)[number];
+
+function isKeyErrorCode(code: string | null): code is KeyErrorCode {
+  return code != null && (KEY_ERROR_CODES as readonly string[]).includes(code);
+}
 
 export default function EmployeeLayout() {
   const { employeeKey, logout } = useAuth();
   const location = useLocation();
-  const { data: status } = usePolling(() => getStatus(employeeKey as string));
+  const t = useT(employeeStrings);
+  const tc = useT(common);
+  const [keyErrorCode, setKeyErrorCode] = useState<string | null>(null);
 
-  const title = TITLES[location.pathname] ?? "MoneySwitch";
+  const { data: status } = usePolling(async () => {
+    try {
+      const res = await getStatus(employeeKey as string);
+      setKeyErrorCode(null);
+      return res;
+    } catch (e) {
+      if (e instanceof ChatApiError) setKeyErrorCode(e.code);
+      throw e;
+    }
+  });
+
+  const current = NAV.find((n) => n.to === location.pathname);
+  const title = current ? t(current.key) : "MoneySwitch";
   const keyLabel = status?.key_name || (status?.key_prefix ? `${status.key_prefix}••••` : employeeKey ? `${employeeKey.slice(0, 12)}••••` : "");
+
+  const keyBroken = isKeyErrorCode(keyErrorCode);
 
   return (
     <div className="app-shell">
@@ -35,7 +57,7 @@ export default function EmployeeLayout() {
           <div className="brand-mark">M</div>
           <div>
             <div className="brand-name">MoneySwitch</div>
-            <div className="brand-sub">我的额度</div>
+            <div className="brand-sub">{t("brandSub")}</div>
           </div>
         </div>
         <nav>
@@ -44,23 +66,24 @@ export default function EmployeeLayout() {
             return (
               <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : "")}>
                 <Icon size={16} strokeWidth={2} />
-                <span>{item.label}</span>
+                <span>{t(item.key)}</span>
               </NavLink>
             );
           })}
         </nav>
         <button className="logout" onClick={logout}>
           <LogOut size={16} strokeWidth={2} />
-          <span>退出登录</span>
+          <span>{tc("signOut")}</span>
         </button>
       </aside>
       <div className="app-main-col">
         <header className="topbar">
           <h1 className="topbar-title">{title}</h1>
           <div className="topbar-right">
+            <LangSwitch />
             <span className="network-badge">
               <span className="network-dot" />
-              Monad Testnet
+              {tc("networkTestnet")}
             </span>
             <span className="wallet-chip">
               <span className="mono">{keyLabel || shortAddr(employeeKey)}</span>
@@ -68,7 +91,23 @@ export default function EmployeeLayout() {
           </div>
         </header>
         <main className="main">
-          <Outlet />
+          {keyBroken ? (
+            <div className="key-broken-shell">
+              <Callout
+                tone="error"
+                title={t("keyBrokenTitle")}
+                action={
+                  <button type="button" className="btn secondary" onClick={logout}>
+                    {tc("signOut")}
+                  </button>
+                }
+              >
+                {t(`keyBroken_${keyErrorCode as KeyErrorCode}`)}
+              </Callout>
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>

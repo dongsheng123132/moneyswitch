@@ -117,7 +117,13 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       const signer = ctx.wallet.getSigner()!;
 
       // Step 3: always force stream:false to the upstream (SPEC-v0.2 §2 step 3).
-      const upstreamBody = { ...body, stream: false };
+      // approval_id is MoneySwitch's own retry field, never forwarded: the
+      // approval binds the sha256 of the upstream body, so forwarding it would
+      // make the approved retry's body differ from the originally-held one and
+      // every approved chat payment would fail with APPROVAL_INVALID
+      // (found in the docs/ux-audit.md walkthrough, B-3).
+      const { approval_id: approvalIdFromBody, ...forwardBody } = body as ChatCompletionsBody & { approval_id?: string };
+      const upstreamBody = { ...forwardBody, stream: false };
 
       const result = await performPaidFetch(ctx.db, ctx.sqlite, key, signer, {
         url: upstreamUrl,
@@ -125,7 +131,7 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: upstreamBody,
-        approvalId: (req.body as { approval_id?: string }).approval_id ?? null,
+        approvalId: typeof approvalIdFromBody === "string" ? approvalIdFromBody : null,
         kind: "chat",
         model: body.model,
       });

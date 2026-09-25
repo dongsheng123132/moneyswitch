@@ -3,15 +3,27 @@ import { Link } from "react-router-dom";
 import { Send, Loader2, ExternalLink } from "lucide-react";
 import { listModelsForKey, sendChatCompletion, ChatApiError, ChatMessage } from "../api";
 import { formatUsdc } from "../money";
+import { useT, TFunction } from "../i18n";
+import { playgroundStrings } from "../i18n/strings/playground";
+import TxLink from "./TxLink";
+import "../styles/playground.css";
+
+type PgStrings = TFunction<keyof typeof playgroundStrings.en>;
 
 interface DisplayMessage {
   id: string;
-  role: "user" | "assistant" | "system-error";
+  role: "user" | "assistant" | "approval" | "error";
   content: string;
   cost?: string;
   txHash?: string;
   tokens?: number;
   approvalId?: string | null;
+  /** Snapshot of the conversation sent when this approval/error happened, for "Continue". */
+  pendingHistory?: ChatMessage[];
+  stillWaiting?: boolean;
+  resending?: boolean;
+  rawCode?: string | null;
+  errLink?: React.ReactNode;
 }
 
 let seq = 0;
@@ -20,43 +32,61 @@ function nextId(): string {
   return `m${seq}`;
 }
 
-export interface PlaygroundChatLabels {
-  keyPlaceholder: string;
-  loadModels: string;
-  loading: string;
-  noModelsYet: string;
-  emptyHint: string;
-  inputPlaceholder: string;
-  send: string;
-  pasteKeyFirst: string;
-  pickModelFirst: string;
-  waitingApproval: string;
-  goApprovals: string;
-}
-
-const DEFAULT_LABELS: PlaygroundChatLabels = {
-  keyPlaceholder: "mk_live_… (stored only in this browser tab)",
-  loadModels: "Load models",
-  loading: "Loading...",
-  noModelsYet: "No models loaded",
-  emptyHint: "Paste a Money Key, load models, and start chatting. Every message is a real x402 payment.",
-  inputPlaceholder: "Message the model — Enter to send, Shift+Enter for newline",
-  send: "Send",
-  pasteKeyFirst: "Paste a Money Key first.",
-  pickModelFirst: "Pick a model first.",
-  waitingApproval: "Waiting for approval",
-  goApprovals: "Go to Approvals",
-};
+const KEY_COMPLETE_RE = /^mk_live_.{32,}/;
 
 interface PlaygroundChatProps {
   apiKey: string;
+  /** admin: editable key input; employee: omitted (masked chip). */
   onApiKeyChange?: (v: string) => void;
   rightPanel: React.ReactNode;
   autoLoadModels?: boolean;
-  labels?: Partial<PlaygroundChatLabels>;
+  /** default "admin"; tailors approval/error copy. */
+  audience?: "admin" | "employee";
+  /** admin: "/approvals" */
   approvalsLinkTo?: string;
-  /** Called after every send attempt (success or failure) so the caller can refresh its own "key status" panel data. */
   onMessageSettled?: () => void;
+}
+
+/** Maps a chat gateway error code to a friendly sentence (docs/ux-audit.md B-3/B-4/B-6). */
+function friendlyErrorText(t: PgStrings, code: string | null, audience: "admin" | "employee"): { title: string; link?: React.ReactNode } {
+  switch ((code || "").toUpperCase()) {
+    case "DAILY_BUDGET_EXCEEDED":
+      return { title: t("err_dailyBudget") };
+    case "TOTAL_BUDGET_EXCEEDED":
+      return { title: t("err_totalBudget") };
+    case "PER_REQUEST_LIMIT_EXCEEDED":
+      return { title: t("err_perRequest") };
+    case "RATE_LIMITED":
+      return { title: t("err_rateLimited") };
+    case "KEY_REVOKED":
+      return { title: t("err_keyRevoked") };
+    case "KEY_EXPIRED":
+      return { title: t("err_keyExpired") };
+    case "KEY_INVALID":
+      return { title: t("err_keyInvalid") };
+    case "WALLET_LOCKED":
+      return audience === "employee"
+        ? { title: t("err_walletLockedEmployee") }
+        : {
+            title: t("err_walletLockedAdmin"),
+            link: (
+              <Link to="/wallet" className="btn small secondary">
+                {t("walletPageLink")}
+                <ExternalLink size={12} />
+              </Link>
+            ),
+          };
+    case "MODEL_NOT_ALLOWED":
+      return { title: t("err_modelNotAllowed") };
+    case "MODEL_NOT_FOUND":
+      return { title: t("err_modelNotFound") };
+    case "PAYMENT_FAILED":
+      return { title: t("err_paymentFailed") };
+    case "UPSTREAM_ERROR":
+      return { title: t("err_upstreamError") };
+    default:
+      return { title: t("err_generic") };
+  }
 }
 
 export default function PlaygroundChat({
@@ -64,11 +94,11 @@ export default function PlaygroundChat({
   onApiKeyChange,
   rightPanel,
   autoLoadModels,
-  labels: labelsOverride,
+  audience = "admin",
   approvalsLinkTo,
   onMessageSettled,
 }: PlaygroundChatProps) {
-  const labels = { ...DEFAULT_LABELS, ...labelsOverride };
+  const t = useT(playgroundStrings);
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState<string>("");
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -77,7 +107,7 @@ export default function PlaygroundChat({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const autoLoadedRef = useRef(false);
+  const loadedForKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -86,13 +116,14 @@ export default function PlaygroundChat({
   async function loadModels() {
     const trimmed = apiKey.trim();
     if (!trimmed) {
-      setModelsError(labels.pasteKeyFirst);
+      setModelsError(t("pasteKeyFirst"));
       return;
     }
     setLoadingModels(true);
     setModelsError(null);
     try {
       const list = await listModelsForKey(trimmed);
+      loadedForKeyRef.current = trimmed;
       setModels(list);
       if (list.length > 0) setModel((prev) => prev || list[0]);
     } catch (e) {
@@ -102,31 +133,47 @@ export default function PlaygroundChat({
     }
   }
 
+  // Immediate load for callers that already have a full key on mount (employee view).
   useEffect(() => {
-    if (autoLoadModels && apiKey.trim() && !autoLoadedRef.current) {
-      autoLoadedRef.current = true;
+    if (autoLoadModels && apiKey.trim() && loadedForKeyRef.current !== apiKey.trim()) {
       loadModels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoLoadModels, apiKey]);
+
+  // Debounced auto-load once the key looks complete, for admin too (docs/ux-audit.md A-7 spirit: don't wait for an explicit click).
+  useEffect(() => {
+    const trimmed = apiKey.trim();
+    if (!KEY_COMPLETE_RE.test(trimmed) || loadedForKeyRef.current === trimmed) return;
+    const timer = setTimeout(() => {
+      loadModels();
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey]);
+
+  function historyFor(msgs: DisplayMessage[]): ChatMessage[] {
+    return msgs
+      .filter((m): m is DisplayMessage & { role: "user" | "assistant" } => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: m.content }));
+  }
 
   async function send() {
     const text = input.trim();
     if (!text || sending) return;
     const trimmedKey = apiKey.trim();
     if (!trimmedKey) {
-      setModelsError(labels.pasteKeyFirst);
+      setModelsError(t("pasteKeyFirst"));
       return;
     }
     if (!model) {
-      setModelsError(labels.pickModelFirst);
+      setModelsError(t("pickModelFirst"));
       return;
     }
     const userMsg: DisplayMessage = { id: nextId(), role: "user", content: text };
-    const chatHistory: ChatMessage[] = [...messages, userMsg]
-      .filter((m): m is DisplayMessage & { role: "user" | "assistant" } => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role, content: m.content }));
-    setMessages((prev) => [...prev, userMsg]);
+    const nextMsgs = [...messages, userMsg];
+    const chatHistory = historyFor(nextMsgs);
+    setMessages(nextMsgs);
     setInput("");
     setSending(true);
     try {
@@ -143,15 +190,80 @@ export default function PlaygroundChat({
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (e) {
       const err = e instanceof ChatApiError ? e : null;
-      const errMsg: DisplayMessage = {
-        id: nextId(),
-        role: "system-error",
-        content: err ? `${err.code ?? err.status}: ${err.message}` : e instanceof Error ? e.message : "request_failed",
-        approvalId: err?.approvalId ?? null,
-      };
-      setMessages((prev) => [...prev, errMsg]);
+      if (err && (err.code || "").toUpperCase() === "APPROVAL_REQUIRED") {
+        const approvalMsg: DisplayMessage = {
+          id: nextId(),
+          role: "approval",
+          content: t("approvalNeeded"),
+          approvalId: err.approvalId,
+          pendingHistory: chatHistory,
+        };
+        setMessages((prev) => [...prev, approvalMsg]);
+      } else {
+        const friendly = friendlyErrorText(t, err?.code ?? null, audience);
+        const errMsg: DisplayMessage = {
+          id: nextId(),
+          role: "error",
+          content: err ? friendly.title : e instanceof Error ? t("err_network") : t("err_generic"),
+          rawCode: err?.code ?? (err ? String(err.status) : null),
+          errLink: err ? friendly.link : undefined,
+        };
+        setMessages((prev) => [...prev, errMsg]);
+      }
     } finally {
       setSending(false);
+      onMessageSettled?.();
+    }
+  }
+
+  async function continueApproval(msgId: string) {
+    const msg = messages.find((m) => m.id === msgId);
+    if (!msg || !msg.pendingHistory) return;
+    const trimmedKey = apiKey.trim();
+    setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, resending: true } : m)));
+    try {
+      const res = await sendChatCompletion(trimmedKey, model, msg.pendingHistory, msg.approvalId ?? undefined);
+      const choice = res.choices?.[0];
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId
+            ? {
+                ...m,
+                role: "assistant",
+                content: choice?.message?.content ?? "",
+                cost: res.moneyswitch?.cost,
+                txHash: res.moneyswitch?.tx_hash,
+                tokens: res.usage?.total_tokens,
+                resending: false,
+                stillWaiting: false,
+              }
+            : m
+        )
+      );
+    } catch (e) {
+      const err = e instanceof ChatApiError ? e : null;
+      if (err && (err.code || "").toUpperCase() === "APPROVAL_REQUIRED") {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, resending: false, stillWaiting: true, approvalId: err.approvalId ?? m.approvalId } : m))
+        );
+      } else {
+        const friendly = friendlyErrorText(t, err?.code ?? null, audience);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? {
+                  ...m,
+                  role: "error",
+                  content: err ? friendly.title : e instanceof Error ? t("err_network") : t("err_generic"),
+                  rawCode: err?.code ?? (err ? String(err.status) : null),
+                  errLink: err ? friendly.link : undefined,
+                  resending: false,
+                }
+              : m
+          )
+        );
+      }
+    } finally {
       onMessageSettled?.();
     }
   }
@@ -164,28 +276,24 @@ export default function PlaygroundChat({
   }
 
   return (
-    <div className="grid-2" style={{ alignItems: "stretch" }}>
-      <div className="card" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 150px)", padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: 14, borderBottom: "1px solid var(--panel-border-soft)", display: "flex", gap: 10, flexWrap: "wrap" }}>
+    <div className="grid-2 pg-grid">
+      <div className="card pg-chat-card">
+        <div className="pg-chat-toolbar">
           {onApiKeyChange ? (
             <input
-              className="mono"
-              style={{ flex: "1 1 260px", background: "var(--bg)", border: "1px solid var(--panel-border)", borderRadius: 7, padding: "7px 10px", color: "var(--text)", fontSize: 12.5 }}
-              placeholder={labels.keyPlaceholder}
+              className="mono pg-key-input"
+              placeholder={t("keyPlaceholder")}
               value={apiKey}
               onChange={(e) => onApiKeyChange(e.target.value)}
+              aria-label={t("keyPlaceholder")}
             />
           ) : (
-            <span
-              className="mono wallet-chip"
-              style={{ flex: "1 1 260px", justifyContent: "flex-start" }}
-              title={apiKey}
-            >
+            <span className="mono wallet-chip pg-key-chip" title={apiKey}>
               {apiKey ? `${apiKey.slice(0, 12)}••••` : ""}
             </span>
           )}
-          <select value={model} onChange={(e) => setModel(e.target.value)} style={{ minWidth: 180 }}>
-            {models.length === 0 && <option value="">{labels.noModelsYet}</option>}
+          <select className="pg-model-select" value={model} onChange={(e) => setModel(e.target.value)} aria-label={t("loadModels")}>
+            {models.length === 0 && <option value="">{t("noModelsYet")}</option>}
             {models.map((m) => (
               <option key={m} value={m}>
                 {m}
@@ -193,7 +301,7 @@ export default function PlaygroundChat({
             ))}
           </select>
           <button type="button" className="btn secondary small" onClick={loadModels} disabled={loadingModels}>
-            {loadingModels ? labels.loading : labels.loadModels}
+            {loadingModels ? t("loading") : t("loadModels")}
           </button>
         </div>
         {modelsError && (
@@ -202,78 +310,81 @@ export default function PlaygroundChat({
           </div>
         )}
 
-        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-          {messages.length === 0 && <div className="empty-state">{labels.emptyHint}</div>}
+        <div ref={scrollRef} className="pg-messages" aria-live="polite">
+          {messages.length === 0 && <div className="empty-state">{t("emptyHint")}</div>}
           {messages.map((m) => (
-            <div key={m.id} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-              <div
-                style={{
-                  maxWidth: "78%",
-                  padding: "9px 13px",
-                  borderRadius: 12,
-                  fontSize: 13.5,
-                  lineHeight: 1.5,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  background: m.role === "user" ? "var(--accent)" : m.role === "system-error" ? "var(--red-bg)" : "var(--panel-2)",
-                  color: m.role === "user" ? "#fff" : m.role === "system-error" ? "var(--red)" : "var(--text)",
-                  border: m.role === "assistant" ? "1px solid var(--panel-border)" : "none",
-                }}
-              >
+            <div key={m.id} className={`pg-msg-row ${m.role}`}>
+              <div className={`pg-bubble ${m.role}`}>
                 {m.content}
-                {m.role === "system-error" && m.approvalId && approvalsLinkTo && (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontWeight: 650, marginBottom: 4 }}>{labels.waitingApproval}</div>
-                    <Link to={approvalsLinkTo} className="btn small secondary">
-                      {labels.goApprovals}
-                      <ExternalLink size={12} />
-                    </Link>
+                {m.role === "approval" && (
+                  <div className="pg-approval-actions">
+                    {m.approvalId && <span className="mono faint">{t("approvalId", { id: m.approvalId })}</span>}
+                    <span>{audience === "employee" ? t("approvalWaitingEmployee") : t("approvalWaitingAdmin")}</span>
                   </div>
                 )}
+                {m.role === "approval" && (
+                  <div className="pg-approval-actions">
+                    <button type="button" className="btn small" onClick={() => continueApproval(m.id)} disabled={m.resending}>
+                      {m.resending ? <Loader2 size={12} className="spin" /> : t("continueBtn")}
+                    </button>
+                    {audience === "admin" && approvalsLinkTo && (
+                      <Link to={approvalsLinkTo} className="btn small secondary">
+                        {t("goApprovals")}
+                        <ExternalLink size={12} />
+                      </Link>
+                    )}
+                  </div>
+                )}
+                {m.role === "approval" && m.stillWaiting && <div className="pg-bubble-code">{t("stillWaiting")}</div>}
+                {m.role === "error" && (
+                  <>
+                    {m.errLink && <div className="pg-approval-actions">{m.errLink}</div>}
+                    {m.rawCode && <div className="pg-bubble-code mono">{t("rawCodeLine", { code: m.rawCode })}</div>}
+                  </>
+                )}
                 {m.role === "assistant" && (m.cost || m.txHash || m.tokens != null) && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-faint)" }} className="num">
+                  <div className="pg-bubble-meta num">
                     {m.cost && <>${formatUsdc(m.cost, { maxDecimals: 4 })}</>}
                     {m.txHash && (
                       <>
-                        {" · tx "}
-                        <a href={`https://testnet.monadvision.com/tx/${m.txHash}`} target="_blank" rel="noreferrer">
-                          {m.txHash.slice(0, 8)}…{m.txHash.slice(-4)} ↗
-                        </a>
+                        {" · "}
+                        <TxLink txHash={m.txHash} />
                       </>
                     )}
-                    {m.tokens != null && <> · {m.tokens} tokens</>}
+                    {m.tokens != null && <> · {t("tokensLabel", { n: m.tokens })}</>}
                   </div>
                 )}
               </div>
             </div>
           ))}
           {sending && (
-            <div style={{ display: "flex", justifyContent: "flex-start" }}>
-              <div style={{ padding: "9px 13px", borderRadius: 12, background: "var(--panel-2)", border: "1px solid var(--panel-border)" }}>
+            <div className="pg-msg-row assistant">
+              <div className="pg-typing">
                 <Loader2 size={14} className="spin" />
               </div>
             </div>
           )}
         </div>
 
-        <div style={{ padding: 12, borderTop: "1px solid var(--panel-border-soft)", display: "flex", gap: 8 }}>
+        <div className="pg-input-row">
           <textarea
             rows={2}
-            style={{ flex: 1, resize: "none", background: "var(--bg)", border: "1px solid var(--panel-border)", borderRadius: 8, padding: "8px 10px", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }}
-            placeholder={labels.inputPlaceholder}
+            className="pg-textarea"
+            placeholder={t("inputPlaceholder")}
+            aria-label={t("inputAriaLabel")}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
             disabled={sending}
           />
-          <button type="button" className="btn" onClick={send} disabled={sending || !input.trim()} style={{ alignSelf: "flex-end" }}>
+          <button type="button" className="btn pg-send-btn" onClick={send} disabled={sending || !input.trim()}>
             {sending ? <Loader2 size={14} className="spin" /> : <Send size={14} />}
-            {labels.send}
+            {t("send")}
           </button>
         </div>
       </div>
 
-      {rightPanel}
+      <div className="pg-right-panel">{rightPanel}</div>
     </div>
   );
 }

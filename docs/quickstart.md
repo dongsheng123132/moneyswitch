@@ -15,8 +15,10 @@ This starts mock-facilitator (4099), demo-seller (4021, pointed at the
 mock facilitator — no real payment ever happens) and the server (4020,
 also serving the Dashboard UI at `/`) together, with data under the
 repo-local `.data/local/` directory (gitignored). Press Ctrl+C to stop all
-three. The admin token is printed exactly once, into
-`.data/local/server.log` (only on the first boot of a fresh data dir).
+three. On the first boot of a fresh data dir the terminal shows a one-time
+setup link (`…/setup#ms_setup_…`) — open it to sign in and follow the setup
+guide. The admin token itself is printed exactly once, into
+`.data/local/server.log`.
 `MONEYSWITCH_WALLET_PASSWORD` defaults to `demo-password` if unset — fine
 for this offline demo, never for anything with real funds.
 
@@ -67,14 +69,23 @@ create in step 4.
 MONEYSWITCH_DATA_DIR=~/.moneyswitch MONEYSWITCH_PORT=4020 node apps/server/dist/index.js
 ```
 
-On first run this prints an admin token to stdout **exactly once**:
+On first run this prints an admin token to stdout **exactly once**, followed
+by a one-time setup link:
 
 ```
 [moneyswitch] Admin token (save this now, it will not be shown again):
   ms_admin_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+[moneyswitch] First-run setup: open this one-time link in your browser (valid 30 min, single use):
+  http://127.0.0.1:4020/setup#ms_setup_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Save it — it is stored only as a hash, and cannot be recovered.
+Open the link: it signs you in and walks you through steps 5–8 below in the
+Dashboard (wallet + test-USDC faucet, demo channel, first key, connecting an
+agent). Save the admin token — it is stored only as a hash and cannot be
+recovered (see the end of this file if you lose it). The setup link works
+once, expires after 30 minutes and does not survive a restart; its security
+reasoning is in [`docs/ux-audit.md`](ux-audit.md#安全相关改动与威胁分析).
 
 ## 5. Create a wallet and unlock it
 

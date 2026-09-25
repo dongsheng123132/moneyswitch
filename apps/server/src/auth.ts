@@ -61,7 +61,10 @@ export function openAiStatusForCode(code: string): number {
     case "TOTAL_BUDGET_EXCEEDED":
       return 402;
     case "APPROVAL_REQUIRED":
+    case "APPROVAL_INVALID":
       return 409;
+    case "WALLET_LOCKED":
+      return 503;
     case "model_not_found":
       return 404;
     default:
@@ -90,6 +93,10 @@ export function humanMessageForCode(code: string): string {
       return "This MoneyKey's total budget is exhausted";
     case "APPROVAL_REQUIRED":
       return "Payment requires manual approval";
+    case "APPROVAL_INVALID":
+      return "approval_id is unknown, not approved yet, expired, already used, or does not match this request";
+    case "WALLET_LOCKED":
+      return "The MoneySwitch wallet is locked; an admin must unlock it";
     case "model_not_allowed":
       return "MoneyKey is not allowed to use this model";
     case "model_not_found":

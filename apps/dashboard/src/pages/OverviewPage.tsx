@@ -1,17 +1,41 @@
-import React from "react";
-import { Wallet, TrendingUp, TrendingDown, Minus, KeyRound, Zap, Inbox } from "lucide-react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { Wallet, TrendingUp, TrendingDown, Minus, KeyRound, Zap, Inbox, CheckCircle2, Circle } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listKeys, listUsage, getWallet, isCountedStatus, MoneyKeyRow, PaymentRow, WalletInfo, isMockPayment } from "../api";
-import { sumMicros, sumDecimalStrings, toMicros, fromMicros, ratioMicros, formatUsdc, formatUsd2, isTodayUtc, utcDayKey, formatRelativeTime } from "../money";
+import {
+  listKeys,
+  listUsage,
+  listApprovals,
+  listChannels,
+  getWallet,
+  isCountedStatus,
+  MoneyKeyRow,
+  PaymentRow,
+  WalletInfo,
+  isMockPayment,
+} from "../api";
+import { sumDecimalStrings, toMicros, fromMicros, ratioMicros, formatUsdc, formatUsd2, isTodayUtc, utcDayKey } from "../money";
 import Avatar from "../components/Avatar";
 import ProgressBar from "../components/ProgressBar";
 import Pill from "../components/Pill";
 import BarChart, { BarDatum } from "../components/BarChart";
 import { SkeletonCard, SkeletonBlock } from "../components/Skeleton";
+import Callout from "../components/Callout";
+import EmptyState from "../components/EmptyState";
+import Term from "../components/Term";
+import StatusPill from "../components/StatusPill";
+import TxLink from "../components/TxLink";
+import { useT } from "../i18n";
+import { common } from "../i18n/strings/common";
+import { overviewStrings } from "../i18n/strings/overview";
+import { useRelativeTime } from "../i18n/format";
+import "../styles/overview.css";
+
+const SETUP_HIDDEN_KEY = "moneyswitch_setup_hidden";
 
 async function fetchOverview() {
-  const [keys, payments, wallet] = await Promise.all([listKeys(), listUsage(), getWallet()]);
-  return { keys, payments, wallet };
+  const [keys, payments, approvals, channels] = await Promise.all([listKeys(), listUsage(), listApprovals("pending"), listChannels()]);
+  return { keys, payments, approvals, channels };
 }
 
 function yesterdayUtc(now: Date): Date {
@@ -19,8 +43,6 @@ function yesterdayUtc(now: Date): Date {
   d.setUTCDate(d.getUTCDate() - 1);
   return d;
 }
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function last7DayKeys(now: Date): string[] {
   const keys: string[] = [];
@@ -32,15 +54,30 @@ function last7DayKeys(now: Date): string[] {
   return keys;
 }
 
-function statusDotClass(p: PaymentRow): string {
-  if (isMockPayment(p)) return "mock";
-  if (p.status === "settled") return "settled";
-  if (p.status === "failed") return "failed";
-  return "pending";
-}
+const WEEKDAY_KEYS = ["weekday0", "weekday1", "weekday2", "weekday3", "weekday4", "weekday5", "weekday6"] as const;
 
 export default function OverviewPage() {
+  const t = useT(overviewStrings);
+  const tc = useT(common);
+  const relTime = useRelativeTime();
   const { data, error, loading } = usePolling(fetchOverview);
+  const { data: wallet } = usePolling(getWallet);
+  const [setupHidden, setSetupHidden] = useState(() => {
+    try {
+      return localStorage.getItem(SETUP_HIDDEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  function hideSetup() {
+    setSetupHidden(true);
+    try {
+      localStorage.setItem(SETUP_HIDDEN_KEY, "1");
+    } catch {
+      // ignore
+    }
+  }
 
   if (loading && !data) {
     return (
@@ -60,15 +97,16 @@ export default function OverviewPage() {
 
   const keys: MoneyKeyRow[] = data?.keys ?? [];
   const payments: PaymentRow[] = data?.payments ?? [];
-  const wallet: WalletInfo | undefined = data?.wallet;
+  const approvals = data?.approvals ?? [];
+  const channels = data?.channels ?? [];
   const now = new Date();
 
   const countedPayments = payments.filter((p) => isCountedStatus(p.status));
   const todayPayments = countedPayments.filter((p) => isTodayUtc(p.created_at, now));
   const yesterdayPayments = countedPayments.filter((p) => isTodayUtc(p.created_at, yesterdayUtc(now)));
 
-  const spentTodayMicros = sumMicros(todayPayments.map((p) => p.amount));
-  const spentYesterdayMicros = sumMicros(yesterdayPayments.map((p) => p.amount));
+  const spentTodayMicros = toMicros(sumDecimalStrings(todayPayments.map((p) => p.amount)));
+  const spentYesterdayMicros = toMicros(sumDecimalStrings(yesterdayPayments.map((p) => p.amount)));
   const deltaMicros = spentTodayMicros - spentYesterdayMicros;
   // No spend yesterday means "vs yesterday" has nothing meaningful to compare
   // against — a jump from $0 to anything is not really "+100%". Show a
@@ -91,71 +129,178 @@ export default function OverviewPage() {
     const micros = byDay.get(dk) ?? 0n;
     const d = new Date(dk + "T00:00:00Z");
     return {
-      label: DAY_LABELS[d.getUTCDay()],
+      label: t(WEEKDAY_KEYS[d.getUTCDay()]),
       value: Number(micros) / 1e6,
       displayValue: formatUsd2(fromMicros(micros)),
     };
   });
 
-  const recent = [...payments]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 8);
+  const recent = [...payments].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 8);
 
   const keyById = new Map(keys.map((k) => [k.id, k] as const));
 
+  const sortedKeys = [...keys].sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+    return toMicros(b.used_today) > toMicros(a.used_today) ? 1 : toMicros(b.used_today) < toMicros(a.used_today) ? -1 : 0;
+  });
+
+  // Getting started (A-2): show while setup is incomplete and the user
+  // hasn't dismissed the card.
+  const hasWallet = Boolean(wallet?.has_keystore);
+  const hasChannel = channels.length > 0;
+  const hasKey = keys.length > 0;
+  const hasFirstCall = keys.some((k) => Boolean(k.last_used_at));
+  const setupIncomplete = !hasWallet || !hasChannel || !hasKey;
+  const showGettingStarted = setupIncomplete && !setupHidden;
+
+  // Needs attention (D-2): only the callouts that currently apply.
+  const pendingCount = approvals.length;
+  const walletNotCreated = wallet != null && !wallet.has_keystore;
+  const walletLocked = Boolean(wallet?.has_keystore) && wallet?.unlocked === false;
+  const balanceZero = Boolean(wallet?.has_keystore) && wallet?.usdc_balance === "0";
+  const hasAttention = pendingCount > 0 || walletNotCreated || walletLocked || balanceZero;
+
   return (
     <div>
-      {error && <div className="error-banner">{error}</div>}
+      {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
+
+      {showGettingStarted && (
+        <div className="card getting-started-card">
+          <div className="card-header">
+            <div>
+              <h3>{t("gettingStartedTitle")}</h3>
+              <div className="card-sub">{t("gettingStartedSub")}</div>
+            </div>
+            <button className="btn secondary small" onClick={hideSetup}>
+              {t("hideSetup")}
+            </button>
+          </div>
+          <div className="getting-started-list">
+            {[
+              { done: hasWallet, label: t("gettingStartedWallet") },
+              { done: hasChannel, label: t("gettingStartedChannel") },
+              { done: hasKey, label: t("gettingStartedKey") },
+              { done: hasFirstCall, label: t("gettingStartedCall") },
+            ].map((item, i) => (
+              <div className="getting-started-item" key={i}>
+                {item.done ? <CheckCircle2 size={16} className="gs-check" /> : <Circle size={16} className="gs-empty" />}
+                <span className={item.done ? "gs-done" : ""}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+          <Link className="btn" to="/setup">
+            {t("continueSetup")}
+          </Link>
+        </div>
+      )}
+
+      {hasAttention && (
+        <div className="attention-row">
+          {pendingCount > 0 && (
+            <Callout
+              tone="warn"
+              action={
+                <Link className="btn small secondary" to="/approvals">
+                  {t("viewApprovals")}
+                </Link>
+              }
+            >
+              {t(pendingCount === 1 ? "attentionPendingApprovals" : "attentionPendingApprovalsPlural", { n: pendingCount })}
+            </Callout>
+          )}
+          {walletNotCreated && (
+            <Callout
+              tone="warn"
+              action={
+                <Link className="btn small secondary" to="/setup">
+                  {t("setUpWallet")}
+                </Link>
+              }
+            >
+              {t("attentionWalletNotCreated")}
+            </Callout>
+          )}
+          {walletLocked && (
+            <Callout
+              tone="warn"
+              action={
+                <Link className="btn small secondary" to="/wallet">
+                  {t("unlockWallet")}
+                </Link>
+              }
+            >
+              <Term k="walletLocked">{t("attentionWalletLocked")}</Term>
+            </Callout>
+          )}
+          {balanceZero && (
+            <Callout
+              tone="warn"
+              action={
+                <Link className="btn small secondary" to="/wallet">
+                  {t("fundWallet")}
+                </Link>
+              }
+            >
+              {t("attentionBalanceZero")}
+            </Callout>
+          )}
+        </div>
+      )}
 
       <div className="grid">
         <div className="kpi-card">
           <div className="kpi-icon">
             <Wallet size={16} />
           </div>
-          <div className="stat-label">Vault balance</div>
-          <div className="stat-value num">{wallet?.usdc_balance != null ? formatUsdc(wallet.usdc_balance, { maxDecimals: 2 }) : "-"} <span style={{ fontSize: 13, color: "var(--text-faint)", fontWeight: 500 }}>USDC</span></div>
-          <div className="stat-sub">{wallet?.unlocked ? "Unlocked" : wallet?.has_keystore ? "Locked" : "Not created"}</div>
+          <div className="stat-label">{t("kpiVaultBalance")}</div>
+          <div className="stat-value num">
+            {wallet?.usdc_balance != null ? formatUsdc(wallet.usdc_balance, { maxDecimals: 2 }) : "-"}{" "}
+            <span style={{ fontSize: 13, color: "var(--text-faint)", fontWeight: 500 }}>{tc("usdc")}</span>
+          </div>
+          <div className="stat-sub">{wallet?.unlocked ? t("walletUnlockedSub") : wallet?.has_keystore ? t("walletLockedSub") : t("walletNotCreatedSub")}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-icon">
             <Zap size={16} />
           </div>
-          <div className="stat-label">Spent today</div>
-          <div className="stat-value num">{formatUsdc(sumDecimalStrings(todayPayments.map((p) => p.amount)), { maxDecimals: 2 })} <span style={{ fontSize: 13, color: "var(--text-faint)", fontWeight: 500 }}>USDC</span></div>
+          <div className="stat-label">{t("kpiSpentToday")}</div>
+          <div className="stat-value num">
+            {formatUsdc(sumDecimalStrings(todayPayments.map((p) => p.amount)), { maxDecimals: 2 })}{" "}
+            <span style={{ fontSize: 13, color: "var(--text-faint)", fontWeight: 500 }}>{tc("usdc")}</span>
+          </div>
           <div className={`stat-delta ${deltaTone}`}>
             {deltaTone === "up" && <TrendingUp size={12} style={{ verticalAlign: -1 }} />}
             {deltaTone === "down" && <TrendingDown size={12} style={{ verticalAlign: -1 }} />}
-            {deltaTone === "flat" && <Minus size={12} style={{ verticalAlign: -1 }} />}
-            {" "}
+            {deltaTone === "flat" && <Minus size={12} style={{ verticalAlign: -1 }} />}{" "}
             {!hasYesterdayBaseline
-              ? "No spend yesterday"
+              ? t("noSpendYesterday")
               : deltaTone === "flat"
-              ? "same as yesterday"
-              : `${deltaPct > 0 ? "+" : ""}${deltaPct}% vs yesterday`}
+              ? t("sameAsYesterday")
+              : t("vsYesterday", { pct: `${deltaPct > 0 ? "+" : ""}${deltaPct}%` })}
           </div>
         </div>
         <div className="kpi-card">
           <div className="kpi-icon">
             <KeyRound size={16} />
           </div>
-          <div className="stat-label">Active keys</div>
+          <div className="stat-label">{t("kpiActiveKeys")}</div>
           <div className="stat-value num">{activeKeys}</div>
-          <div className="stat-sub">{keys.length} total</div>
+          <div className="stat-sub">{t("totalKeysCount", { n: keys.length })}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-icon">
             <Inbox size={16} />
           </div>
-          <div className="stat-label">Payments today</div>
+          <div className="stat-label">{t("kpiPaymentsToday")}</div>
           <div className="stat-value num">{todayPayments.length}</div>
-          <div className="stat-sub">{payments.length} all time</div>
+          <div className="stat-sub">{t("allTimeCount", { n: payments.length })}</div>
         </div>
       </div>
 
       <div className="card">
         <div className="card-header">
-          <h3>Daily spend — last 7 days</h3>
-          <span className="card-sub">UTC</span>
+          <h3>{t("chartTitle")}</h3>
+          <span className="card-sub">{t("utcLabel")}</span>
         </div>
         <BarChart data={chartData} />
       </div>
@@ -163,39 +308,53 @@ export default function OverviewPage() {
       <div className="grid-2" style={{ marginTop: 16 }}>
         <div className="card">
           <div className="card-header">
-            <h3>Agents</h3>
-            <span className="card-sub">{keys.length} keys</span>
+            <h3>{t("todayByAgentTitle")}</h3>
+            <span className="card-sub">{t("keysCount", { n: keys.length })}</span>
           </div>
-          {keys.length === 0 ? (
-            <div className="empty-state">No MoneyKeys yet.</div>
+          {sortedKeys.length === 0 ? (
+            <EmptyState
+              icon={<KeyRound size={24} />}
+              title={t("emptyKeysTitle")}
+              action={
+                <Link className="btn small" to="/keys?new=1">
+                  {t("emptyKeysAction")}
+                </Link>
+              }
+            >
+              {t("emptyKeysBody")}
+            </EmptyState>
           ) : (
             <div>
-              {keys.map((k) => {
+              {sortedKeys.map((k) => {
                 const usedMicros = toMicros(k.used_today);
                 const limitMicros = toMicros(k.daily_budget);
                 const remaining = limitMicros - usedMicros;
                 const r = ratioMicros(usedMicros, limitMicros);
                 return (
-                  <div key={k.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--panel-border-soft)" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <Link
+                    key={k.id}
+                    to={`/usage?key=${encodeURIComponent(k.id)}&range=today`}
+                    className={`today-agent-row${!k.enabled ? " dimmed" : ""}`}
+                  >
+                    <div className="today-agent-top">
                       <div className="agent-row">
                         <Avatar name={k.name} />
                         <div>
                           <div className="agent-name">{k.name}</div>
                           <div className="stat-sub" style={{ marginTop: 0 }}>
-                            {formatUsdc(k.used_today, { maxDecimals: 4 })} / {formatUsdc(k.daily_budget, { maxDecimals: 4 })} USDC today
+                            {t("usedOfDaily", { used: formatUsdc(k.used_today, { maxDecimals: 4 }), daily: formatUsdc(k.daily_budget, { maxDecimals: 4 }) })}
                           </div>
                         </div>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
                         <div className="num" style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                          {remaining > 0n ? `${formatUsdc(fromMicros(remaining), { maxDecimals: 4 })} left` : "0 left"}
+                          {remaining > 0n ? t("remainingLeft", { amount: formatUsdc(fromMicros(remaining), { maxDecimals: 4 }) }) : t("remainingZero")}
                         </div>
-                        {!k.enabled && <Pill tone="red">revoked</Pill>}
+                        {!k.enabled && <Pill tone="red">{t("revokedBadge")}</Pill>}
                       </div>
                     </div>
                     <ProgressBar ratio={r} />
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -204,32 +363,40 @@ export default function OverviewPage() {
 
         <div className="card">
           <div className="card-header">
-            <h3>Recent activity</h3>
+            <h3>{t("recentActivityTitle")}</h3>
           </div>
           {recent.length === 0 ? (
-            <div className="empty-state">No activity yet.</div>
+            <EmptyState
+              title={t("emptyActivityTitle")}
+              action={
+                <Link className="btn small" to="/playground">
+                  {t("emptyActivityAction")}
+                </Link>
+              }
+            >
+              {t("emptyActivityBody")}
+            </EmptyState>
           ) : (
             <div className="activity-feed">
               {recent.map((p) => {
                 const key = keyById.get(p.key_id);
                 const mock = isMockPayment(p);
+                const target = p.kind === "chat" && p.model ? p.model : p.host;
                 return (
                   <div className="activity-item" key={p.id}>
-                    <span className={`activity-dot ${statusDotClass(p)}`} />
+                    <span className={`activity-dot ${mock ? "mock" : p.status === "settled" ? "settled" : p.status === "failed" ? "failed" : "pending"}`} />
                     <div className="activity-body">
-                      <div className="activity-title">
-                        {key?.name ?? p.key_id.slice(0, 8)} paid <span className="num">{formatUsdc(p.amount, { maxDecimals: 4 })}</span> USDC to{" "}
-                        {p.kind === "chat" && p.model ? p.model : p.host}
-                        {mock && <span className="badge mock" style={{ marginLeft: 6 }}>MOCK</span>}
-                      </div>
-                      <div className="activity-meta">
-                        <Pill tone={p.status === "settled" ? "green" : p.status === "failed" ? "red" : "yellow"}>{p.status}</Pill>
-                        <span>{formatRelativeTime(p.created_at, now)}</span>
-                        {p.tx_hash && !mock && (
-                          <a href={`https://testnet.monadvision.com/tx/${p.tx_hash}`} target="_blank" rel="noreferrer">
-                            tx
-                          </a>
-                        )}
+                      <Link className="activity-link" to={`/usage?q=${encodeURIComponent(p.tx_hash || p.id)}`}>
+                        <div className="activity-title">
+                          {t("activitySentence", { agent: key?.name ?? p.key_id.slice(0, 8), amount: formatUsdc(p.amount, { maxDecimals: 4 }), target })}
+                        </div>
+                        <div className="activity-meta">
+                          <StatusPill status={p.status} mock={mock} />
+                          <span>{relTime(p.created_at, now)}</span>
+                        </div>
+                      </Link>
+                      <div className="activity-tx">
+                        <TxLink txHash={p.tx_hash} mock={mock} />
                       </div>
                     </div>
                   </div>

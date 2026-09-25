@@ -1,5 +1,6 @@
 import { build } from "esbuild";
-import { rmSync, mkdirSync } from "node:fs";
+import { rmSync, mkdirSync, readdirSync, renameSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -38,4 +39,20 @@ await build({
   entryNames: "mcp",
 });
 
-console.log("built dist/cli.js + dist/mcp.js");
+// pack/moneyswitch.tgz: the same tarball "npm publish" would upload, served by
+// the MoneySwitch server at GET /dl/moneyswitch.tgz so the Dashboard's one-line
+// "npx -y --package=<server>/dl/moneyswitch.tgz moneyswitch connect ..." works
+// before (and without) an npm release. --ignore-scripts: prepack would re-run
+// this very build. Kept outside dist/ so it never ends up inside the package.
+const packDir = path.join(__dirname, "pack");
+rmSync(packDir, { recursive: true, force: true });
+mkdirSync(packDir, { recursive: true });
+execSync(`npm pack --ignore-scripts --silent --pack-destination "${packDir}"`, {
+  cwd: __dirname,
+  stdio: ["ignore", "ignore", "inherit"],
+});
+const packed = readdirSync(packDir).find((f) => f.endsWith(".tgz"));
+if (!packed) throw new Error("npm pack produced no tarball");
+renameSync(path.join(packDir, packed), path.join(packDir, "moneyswitch.tgz"));
+
+console.log("built dist/cli.js + dist/mcp.js + pack/moneyswitch.tgz");

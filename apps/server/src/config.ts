@@ -8,6 +8,10 @@ export interface ServerConfig {
   dataDir: string;
   dbFilePath: string;
   walletPassword: string | null;
+  /** Base URL of the demo x402 seller (set by scripts/demo-*.mjs), used by the Dashboard's one-click demo channel. */
+  demoSellerUrl?: string | null;
+  /** Absolute path of the packed client CLI tarball served at GET /dl/moneyswitch.tgz (defaults to apps/cli/pack/moneyswitch.tgz). */
+  cliTarballPath?: string | null;
 }
 
 function defaultDataDir(): string {
@@ -27,5 +31,6 @@ export function loadConfig(): ServerConfig {
       walletPassword = null;
     }
   }
-  return { port, host, dataDir, dbFilePath, walletPassword };
+  const demoSellerUrl = process.env.MONEYSWITCH_DEMO_SELLER_URL?.trim() || null;
+  return { port, host, dataDir, dbFilePath, walletPassword, demoSellerUrl };
 }

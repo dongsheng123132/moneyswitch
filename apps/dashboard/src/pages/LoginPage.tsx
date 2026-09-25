@@ -1,63 +1,132 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../auth";
+import { getSetupStatus } from "../api";
+import { useT } from "../i18n";
+import { shellStrings } from "../i18n/strings/shell";
+import LangSwitch from "../components/LangSwitch";
+import Callout from "../components/Callout";
+import Snippet from "../components/Snippet";
+
+const RESET_CMD = "pnpm admin:reset-token -- --data-dir <MONEYSWITCH_DATA_DIR>";
 
 export default function LoginPage() {
-  const { loginAdmin, loginEmployee, loading, error } = useAuth();
+  const t = useT(shellStrings);
+  const { loginAdmin, loginEmployee, loading, error, errorDetail } = useAuth();
   const [token, setToken] = useState("");
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [reveal, setReveal] = useState(false);
+  const [formatError, setFormatError] = useState(false);
+  const [setupActive, setSetupActive] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    getSetupStatus()
+      .then((s) => setSetupActive(s.setup_link_active))
+      .catch(() => setSetupActive(false));
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const candidate = token.trim();
     if (!candidate) return;
-    setLocalError(null);
-
+    setFormatError(false);
     if (candidate.startsWith("ms_admin_")) {
-      const ok = await loginAdmin(candidate);
-      if (ok) navigate("/", { replace: true });
+      if (await loginAdmin(candidate)) navigate("/", { replace: true });
       return;
     }
     if (candidate.startsWith("mk_live_")) {
-      const ok = await loginEmployee(candidate);
-      if (ok) navigate("/me", { replace: true });
+      if (await loginEmployee(candidate)) navigate("/me", { replace: true });
       return;
     }
-    setLocalError("这不是有效的 MoneySwitch 凭据：管理员请粘贴 ms_admin_ 开头的 token，员工请粘贴 mk_live_ 开头的 Key。");
+    setFormatError(true);
   }
+
+  function errorText(): string | null {
+    if (formatError) return t("login_err_format");
+    if (!error) return null;
+    switch (error) {
+      case "admin_invalid":
+        return t("login_err_admin");
+      case "unreachable":
+        return t("login_err_unreachable");
+      case "KEY_INVALID":
+        return t("login_err_KEY_INVALID");
+      case "KEY_REVOKED":
+        return t("login_err_KEY_REVOKED");
+      case "KEY_EXPIRED":
+        return t("login_err_KEY_EXPIRED");
+      default:
+        return t("login_err_generic", { message: errorDetail ?? error });
+    }
+  }
+  const err = errorText();
 
   return (
     <div className="login-shell">
-      <div className="card login-card">
-        <div className="login-brand">
-          <div className="brand-mark">M</div>
-          <div>
-            <h1>MoneySwitch</h1>
-          </div>
-        </div>
-        <p className="login-tagline">Give your AI an API key for money.</p>
-        <form onSubmit={onSubmit}>
-          <div className="field">
-            <label htmlFor="login-token">管理员 token 或员工 Key</label>
-            <input
-              id="login-token"
-              type="password"
-              autoFocus
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="ms_admin_… 或 mk_live_…"
-            />
-            <div className="field-hint">
-              ms_admin_ 开头 → 打开管理员控制台（钱包/渠道/审批/全公司用量）；mk_live_ 开头 → 打开员工视图（只看自己的额度和流水）。
+      <div className="login-topright">
+        <LangSwitch />
+      </div>
+      <div className="login-stack">
+        {setupActive && (
+          <Callout tone="info" title={t("login_setupActiveTitle")}>
+            {t("login_setupActiveBody")}
+          </Callout>
+        )}
+        <div className="card login-card">
+          <div className="login-brand">
+            <div className="brand-mark">M</div>
+            <div>
+              <h1>MoneySwitch</h1>
             </div>
           </div>
-          {(localError || error) && <div className="error-banner">{localError || error}</div>}
-          <button className="btn big" type="submit" disabled={loading || !token.trim()}>
-            {loading ? "登录中…" : "登录"}
-          </button>
-        </form>
-        <div className="login-footnote">USDC · Monad · x402</div>
+          <p className="login-tagline">{t("login_tagline")}</p>
+          <form onSubmit={onSubmit} noValidate>
+            <div className="field">
+              <label htmlFor="login-token">{t("login_label")}</label>
+              <div className="input-with-action">
+                <input
+                  id="login-token"
+                  type={reveal ? "text" : "password"}
+                  autoFocus
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={token}
+                  onChange={(e) => {
+                    setToken(e.target.value);
+                    setFormatError(false);
+                  }}
+                  placeholder={t("login_placeholder")}
+                  aria-invalid={Boolean(err)}
+                  aria-describedby={err ? "login-error" : undefined}
+                />
+                <button type="button" className="input-action" onClick={() => setReveal((r) => !r)} aria-label={reveal ? t("login_hide") : t("login_show")}>
+                  {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+            {err && (
+              <div id="login-error">
+                <Callout tone="error">{err}</Callout>
+              </div>
+            )}
+            <button className="btn big" type="submit" disabled={loading || !token.trim()}>
+              {loading ? t("login_submitting") : t("login_submit")}
+            </button>
+          </form>
+
+          <div className="login-help">
+            <div className="login-help-title">{t("login_whereTitle")}</div>
+            <p>{t("login_whereAdmin")}</p>
+            <p>{t("login_whereEmployee")}</p>
+            <details className="login-lost">
+              <summary>{t("login_lostTitle")}</summary>
+              <p>{t("login_lostBody")}</p>
+              <Snippet code={RESET_CMD} />
+            </details>
+          </div>
+          <div className="login-footnote">USDC · Monad · x402</div>
+        </div>
       </div>
     </div>
   );

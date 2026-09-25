@@ -76,6 +76,9 @@ async function main() {
         MONEYSWITCH_PORT: String(SERVER_PORT),
         MONEYSWITCH_DATA_DIR: DATA_DIR,
         MONEYSWITCH_WALLET_PASSWORD: effectiveWalletPassword,
+        // Lets the Dashboard's "one-click demo channel" point at THIS seller
+        // instead of a hard-coded port (docs/ux-audit.md A-7).
+        MONEYSWITCH_DEMO_SELLER_URL: `http://127.0.0.1:${SELLER_PORT}`,
       },
       cwd: REPO_ROOT,
     },
@@ -96,7 +99,30 @@ async function main() {
   );
   console.log("[demo:local] press Ctrl+C to stop all three services.\n");
 
+  // First boot of a fresh data dir: surface the one-time setup link (NOT the
+  // admin token) in this terminal. It is single-use and expires in 30 min, so
+  // echoing it here is far less sensitive than the admin token itself.
+  const setupLink = findSetupLink(serverLogPath);
+  if (setupLink) {
+    console.log(`[demo:local] 首次启动 / first run — open this one-time setup link:
+
+    ${setupLink}
+`);
+  }
+
   installShutdownHandlers([mockFacilitator, demoSeller, server]);
+}
+
+/** Returns the setup link printed by the most recent server start in this log, if any. */
+function findSetupLink(logPath) {
+  try {
+    const text = fs.readFileSync(logPath, "utf8");
+    const lastRun = text.slice(text.lastIndexOf("===== "));
+    const m = /(http:\/\/\S+\/setup#ms_setup_[A-Za-z0-9]+)/.exec(lastRun);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
 }
 
 main().catch((err) => {

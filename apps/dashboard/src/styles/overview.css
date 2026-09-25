@@ -1,0 +1,87 @@
+/* Overview page (docs/ux-audit.md A-2, A-5, D-1, D-2) */
+
+.getting-started-card {
+  margin-bottom: 16px;
+}
+
+.getting-started-card .card-header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.getting-started-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 10px 24px;
+  margin: 14px 0 16px;
+}
+
+.getting-started-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.getting-started-item .gs-check {
+  color: var(--accent-success, #34c78e);
+  flex-shrink: 0;
+}
+
+.getting-started-item .gs-empty {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.getting-started-item .gs-done {
+  color: var(--text);
+}
+
+.attention-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.today-agent-row {
+  display: block;
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-bottom: 1px solid var(--panel-border-soft);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: inherit;
+}
+
+.today-agent-row:last-child {
+  border-bottom: none;
+}
+
+.today-agent-row:hover,
+.today-agent-row:focus-visible {
+  background: var(--panel-2);
+  outline: none;
+}
+
+.today-agent-row.dimmed {
+  opacity: 0.55;
+}
+
+.today-agent-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.activity-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.activity-tx {
+  margin-top: 4px;
+}

@@ -20,3 +20,10 @@ docs/pitch/deck/ppt/
 # delegated-agent scratch files
 tools/m6/TASK.md
 tools/m6/pi-run.log
+
+# pitch media (large binaries / generated) — publish via GitHub Releases instead
+docs/pitch/video/
+docs/pitch/voice/
+docs/pitch/voice-samples/
+docs/pitch/deck-v2/shots/
+docs/pitch/deck-v2/tools/

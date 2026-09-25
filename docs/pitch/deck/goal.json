@@ -4,7 +4,7 @@
   "audience": "黑客松评委 / Monad 生态导师 / 开发者",
   "owner": "MoneySwitch",
   "randomSeed": "theme02-20260926-msw",
-  "pageCount": 11,
+  "pageCount": 12,
   "themePack": "theme02",
   "slides": [
     {
@@ -195,15 +195,47 @@
       }
     },
     {
+      "layout": "theme02_page065",
+      "props": {
+        "kicker": "谁在用",
+        "title": "四个角色",
+        "titleEm": "围着 MoneyKey",
+        "center": {
+          "label": "MoneySwitch",
+          "sub": "npx moneyswitch connect --apply"
+        },
+        "nodeCount": 4,
+        "nodes": [
+          {
+            "label": "管理员",
+            "desc": "ms_admin_ · 控制台:钱包/渠道/发Key/审批"
+          },
+          {
+            "label": "员工",
+            "desc": "mk_live_ ·「我的额度」:额度/对话/流水"
+          },
+          {
+            "label": "Agent",
+            "desc": "Claude Code/Codex 等,MCP或OpenAI兼容"
+          },
+          {
+            "label": "卖方",
+            "desc": "无需注册,挂 x402 直接收 USDC"
+          }
+        ],
+        "index": "P.08"
+      }
+    },
+    {
       "layout": "theme02_page020",
       "props": {
-        "kicker": "2026-09-25 实测",
+        "kicker": "2026-09-26 实测",
         "title": "真实数据",
         "titleEm": "全部链上可查",
         "statCount": 3,
         "stats": [
           {
-            "value": "10",
+            "value": "11",
             "unit": "笔已结算",
             "caption": "0 笔 mock · 首笔 0x1c83a4…4d4d",
             "delta": "链上可查"
@@ -217,11 +249,11 @@
           {
             "value": "0",
             "unit": "MON",
-            "caption": "金库免 gas · 65 个测试全绿",
+            "caption": "金库免 gas · 92 个测试全绿",
             "delta": "facilitator 代付"
           }
         ],
-        "index": "P.08"
+        "index": "P.09"
       }
     },
     {
@@ -241,20 +273,20 @@
           {
             "date": "0:20",
             "tag": "Claude Code",
-            "title": "自动购买报告",
+            "title": "自付一份报告",
             "desc": "付 $0.01,链上 tx 实时出现"
           },
           {
             "date": "0:40",
             "tag": "Playground",
-            "title": "当 OpenAI Key 用",
-            "desc": "每条消息扣 $0.01"
+            "title": "对话按条扣费",
+            "desc": "MoneyKey当OpenAI Key,每条$0.01"
           },
           {
             "date": "0:55",
             "tag": "护栏测试",
-            "title": "恶意请求 $5",
-            "desc": "PER_REQUEST_LIMIT_EXCEEDED"
+            "title": "$5 被拦",
+            "desc": "超单笔上限,PER_REQUEST_LIMIT_EXCEEDED"
           },
           {
             "date": "1:10",
@@ -264,12 +296,12 @@
           },
           {
             "date": "1:25",
-            "tag": "撤销",
-            "title": "Revoke",
-            "desc": "立即 KEY_REVOKED"
+            "tag": "员工视图/撤销",
+            "title": "我的额度 + Revoke",
+            "desc": "看流水,一键 KEY_REVOKED"
           }
         ],
-        "index": "P.09"
+        "index": "P.10"
       }
     },
     {
@@ -282,22 +314,22 @@
         "phaseCount": 3,
         "phases": [
           {
-            "period": "今天 v0.1-v0.2",
+            "period": "今天 v0.1-v0.3",
             "title": "已上线",
-            "desc": "MoneyKey+策略+x402+MCP+Dashboard;OpenAI网关+Playground"
+            "desc": "MoneyKey+策略+x402+MCP+Dashboard+网关+员工视图+CLI接入"
           },
           {
-            "period": "v0.3",
+            "period": "v0.4",
             "title": "按量计价",
             "desc": "x402 upto 按 token 计价 · MetaMask/OKX 钱包驱动 · 一键配 Key"
           },
           {
-            "period": "v0.4",
+            "period": "v0.5",
             "title": "企业版",
             "desc": "多用户/部门额度/审批流/审计,一个USDC资金池分给每个Agent"
           }
         ],
-        "index": "P.10"
+        "index": "P.11"
       }
     },
     {
@@ -307,13 +339,13 @@
         "ghost": "MoneySwitch",
         "statement": "Your AI gets",
         "statementEm": " pocket money.",
-        "sub": "You keep the bank account.",
+        "sub": "You keep the bank account. API keys for money · USDC · Monad · x402",
         "signature": {
           "org": "MoneySwitch",
           "date": "2026.09.26",
-          "note": "API keys for money · USDC · Monad · x402"
+          "note": "开源 · github.com/dongsheng123132/moneyswitch"
         },
-        "index": "P.11"
+        "index": "P.12"
       }
     }
   ]

@@ -1,5 +1,10 @@
 # Using MoneySwitch from Claude Code
 
+> Easiest path: open the Dashboard → *Connect agent* (or the page shown right
+> after creating a key) and copy the one-line `moneyswitch connect` command —
+> it is generated with your server's real address and registers the MCP server
+> with user scope (`-s user`) for you. The manual steps below are the fallback.
+
 1. Build the MCP server:
 
    ```bash

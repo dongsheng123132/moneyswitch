@@ -7,6 +7,7 @@ import type { AppContext } from "./context.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAgentRoutes } from "./routes/agent.js";
 import { registerGatewayRoutes } from "./routes/gateway.js";
+import { registerSetupRoutes } from "./routes/setup.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +28,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
           "req.headers.authorization",
           "req.headers.Authorization",
           'req.body.password',
+          'req.body.setup_token',
           'req.body["mk_live_"]',
         ],
         censor: "[REDACTED]",
@@ -54,6 +56,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerAdminRoutes(app, ctx);
   registerAgentRoutes(app, ctx);
   registerGatewayRoutes(app, ctx);
+  registerSetupRoutes(app, ctx);
 
   const dashboardDist = resolveDashboardDist();
   const dashboardIndexPath = path.join(dashboardDist, "index.html");

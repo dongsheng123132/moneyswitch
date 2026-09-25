@@ -8,13 +8,16 @@ import {
   setEmployeeKey as persistEmployeeKey,
   clearEmployeeKey,
   getStatus,
+  ChatApiError,
 } from "./api";
 
 interface AuthState {
   token: string | null; // admin token (ms_admin_…)
   employeeKey: string | null; // employee MoneyKey (mk_live_…)
   loading: boolean;
+  /** Error CODE (not display text): "admin_invalid" | "unreachable" | a MoneyKey error code (KEY_REVOKED…) | "generic". LoginPage localizes it. */
   error: string | null;
+  errorDetail: string | null;
   loginAdmin: (token: string) => Promise<boolean>;
   loginEmployee: (key: string) => Promise<boolean>;
   logout: () => void;
@@ -27,14 +30,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [employeeKey, setEmployeeKeyState] = useState<string | null>(() => getEmployeeKey());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   const loginAdmin = useCallback(async (candidate: string) => {
     setLoading(true);
     setError(null);
+    setErrorDetail(null);
     try {
       const ok = await verifyAdminToken(candidate);
       if (!ok) {
-        setError("Token invalid or does not have admin access.");
+        setError("admin_invalid");
         setLoading(false);
         return false;
       }
@@ -43,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return true;
     } catch {
-      setError("Could not reach MoneySwitch server.");
+      setError("unreachable");
       setLoading(false);
       return false;
     }
@@ -55,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginEmployee = useCallback(async (candidate: string) => {
     setLoading(true);
     setError(null);
+    setErrorDetail(null);
     try {
       await getStatus(candidate);
       persistEmployeeKey(candidate);
@@ -62,7 +68,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Key invalid or could not reach MoneySwitch server.");
+      if (e instanceof ChatApiError) {
+        setError(e.code ?? (e.status === 401 ? "KEY_INVALID" : "generic"));
+        setErrorDetail(e.message);
+      } else {
+        setError("unreachable");
+      }
       setLoading(false);
       return false;
     }
@@ -76,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ token, employeeKey, loading, error, loginAdmin, loginEmployee, logout }}>
+    <AuthContext.Provider value={{ token, employeeKey, loading, error, errorDetail, loginAdmin, loginEmployee, logout }}>
       {children}
     </AuthContext.Provider>
   );
