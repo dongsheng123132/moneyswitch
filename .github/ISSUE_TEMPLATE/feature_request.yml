@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a new capability or change to MoneySwitch
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that MoneySwitch doesn't support today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see happen? If it changes documented behavior, note which SPEC*.md section it would affect.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - apps/server
+        - apps/dashboard
+        - apps/mcp
+        - apps/connect
+        - apps/cli (moneyswitch npm package)
+        - packages/* (policy/wallet/x402/core)
+        - docs
+        - other / not sure
+    validations:
+      required: true

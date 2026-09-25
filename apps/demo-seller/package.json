@@ -1,0 +1,32 @@
+{
+  "name": "@moneyswitch/demo-seller",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"no unit tests in demo-seller (covered by server test:e2e)\" && exit 0",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@moneyswitch/core": "workspace:*",
+    "@moneyswitch/x402": "workspace:*",
+    "@x402/core": "2.27.0",
+    "@x402/evm": "2.27.0",
+    "@x402/express": "2.27.0",
+    "express": "5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.3",
+    "typescript": "5.7.3",
+    "tsx": "4.23.15"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
+    "directory": "apps/demo-seller"
+  }
+}

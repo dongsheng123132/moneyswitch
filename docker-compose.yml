@@ -1,0 +1,34 @@
+# v0.1: docker-compose is written per SPEC.md §2.1/2.7 but is NOT the
+# validated path in this environment (Docker Desktop daemon is not running
+# here). `pnpm dev` / `pnpm start` running directly on the host is the P0
+# path; this compose file has not been started/tested.
+services:
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    ports:
+      - "4020:4020"
+    environment:
+      MONEYSWITCH_PORT: "4020"
+      MONEYSWITCH_HOST: "0.0.0.0"
+      MONEYSWITCH_DATA_DIR: "/data"
+      MONEYSWITCH_WALLET_PASSWORD_FILE: "/run/secrets/wallet_password"
+    volumes:
+      - moneyswitch-data:/data
+    restart: unless-stopped
+
+  demo-seller:
+    build:
+      context: .
+      dockerfile: apps/demo-seller/Dockerfile
+    ports:
+      - "4021:4021"
+    environment:
+      DEMO_SELLER_PORT: "4021"
+      DEMO_SELLER_PAY_TO: "${DEMO_SELLER_PAY_TO}"
+      DEMO_SELLER_FACILITATOR_URL: "${DEMO_SELLER_FACILITATOR_URL:-https://x402-facilitator.molandak.org}"
+    restart: unless-stopped
+
+volumes:
+  moneyswitch-data:

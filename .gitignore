@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.log
+.moneyswitch/
+data/
+.data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+.env
+.env.*
+!.env.example
+*.tgz
+tools/m6/node_modules/
+docs/pitch/deck/ppt/node_modules/
+
+# third-party vendor assets of the rendered pitch deck (licenses not audited)
+docs/pitch/deck/ppt/
+# delegated-agent scratch files
+tools/m6/TASK.md
+tools/m6/pi-run.log

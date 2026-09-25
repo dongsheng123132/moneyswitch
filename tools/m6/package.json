@@ -1,0 +1,10 @@
+{
+  "name": "m6-monad-testnet-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Monad testnet helper scripts (fund-vault, verify-transfer)",
+  "dependencies": {
+    "viem": "2.56.9"
+  }
+}

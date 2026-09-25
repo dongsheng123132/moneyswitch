@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/dongsheng123132/moneyswitch/security/advisories/new
+    about: Please report vulnerabilities privately via Security Advisories, not a public issue. See SECURITY.md.
+  - name: Questions / discussion
+    url: https://github.com/dongsheng123132/moneyswitch/discussions
+    about: General questions about using or deploying MoneySwitch.

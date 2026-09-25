@@ -1,0 +1,320 @@
+{
+  "title": "MoneySwitch · Monad Metropolis 深圳 Hacker House",
+  "goal": "面向黑客松评委、Monad生态导师、开发者,讲清MoneySwitch如何用MoneyKey让AI安全花USDC而不是拿到钱包私钥,并展示今天(9/26)现场可跑的真实链上数据",
+  "audience": "黑客松评委 / Monad 生态导师 / 开发者",
+  "owner": "MoneySwitch",
+  "randomSeed": "theme02-20260926-msw",
+  "pageCount": 11,
+  "themePack": "theme02",
+  "slides": [
+    {
+      "layout": "theme02_page002",
+      "props": {
+        "kicker": "Give your AI an API key for money.",
+        "title": "MoneySwitch",
+        "titleEm": "花钱像用 API Key",
+        "subtitle": "让 AI 像用 API Key 一样花钱,而不是把钱包交给 AI",
+        "statCount": 0,
+        "stats": [],
+        "meta": [
+          "USDC·Monad·x402",
+          "Monad Metropolis",
+          "深圳 · 2026.09.26"
+        ],
+        "index": "P.01"
+      }
+    },
+    {
+      "layout": "theme02_page045",
+      "props": {
+        "kicker": "问题",
+        "title": "钱包不敢交给AI",
+        "titleEm": "但AI已经能付钱",
+        "heroKicker": "x402 现状",
+        "itemCount": 3,
+        "items": [
+          {
+            "lead": "x402 已是现实",
+            "body": "Agent 按次付 USDC:HTTP 402 → 签名 → 结算,已经在跑"
+          },
+          {
+            "lead": "密钥直接裸奔",
+            "body": "客户端示例普遍 PRIVATE_KEY=0x… 直接塞给程序"
+          },
+          {
+            "lead": "规模没有答案",
+            "body": "一次 Prompt Injection 就能转空;10个、100个Agent怎么管?"
+          }
+        ],
+        "index": "P.02"
+      }
+    },
+    {
+      "layout": "theme02_page047",
+      "props": {
+        "kicker": "洞察",
+        "quote": "AI已经把用户教育好了",
+        "quoteEm": "——不是钱包,是API Key",
+        "quoteTail": "。把管理token的常识,搬到真钱上。",
+        "attribution": "参考 NewAPI / OpenRouter 的额度管理体系",
+        "index": "P.03"
+      }
+    },
+    {
+      "layout": "theme02_page027",
+      "props": {
+        "kicker": "方案",
+        "title": "MoneyKey",
+        "titleEm": "≠ 钱,≠ 私钥",
+        "lead": "钱在金库,AI只拿一段可控的花钱权限",
+        "cardCount": 3,
+        "cards": [
+          {
+            "title": "钱始终是 USDC",
+            "desc": "放在你自己的低余额金库里",
+            "tag": "金库"
+          },
+          {
+            "title": "AI只拿MoneyKey",
+            "desc": "mk_live_…:有额度、可撤销的权限",
+            "tag": "授权"
+          },
+          {
+            "title": "每一分钱可见",
+            "desc": "像 token 用量一样可审计",
+            "tag": "审计"
+          }
+        ],
+        "index": "P.04"
+      }
+    },
+    {
+      "layout": "theme02_page053",
+      "props": {
+        "kicker": "怎么工作",
+        "title": "MoneyKey 支付链路",
+        "titleEm": "签名前先检查",
+        "lead": "底层全用现成的:x402官方SDK·Monad·Circle USDC,我们不发币、不造协议",
+        "stepCount": 4,
+        "imageCount": 0,
+        "images": [],
+        "steps": [
+          {
+            "tag": "01",
+            "title": "调用 + 报价",
+            "note": "Agent用MoneyKey调用,卖方返回HTTP 402报价"
+          },
+          {
+            "tag": "02",
+            "title": "签名前检查",
+            "note": "策略引擎核对额度/白名单/审批"
+          },
+          {
+            "tag": "03",
+            "title": "签名 + 结算",
+            "note": "本地签USDC授权,facilitator在Monad结算"
+          },
+          {
+            "tag": "04",
+            "title": "返回 + 记账",
+            "note": "返回内容,用量 +$0.01"
+          }
+        ],
+        "index": "P.05"
+      }
+    },
+    {
+      "layout": "theme02_page051",
+      "props": {
+        "kicker": "OpenAI / NewAPI 兼容",
+        "title": "零改造接入",
+        "titleEm": ",只换 Base URL",
+        "leftTag": "今天",
+        "rightTag": "MoneySwitch",
+        "pointCount": 3,
+        "leftPoints": [
+          "Base URL = api.openai.com",
+          "API Key = sk-…",
+          "按 token 扣虚拟额度"
+        ],
+        "rightPoints": [
+          "Base URL = 127.0.0.1:4020/v1",
+          "API Key = mk_live_…",
+          "每次调用在 Monad 真实结算 USDC"
+        ],
+        "leftStat": {
+          "value": "Token",
+          "unit": "虚拟额度",
+          "caption": "按 token 扣量,不触碰真实资金"
+        },
+        "rightStat": {
+          "value": "USDC",
+          "unit": "链上结算",
+          "caption": "Cherry Studio/Open WebUI/MCP 零改造接入"
+        },
+        "index": "P.06"
+      }
+    },
+    {
+      "layout": "theme02_page007",
+      "props": {
+        "kicker": "护栏",
+        "title": "签名之前先拦",
+        "titleEm": "六道防线",
+        "lead": "Prompt Injection让它转$500?单笔上限$0.20,签名都不会发生",
+        "leadKicker": "护栏",
+        "chapterUnit": "项",
+        "itemCount": 6,
+        "items": [
+          {
+            "title": "单笔上限",
+            "sub": "超出在签名前拒绝"
+          },
+          {
+            "title": "日/总预算",
+            "sub": "并发下原子预留"
+          },
+          {
+            "title": "服务白名单",
+            "sub": "仅允许列表内服务"
+          },
+          {
+            "title": "人工审批阈值",
+            "sub": "超线需人工批准"
+          },
+          {
+            "title": "一键撤销",
+            "sub": "立即生效"
+          },
+          {
+            "title": "防SSRF/重定向",
+            "sub": "防止劫持付款"
+          }
+        ],
+        "index": "P.07"
+      }
+    },
+    {
+      "layout": "theme02_page020",
+      "props": {
+        "kicker": "2026-09-25 实测",
+        "title": "真实数据",
+        "titleEm": "全部链上可查",
+        "statCount": 3,
+        "stats": [
+          {
+            "value": "10",
+            "unit": "笔已结算",
+            "caption": "0 笔 mock · 首笔 0x1c83a4…4d4d",
+            "delta": "链上可查"
+          },
+          {
+            "value": "$0.01",
+            "unit": "每次调用",
+            "caption": "上游推理成本仅 $0.000126",
+            "delta": "按次收 USDC"
+          },
+          {
+            "value": "0",
+            "unit": "MON",
+            "caption": "金库免 gas · 65 个测试全绿",
+            "delta": "facilitator 代付"
+          }
+        ],
+        "index": "P.08"
+      }
+    },
+    {
+      "layout": "theme02_page012",
+      "props": {
+        "kicker": "现场演示",
+        "title": "5分钟走一遍",
+        "titleEm": "全程真实结算",
+        "itemCount": 6,
+        "items": [
+          {
+            "date": "0:00",
+            "tag": "Dashboard",
+            "title": "开一把 MoneyKey",
+            "desc": "给 Claude 开 $0.50/天 额度"
+          },
+          {
+            "date": "0:20",
+            "tag": "Claude Code",
+            "title": "自动购买报告",
+            "desc": "付 $0.01,链上 tx 实时出现"
+          },
+          {
+            "date": "0:40",
+            "tag": "Playground",
+            "title": "当 OpenAI Key 用",
+            "desc": "每条消息扣 $0.01"
+          },
+          {
+            "date": "0:55",
+            "tag": "护栏测试",
+            "title": "恶意请求 $5",
+            "desc": "PER_REQUEST_LIMIT_EXCEEDED"
+          },
+          {
+            "date": "1:10",
+            "tag": "审批",
+            "title": "超线一键批准",
+            "desc": "Dashboard 手动放行"
+          },
+          {
+            "date": "1:25",
+            "tag": "撤销",
+            "title": "Revoke",
+            "desc": "立即 KEY_REVOKED"
+          }
+        ],
+        "index": "P.09"
+      }
+    },
+    {
+      "layout": "theme02_page056",
+      "props": {
+        "kicker": "路线图",
+        "title": "从今天到企业版",
+        "titleEm": "开源打底",
+        "lead": "开源:接入层(MCP/适配器/卖方示例)Apache-2.0;服务端 AGPL-3.0",
+        "phaseCount": 3,
+        "phases": [
+          {
+            "period": "今天 v0.1-v0.2",
+            "title": "已上线",
+            "desc": "MoneyKey+策略+x402+MCP+Dashboard;OpenAI网关+Playground"
+          },
+          {
+            "period": "v0.3",
+            "title": "按量计价",
+            "desc": "x402 upto 按 token 计价 · MetaMask/OKX 钱包驱动 · 一键配 Key"
+          },
+          {
+            "period": "v0.4",
+            "title": "企业版",
+            "desc": "多用户/部门额度/审批流/审计,一个USDC资金池分给每个Agent"
+          }
+        ],
+        "index": "P.10"
+      }
+    },
+    {
+      "layout": "theme02_page074",
+      "props": {
+        "kicker": "MoneySwitch",
+        "ghost": "MoneySwitch",
+        "statement": "Your AI gets",
+        "statementEm": " pocket money.",
+        "sub": "You keep the bank account.",
+        "signature": {
+          "org": "MoneySwitch",
+          "date": "2026.09.26",
+          "note": "API keys for money · USDC · Monad · x402"
+        },
+        "index": "P.11"
+      }
+    }
+  ]
+}

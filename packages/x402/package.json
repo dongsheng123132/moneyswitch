@@ -1,0 +1,36 @@
+{
+  "name": "@moneyswitch/x402",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"no unit tests in x402 package (covered by server test:e2e + test:testnet)\" && exit 0",
+    "test:testnet": "tsx test/testnet.readonly.ts"
+  },
+  "dependencies": {
+    "@moneyswitch/core": "workspace:*",
+    "@moneyswitch/db": "workspace:*",
+    "@moneyswitch/wallet": "workspace:*",
+    "@x402/core": "2.27.0",
+    "@x402/evm": "2.27.0",
+    "@x402/fetch": "2.27.0",
+    "viem": "2.56.9",
+    "ethers": "6.17.0"
+  },
+  "devDependencies": {
+    "vitest": "5.0.2",
+    "typescript": "5.7.3",
+    "tsx": "4.23.15",
+    "better-sqlite3": "13.0.3",
+    "@types/better-sqlite3": "7.6.13"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
+    "directory": "packages/x402"
+  }
+}

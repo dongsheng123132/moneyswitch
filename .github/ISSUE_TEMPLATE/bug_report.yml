@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in MoneySwitch isn't working as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. If this is a
+        **security** vulnerability, please use
+        [Security Advisories](https://github.com/dongsheng123132/moneyswitch/security/advisories/new)
+        instead of this form — see [SECURITY.md](../../SECURITY.md).
+  - type: input
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the repo (apps/server, apps/dashboard, apps/mcp, apps/connect, apps/cli / `moneyswitch` npm package, a specific package/*)?
+      placeholder: apps/server
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Git commit / tag, or the `moneyswitch` npm package version if applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands/requests, ideally against `pnpm demo:local` (offline) rather than a real testnet run.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / output
+      description: Paste any error output. Redact any `mk_live_`/`ms_admin_` secrets, private keys, or wallet passwords before pasting.
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "OS, Node version, pnpm version"
+    validations:
+      required: true

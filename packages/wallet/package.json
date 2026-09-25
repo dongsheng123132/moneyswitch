@@ -1,0 +1,25 @@
+{
+  "name": "@moneyswitch/wallet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ethers": "6.17.0"
+  },
+  "devDependencies": {
+    "vitest": "5.0.2",
+    "typescript": "5.7.3"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
+    "directory": "packages/wallet"
+  }
+}

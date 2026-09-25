@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: build + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test (T1 — offline unit/integration)
+        run: pnpm test
+
+      - name: Test (T2 — offline end-to-end, mock-facilitator)
+        run: pnpm test:e2e
+
+      # T3 (pnpm test:testnet) is intentionally NOT run in CI: its
+      # funds-requiring half needs a funded Monad testnet wallet and real
+      # network access to a third-party facilitator, which CI runners
+      # shouldn't have credentials for. See CONTRIBUTING.md.

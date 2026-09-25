@@ -1,0 +1,40 @@
+{
+  "name": "@moneyswitch/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run test/unit",
+    "test:e2e": "vitest run test/e2e --testTimeout=30000",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.4",
+    "@moneyswitch/core": "workspace:*",
+    "@moneyswitch/db": "workspace:*",
+    "@moneyswitch/wallet": "workspace:*",
+    "@moneyswitch/x402": "workspace:*",
+    "fastify": "5.12.5"
+  },
+  "devDependencies": {
+    "@moneyswitch/demo-seller": "workspace:*",
+    "@moneyswitch/mock-facilitator": "workspace:*",
+    "@types/better-sqlite3": "7.6.13",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.3",
+    "ethers": "6.17.0",
+    "openai": "^7.23.0",
+    "tsx": "4.23.15",
+    "typescript": "5.7.3",
+    "vitest": "5.0.2"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
+    "directory": "apps/server"
+  }
+}
