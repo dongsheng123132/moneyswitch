@@ -264,6 +264,8 @@ export interface WalletInfo {
   has_keystore: boolean;
   usdc_balance: string | null;
   network: string;
+  /** Offline demo: usdc_balance is simulated, not read from the chain. */
+  simulated?: boolean;
 }
 
 export async function getWallet(): Promise<WalletInfo> {
@@ -700,7 +702,7 @@ export async function revokeMyChildKey(key: string, id: string): Promise<{ id: s
 // ---------------------------------------------------------------------------
 
 /** GET /v1/setup/status — unauthenticated; only says whether a one-time setup link is still claimable. */
-export async function getSetupStatus(): Promise<{ setup_link_active: boolean }> {
+export async function getSetupStatus(): Promise<{ setup_link_active: boolean; demo?: boolean }> {
   const res = await fetch("/v1/setup/status");
   if (!res.ok) throw new ApiError(res.status, res.statusText);
   return res.json();
@@ -737,6 +739,8 @@ export interface AdminMeta {
   public_base: string;
   /** v0.5: true when public_base comes from MONEYSWITCH_PUBLIC_URL rather than the browser's origin. */
   public_base_from_env: boolean;
+  /** true only on the offline demo (`moneyswitch-server demo`). */
+  demo?: boolean;
 }
 
 /** GET /v1/admin/meta — admin only. */

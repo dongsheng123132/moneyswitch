@@ -4,6 +4,56 @@ All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per the repository's own `SPEC*.md`
 files.
 
+## 0.5.1 — 2026-09-26
+
+Zero-setup trial and one-command self-hosting.
+
+- **New npm package `moneyswitch-server` 0.5.1** (`apps/server-pkg`,
+  AGPL-3.0-only): the server, Dashboard and all AGPL/Apache workspace code
+  (core, db, x402, wallet, tollbooth, mock-facilitator, demo-seller) bundled
+  with esbuild into one file, plus the prebuilt Dashboard and the SQL
+  migrations. Only runtime dependency: `better-sqlite3` (native; its npm
+  package ships prebuilt binaries for Windows / macOS / Linux, x64 + arm64).
+  Node.js 22+ (required by better-sqlite3 13).
+  - `npx moneyswitch-server [--data-dir] [--port] [--host]`: self-hosted
+    server + Dashboard, data in `~/.moneyswitch/server` by default; first
+    start prints the admin token and the one-time setup link as before.
+  - `npx moneyswitch-server demo [--port] [--no-open]`: fully offline demo in
+    one process — mock facilitator, demo seller (LLM echo mode) and server on
+    free ports from 4020 up, a throwaway temp data dir, a mock wallet
+    (simulated 20 USDC), channel "Demo LLM (x402)", MoneyKeys "Claude Code" and
+    "Codex", toll booth "Demo Weather API" in front of the demo seller, and a
+    few real mock-settled payments. Opens the Dashboard signed in through the
+    server's own one-time setup link (the MoneyKey for the Playground rides in
+    the same URL fragment; no new authentication path). Ctrl+C closes every
+    service and deletes the temp dir; dirs left by a hard-killed demo are
+    swept on the next run.
+- **`moneyswitch demo`** (`moneyswitch` 0.5.1, Apache-2.0): runs
+  `npx -y moneyswitch-server@<same version> demo`, passing arguments through;
+  `--registry=<url>` goes to npx. If the package is not found and the
+  registry is not registry.npmjs.org, it suggests
+  `--registry=https://registry.npmjs.org/`. `MONEYSWITCH_SERVER_SPEC`
+  overrides the package spec (e.g. a local `.tgz`). The help states that it
+  downloads the AGPL-3.0-only server package. `moneyswitch --version` added.
+- **Dashboard demo mode**: an always-visible "DEMO · simulated settlement — no
+  real money moves" banner on every screen (login and setup included), a
+  "Demo · mock settlement" network badge, and an overview guide card: send a
+  Playground message ($0.01) / buy the $5 report and watch it get blocked /
+  see the toll booth's income.
+- Server: `GET /v1/setup/status` and `GET /v1/admin/meta` report `demo`;
+  in demo mode `GET /v1/admin/wallet` returns a simulated balance
+  (`simulated: true`) instead of querying the chain, and on-chain
+  reconciliation is off. `startServer()` (`apps/server/src/start.ts`) is the
+  shared boot path; `buildContext` accepts `onFirstRun`; `dashboardDir` /
+  `migrationsDir` are configurable (`MONEYSWITCH_DASHBOARD_DIR`, `openDb({
+  migrationsDir })`). The demo seller is now a factory
+  (`@moneyswitch/demo-seller/app`) and serves a free `GET /weather` upstream
+  for the toll booth demo.
+- Docs: README / README.zh-CN quick start and the site now use the published
+  commands (`npx moneyswitch demo`, `npx moneyswitch-server`,
+  `npx moneyswitch connect / ui / sell`); the site gains a "Get paid: toll
+  booths" section and marks v0.5 done.
+
 ## 0.5.0 — 2026-09-26
 
 Toll booths: let any API charge AI in USDC (`SPEC-v0.5.md`).

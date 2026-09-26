@@ -66,6 +66,14 @@ export const payments = sqliteTable("payments", {
   model: text("model"),
   promptTokens: integer("prompt_tokens"),
   completionTokens: integer("completion_tokens"),
+  /** v0.5: EIP-3009 authorization.from, captured right after the client signs it. */
+  authFrom: text("auth_from"),
+  /** v0.5: EIP-3009 authorization.nonce (bytes32 hex). */
+  authNonce: text("auth_nonce"),
+  /** v0.5: EIP-3009 authorization.validBefore, unix seconds. */
+  authValidBefore: integer("auth_valid_before"),
+  /** v0.5: when reconcileUnknownPayments last resolved this row (null = not yet reconciled). */
+  reconciledAt: text("reconciled_at"),
 });
 
 export const approvals = sqliteTable("approvals", {

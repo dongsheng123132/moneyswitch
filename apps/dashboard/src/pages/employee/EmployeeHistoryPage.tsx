@@ -139,7 +139,11 @@ export default function EmployeeHistoryPage() {
                   </td>
                   <td className="num">{formatUsdc(h.amount, { maxDecimals: 4 })}</td>
                   <td>
-                    <StatusPill status={h.status} mock={Boolean(h.tx_hash && h.tx_hash.startsWith("0xmock"))} />
+                    <StatusPill
+                      status={h.status}
+                      mock={Boolean(h.tx_hash && h.tx_hash.startsWith("0xmock"))}
+                      errorCode={h.error_code}
+                    />
                   </td>
                   <td>
                     <TxLink txHash={h.tx_hash} />

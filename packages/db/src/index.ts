@@ -15,12 +15,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Runs raw SQL migrations found in packages/db/migrations, in filename order,
  * tracked in a `__migrations` table so re-runs are idempotent.
  */
-function runMigrations(sqlite: Database.Database): void {
+function runMigrations(sqlite: Database.Database, explicitDir?: string): void {
   sqlite.exec(
     `CREATE TABLE IF NOT EXISTS __migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`
   );
-  const migrationsDir = path.resolve(__dirname, "..", "migrations");
-  if (!fs.existsSync(migrationsDir)) return;
+  const migrationsDir = explicitDir ?? path.resolve(__dirname, "..", "migrations");
+  if (!fs.existsSync(migrationsDir)) {
+    // An explicitly configured directory (e.g. the bundled moneyswitch-server
+    // package) must exist: silently skipping would start on an empty schema.
+    if (explicitDir) throw new Error(`migrations directory not found: ${explicitDir}`);
+    return;
+  }
   const files = fs
     .readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
@@ -47,6 +52,12 @@ function runMigrations(sqlite: Database.Database): void {
 export interface OpenDbOptions {
   /** Path to the sqlite file, or ":memory:" for tests. */
   filePath: string;
+  /**
+   * Directory holding the *.sql migrations. Defaults to packages/db/migrations
+   * (resolved relative to this module); bundled distributions such as the
+   * `moneyswitch-server` npm package pass their own copy.
+   */
+  migrationsDir?: string;
 }
 
 export function openDb(opts: OpenDbOptions): { db: MoneySwitchDb; sqlite: Database.Database } {
@@ -58,7 +69,7 @@ export function openDb(opts: OpenDbOptions): { db: MoneySwitchDb; sqlite: Databa
     sqlite.pragma("journal_mode = WAL");
   }
   sqlite.pragma("foreign_keys = ON");
-  runMigrations(sqlite);
+  runMigrations(sqlite, opts.migrationsDir);
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };
 }

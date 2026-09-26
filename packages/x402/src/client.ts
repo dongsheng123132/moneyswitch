@@ -12,6 +12,7 @@ import {
   settlePayment,
   failPayment,
   markUnknown,
+  recordPaymentAuthorization,
   formatMicrosToUsdc,
   type MoneyKeyRow,
 } from "@moneyswitch/core";
@@ -133,6 +134,37 @@ export async function performPaidFetch(
         }
         ownAbortCode = "PAYMENT_FAILED";
         return { abort: true, reason: "PAYMENT_FAILED" };
+      }
+    })
+    // v0.5 (unknown-payment reconciliation): captures the signed EIP-3009
+    // authorization's (from, nonce, validBefore) on the just-reserved payments
+    // row, before the request is even sent. If the seller never sends back a
+    // settle header (e.g. its own upstream 500s), the row stays `unknown`
+    // with these fields set, and reconcileUnknownPayments can later ask the
+    // USDC contract on-chain whether that authorization was ever used.
+    // Non-EIP-3009 payloads (e.g. a future permit2 fallback) have no
+    // `authorization` field and are silently left uncaptured — nothing to
+    // reconcile them against on-chain via authorizationState() anyway.
+    .onAfterPaymentCreation(async (context) => {
+      if (!paymentId) return;
+      const payload = context.paymentPayload?.payload as
+        | { authorization?: { from?: unknown; nonce?: unknown; validBefore?: unknown } }
+        | undefined;
+      const authorization = payload?.authorization;
+      if (
+        authorization &&
+        typeof authorization.from === "string" &&
+        typeof authorization.nonce === "string" &&
+        (typeof authorization.validBefore === "string" || typeof authorization.validBefore === "number")
+      ) {
+        const validBefore = Number(authorization.validBefore);
+        if (Number.isFinite(validBefore)) {
+          recordPaymentAuthorization(db, paymentId, {
+            from: authorization.from,
+            nonce: authorization.nonce,
+            validBefore,
+          });
+        }
       }
     });
 

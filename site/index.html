@@ -6,7 +6,7 @@
 <title>MoneySwitch — Give your AI an API key for money</title>
 <meta name="description" content="Open-source MoneyKeys for AI agents. An agent holds an mk_live_ key, never a private key; MoneySwitch checks budgets before every payment and pays x402 APIs in USDC. Running on Monad testnet.">
 <meta name="theme-color" content="#07060d">
-<link rel="canonical" href="https://dongsheng123132.github.io/moneyswitch/">
+<link rel="canonical" href="https://moneyswitch.dev/">
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
@@ -15,15 +15,15 @@
 <meta property="og:site_name" content="MoneySwitch">
 <meta property="og:title" content="MoneySwitch — Give your AI an API key for money">
 <meta property="og:description" content="Model keys give AI a brain. MoneyKeys give it a wallet. Policy before signature, USDC over x402, real settlements on Monad testnet.">
-<meta property="og:url" content="https://dongsheng123132.github.io/moneyswitch/">
-<meta property="og:image" content="https://dongsheng123132.github.io/moneyswitch/og.png">
+<meta property="og:url" content="https://moneyswitch.dev/">
+<meta property="og:image" content="https://moneyswitch.dev/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="MoneySwitch — Give your AI an API key for money">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="MoneySwitch — Give your AI an API key for money">
 <meta name="twitter:description" content="Model keys give AI a brain. MoneyKeys give it a wallet. Open source, running on Monad testnet.">
-<meta name="twitter:image" content="https://dongsheng123132.github.io/moneyswitch/og.png">
+<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
 
 <link rel="stylesheet" href="assets/css/site.css">
 <script>
@@ -46,7 +46,7 @@
   "codeRepository": "https://github.com/dongsheng123132/moneyswitch",
   "programmingLanguage": "TypeScript",
   "license": ["https://www.apache.org/licenses/LICENSE-2.0", "https://www.gnu.org/licenses/agpl-3.0.html"],
-  "url": "https://dongsheng123132.github.io/moneyswitch/"
+  "url": "https://moneyswitch.dev/"
 }
 </script>
 </head>
@@ -62,6 +62,7 @@
     <nav class="nav-links" aria-label="Sections">
       <a href="#how" data-i18n="nav.how">How it works</a>
       <a href="#guardrails" data-i18n="nav.guard">Guardrails</a>
+      <a href="#tollbooth" data-i18n="nav.toll">Get paid</a>
       <a href="#proof" data-i18n="nav.proof">On-chain proof</a>
       <a href="#start" data-i18n="nav.start">Quickstart</a>
       <a href="#roadmap" data-i18n="nav.roadmap">Roadmap</a>
@@ -85,7 +86,7 @@
 <!-- ============ HERO ============ -->
 <section class="hero">
   <div class="wrap">
-    <p class="pill"><span class="dot" aria-hidden="true"></span><span data-i18n="hero.badge">v0.4 · Open source · Real payments on Monad testnet</span></p>
+    <p class="pill"><span class="dot" aria-hidden="true"></span><span data-i18n="hero.badge">v0.5 · Open source · Real payments on Monad testnet</span></p>
     <h1 class="hero-title" data-i18n="hero.title">Give your AI an <span class="hl">API key</span> for money.</h1>
     <p class="hero-sub" data-i18n="hero.sub">Your agent holds an <code>mk_live_</code> MoneyKey — never a private key. MoneySwitch checks every payment against budgets and limits <em>before</em> it signs, then pays x402-priced APIs in USDC.</p>
     <p class="hero-compare" data-i18n="hero.compare"><span>Model keys give AI a brain.</span> <span class="lime">MoneyKeys give it a wallet.</span></p>
@@ -95,7 +96,14 @@
         <span data-i18n="cta.star">Star on GitHub</span>
         <span class="gh-count" hidden></span>
       </a>
-      <a class="btn btn-ghost" href="#start" data-i18n="cta.start">Run the local demo →</a>
+      <a class="btn btn-ghost" href="#start" data-i18n="cta.start">Quickstart →</a>
+    </div>
+    <div class="hero-try">
+      <div class="term-static">
+        <button type="button" class="copy" data-copy="npx moneyswitch demo" data-i18n="copy">Copy</button>
+<pre><code><span class="p">$</span> npx moneyswitch demo</code></pre>
+      </div>
+      <p class="hero-try-note" data-i18n="hero.try">30-second offline tour: a throwaway local MoneySwitch with a mock wallet, demo keys and a toll booth opens in your browser, already signed in. Simulated settlement — no real money. Node.js 22+.</p>
     </div>
 
     <!-- hero demo -->
@@ -126,6 +134,42 @@
       </div>
     </div>
     <p class="demo-note" data-i18n="demo.note">Animation replays the real flow; budget numbers are an example policy. The tx hash shown is Claude Code's real autonomous MCP payment (0.01 USDC <code>/premium-report</code>) — verify it in the <a href="#proof">on-chain proof</a> list.</p>
+  </div>
+</section>
+
+<!-- ============ BEFORE / AFTER: x402, plug and play ============ -->
+<section class="section ba" id="plug" aria-labelledby="ba-h">
+  <div class="wrap">
+    <p class="eyebrow" data-i18n="ba.eyebrow">x402, plug and play</p>
+    <h2 class="h2" id="ba-h" data-i18n="ba.h">x402 is powerful — but too hard for most people. We turned it into an API key.</h2>
+    <p class="lead" data-i18n="ba.lead">Spend money like you use an API key. It feels like NewAPI (issue keys, set quotas, watch usage) plus CCSwitch (flip one switch to enable).</p>
+    <div class="ba-grid">
+      <div class="ba-col ba-before">
+        <p class="ba-label" data-i18n="ba.before">Today, with raw x402</p>
+<pre class="code"><code>PRIVATE_KEY=0x…            <span class="c">// inside your program</span>
+
+<span class="k">const</span> client = <span class="k">new</span> x402Client()
+  .register(<span class="s">"eip155:10143"</span>, <span class="k">new</span> ExactEvmScheme(signer));
+<span class="k">const</span> pay = wrapFetchWithPayment(fetch, client);</code></pre>
+        <ul class="ba-list ba-cons">
+          <li data-i18n="ba.b1">You have to understand HTTP 402, EIP-3009, facilitators and gas</li>
+          <li data-i18n="ba.b2">A raw private key sits inside every agent</li>
+          <li data-i18n="ba.b3">No budget, no per-request limit, no approval, no usage view</li>
+        </ul>
+      </div>
+      <div class="ba-arrow" aria-hidden="true">→</div>
+      <div class="ba-col ba-after">
+        <p class="ba-label" data-i18n="ba.after">With MoneySwitch</p>
+<pre class="code"><code>MONEY_API_BASE=http://127.0.0.1:4020
+MONEY_API_KEY=<span class="s">mk_live_…</span></code></pre>
+        <p class="ba-or" data-i18n="ba.or">…or in Cherry Studio / the OpenAI SDK: <b>Base URL</b> + <b>API Key</b>. That's it.</p>
+        <ul class="ticks">
+          <li data-i18n="ba.a1">The agent holds a revocable <code>mk_live_</code> key — never a private key</li>
+          <li data-i18n="ba.a2">Budgets, per-request limits and approvals checked before every signature</li>
+          <li data-i18n="ba.a3">Every payment shows up per key, like usage in NewAPI</li>
+        </ul>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -317,6 +361,30 @@
   </div>
 </section>
 
+<!-- ============ GET PAID: TOLL BOOTHS ============ -->
+<section class="section" id="tollbooth" aria-labelledby="toll-h">
+  <div class="wrap">
+    <p class="new" data-i18n="toll.new">New in v0.5</p>
+    <h2 class="h2" id="toll-h" data-i18n="toll.h">Get paid: put a toll booth in front of any API.</h2>
+    <p class="lead" data-i18n="toll.lead">Sellers don't need to understand x402 either: point a toll booth at your API, set a price, share the address. AI agents pay USDC per call and the money goes straight to your receiving address. You need no secret to sell — only a public address — and your service does not change a single line. Buyers are only charged when your service answers 2xx/3xx.</p>
+    <div class="ledger toll-things">
+      <table class="tx-table">
+        <thead><tr><th data-i18n="toll.th1">Thing</th><th data-i18n="toll.th2">Think of it as</th><th data-i18n="toll.th3">Give it to</th><th data-i18n="toll.th4">In MoneySwitch</th></tr></thead>
+        <tbody>
+          <tr><td data-i18n="toll.r1a"><b>Private key</b></td><td data-i18n="toll.r1b">the key to the safe</td><td data-i18n="toll.r1c"><b>nobody</b></td><td data-i18n="toll.r1d">never shown anywhere; it only lives (decrypted) in the server's memory</td></tr>
+          <tr><td data-i18n="toll.r2a"><b>MoneyKey</b> <code>mk_live_…</code></td><td data-i18n="toll.r2b">a capped company card for an employee</td><td data-i18n="toll.r2c"><b>only your own AI</b></td><td data-i18n="toll.r2d">🔒 amber, “Secret: whoever holds it can spend within its limits — never send it to a seller”</td></tr>
+          <tr><td data-i18n="toll.r3a"><b>Receiving address</b> <code>0x…</code></td><td data-i18n="toll.r3b">your payment QR code</td><td data-i18n="toll.r3c"><b>anyone</b></td><td data-i18n="toll.r3d">✅ green, “Public: people pay you with it, safe to share”</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="term-static">
+      <button type="button" class="copy" data-copy="npx moneyswitch sell --upstream http://localhost:8000 --price 0.01 --pay-to 0xYourPublicAddress" data-i18n="copy">Copy</button>
+<pre><code><span class="p">$</span> npx moneyswitch sell --upstream http://localhost:8000 --price 0.01 --pay-to 0xYourPublicAddress</code></pre>
+    </div>
+    <p class="fineprint" data-i18n="toll.fine">No server needed: one process on your machine (official <code>@x402/express</code>) prints your public paid address, and refuses a MoneyKey or private key as <code>--pay-to</code>. With a MoneySwitch server, <b>Toll booths → New toll booth</b> in the Dashboard does the same with per-route prices, and <b>Earnings</b> shows the income. Try both in <code>npx moneyswitch demo</code>.</p>
+  </div>
+</section>
+
 <!-- ============ DESKTOP CONSOLE ============ -->
 <section class="section" id="desktop" aria-labelledby="desk-h">
   <div class="wrap">
@@ -334,7 +402,7 @@
       </figure>
     </div>
     <div class="term-static">
-<pre><code><span class="p">$</span> npx -y --package=&lt;your-server&gt;/dl/moneyswitch.tgz moneyswitch ui</code></pre>
+<pre><code><span class="p">$</span> npx moneyswitch ui</code></pre>
     </div>
     <p class="fineprint" data-i18n="desk.fine">Runs a local-only web console on 127.0.0.1, unlocked with a one-time session token. Model keys and MoneyKeys stay on your machine and are only written into each agent's own config.</p>
   </div>
@@ -382,24 +450,20 @@
 <section class="section" id="start" aria-labelledby="start-h">
   <div class="wrap narrow">
     <p class="eyebrow" data-i18n="start.eyebrow">Quickstart</p>
-    <h2 class="h2" id="start-h" data-i18n="start.h">Run it locally in three commands.</h2>
+    <h2 class="h2" id="start-h" data-i18n="start.h">Try it in 30 seconds. Self-host in one command.</h2>
     <div class="term-static">
-      <button type="button" class="copy" data-copy="git clone https://github.com/dongsheng123132/moneyswitch.git&#10;cd moneyswitch&#10;pnpm i &amp;&amp; pnpm build &amp;&amp; pnpm demo:local" data-i18n="copy">Copy</button>
-<pre><code><span class="p">$</span> git clone https://github.com/dongsheng123132/moneyswitch.git
-<span class="p">$</span> cd moneyswitch
-<span class="p">$</span> pnpm i &amp;&amp; pnpm build &amp;&amp; pnpm demo:local</code></pre>
+      <button type="button" class="copy" data-copy="npx moneyswitch demo" data-i18n="copy">Copy</button>
+<pre><code><span class="p">$</span> npx moneyswitch demo          <span class="c"># offline tour, no real money</span>
+<span class="p">$</span> npx moneyswitch-server        <span class="c"># self-host server + Dashboard on :4020</span></code></pre>
     </div>
-    <p data-i18n="start.p1"><code>demo:local</code> starts a mock x402 facilitator, a demo seller and the MoneySwitch server with its Dashboard — fully offline, no real payment. Open the one-time setup link it prints: wallet → channel → first key → connect an agent.</p>
+    <p data-i18n="start.p1"><code>moneyswitch demo</code> starts a throwaway MoneySwitch on free local ports — mock wallet, a demo channel, two MoneyKeys, a toll booth and a few payments — and opens the Dashboard already signed in. Send a message in the Playground ($0.01), try to buy a $5 report and watch it get blocked, then check the toll booth's income. Ctrl+C deletes everything.</p>
     <ul class="ticks">
-      <li data-i18n="start.l1">Real Monad-testnet path: <code>pnpm demo:testnet</code> — see <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/docs/quickstart.md" rel="noopener">docs/quickstart.md</a></li>
-      <li data-i18n="start.l2">Claude Code / Codex: the Dashboard's <b>Connect agent</b> page gives you a one-line <code>moneyswitch connect</code> command</li>
-      <li data-i18n="start.l3">Desktop console (v0.4): <code>npx -y --package=&lt;your-server&gt;/dl/moneyswitch.tgz moneyswitch ui</code> — every MoneySwitch server serves the client package until it is on npm</li>
+      <li data-i18n="start.l1">Self-host: <code>npx moneyswitch-server</code> keeps data in <code>~/.moneyswitch/server</code> (<code>--data-dir</code>, <code>--port</code>, <code>--host</code>) and prints a one-time setup link: wallet → channel → first key → connect an agent</li>
+      <li data-i18n="start.l2">Claude Code / Codex: <code>npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply</code> — the Dashboard's <b>Connect agent</b> page fills it in for you</li>
+      <li data-i18n="start.l3">Desktop console: <code>npx moneyswitch ui</code> · charge AI for your own API: <code>npx moneyswitch sell</code></li>
+      <li data-i18n="start.l4">Real Monad-testnet path and building from source (<code>pnpm demo:local</code>, <code>pnpm demo:testnet</code>): see <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/docs/quickstart.md" rel="noopener">docs/quickstart.md</a></li>
     </ul>
-    <div class="term-static muted">
-<pre><code><span class="p">$</span> npx moneyswitch demo   <span class="soon-inline" data-i18n="soon.short">coming soon</span>
-<span class="p">$</span> npx moneyswitch ui     <span class="soon-inline" data-i18n="soon.short">coming soon</span></code></pre>
-    </div>
-    <p class="fineprint" data-i18n="start.fine">The <code>moneyswitch</code> npm package is not published yet. Requires Node.js and pnpm.</p>
+    <p class="fineprint" data-i18n="start.fine">Requires Node.js 22+. <code>moneyswitch</code> (Apache-2.0) and <code>moneyswitch-server</code> (AGPL-3.0) are separate npm packages; <code>moneyswitch demo</code> downloads the server package. Behind an npm mirror that hasn't synced yet, add <code>--registry=https://registry.npmjs.org/</code>.</p>
   </div>
 </section>
 
@@ -417,7 +481,7 @@
       <div class="card lic">
         <p class="lic-name">AGPL-3.0</p>
         <h3 data-i18n="lic.b.t">Server &amp; Dashboard</h3>
-        <p data-i18n="lic.b.p">The self-hosted server, Dashboard and core packages stay copyleft, so hosted forks give improvements back. Commercial license: open an issue.</p>
+        <p data-i18n="lic.b.p">The self-hosted server, Dashboard and core packages (the <code>moneyswitch-server</code> npm package) stay copyleft, so hosted forks give improvements back. Commercial license: open an issue.</p>
       </div>
     </div>
   </div>
@@ -432,8 +496,9 @@
       <li class="done"><span class="v">v0.1</span><span class="st" data-i18n="road.done">done</span><p data-i18n="road.1">MoneyKey, policy engine, local wallet, x402 client, MCP, Dashboard.</p></li>
       <li class="done"><span class="v">v0.2</span><span class="st" data-i18n="road.done">done</span><p data-i18n="road.2">OpenAI / NewAPI-compatible gateway, channels, Playground.</p></li>
       <li class="done"><span class="v">v0.3</span><span class="st" data-i18n="road.done">done</span><p data-i18n="road.3">Employee view, one-command desktop connect, real settlements on Monad testnet.</p></li>
-      <li class="now"><span class="v">v0.4</span><span class="st" data-i18n="road.latest">latest</span><p data-i18n="road.4">Multi-level child keys with cascading revoke; desktop console <code>moneyswitch ui</code> — brain + wallet per agent.</p></li>
-      <li class="dev"><span class="v" data-i18n="road.nextv">Next</span><span class="st" data-i18n="road.plan">planned</span><p data-i18n="road.5">Toll booth: put an x402 price on any API (planned for v0.5) · per-token pricing (x402 <code>upto</code>) · MetaMask / OKX wallet drivers · enterprise multi-user.</p></li>
+      <li class="done"><span class="v">v0.4</span><span class="st" data-i18n="road.done">done</span><p data-i18n="road.4">Multi-level child keys with cascading revoke; desktop console <code>moneyswitch ui</code> — brain + wallet per agent.</p></li>
+      <li class="done now"><span class="v">v0.5</span><span class="st" data-i18n="road.done">done</span><p data-i18n="road.5">Toll booths: put an x402 price on any API, Earnings, <code>moneyswitch sell</code>. v0.5.1: <code>npx moneyswitch demo</code> and one-command self-host <code>npx moneyswitch-server</code>.</p></li>
+      <li class="dev"><span class="v" data-i18n="road.nextv">Next</span><span class="st" data-i18n="road.plan">planned</span><p data-i18n="road.6">Per-token pricing (x402 <code>upto</code>) · MetaMask / OKX wallet drivers · enterprise multi-user.</p></li>
     </ol>
     <p class="fineprint" data-i18n="road.fine">Not planned: wallet-extension import, mainnet-by-default, fiat on-ramp.</p>
   </div>
@@ -461,7 +526,8 @@
     <div>
       <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
       <p class="dim small" data-i18n="foot.tag">Give your AI an API key for money.</p>
-      <p class="dim small" data-i18n="foot.warn">v0.4 runs on Monad testnet. Not for mainnet funds.</p>
+      <p class="dim small" data-i18n="foot.warn">v0.5 runs on Monad testnet. Not for mainnet funds.</p>
+      <p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p>
     </div>
     <nav class="foot-links" aria-label="Footer">
       <a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">GitHub</a>

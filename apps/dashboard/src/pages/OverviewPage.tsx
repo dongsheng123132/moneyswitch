@@ -30,6 +30,8 @@ import { useT } from "../i18n";
 import { common } from "../i18n/strings/common";
 import { overviewStrings } from "../i18n/strings/overview";
 import { useRelativeTime } from "../i18n/format";
+import DemoGuideCard from "../components/DemoGuideCard";
+import { useDemoMode } from "../demoMode";
 import "../styles/overview.css";
 
 const SETUP_HIDDEN_KEY = "moneyswitch_setup_hidden";
@@ -61,6 +63,7 @@ export default function OverviewPage() {
   const t = useT(overviewStrings);
   const tc = useT(common);
   const relTime = useRelativeTime();
+  const demo = useDemoMode();
   const { data, error, loading } = usePolling(fetchOverview);
   const { data: wallet } = usePolling(getWallet);
   // SPEC-v0.5.md §3: polled separately from the rest of the overview data so
@@ -180,7 +183,7 @@ export default function OverviewPage() {
   const hasKey = keys.length > 0;
   const hasFirstCall = keys.some((k) => Boolean(k.last_used_at));
   const setupIncomplete = !hasWallet || !hasChannel || !hasKey;
-  const showGettingStarted = setupIncomplete && !setupHidden;
+  const showGettingStarted = setupIncomplete && !setupHidden && !demo;
 
   // Needs attention (D-2): only the callouts that currently apply.
   const pendingCount = approvals.length;
@@ -192,6 +195,8 @@ export default function OverviewPage() {
   return (
     <div>
       {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
+
+      {demo && <DemoGuideCard />}
 
       {showGettingStarted && (
         <div className="card getting-started-card">

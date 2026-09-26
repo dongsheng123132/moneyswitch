@@ -28,5 +28,12 @@
     "type": "git",
     "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
     "directory": "apps/demo-seller"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "default": "./dist/app.js"
+    }
   }
 }

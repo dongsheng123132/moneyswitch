@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { dbNumberToMicros } from "./money.js";
 import type { PaymentRow, PaymentStatus } from "./types.js";
@@ -24,6 +24,10 @@ function rowToPayment(row: typeof schema.payments.$inferSelect): PaymentRow {
     model: row.model,
     promptTokens: row.promptTokens,
     completionTokens: row.completionTokens,
+    authFrom: row.authFrom,
+    authNonce: row.authNonce,
+    authValidBefore: row.authValidBefore,
+    reconciledAt: row.reconciledAt,
   };
 }
 
@@ -49,6 +53,29 @@ export function failPayment(db: MoneySwitchDb, id: string, errorCode: string): v
 export function markUnknown(db: MoneySwitchDb, id: string, errorCode?: string): void {
   db.update(schema.payments)
     .set({ status: "unknown", errorCode: errorCode ?? null, updatedAt: new Date().toISOString() })
+    .where(eq(schema.payments.id, id))
+    .run();
+}
+
+/**
+ * v0.5: called from the x402 client's onAfterPaymentCreation hook, right
+ * after the exact-EIP-3009 scheme signs the buyer's transferWithAuthorization
+ * — before the paid request is even sent. Lets reconcileUnknownPayments later
+ * ask the USDC contract on-chain whether this specific (from, nonce) was ever
+ * used, independent of whether we ever got a settle response back.
+ */
+export function recordPaymentAuthorization(
+  db: MoneySwitchDb,
+  id: string,
+  auth: { from: string; nonce: string; validBefore: number }
+): void {
+  db.update(schema.payments)
+    .set({
+      authFrom: auth.from,
+      authNonce: auth.nonce,
+      authValidBefore: auth.validBefore,
+      updatedAt: new Date().toISOString(),
+    })
     .where(eq(schema.payments.id, id))
     .run();
 }
@@ -93,4 +120,62 @@ export function listAllPayments(db: MoneySwitchDb, limit = 100): PaymentRow[] {
     .limit(limit)
     .all()
     .map(rowToPayment);
+}
+
+/**
+ * v0.5: `unknown` payments whose EIP-3009 authorization has expired (past
+ * `validBefore` + a grace period) and were never reconciled — candidates for
+ * reconcileUnknownPayments. Rows without a captured authorization (e.g. an
+ * older payment from before this migration, or a non-EIP-3009 scheme) are
+ * never selected: there is nothing on-chain to check them against.
+ */
+export function listUnknownPaymentsToReconcile(
+  db: MoneySwitchDb,
+  cutoffUnixSeconds: number,
+  limit = 200
+): PaymentRow[] {
+  return db
+    .select()
+    .from(schema.payments)
+    .where(
+      and(
+        eq(schema.payments.status, "unknown"),
+        isNull(schema.payments.reconciledAt),
+        isNotNull(schema.payments.authFrom),
+        isNotNull(schema.payments.authNonce),
+        isNotNull(schema.payments.authValidBefore),
+        lt(schema.payments.authValidBefore, cutoffUnixSeconds)
+      )
+    )
+    .orderBy(schema.payments.createdAt)
+    .limit(limit)
+    .all()
+    .map(rowToPayment);
+}
+
+/** v0.5: authorization confirmed never used on-chain — release the reservation. */
+export function reconcilePaymentToFailed(db: MoneySwitchDb, id: string, nowIso: string): void {
+  db.update(schema.payments)
+    .set({ status: "failed", errorCode: "NOT_SETTLED_EXPIRED", reconciledAt: nowIso, updatedAt: nowIso })
+    .where(eq(schema.payments.id, id))
+    .run();
+}
+
+/** v0.5: authorization confirmed used on-chain — belatedly record the settlement. */
+export function reconcilePaymentToSettled(
+  db: MoneySwitchDb,
+  id: string,
+  txHash: string | null,
+  nowIso: string
+): void {
+  db.update(schema.payments)
+    .set({
+      status: "settled",
+      txHash,
+      errorCode: txHash ? null : "SETTLED_TX_UNKNOWN",
+      reconciledAt: nowIso,
+      updatedAt: nowIso,
+    })
+    .where(eq(schema.payments.id, id))
+    .run();
 }

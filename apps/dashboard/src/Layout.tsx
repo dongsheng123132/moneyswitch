@@ -10,6 +10,8 @@ import LangSwitch from "./components/LangSwitch";
 import { useT } from "./i18n";
 import { shellStrings } from "./i18n/strings/shell";
 import { common } from "./i18n/strings/common";
+import { useDemoMode } from "./demoMode";
+import { demoStrings } from "./i18n/strings/demo";
 import "./styles/tollbooths.css";
 
 type NavKey =
@@ -46,6 +48,8 @@ const RECEIVE_NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof
 export default function Layout() {
   const t = useT(shellStrings);
   const tc = useT(common);
+  const td = useT(demoStrings);
+  const demo = useDemoMode();
   const { logout } = useAuth();
   const location = useLocation();
   const { data: wallet, loading: walletLoading } = usePolling(getWallet);
@@ -108,9 +112,9 @@ export default function Layout() {
         <header className="topbar">
           <h1 className="topbar-title">{title}</h1>
           <div className="topbar-right">
-            <span className="network-badge">
+            <span className={`network-badge${demo ? " demo" : ""}`}>
               <span className="network-dot" />
-              {tc("networkTestnet")}
+              {demo ? td("networkBadge") : tc("networkTestnet")}
             </span>
             {walletLoading && !wallet ? (
               <span className="wallet-chip dim">{t("walletLoading")}</span>

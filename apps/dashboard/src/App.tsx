@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { LangProvider } from "./i18n";
 import SetupPage from "./pages/SetupPage";
+import DemoBanner from "./components/DemoBanner";
 import "./styles/shell.css";
 import Layout from "./Layout";
 import EmployeeLayout from "./EmployeeLayout";
@@ -42,6 +43,8 @@ function Routed() {
   const loggedInPath = token ? "/" : employeeKey ? "/me" : null;
 
   return (
+    <>
+    <DemoBanner />
     <Routes>
       {/* First-run wizard (docs/ux-audit.md A-1/A-2). Not behind RequireAdmin: it
           handles the one-time /setup#ms_setup_… claim itself, and redirects
@@ -91,6 +94,7 @@ function Routed() {
 
       <Route path="*" element={<Navigate to={loggedInPath ?? "/login"} replace />} />
     </Routes>
+    </>
   );
 }
 

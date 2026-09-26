@@ -6,7 +6,7 @@
 
 **给你的 AI 一把花钱的 API Key。**
 
-[English →](README.md)
+官网：[moneyswitch.dev](https://moneyswitch.dev) · [English →](README.md)
 
 AI Agent 拿到的是一把 `mk_live_xxx` **MoneyKey**——不是钱包私钥——通过
 [x402](https://x402.org) 协议在 [Monad](https://monad.xyz) 测试网上用 USDC
@@ -27,20 +27,50 @@ token 和链上 USDC 转账之间，用发 API Key 的平台早就熟悉的那�
 
 ## 30 秒上手
 
-把已有的 MoneySwitch 服务器 + MoneyKey 接进本机的 Claude Code / Codex：
+**先试玩——完全离线，不动真钱**（需要 Node.js 22+）：
 
 ```bash
-npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch connect \n  --server http://127.0.0.1:4020 --key mk_live_xxx --apply
+npx moneyswitch demo
+```
+
+会在本机空闲端口起一个临时的 MoneySwitch：模拟钱包、一个演示 LLM 渠道、两把
+MoneyKey（「Claude Code」「Codex」）、挡在演示 API 前面的一个收费站，外加几笔
+演示流水，并自动打开已登录的 Dashboard。在 Playground 发一条消息（$0.01），
+试着买一次 $5 的报告看它被单笔上限拦下，再去看收费站收入。所有界面都标着
+**DEMO · 模拟结算**，结算走本地 mock facilitator，不上任何链。Ctrl+C 即停止并
+删除全部数据。（`moneyswitch demo` 会下载独立的 `moneyswitch-server` 包，许可
+证为 AGPL-3.0-only；如果你的 npm 镜像源还没同步到它，加上
+`--registry=https://registry.npmjs.org/`。）
+
+**一条命令自托管服务端 + Dashboard**：
+
+```bash
+npx moneyswitch-server            # http://127.0.0.1:4020，数据在 ~/.moneyswitch/server
+```
+
+首次启动会打印一条一次性设置链接（`http://127.0.0.1:4020/setup#ms_setup_…`），
+打开即登录，并带你走完 钱包 → 渠道 → 第一把 Key → 接入 Agent。可用
+`--data-dir`、`--port`、`--host` 改默认值。
+
+**把本机的 Claude Code / Codex 接到 MoneySwitch**（用一把 MoneyKey）：
+
+```bash
+npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply
 ```
 
 这条命令会探测本机的 Claude Code / Codex 并自动接好 MoneySwitch 的 MCP
-服务器（不带 `--apply` 时只打印打算做的改动）。`moneyswitch` 客户端 CLI
-还没有发布到 npm，所以每台 MoneySwitch 服务器都在 `/dl/moneyswitch.tgz`
-提供同一个包（由 `pnpm build` 生成）；Dashboard 的「接入 Agent」页和「发给员工」
-消息会用正确的服务器地址生成这条命令。`… moneyswitch status --server … --key …`
-查一把 Key 的剩余额度；`… moneyswitch remove --apply` 撤销接入。
+服务器（不带 `--apply` 时只打印打算做的改动）。`npx moneyswitch status --server … --key …`
+查一把 Key 的剩余额度；`npx moneyswitch remove --apply` 撤销接入；
+`npx moneyswitch ui` 打开本机桌面控制台。Dashboard 的「接入 Agent」页和
+「发给员工」消息会用正确的服务器地址生成这些命令。
 
-自托管服务器：
+**让 AI 为你自己的 API 付钱**（不需要服务器）：
+
+```bash
+npx moneyswitch sell --upstream http://localhost:8000 --price 0.01 --pay-to 0x你的公开收款地址
+```
+
+从源码运行（贡献者）：
 
 ```bash
 pnpm install
@@ -48,12 +78,9 @@ pnpm build
 pnpm demo:local
 ```
 
-首次启动会打印一条一次性设置链接（`http://127.0.0.1:4020/setup#ms_setup_…`），
-打开即登录，并带你走完 钱包 → 渠道 → 第一把 Key → 接入 Agent。
-
-`pnpm demo:local` 会同时起一个离线 mock 的 x402 facilitator、一个 demo x402
-卖方、和带 Dashboard 界面的 MoneySwitch 服务器——全程离线，不会发生真实付
-款。真实 Monad 测试网路径（`pnpm demo:testnet`）与手动分步版本见
+`pnpm demo:local` 会用仓库代码同时起一个离线 mock 的 x402 facilitator、一个
+demo x402 卖方、和带 Dashboard 界面的 MoneySwitch 服务器——全程离线，不会发生
+真实付款。真实 Monad 测试网路径（`pnpm demo:testnet`）与手动分步版本见
 [`docs/quickstart.md`](docs/quickstart.md)。
 
 ## 架构
@@ -161,7 +188,7 @@ curl -s http://127.0.0.1:4020/v1/fetch \
 ### 不开服务器：`moneyswitch sell`
 
 ```bash
-npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch sell \
+npx moneyswitch sell \
   --upstream http://localhost:8000 --price 0.01 --pay-to 0x你的公开收款地址 \
   --route "POST /v1/chat/completions=0.02" --route "GET /health=0"
 ```
@@ -236,7 +263,8 @@ gas（facilitator 为 `exact`/EIP-3009 结算代付 gas），首笔 tx
 - **v0.3**（已完成）：员工端 Dashboard 视图、一键桌面接入
   （`moneyswitch-connect` → npm 包 `moneyswitch`）。
 - **v0.4**（已完成）：子 Key（多级分配）与本机桌面控制台（`moneyswitch ui`）。
-- **v0.5**（当前）：收费站——让任何 API 向 AI 收 USDC（`/t/<slug>`、收入页、`moneyswitch sell`）。
+- **v0.5**（已完成）：收费站——让任何 API 向 AI 收 USDC（`/t/<slug>`、收入页、`moneyswitch sell`）；
+  v0.5.1：`npx moneyswitch demo`（离线试玩）与 `npx moneyswitch-server`（一条命令自托管）。
 - **下一步**：按 token 计价（x402 `upto`）、MetaMask / OKX 钱包驱动、
   多用户组织（部门额度、审批流）。
 - 明确不做（完整列表与原因见 [`SPEC.md`](SPEC.md) §12）：导入钱包插件私
@@ -250,9 +278,13 @@ MoneySwitch 按组件分层许可：Agent 或卖方**嵌入自己进程**的部�
 | 组件 | 许可证 |
 |---|---|
 | `apps/mcp`、`apps/connect`、`apps/cli`（npm 包 `moneyswitch`）——客户端代码 | [Apache-2.0](apps/mcp/LICENSE) |
+| `apps/server-pkg`（npm 包 `moneyswitch-server`：为 `npx` 打包好的服务端 + Dashboard） | [AGPL-3.0-only](apps/server-pkg/LICENSE) |
 | `apps/demo-seller`（x402 卖方示例） | [Apache-2.0](apps/demo-seller/LICENSE) |
 | `packages/tollbooth`（收费站规则匹配、转发、收款地址校验——服务端与 `moneyswitch sell` 共用） | [Apache-2.0](packages/tollbooth/LICENSE) |
 | 其余全部（`apps/server`、`apps/dashboard`、其余 `packages/*`） | [AGPL-3.0-only](LICENSE) |
+
+两个 npm 包分别发布：`moneyswitch`（Apache-2.0）里没有任何服务端代码；
+`moneyswitch demo` 只是通过 `npx` 以独立进程**运行** `moneyswitch-server`（AGPL-3.0-only）。
 
 需要在闭源产品中嵌入 server，请开 issue 讨论商业许可。
 

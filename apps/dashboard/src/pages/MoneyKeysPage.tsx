@@ -680,7 +680,7 @@ export default function MoneyKeysPage() {
                 <Snippet title={t("connectDryRunLabel")} code={connectCommand(src, apiBase, created.key, false)} />
                 {src.kind === "tarball" && <div className="connect-source-note">{t("sourceNoteTarball")}</div>}
                 {src.kind === "local" && <div className="connect-source-note">{t("sourceNoteLocal")}</div>}
-                {src.kind === "npm" && <Callout tone="warn" title={t("sourceNoteNpmTitle")}>{t("sourceNoteNpm")}</Callout>}
+                {src.kind === "npm" && <Callout tone="info" title={t("sourceNoteNpmTitle")}>{t("sourceNoteNpm")}</Callout>}
               </div>
             )}
             {tab === "claude" && <Snippet title={t("tabClaude")} code={claudeMcpCommand(src, apiBase, created.key)} note={t("claudeNote")} />}

@@ -49,6 +49,11 @@ export interface PaymentRow {
   model: string | null;
   promptTokens: number | null;
   completionTokens: number | null;
+  /** v0.5: EIP-3009 authorization fields, captured right after the client signs (unknown-payment reconciliation). */
+  authFrom: string | null;
+  authNonce: string | null;
+  authValidBefore: number | null;
+  reconciledAt: string | null;
 }
 
 /** v0.2 (SPEC-v0.2 §1): a channel = an OpenAI-protocol, x402-billed upstream. */

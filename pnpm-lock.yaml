@@ -245,6 +245,46 @@ importers:
         specifier: 5.0.2
         version: 5.0.2(@types/node@26.6.2)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(tsx@4.23.15))
 
+  apps/server-pkg:
+    dependencies:
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
+    devDependencies:
+      '@moneyswitch/dashboard':
+        specifier: workspace:*
+        version: link:../dashboard
+      '@moneyswitch/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@moneyswitch/demo-seller':
+        specifier: workspace:*
+        version: link:../demo-seller
+      '@moneyswitch/mock-facilitator':
+        specifier: workspace:*
+        version: link:../../packages/mock-facilitator
+      '@moneyswitch/server':
+        specifier: workspace:*
+        version: link:../server
+      '@moneyswitch/wallet':
+        specifier: workspace:*
+        version: link:../../packages/wallet
+      '@types/node':
+        specifier: 22.10.5
+        version: 22.10.5
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      ethers:
+        specifier: 6.17.0
+        version: 6.17.0
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 5.0.2
+        version: 5.0.2(@types/node@22.10.5)(vite@8.3.1(@types/node@22.10.5)(esbuild@0.28.2)(tsx@4.23.15))
+
   packages/core:
     dependencies:
       '@moneyswitch/db':

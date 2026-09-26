@@ -34,7 +34,9 @@ export const glossary = defineMessages(
     status_reserved: "Budget reserved, payment in flight.",
     status_failed: "Payment did not go through; nothing was charged against the budget.",
     status_unknown:
-      "The upstream result could not be determined (timeout/disconnect). It is conservatively counted as spent — check it on the explorer.",
+      "Waiting for on-chain confirmation: the buyer signed a payment authorization but we never heard back from the seller. It is conservatively counted as spent until the authorization expires, at which point MoneySwitch automatically checks the chain and reconciles it.",
+    status_failed_not_settled_expired:
+      "The seller never settled and the payment authorization expired unused — confirmed on-chain. Not settled; the reserved quota has been released back to the key.",
     mock: "Settled by the offline mock facilitator: no real on-chain transfer happened.",
     canDelegate:
       "This key's holder may create their own sub-keys (child MoneyKeys). A sub-key can never exceed its parent's limits, and revoking the parent disables every sub-key beneath it.",
@@ -70,7 +72,8 @@ export const glossary = defineMessages(
     status_settled: "已付款，facilitator 已确认。",
     status_reserved: "额度已预占，付款进行中。",
     status_failed: "付款没有成功，不占用额度。",
-    status_unknown: "上游结果无法确定（超时/断连），为了不超支按「已花」计入额度，请到链上浏览器核对。",
+    status_unknown: "等待链上确认：买家已签署付款授权，但一直没收到卖家的结算回执。为了不超支，暂时按「已花」计入额度；授权过期后 MoneySwitch 会自动去链上核对并对账。",
+    status_failed_not_settled_expired: "卖家一直没有结算，付款授权已过期作废（已在链上确认未被使用）。未结算，占用的额度已自动退回这把 Key。",
     mock: "由离线 mock facilitator 模拟结算，没有真实链上转账。",
     canDelegate: "这把 Key 的持有人可以再往下切子 Key。子 Key 的额度永远不能超过这把 Key；这把 Key 一旦被撤销，它所有的子 Key 也会立即失效。",
     subtreeUsage: "这里的「今日」「累计已用」= 这把 Key 自己的花费 + 它所有子 Key 的花费之和 —— 这才是真正会计入这把 Key 额度的数字。",

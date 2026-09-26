@@ -62,7 +62,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerSetupRoutes(app, ctx);
   registerTollboothRoutes(app, ctx);
 
-  const dashboardDist = resolveDashboardDist();
+  const dashboardDist = ctx.config.dashboardDir || resolveDashboardDist();
   const dashboardIndexPath = path.join(dashboardDist, "index.html");
   const dashboardAvailable = fs.existsSync(dashboardIndexPath);
 

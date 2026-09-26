@@ -1,7 +1,8 @@
 import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
-import { bootstrapAdminToken, SetupTokenStore } from "@moneyswitch/core";
+import { bootstrapAdminToken, SetupTokenStore, type AuthorizationReader } from "@moneyswitch/core";
+import { createEvmAuthorizationReader } from "@moneyswitch/x402";
 import type { ServerConfig } from "./config.js";
 
 export interface AppContext {
@@ -11,6 +12,15 @@ export interface AppContext {
   config: ServerConfig;
   /** First-run one-time setup link store (memory only). Absent/inactive on every boot except the first of a data dir. */
   setup?: SetupTokenStore;
+  /**
+   * v0.5: on-chain reader used by reconcileUnknownPayments (the background
+   * loop and POST /v1/admin/reconcile). buildContext always sets a real
+   * viem-backed reader against the active network's RPC; test suites that
+   * build an AppContext by hand (bypassing buildContext) should inject a
+   * fake reader here instead of leaving this unset, so reconciliation never
+   * touches a real RPC endpoint. Left undefined, reconcile is a no-op.
+   */
+  chainReader?: AuthorizationReader;
 }
 
 /** Host to put in the printed setup link: a wildcard bind address is not browsable, use loopback instead. */
@@ -19,14 +29,40 @@ function browsableHost(host: string): string {
   return host.includes(":") ? `[${host}]` : host;
 }
 
+/** What the first boot of a data directory produces (see buildContext's onFirstRun). */
+export interface FirstRunSecrets {
+  adminToken: string;
+  setupToken: string;
+  /** `http://<host>:<port>/setup#<setupToken>` — the one-time setup link. */
+  setupUrl: string;
+}
+
+export interface BuildContextOptions {
+  /**
+   * Replaces the default "print the admin token + one-time setup link to
+   * stdout" on the first boot of a data dir. Used by the offline demo
+   * runner, which is the process that owns that stdout anyway: it opens the
+   * very same one-time link in the browser. Same secrets, same channel —
+   * no extra way to obtain them.
+   */
+  onFirstRun?: (secrets: FirstRunSecrets) => void;
+}
+
 /** Builds the app context, running DB migrations and printing a fresh admin token exactly once. */
-export async function buildContext(config: ServerConfig): Promise<AppContext> {
-  const { db, sqlite } = openDb({ filePath: config.dbFilePath });
+export async function buildContext(config: ServerConfig, opts: BuildContextOptions = {}): Promise<AppContext> {
+  const { db, sqlite } = openDb({ filePath: config.dbFilePath, migrationsDir: config.migrationsDir ?? undefined });
   const wallet = new LocalWalletDriver(config.dataDir);
 
   const setup = new SetupTokenStore();
   const freshAdminToken = bootstrapAdminToken(db);
-  if (freshAdminToken) {
+  if (freshAdminToken && opts.onFirstRun) {
+    const setupToken = setup.issue(freshAdminToken);
+    opts.onFirstRun({
+      adminToken: freshAdminToken,
+      setupToken,
+      setupUrl: `http://${browsableHost(config.host)}:${config.port}/setup#${setupToken}`,
+    });
+  } else if (freshAdminToken) {
     // Only place this ever gets printed. Never logged again, never stored
     // in plaintext. The only API that can hand it out is the one-time setup
     // claim below, which requires the setup token printed right next to it.
@@ -50,5 +86,10 @@ export async function buildContext(config: ServerConfig): Promise<AppContext> {
     }
   }
 
-  return { db, sqlite, wallet, config, setup };
+  // Demo mode settles through the mock facilitator only (0xmock… hashes that
+  // never exist on chain): leave the reader unset so reconcile is a no-op and
+  // nothing ever talks to a real RPC endpoint.
+  const chainReader = config.demo ? undefined : createEvmAuthorizationReader();
+
+  return { db, sqlite, wallet, config, setup, chainReader };
 }

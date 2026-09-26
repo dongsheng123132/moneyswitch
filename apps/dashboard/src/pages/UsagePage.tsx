@@ -229,7 +229,7 @@ export default function UsagePage() {
                       {p.prompt_tokens != null || p.completion_tokens != null ? (p.prompt_tokens ?? 0) + (p.completion_tokens ?? 0) : "-"}
                     </td>
                     <td>
-                      <StatusPill status={p.status} mock={mock} />
+                      <StatusPill status={p.status} mock={mock} errorCode={p.error_code} />
                     </td>
                     <td>
                       <TxLink txHash={p.tx_hash} mock={mock} />

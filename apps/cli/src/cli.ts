@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import { runCli } from "moneyswitch-connect/lib";
 import { pathToFileURL } from "node:url";
+import { runDemoLauncher } from "./demo.js";
+
+declare const __MONEYSWITCH_VERSION__: string | undefined;
+/** Injected by build.mjs from package.json; "0.0.0-dev" when run from source (tests). */
+export const VERSION = typeof __MONEYSWITCH_VERSION__ === "string" ? __MONEYSWITCH_VERSION__ : "0.0.0-dev";
 
 /**
  * `moneyswitch` — the published client CLI. Thin dispatcher over:
@@ -17,13 +22,19 @@ import { pathToFileURL } from "node:url";
 export const TOP_HELP = `moneyswitch - client CLI for MoneySwitch (x402 + USDC on Monad)
 
 Usage:
+  moneyswitch demo [--port 4020] [--no-open] [--registry=<url>]
   moneyswitch connect --server <url> --key <mk_live_...> [--apply] [--json]
   moneyswitch status --server <url> --key <mk_live_...> [--json]
   moneyswitch remove [--apply] [--json]
   moneyswitch ui [--port 4318] [--no-open]
   moneyswitch sell --upstream <url> --pay-to <0x…> [--price 0.01] [--route "POST /path=0.01"]...
   moneyswitch mcp
+  moneyswitch --version
 
+"demo" is a 30-second offline tour (mock wallet, no real money). It runs
+"npx -y moneyswitch-server@<version> demo", which DOWNLOADS the separate
+moneyswitch-server package (self-hosted server + Dashboard, AGPL-3.0-only;
+this CLI is Apache-2.0). Run "moneyswitch demo --help" for details.
 "sell" puts a toll booth in front of your own API: AI agents pay USDC per call
 (x402) straight to your PUBLIC receiving address; no MoneySwitch server needed.
 Run "moneyswitch sell --help" for all options.
@@ -41,6 +52,8 @@ export type Dispatch =
   | { kind: "ui"; args: string[] }
   | { kind: "sell"; args: string[] }
   | { kind: "connect-lib"; args: string[] }
+  | { kind: "demo"; args: string[] }
+  | { kind: "version" }
   | { kind: "help" }
   | { kind: "unknown"; command: string };
 
@@ -53,6 +66,8 @@ export function parseTopArgv(argv: string[]): Dispatch {
   if (sub === "mcp") return { kind: "mcp" };
   if (sub === "ui") return { kind: "ui", args: rest };
   if (sub === "sell") return { kind: "sell", args: rest };
+  if (sub === "demo") return { kind: "demo", args: rest };
+  if (sub === "--version" || sub === "-v") return { kind: "version" };
   if (sub === "connect") return { kind: "connect-lib", args: rest };
   if (sub === "status" || sub === "remove") return { kind: "connect-lib", args: argv };
   if (sub === undefined || sub === "--help" || sub === "-h") return { kind: "help" };
@@ -77,6 +92,17 @@ async function main(): Promise<void> {
     // SPEC-v0.5 §4: lazy bundle (express + @x402/* + viem), loaded only for `sell`.
     const { runSell } = (await import("./sell.js")) as { runSell: (argv: string[]) => Promise<number> };
     process.exit(await runSell(dispatch.args));
+    return;
+  }
+
+  if (dispatch.kind === "demo") {
+    process.exit(await runDemoLauncher(dispatch.args, VERSION));
+    return;
+  }
+
+  if (dispatch.kind === "version") {
+    process.stdout.write(VERSION + "\n");
+    process.exit(0);
     return;
   }
 

@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./start": {
+      "types": "./dist/start.d.ts",
+      "default": "./dist/start.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run test/unit",

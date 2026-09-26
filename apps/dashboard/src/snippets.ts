@@ -8,7 +8,7 @@ import { isCliTarballAvailable, type AdminMeta } from "./api";
 export type CliSource =
   | { kind: "tarball"; url: string } // served by this server at /dl/moneyswitch.tgz (works anywhere with Node)
   | { kind: "local"; cliPath: string; mcpPath: string | null } // absolute path on the server machine (admin only)
-  | { kind: "npm" }; // fallback: requires the package to be published
+  | { kind: "npm" }; // fallback: the published `moneyswitch` npm package
 
 export const KEY_PLACEHOLDER = "mk_live_xxx";
 

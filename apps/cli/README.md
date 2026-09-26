@@ -15,26 +15,45 @@ server's HTTP API.
 
 ## Install
 
-No install needed. Until this package is published to the npm registry,
-every MoneySwitch server (after `pnpm build`) serves it at
-`/dl/moneyswitch.tgz`, so `npx` can run it straight from your server:
+No install needed — it is on npm:
 
 ```bash
-npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch connect \n  --server http://127.0.0.1:4020 --key mk_live_xxx --apply
+npx moneyswitch demo                     # 30-second offline tour, no real money
+npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply
+npx moneyswitch sell --upstream http://127.0.0.1:8080 --pay-to 0xYourAddress --price 0.01
+npx moneyswitch ui
 ```
 
-Once published, the short form is `npx moneyswitch connect …`.
+Every MoneySwitch server built from the repository also serves this package
+at `/dl/moneyswitch.tgz` (`npx -y --package=<server>/dl/moneyswitch.tgz moneyswitch …`),
+for machines that cannot reach the npm registry.
 
 ## Commands
 
 ```
+moneyswitch demo    [--port 4020] [--no-open] [--registry=<url>]
 moneyswitch connect --server <url> --key <mk_live_...> [--apply] [--json]
 moneyswitch status  --server <url> --key <mk_live_...> [--json]
 moneyswitch remove  [--apply] [--json]
 moneyswitch ui      [--port 4318] [--no-open]
+moneyswitch sell    --upstream <url> --pay-to <0x…> [--price 0.01] [--route "POST /path=0.01"]...
 moneyswitch mcp
+moneyswitch --version
 ```
 
+- `demo` runs `npx -y moneyswitch-server@<same version> demo`: it **downloads
+  the separate `moneyswitch-server` package** (the self-hostable server +
+  Dashboard, licensed **AGPL-3.0-only** — this CLI stays Apache-2.0 and does
+  not include it) and starts a throwaway, fully offline MoneySwitch: mock
+  wallet, a demo channel, two MoneyKeys, a toll booth and a few simulated
+  payments, opened in your browser already signed in. Everything is labelled
+  "DEMO · simulated settlement"; Ctrl+C stops it and deletes the data. If your
+  npm mirror has not synced the package yet, add
+  `--registry=https://registry.npmjs.org/`. `MONEYSWITCH_SERVER_SPEC` runs a
+  different package spec (e.g. a local `.tgz`).
+- `sell` puts a toll booth in front of your own API: AI agents pay USDC per
+  call (x402) straight to your public receiving address; no MoneySwitch
+  server needed. `moneyswitch sell --help` lists every option.
 - `connect` detects Claude Code / Codex on this machine and (with `--apply`)
   wires up the MoneySwitch MCP server for you. Without `--apply` it only
   prints what it would do (dry run).
@@ -55,8 +74,9 @@ moneyswitch mcp
   Claude Code / Codex at — normally you never run it by hand). It reads
   `MONEY_API_BASE` and `MONEY_API_KEY` from the environment.
 
-See the [main repository](https://github.com/dongsheng123132/moneyswitch)
-for how to run a MoneySwitch server.
+Run your own MoneySwitch server (separate package, AGPL-3.0-only):
+`npx moneyswitch-server` — see the
+[main repository](https://github.com/dongsheng123132/moneyswitch).
 
 ## License
 

@@ -3,6 +3,7 @@ import { rmSync, mkdirSync, readdirSync, renameSync, copyFileSync } from "node:f
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outdir = path.join(__dirname, "dist");
@@ -28,6 +29,9 @@ await build({
   entryPoints: [path.join(__dirname, "src/cli.ts")],
   entryNames: "cli",
   external: ["./mcp.js", "./desktop.js", "./sell.js"],
+  // `moneyswitch --version`, and the matching `moneyswitch-server@<version>`
+  // that `moneyswitch demo` runs.
+  define: { __MONEYSWITCH_VERSION__: JSON.stringify(JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version) },
 });
 
 // dist/sell.js: `moneyswitch sell` (SPEC-v0.5 §4) — express + the official
@@ -83,6 +87,13 @@ await build({
 // "npx -y --package=<server>/dl/moneyswitch.tgz moneyswitch connect ..." works
 // before (and without) an npm release. --ignore-scripts: prepack would re-run
 // this very build. Kept outside dist/ so it never ends up inside the package.
+// Skipped when this build runs as npm's own `prepack` (npm publish / npm pack):
+// the outer command is already producing the tarball, and a nested pack would
+// inherit npm_config_dry_run and produce nothing.
+if (process.env.npm_lifecycle_event === "prepack") {
+  console.log("built dist/ (prepack: skipped pack/moneyswitch.tgz)");
+  process.exit(0);
+}
 const packDir = path.join(__dirname, "pack");
 rmSync(packDir, { recursive: true, force: true });
 mkdirSync(packDir, { recursive: true });

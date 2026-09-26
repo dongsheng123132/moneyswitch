@@ -23,14 +23,14 @@ describe("First-run setup link", () => {
     t = await buildTestApp();
     const res = await t.app.inject({ method: "GET", url: "/v1/setup/status" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ setup_link_active: false });
+    expect(res.json()).toEqual({ setup_link_active: false, demo: false });
     const claim = await t.app.inject({ method: "POST", url: "/v1/setup/claim", payload: { setup_token: "ms_setup_x" } });
     expect(claim.statusCode).toBe(410);
   });
 
   it("claim hands over a working admin token exactly once, with no-store", async () => {
     const setupToken = await withSetup();
-    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: true });
+    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: true, demo: false });
 
     const res = await t.app.inject({ method: "POST", url: "/v1/setup/claim", payload: { setup_token: setupToken } });
     expect(res.statusCode).toBe(200);
@@ -44,7 +44,7 @@ describe("First-run setup link", () => {
     const again = await t.app.inject({ method: "POST", url: "/v1/setup/claim", payload: { setup_token: setupToken } });
     expect(again.statusCode).toBe(410);
     expect(again.json()).toEqual({ error: "SETUP_USED" });
-    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: false });
+    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: false, demo: false });
   });
 
   it("wrong token, a MoneyKey, or the admin token itself cannot claim", async () => {

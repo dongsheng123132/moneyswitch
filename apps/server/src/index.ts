@@ -1,12 +1,9 @@
 import { loadConfig } from "./config.js";
-import { buildContext } from "./context.js";
-import { buildApp } from "./app.js";
+import { startServer } from "./start.js";
 
 async function main() {
   const config = loadConfig();
-  const ctx = await buildContext(config);
-  const app = buildApp(ctx);
-  await app.listen({ port: config.port, host: config.host });
+  await startServer(config);
   console.log(`[moneyswitch] server listening on http://${config.host}:${config.port}`);
 }
 

@@ -338,7 +338,7 @@ html[data-lang="zh"] .hero-title { max-width: 14ch; line-height: 1.12; letter-sp
 .card.lic h3 { font-size: 22px; }
 
 /* roadmap */
-.road { list-style: none; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.road { list-style: none; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 .road li { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; background: var(--panel); position: relative; }
 .road .v { font: 700 18px var(--mono); }
 .road .st { display: block; margin-top: 2px; font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
@@ -446,3 +446,38 @@ html[data-lang="zh"] .hero-title { max-width: 14ch; line-height: 1.12; letter-sp
 .tx-label.first-payment { color: var(--text); }
 @media (max-width: 640px) { .tx-label { display: block; margin: 2px 0 0; } }
 #start li code, #desktop .lead code { white-space: normal; overflow-wrap: anywhere; }
+
+/* v0.5.1: hero "try it" command + toll booth section */
+.hero-try { max-width: 640px; margin-top: 22px; }
+.hero-try .term-static { margin-top: 0; }
+.hero-try .term-static pre { font-size: 15px; }
+.hero-try-note { margin-top: 10px; color: var(--dim); font-size: 14px; }
+.term-static .c { color: var(--faint); }
+.toll-things { margin-top: 28px; }
+.toll-things .tx-table td { vertical-align: top; color: var(--dim); }
+.toll-things .tx-table td:first-child { color: var(--text); white-space: nowrap; }
+.toll-things .tx-table code { white-space: nowrap; }
+@media (max-width: 640px) {
+  .hero-try .term-static pre { font-size: 13px; padding-top: 44px; }
+  .toll-things .tx-table tr { grid-template-columns: 1fr; }
+  .toll-things .tx-table td:first-child { white-space: normal; }
+}
+
+/* Before / After: x402, plug and play */
+.ba-grid { margin-top: 36px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 18px; align-items: stretch; }
+.ba-col { border: 1px solid var(--line2); border-radius: 16px; padding: 22px; background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .02)); min-width: 0; }
+.ba-before { border-color: rgba(255, 92, 122, .35); }
+.ba-after { border-color: rgba(180, 255, 74, .45); background: linear-gradient(180deg, rgba(180, 255, 74, .07), rgba(180, 255, 74, .02)); }
+.ba-label { font: 600 12.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 14px; color: var(--dim); }
+.ba-before .ba-label { color: var(--red); }
+.ba-after .ba-label { color: var(--lime); }
+.ba-col .code .c { color: var(--faint); }
+.ba-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+.ba-cons li { position: relative; padding-left: 24px; color: var(--dim); font-size: 15px; }
+.ba-cons li::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 700; }
+.ba-or { margin-top: 14px; color: var(--dim); font-size: 15px; }
+.ba-arrow { align-self: center; font: 700 34px var(--mono); color: var(--lime); }
+@media (max-width: 900px) {
+  .ba-grid { grid-template-columns: 1fr; }
+  .ba-arrow { justify-self: center; transform: rotate(90deg); font-size: 28px; }
+}

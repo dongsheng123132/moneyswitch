@@ -1,0 +1,64 @@
+{
+  "name": "moneyswitch-server",
+  "version": "0.5.1",
+  "description": "Self-hosted MoneySwitch server + Dashboard in one command (npx moneyswitch-server), plus a fully offline 30-second demo (npx moneyswitch-server demo). Give your AI an API key for money: x402 + USDC on Monad.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "moneyswitch-server": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "dashboard",
+    "migrations",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
+    "directory": "apps/server-pkg"
+  },
+  "homepage": "https://moneyswitch.dev",
+  "bugs": {
+    "url": "https://github.com/dongsheng123132/moneyswitch/issues"
+  },
+  "keywords": [
+    "x402",
+    "usdc",
+    "monad",
+    "ai-agent",
+    "api-key",
+    "self-hosted",
+    "dashboard",
+    "toll-booth",
+    "paywall",
+    "openai"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run test/unit",
+    "prepack": "node build.mjs",
+    "test:e2e": "vitest run test/e2e --testTimeout=60000"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3"
+  },
+  "devDependencies": {
+    "@moneyswitch/dashboard": "workspace:*",
+    "@moneyswitch/db": "workspace:*",
+    "@moneyswitch/demo-seller": "workspace:*",
+    "@moneyswitch/mock-facilitator": "workspace:*",
+    "@moneyswitch/server": "workspace:*",
+    "@moneyswitch/wallet": "workspace:*",
+    "@types/node": "22.10.5",
+    "esbuild": "0.28.2",
+    "ethers": "6.17.0",
+    "typescript": "5.7.3",
+    "vitest": "5.0.2"
+  }
+}

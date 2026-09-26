@@ -25,7 +25,8 @@ const FAUCET_URL = "https://faucet.circle.com/";
 /**
  * First-run setup + Dashboard metadata routes (docs/ux-audit.md).
  *
- * - GET  /v1/setup/status   unauthenticated, returns ONLY whether a one-time setup link is still claimable.
+ * - GET  /v1/setup/status   unauthenticated, returns ONLY whether a one-time setup link is still claimable
+ *                           (+ whether this is the offline demo, for the Dashboard's DEMO banner).
  * - POST /v1/setup/claim    unauthenticated, exchanges the one-time setup token (printed to stdout on first boot)
  *                           for the admin token. Single use, 30 min, burns after 10 bad attempts (SetupTokenStore).
  * - GET  /v1/admin/meta     admin only: network facts + demo seller URL + local CLI paths for copy-paste snippets.
@@ -36,7 +37,12 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
 
   app.get("/v1/setup/status", async (_req, reply) => {
-    return reply.header("cache-control", "no-store").send({ setup_link_active: ctx.setup?.isActive() ?? false });
+    // `demo` only tells the Dashboard to render the "DEMO · simulated
+    // settlement" banner on every screen (login/setup included); it grants
+    // nothing and is never true outside `moneyswitch-server demo`.
+    return reply
+      .header("cache-control", "no-store")
+      .send({ setup_link_active: ctx.setup?.isActive() ?? false, demo: Boolean(ctx.config.demo) });
   });
 
   app.post("/v1/setup/claim", async (req, reply) => {
@@ -74,6 +80,7 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       wallet_address: ctx.wallet.getAddress(),
       public_base: publicBase(ctx, req),
       public_base_from_env: Boolean(ctx.config.publicUrl),
+      demo: Boolean(ctx.config.demo),
     });
   });
 

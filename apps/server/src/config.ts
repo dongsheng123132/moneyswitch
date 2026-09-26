@@ -26,6 +26,34 @@ export interface ServerConfig {
    * Dashboard shows the origin it was opened from.
    */
   publicUrl?: string | null;
+  /**
+   * v0.5: how often (ms) to run reconcileUnknownPayments in the background.
+   * MONEYSWITCH_RECONCILE_INTERVAL_MS, default 60000; 0 disables the loop
+   * (the admin can still trigger it on demand via POST /v1/admin/reconcile).
+   */
+  reconcileIntervalMs?: number;
+  /**
+   * Directory with the built Dashboard (index.html + assets). Defaults to
+   * apps/dashboard/dist; the `moneyswitch-server` npm package ships its own
+   * copy (MONEYSWITCH_DASHBOARD_DIR).
+   */
+  dashboardDir?: string | null;
+  /** Directory with the SQL migrations (defaults to packages/db/migrations). */
+  migrationsDir?: string | null;
+  /**
+   * Offline demo mode (`npx moneyswitch-server demo`). Only ever set in code by
+   * the demo runner — there is no environment variable for it. It never
+   * relaxes authentication; it only (a) tells the Dashboard to show the
+   * "DEMO · simulated settlement" banner + guide card, (b) reports a simulated
+   * wallet balance instead of querying the chain, (c) skips on-chain
+   * reconciliation (every settlement goes through the mock facilitator).
+   */
+  demo?: DemoModeInfo | null;
+}
+
+export interface DemoModeInfo {
+  /** Simulated starting wallet balance, in USDC micros. */
+  startingBalanceMicros: number;
 }
 
 function defaultDataDir(): string {
@@ -48,5 +76,22 @@ export function loadConfig(): ServerConfig {
   const demoSellerUrl = process.env.MONEYSWITCH_DEMO_SELLER_URL?.trim() || null;
   const maxKeyDepth = parseMaxKeyDepth(process.env.MONEYSWITCH_MAX_KEY_DEPTH);
   const publicUrl = process.env.MONEYSWITCH_PUBLIC_URL?.trim().replace(/\/+$/, "") || null;
-  return { port, host, dataDir, dbFilePath, walletPassword, demoSellerUrl, maxKeyDepth, publicUrl };
+  const rawReconcileInterval = process.env.MONEYSWITCH_RECONCILE_INTERVAL_MS;
+  const parsedReconcileInterval = rawReconcileInterval != null ? Number(rawReconcileInterval) : NaN;
+  const dashboardDir = process.env.MONEYSWITCH_DASHBOARD_DIR?.trim() || null;
+  const reconcileIntervalMs = Number.isFinite(parsedReconcileInterval) && parsedReconcileInterval >= 0
+    ? parsedReconcileInterval
+    : 60_000;
+  return {
+    port,
+    host,
+    dataDir,
+    dbFilePath,
+    walletPassword,
+    demoSellerUrl,
+    maxKeyDepth,
+    publicUrl,
+    reconcileIntervalMs,
+    dashboardDir,
+  };
 }

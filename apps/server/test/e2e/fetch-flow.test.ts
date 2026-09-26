@@ -26,7 +26,8 @@ import { eq } from "drizzle-orm";
 const SELLER_PORT = 14021;
 const MOCK_FACILITATOR_PORT = 14099;
 const SERVER_PORT = 14020;
-const REDIRECT_SERVER_PORT = 14022;
+// 14022 collided with a desktop app (WeChat) on the dev machine; any free port works.
+const REDIRECT_SERVER_PORT = 14052;
 const PAY_TO = EthersWallet.createRandom().address;
 
 let tmpDir: string;

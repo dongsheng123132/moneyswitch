@@ -31,6 +31,7 @@ import { useAdminMeta } from "../useAdminMeta";
 import { connectCommand, openaiBase, useCliSource } from "../snippets";
 import { FundingGuide } from "./WalletPage";
 import { addDemoChannel } from "./ChannelsPage";
+import { fetchDemoMode, PLAYGROUND_KEY_STORAGE } from "../demoMode";
 import "../styles/setup.css";
 
 const SKIPPED_KEY = "moneyswitch_setup_skipped";
@@ -76,7 +77,16 @@ export default function SetupPage() {
   const navigate = useNavigate();
 
   // --- one-time setup link claim (/setup#ms_setup_…) -------------------------
-  const [hashToken] = useState(() => (window.location.hash.startsWith("#ms_setup_") ? window.location.hash.slice(1) : null));
+  // "#ms_setup_…" (printed on first boot); the offline demo appends
+  // "&demo_key=mk_live_…" so the Playground is ready to use (demo mode only).
+  const [{ hashToken, demoKey }] = useState(() => {
+    const h = window.location.hash;
+    if (!h.startsWith("#ms_setup_")) return { hashToken: null, demoKey: null };
+    const [tok, rest] = h.slice(1).split("&", 2);
+    const dk = new URLSearchParams(rest ?? "").get("demo_key");
+    return { hashToken: tok, demoKey: dk && dk.startsWith("mk_live_") ? dk : null };
+  });
+  const [demoLanding, setDemoLanding] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimedToken, setClaimedToken] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(Boolean(hashToken) && !token);
@@ -93,6 +103,14 @@ export default function SetupPage() {
     claimInFlight
       .then(async (admin) => {
         await loginAdmin(admin);
+        // Offline demo: everything is pre-configured, so skip the wizard and
+        // land on the overview (its guide card), with the demo key in the
+        // Playground. Only when the server itself says it is the demo.
+        if (await fetchDemoMode()) {
+          if (demoKey) sessionStorage.setItem(PLAYGROUND_KEY_STORAGE, demoKey);
+          setDemoLanding(true);
+          return;
+        }
         setClaimedToken(admin);
         sessionStorage.removeItem(ACK_KEY);
       })
@@ -127,6 +145,7 @@ export default function SetupPage() {
     );
   }
   if (!token) return <Navigate to="/login" replace />;
+  if (demoLanding) return <Navigate to="/" replace />;
 
   return <Wizard claimedToken={claimedToken} onFinish={() => navigate("/")} />;
 }

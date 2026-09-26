@@ -27,6 +27,7 @@ import { getActiveNetwork } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
 import { keyView, statusFromIndex } from "../keyview.js";
+import { runReconcileOnce } from "../reconcileJob.js";
 
 export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
@@ -189,6 +190,28 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     });
   });
 
+  // v0.5: on-chain reconciliation for `unknown` payments (SPEC-v0.5 §
+  // "unknown 付款的链上对账"). Runs the exact same logic as the background
+  // loop (apps/server/src/reconcileJob.ts), just on demand.
+  app.post("/v1/admin/reconcile", { preHandler: adminGuard }, async (_req, reply) => {
+    const result = await runReconcileOnce(ctx);
+    writeAudit(ctx.db, "admin", "payments.reconcile", {
+      scanned: result.scanned,
+      failed: result.failed,
+      settledWithTx: result.settledWithTx,
+      settledTxUnknown: result.settledTxUnknown,
+      rpcErrors: result.rpcErrors,
+    });
+    return reply.send({
+      scanned: result.scanned,
+      failed: result.failed,
+      settled_with_tx: result.settledWithTx,
+      settled_tx_unknown: result.settledTxUnknown,
+      rpc_errors: result.rpcErrors,
+      reconciled_payment_ids: result.reconciledPaymentIds,
+    });
+  });
+
   // --- v0.2 (SPEC-v0.2 §1): Channel management ---
 
   app.get("/v1/admin/channels", { preHandler: adminGuard }, async (_req, reply) => {
@@ -336,7 +359,12 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     const network = getActiveNetwork();
     const address = ctx.wallet.getAddress();
     let balance: string | null = null;
-    if (address) {
+    if (address && ctx.config.demo) {
+      // Offline demo: no chain to ask. Simulated balance = starting amount
+      // − settled spend + settled toll booth income (demo booths pay this
+      // wallet). Clearly a simulation: the Dashboard shows the DEMO banner.
+      balance = formatMicrosToUsdc(BigInt(demoBalanceMicros(ctx)));
+    } else if (address) {
       try {
         const raw = await ctx.wallet.getUsdcBalance(network.rpcUrl, network.usdcAddress);
         balance = formatMicrosToUsdc(raw);
@@ -350,6 +378,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       has_keystore: ctx.wallet.hasKeystore(),
       usdc_balance: balance,
       network: network.caip2,
+      simulated: Boolean(ctx.config.demo),
     });
   });
 
@@ -377,4 +406,11 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       return reply.status(400).send({ error: "unlock_failed" });
     }
   });
+}
+
+function demoBalanceMicros(ctx: AppContext): number {
+  const start = ctx.config.demo?.startingBalanceMicros ?? 0;
+  const spent = ctx.sqlite.prepare(`SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE status = 'settled'`).get() as { s: number };
+  const earned = ctx.sqlite.prepare(`SELECT COALESCE(SUM(amount), 0) AS s FROM earnings WHERE status = 'settled'`).get() as { s: number };
+  return Math.max(0, start - Number(spent.s) + Number(earned.s));
 }

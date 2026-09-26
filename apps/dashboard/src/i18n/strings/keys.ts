@@ -113,8 +113,8 @@ export const keysStrings = defineMessages(
     connectDryRunLabel: "Dry run (preview only, changes nothing)",
     sourceNoteTarball: "Downloads the MoneySwitch CLI (~150 KB, Apache-2.0) from this server.",
     sourceNoteLocal: "Uses the CLI built in this repo — works on this computer only.",
-    sourceNoteNpmTitle: "Not published to npm yet",
-    sourceNoteNpm: "The moneyswitch package is not published to npm yet. Run `pnpm build` so this server can serve it, or use another tab first.",
+    sourceNoteNpmTitle: "From npm",
+    sourceNoteNpm: "Uses the moneyswitch package from npm (npx downloads it on first run). If your npm mirror hasn't synced the latest version yet, add --registry=https://registry.npmjs.org/ to npx.",
 
     claudeNote: "-s user makes it available in every folder. On native Windows, if Claude Code can't start npx, prefix the command after -- with `cmd /c`.",
     codexNote: "Append this to ~/.codex/config.toml.",
@@ -236,8 +236,8 @@ export const keysStrings = defineMessages(
     connectDryRunLabel: "预览模式（只看不改）",
     sourceNoteTarball: "从本服务器下载 MoneySwitch CLI（约 150 KB，Apache-2.0 协议）。",
     sourceNoteLocal: "使用本仓库里已构建的 CLI —— 只能在这台机器上用。",
-    sourceNoteNpmTitle: "还没发布到 npm",
-    sourceNoteNpm: "moneyswitch 包还没有发布到 npm。运行 `pnpm build` 让本服务器可以分发它，或者先切到别的方式。",
+    sourceNoteNpmTitle: "来自 npm",
+    sourceNoteNpm: "使用 npm 上的 moneyswitch 包（npx 首次运行时自动下载）。如果你的 npm 镜像源还没同步最新版本，给 npx 加上 --registry=https://registry.npmjs.org/。",
 
     claudeNote: "-s user 让它在任何目录下都能用。原生 Windows 上如果 Claude Code 启动不了 npx，请在 -- 后面加上 `cmd /c`。",
     codexNote: "把这段追加到 ~/.codex/config.toml。",
