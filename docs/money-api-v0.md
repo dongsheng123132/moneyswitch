@@ -289,6 +289,99 @@ key's `total_budget` (in USD, since USDC is treated 1:1 with USD here).
 `total_usage` is the key's total spend in **USD cents** (OpenAI's legacy
 convention), i.e. `total_used_micro_usdc / 10_000`.
 
+## Child keys (v0.4, SPEC-v0.4 §A)
+
+A MoneyKey created by the admin with `can_delegate: true` can cut **child
+keys** for its own agents; a child created with `can_delegate: true` can cut
+its own children, down to `MONEYSWITCH_MAX_KEY_DEPTH` (default 3: root + 3
+levels). A child can never do more than its parent:
+
+- `per_request_limit`, `daily_budget`, `total_budget`,
+  `max_payments_per_minute` ≤ the parent's;
+- `allowed_hosts` ⊆ the parent's (a parent entry `host` covers any
+  `host:port`; `host:port` covers only that port); `allowed_models` ⊆ the
+  parent's effective list; omitted → inherited;
+- `expires_at` ≤ the parent's effective expiry (omitted → inherited);
+- `approval_threshold` ≤ the strictest threshold on the parent's chain
+  (omitted → the ancestors' thresholds still apply).
+
+At payment time the policy engine checks, **in the same SQLite transaction
+that reserves the payment**, the key itself and every ancestor: enabled,
+unexpired, per-request limit, daily and total budget — where a key's "used"
+is the settled+reserved+unknown sum of its **whole subtree**. The first
+failing level wins. Revoking/expiring any ancestor disables the whole
+subtree immediately. Any ancestor's `approval_threshold` also triggers
+approval (still decided by the admin).
+
+### Error bodies carry the limiting level
+
+Key-state and limit denials (`KEY_REVOKED`, `KEY_EXPIRED`, `RATE_LIMITED`,
+`HOST_NOT_ALLOWED`, `PER_REQUEST_LIMIT_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`,
+`TOTAL_BUDGET_EXCEEDED`) add:
+
+```json
+{ "limit_scope": "self | ancestor", "limit_key_prefix": "mk_live_ab12" }
+```
+
+— top-level in the `/v1/fetch` envelope and in `{status:"error"}` auth
+errors, inside `error` for OpenAI-shaped errors.
+
+### `GET /v1/status` (v0.4 additions)
+
+`remaining_today` / `remaining_total` / `per_request_limit` are now the
+**effective** values (minimum over the key and its ancestors). New fields:
+`used_today`, `used_total` (subtree), `remaining_today_scope`,
+`remaining_total_scope` (`self|ancestor`: which level binds),
+`approval_threshold` (effective), `expires_at` (effective), `depth`,
+`max_depth`, `can_delegate`, `can_create_children`, `is_child`.
+
+### `POST /v1/keys/children`
+
+Body: `{ name, daily_budget, total_budget, per_request_limit,
+approval_threshold?, allowed_hosts?, allowed_models?, expires_at?,
+can_delegate?, max_payments_per_minute? }` (amounts are decimal strings;
+numbers are accepted too).
+
+- 200: the child key view (same fields as the admin `GET /v1/keys` rows) plus
+  `key` — the full `mk_live_…`, returned **only here**. Audited as
+  `key.child_create` with actor `key:<parentId>`.
+- 400 `{ "error": "CHILD_EXCEEDS_PARENT", "code": "CHILD_EXCEEDS_PARENT",
+  "message", "field": "daily_budget", "parent_value": "1" }` — `field` is the
+  offending request field. `INVALID_REQUEST` (same shape) for missing /
+  malformed fields.
+- 403 `DELEGATION_NOT_ALLOWED` (caller has `can_delegate=false`),
+  `MAX_DEPTH_EXCEEDED` (caller is at max depth, or `can_delegate:true`
+  requested for a child that would sit at max depth), `CHILDREN_LIMIT_REACHED`
+  (100 direct children per key, revoked ones included).
+- 401 `KEY_REVOKED` / `KEY_EXPIRED` (+ `limit_scope`) if the caller or an
+  ancestor is no longer active.
+
+### `GET /v1/keys/children`
+
+`{ "children": [ … ] }` — the caller's **direct** children, oldest first:
+`id, name, key_prefix, enabled, status (active|revoked|expired|ancestor_revoked|ancestor_expired),
+total_budget, daily_budget, per_request_limit, approval_threshold,
+allowed_hosts, allowed_models, max_payments_per_minute, expires_at,
+created_at, last_used_at, used_today, used_total (subtree), own_used_today,
+own_used_total, parent_id, depth, can_delegate, created_by, children_count`.
+Never the key or its hash.
+
+### `POST /v1/keys/children/:id/revoke`
+
+Revokes any key in the caller's subtree (child, grandchild, …) →
+`{ "id", "revoked": true }`. Anything else — the caller itself, its parent,
+a sibling, another tree, an unknown id — is `404 { "code": "NOT_FOUND" }`
+(indistinguishable, so it cannot be used to probe for keys). Audited as
+`key.child_revoke`.
+
+### Admin additions
+
+`POST /v1/keys` accepts `can_delegate` (default `false`); `GET /v1/keys`
+rows add `parent_id, depth, can_delegate, created_by, children_count,
+status, own_used_today, own_used_total` (`used_today`/`used_total` are
+subtree totals); `GET /v1/admin/keys/tree` returns
+`{ "tree": [ { …row, "children": [ … ] } ] }`.
+
 ## License
 
 This document is licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).

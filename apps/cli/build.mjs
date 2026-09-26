@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { rmSync, mkdirSync, readdirSync, renameSync } from "node:fs";
+import { rmSync, mkdirSync, readdirSync, renameSync, copyFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -27,8 +27,34 @@ await build({
   ...shared,
   entryPoints: [path.join(__dirname, "src/cli.ts")],
   entryNames: "cli",
-  external: ["./mcp.js"],
+  external: ["./mcp.js", "./desktop.js"],
 });
+
+// dist/desktop.js: `moneyswitch ui` (SPEC-v0.4 §B), the local desktop console
+// server. Lazy-loaded by cli.js; smol-toml is bundled in.
+await build({
+  ...shared,
+  entryPoints: [path.join(__dirname, "src/desktop.ts")],
+  entryNames: "desktop",
+});
+
+// dist/ui/: the console's browser app (React bundled, no CDN, CSP 'self').
+const uiDir = path.join(outdir, "ui");
+mkdirSync(uiDir, { recursive: true });
+await build({
+  entryPoints: [path.join(__dirname, "src/desktop/web/main.tsx")],
+  bundle: true,
+  platform: "browser",
+  target: "es2020",
+  format: "esm",
+  outfile: path.join(uiDir, "app.js"),
+  jsx: "automatic",
+  minify: true,
+  define: { "process.env.NODE_ENV": '"production"' },
+  legalComments: "none",
+  logLevel: "info",
+});
+copyFileSync(path.join(__dirname, "src/desktop/web/index.html"), path.join(uiDir, "index.html"));
 
 // dist/mcp.js: @moneyswitch/mcp (Apache-2.0) bundled standalone, including
 // @modelcontextprotocol/sdk and zod so the published package has ~0 runtime
@@ -55,4 +81,4 @@ const packed = readdirSync(packDir).find((f) => f.endsWith(".tgz"));
 if (!packed) throw new Error("npm pack produced no tarball");
 renameSync(path.join(packDir, packed), path.join(packDir, "moneyswitch.tgz"));
 
-console.log("built dist/cli.js + dist/mcp.js + pack/moneyswitch.tgz");
+console.log("built dist/cli.js + dist/mcp.js + dist/desktop.js + dist/ui/ + pack/moneyswitch.tgz");

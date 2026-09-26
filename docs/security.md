@@ -34,6 +34,18 @@
   your reverse proxy provides. Put MoneySwitch behind a firewall; do not
   expose port 4020 to the public internet.
 
+- **Child keys (v0.4) cannot widen authority.** Every limit of a child is
+  bounded by its parent at creation, and — independently — every payment
+  re-checks the whole ancestor chain (state + per-request + subtree
+  daily/total) inside the single `BEGIN IMMEDIATE` reservation transaction,
+  so a child can never spend past any ancestor, even with a stale or forged
+  in-memory key row. Revoking a key disables its whole subtree immediately
+  (evaluated at query time). A parent's `max_payments_per_minute` caps its
+  whole subtree, so splitting a key into children does not multiply its
+  rate. Child keys are still bearer secrets: whoever holds a delegable key
+  can mint up to 100 children per key, and those children can be used by
+  anyone they are handed to — revoke the parent to cut all of them off.
+
 ## Secrets handling
 
 - The full plaintext MoneyKey and the full admin token are each shown to

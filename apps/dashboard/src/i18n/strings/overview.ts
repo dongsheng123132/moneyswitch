@@ -60,6 +60,11 @@ export const overviewStrings = defineMessages(
     emptyActivityTitle: "No payments yet",
     emptyActivityBody: "Try the Playground to make your first paid call.",
     emptyActivityAction: "Open Playground",
+
+    // SPEC-v0.4.md §A: "today by agent" aggregates by root key; used_today on
+    // a root already includes its sub-keys' spend, so it is shown as-is.
+    showSubKeys: "Show {n} sub-key(s)",
+    hideSubKeys: "Hide sub-keys",
   },
   {
     kpiVaultBalance: "钱包余额",
@@ -119,5 +124,8 @@ export const overviewStrings = defineMessages(
     emptyActivityTitle: "还没有付款记录",
     emptyActivityBody: "去 Playground 试试第一次付费调用。",
     emptyActivityAction: "打开 Playground",
+
+    showSubKeys: "展开 {n} 把子 Key",
+    hideSubKeys: "收起子 Key",
   }
 );

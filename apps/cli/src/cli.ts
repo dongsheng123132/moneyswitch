@@ -6,6 +6,9 @@ import { pathToFileURL } from "node:url";
  * `moneyswitch` — the published client CLI. Thin dispatcher over:
  *  - moneyswitch-connect's runCli (SPEC-v0.3-employee.md §B): `connect`,
  *    `status`, `remove` subcommands.
+ *  - SPEC-v0.4 §B: `ui` subcommand, the local desktop console, loaded
+ *    lazily from ./desktop.js (built from src/desktop/ui.ts) together with
+ *    its static assets in ./ui/.
  *  - @moneyswitch/mcp (SPEC §7): `mcp` subcommand, started as a genuinely
  *    separate bundle (./mcp.js, built from src/mcp-bin.ts) so importing it
  *    is only ever attempted when `moneyswitch mcp` is actually invoked, not
@@ -17,8 +20,11 @@ Usage:
   moneyswitch connect --server <url> --key <mk_live_...> [--apply] [--json]
   moneyswitch status --server <url> --key <mk_live_...> [--json]
   moneyswitch remove [--apply] [--json]
+  moneyswitch ui [--port 4318] [--no-open]
   moneyswitch mcp
 
+"ui" opens the local desktop console (127.0.0.1 only): give each agent a
+model key and a MoneyKey, preview the config diff, then enable.
 Without --apply, "connect"/"remove" only print planned changes (dry-run).
 "mcp" starts a stdio MCP server; it reads MONEY_API_BASE and MONEY_API_KEY
 from the environment and never touches this process's argv/stdout for
@@ -28,6 +34,7 @@ Exit codes: 0 ok, 1 failure, 2 bad args.`;
 
 export type Dispatch =
   | { kind: "mcp" }
+  | { kind: "ui"; args: string[] }
   | { kind: "connect-lib"; args: string[] }
   | { kind: "help" }
   | { kind: "unknown"; command: string };
@@ -39,6 +46,7 @@ export type Dispatch =
 export function parseTopArgv(argv: string[]): Dispatch {
   const [sub, ...rest] = argv;
   if (sub === "mcp") return { kind: "mcp" };
+  if (sub === "ui") return { kind: "ui", args: rest };
   if (sub === "connect") return { kind: "connect-lib", args: rest };
   if (sub === "status" || sub === "remove") return { kind: "connect-lib", args: argv };
   if (sub === undefined || sub === "--help" || sub === "-h") return { kind: "help" };
@@ -50,6 +58,12 @@ async function main(): Promise<void> {
 
   if (dispatch.kind === "mcp") {
     await import("./mcp.js");
+    return;
+  }
+
+  if (dispatch.kind === "ui") {
+    const { runUi } = (await import("./desktop.js")) as { runUi: (argv: string[]) => Promise<number> };
+    process.exit(await runUi(dispatch.args));
     return;
   }
 

@@ -8,6 +8,7 @@ export const employeeStrings = defineMessages(
     navChat: "Chat",
     navHistory: "History",
     navConnect: "Connect my agent",
+    navChildren: "My sub-keys",
     brandSub: "Employee",
 
     // Key broken (KEY_REVOKED / KEY_EXPIRED / KEY_INVALID on /v1/status)
@@ -15,6 +16,8 @@ export const employeeStrings = defineMessages(
     keyBroken_KEY_REVOKED: "This key has been revoked. Ask your admin for a new one — you won't be able to chat or see your budget until then.",
     keyBroken_KEY_EXPIRED: "This key has expired. Ask your admin for a new one — you won't be able to chat or see your budget until then.",
     keyBroken_KEY_INVALID: "This key is not valid for this server. Ask your admin for a new one.",
+    keyBroken_KEY_REVOKED_ANCESTOR: "This sub-key stopped working because the key it was cut from has been revoked. Ask whoever gave it to you for a new one.",
+    keyBroken_KEY_EXPIRED_ANCESTOR: "This sub-key stopped working because the key it was cut from has expired. Ask whoever gave it to you for a new one.",
     keyBrokenGeneric: "This key isn't working right now. Ask your admin for a new one.",
 
     // --- My budget (B-5) ---
@@ -98,12 +101,15 @@ export const employeeStrings = defineMessages(
     navChat: "对话",
     navHistory: "流水",
     navConnect: "接入本机 Agent",
+    navChildren: "我的子 Key",
     brandSub: "员工",
 
     keyBrokenTitle: "这把 Key 已经不能用了",
     keyBroken_KEY_REVOKED: "这把 Key 已被管理员撤销，在拿到新 Key 之前无法对话、也看不到额度。",
     keyBroken_KEY_EXPIRED: "这把 Key 已经过期，在拿到新 Key 之前无法对话、也看不到额度。",
     keyBroken_KEY_INVALID: "这把 Key 对这台服务器无效，请联系管理员重新发一把。",
+    keyBroken_KEY_REVOKED_ANCESTOR: "这把子 Key 已失效：切出它的上级 Key 已被撤销。请找给你 Key 的人重新发一把。",
+    keyBroken_KEY_EXPIRED_ANCESTOR: "这把子 Key 已失效：切出它的上级 Key 已过期。请找给你 Key 的人重新发一把。",
     keyBrokenGeneric: "这把 Key 现在用不了，请联系管理员重新发一把。",
 
     todayBudgetLabel: "今日额度",

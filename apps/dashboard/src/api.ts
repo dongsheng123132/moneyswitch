@@ -79,6 +79,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // MoneyKeys
 // ---------------------------------------------------------------------------
 
+// SPEC-v0.4.md §A — child keys / multi-level delegation. A key's status now
+// accounts for cascading revoke/expiry down an ancestor chain: a key can be
+// individually enabled+unexpired yet still unusable because a parent was
+// revoked or expired ("ancestor_revoked" / "ancestor_expired").
+export type MoneyKeyStatus = "active" | "revoked" | "expired" | "ancestor_revoked" | "ancestor_expired";
+
 export interface MoneyKeyRow {
   id: string;
   name: string;
@@ -93,12 +99,32 @@ export interface MoneyKeyRow {
   expires_at: string | null;
   created_at: string;
   last_used_at: string | null;
+  // SPEC-v0.4.md §A: used_today/used_total are now SUBTREE totals (this
+  // key's own spend + every descendant's spend — what actually counts
+  // against this key's own budget). Never sum these across parent+child
+  // rows client-side (double counting) — to get a root's total just read
+  // the root row.
   used_today: string;
   used_total: string;
   // SPEC-v0.2 §1: MoneyKey allowed_models — null = all models from enabled
   // channels are allowed. Confirmed present on every /v1/keys row by the
   // real v0.2 server (verified on testnet).
   allowed_models: string[] | null;
+  // --- SPEC-v0.4.md §A: child keys / multi-level delegation ---
+  parent_id: string | null;
+  depth: number;
+  can_delegate: boolean;
+  created_by: string; // "admin" | "key:<parentId>"
+  children_count: number;
+  status: MoneyKeyStatus;
+  // This key's own spend only (excludes descendants).
+  own_used_today: string;
+  own_used_total: string;
+}
+
+/** GET /v1/admin/keys/tree node — same fields as a /v1/keys row, plus nested children (oldest first). */
+export interface MoneyKeyTreeNode extends MoneyKeyRow {
+  children: MoneyKeyTreeNode[];
 }
 
 export interface CreateMoneyKeyInput {
@@ -112,6 +138,9 @@ export interface CreateMoneyKeyInput {
   expires_at?: string | null;
   // ASSUMPTION (SPEC-v0.2 §1): optional; omitted/null = all models allowed.
   allowed_models?: string[] | null;
+  // SPEC-v0.4.md §A: lets the employee holding this key create sub-keys of
+  // their own (POST /v1/keys/children). Defaults to false server-side.
+  can_delegate?: boolean;
 }
 
 export interface CreateMoneyKeyResponse extends Omit<MoneyKeyRow, "key_prefix" | "used_today" | "used_total" | "last_used_at" | "created_at"> {
@@ -132,6 +161,12 @@ export async function createKey(input: CreateMoneyKeyInput): Promise<CreateMoney
 
 export async function revokeKey(id: string): Promise<{ id: string; revoked: boolean }> {
   return request(`/v1/keys/${id}/revoke`, { method: "POST" });
+}
+
+/** GET /v1/admin/keys/tree — same rows as GET /v1/keys, nested under their parent (roots = parent_id null). */
+export async function getKeyTree(): Promise<MoneyKeyTreeNode[]> {
+  const res = await request<{ tree: MoneyKeyTreeNode[] }>("/v1/admin/keys/tree");
+  return res.tree;
 }
 
 // ---------------------------------------------------------------------------
@@ -427,19 +462,56 @@ export interface OpenAiErrorBody {
     type?: string;
     code?: string;
     approval_id?: string;
+    // SPEC-v0.4.md §A: a payment denial from a child key may name which
+    // ancestor's limit actually tripped (limit_scope "self" | "ancestor").
+    limit_scope?: "self" | "ancestor";
+    limit_key_prefix?: string;
   };
 }
 
-/** Thrown by the MoneyKey-authed gateway calls; carries the OpenAI-shaped error fields. */
+// SPEC-v0.4.md §A: POST /v1/keys/children error bodies are NOT the nested
+// OpenAI shape above — they are flat, admin-`request()`-style bodies:
+//   400 { error, code: "CHILD_EXCEEDS_PARENT" | "INVALID_REQUEST", message, field?, parent_value? }
+//   403 { code: "DELEGATION_NOT_ALLOWED" | "MAX_DEPTH_EXCEEDED" | "CHILDREN_LIMIT_REACHED", message, field? }
+//   401 { status: "error", code, limit_scope?, limit_key_prefix? }
+interface FlatKeyErrorBody {
+  error?: string;
+  code?: string;
+  message?: string;
+  field?: string;
+  parent_value?: string | string[];
+  status?: string;
+  limit_scope?: "self" | "ancestor";
+  limit_key_prefix?: string;
+}
+
+/** Thrown by the MoneyKey-authed gateway/child-key calls; carries every shape's error fields (only the relevant ones are ever set). */
 export class ChatApiError extends Error {
   status: number;
   code: string | null;
   approvalId: string | null;
-  constructor(status: number, message: string, code?: string | null, approvalId?: string | null) {
+  /** SPEC-v0.4.md §A: the request field (snake_case) that violated a parent's limit, e.g. "daily_budget". */
+  field: string | null;
+  /** SPEC-v0.4.md §A: the parent's own value for `field`, to show "cannot exceed the parent: {parent_value}". */
+  parentValue: string | string[] | null;
+  /** SPEC-v0.4.md §A: whose limit actually tripped — this key's own, or an ancestor's. */
+  limitScope: "self" | "ancestor" | null;
+  limitKeyPrefix: string | null;
+  constructor(
+    status: number,
+    message: string,
+    code?: string | null,
+    approvalId?: string | null,
+    extra?: { field?: string | null; parentValue?: string | string[] | null; limitScope?: "self" | "ancestor" | null; limitKeyPrefix?: string | null }
+  ) {
     super(message);
     this.status = status;
     this.code = code ?? null;
     this.approvalId = approvalId ?? null;
+    this.field = extra?.field ?? null;
+    this.parentValue = extra?.parentValue ?? null;
+    this.limitScope = extra?.limitScope ?? null;
+    this.limitKeyPrefix = extra?.limitKeyPrefix ?? null;
   }
 }
 
@@ -461,8 +533,24 @@ async function keyAuthedRequest<T>(path: string, key: string, init?: RequestInit
     }
   }
   if (!res.ok) {
-    const body = json as OpenAiErrorBody | null;
-    throw new ChatApiError(res.status, body?.error?.message ?? res.statusText, body?.error?.code, body?.error?.approval_id);
+    // The gateway (chat) error shape nests everything under `error` as an
+    // object; the child-key admin-style shape is flat with `error` (if
+    // present at all) as a plain string. Distinguish by the type of `error`.
+    const nested = json as OpenAiErrorBody | null;
+    if (nested?.error && typeof nested.error === "object") {
+      throw new ChatApiError(res.status, nested.error.message ?? res.statusText, nested.error.code, nested.error.approval_id, {
+        limitScope: nested.error.limit_scope ?? null,
+        limitKeyPrefix: nested.error.limit_key_prefix ?? null,
+      });
+    }
+    const flat = json as FlatKeyErrorBody | null;
+    const message = flat?.message ?? (typeof flat?.error === "string" ? flat.error : undefined) ?? res.statusText;
+    throw new ChatApiError(res.status, message, flat?.code ?? null, null, {
+      field: flat?.field ?? null,
+      parentValue: flat?.parent_value ?? null,
+      limitScope: flat?.limit_scope ?? null,
+      limitKeyPrefix: flat?.limit_key_prefix ?? null,
+    });
   }
   return json as T;
 }
@@ -507,6 +595,25 @@ export interface StatusResponse {
   daily_budget?: string;
   /** ASSUMPTION (SPEC-v0.3-employee.md §B.0): may be absent on old servers. */
   total_budget?: string;
+
+  // --- SPEC-v0.4.md §A: child keys / multi-level delegation. All optional —
+  // absent on servers older than v0.4. ---
+  /** Subtree total (this key's own spend + all descendants'). */
+  used_today?: string;
+  /** Subtree total (this key's own spend + all descendants'). */
+  used_total?: string;
+  /** remaining_today/remaining_total above are now EFFECTIVE (min over this key and its ancestors); these say whose limit is currently binding. */
+  remaining_today_scope?: "self" | "ancestor";
+  remaining_total_scope?: "self" | "ancestor";
+  /** Effective approval threshold (this key's own, or a tighter ancestor's). */
+  approval_threshold?: string | null;
+  /** Effective expiry (this key's own, or an earlier ancestor's). */
+  expires_at?: string | null;
+  depth?: number;
+  max_depth?: number;
+  can_delegate?: boolean;
+  can_create_children?: boolean;
+  is_child?: boolean;
 }
 
 /** GET /v1/status — the logged-in MoneyKey's own remaining budget. Also used as the employee-login probe. */
@@ -536,6 +643,50 @@ export interface HistoryRow {
 export async function getHistory(key: string): Promise<HistoryRow[]> {
   const res = await keyAuthedRequest<{ history: HistoryRow[] }>("/v1/history", key);
   return res.history ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// SPEC-v0.4.md §A — child keys, employee-side ("我的子 Key" page). MoneyKey
+// auth throughout — the caller's own key is always the implicit parent.
+// ---------------------------------------------------------------------------
+
+/** A direct child's row — same shape as an admin /v1/keys row (no key, no hash). */
+export type ChildKeyRow = MoneyKeyRow;
+
+export interface CreateChildKeyInput {
+  name: string;
+  daily_budget: string;
+  total_budget: string;
+  per_request_limit: string;
+  approval_threshold?: string | null;
+  allowed_hosts?: string[];
+  allowed_models?: string[] | null;
+  expires_at?: string | null;
+  can_delegate?: boolean;
+  max_payments_per_minute?: number;
+}
+
+export interface CreateChildKeyResponse extends ChildKeyRow {
+  key: string; // plaintext mk_live_ key, shown once
+}
+
+/** GET /v1/keys/children — the caller's direct children only. */
+export async function listMyChildKeys(key: string): Promise<ChildKeyRow[]> {
+  const res = await keyAuthedRequest<{ children: ChildKeyRow[] }>("/v1/keys/children", key);
+  return res.children ?? [];
+}
+
+/** POST /v1/keys/children — create a sub-key of the caller's own key. */
+export async function createMyChildKey(key: string, input: CreateChildKeyInput): Promise<CreateChildKeyResponse> {
+  return keyAuthedRequest<CreateChildKeyResponse>("/v1/keys/children", key, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** POST /v1/keys/children/:id/revoke — only works for a key in the caller's own subtree. */
+export async function revokeMyChildKey(key: string, id: string): Promise<{ id: string; revoked: boolean }> {
+  return keyAuthedRequest<{ id: string; revoked: boolean }>(`/v1/keys/children/${id}/revoke`, key, { method: "POST" });
 }
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ import MyBudgetPage from "./pages/employee/MyBudgetPage";
 import EmployeePlaygroundPage from "./pages/employee/EmployeePlaygroundPage";
 import EmployeeHistoryPage from "./pages/employee/EmployeeHistoryPage";
 import EmployeeConnectPage from "./pages/employee/EmployeeConnectPage";
+import MySubKeysPage from "./pages/employee/MySubKeysPage";
 
 function RequireAdmin({ children }: { children: React.ReactElement }) {
   const { token } = useAuth();
@@ -76,6 +77,8 @@ function Routed() {
         <Route path="playground" element={<EmployeePlaygroundPage />} />
         <Route path="history" element={<EmployeeHistoryPage />} />
         <Route path="connect" element={<EmployeeConnectPage />} />
+        {/* SPEC-v0.4.md §A: employee's own sub-keys, shown when their key can_delegate. */}
+        <Route path="children" element={<MySubKeysPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to={loggedInPath ?? "/login"} replace />} />

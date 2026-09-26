@@ -41,10 +41,15 @@
   },
   "devDependencies": {
     "@moneyswitch/mcp": "workspace:*",
+    "@types/node": "22.10.5",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "^18.3.7",
     "esbuild": "0.28.2",
     "moneyswitch-connect": "workspace:*",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "smol-toml": "^1.9.0",
     "typescript": "5.7.3",
-    "vitest": "5.0.2",
-    "@types/node": "22.10.5"
+    "vitest": "5.0.2"
   }
 }

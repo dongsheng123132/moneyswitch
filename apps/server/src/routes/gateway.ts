@@ -4,8 +4,11 @@ import {
   assertNotSsrf,
   MoneySwitchError,
   ApprovalRequiredError,
-  usedToday,
   usedTotal,
+  getKeyChain,
+  effectiveAllowedModels,
+  effectiveRemaining,
+  limitFields,
   formatMicrosToUsdc,
   listEnabledModels,
   findChannelForModel,
@@ -42,7 +45,9 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get("/v1/models", { preHandler: keyGuard }, async (req, reply) => {
     const key = req.moneyKey!;
     const allModels = listEnabledModels(ctx.db);
-    const models = key.allowedModels == null ? allModels : allModels.filter((m) => key.allowedModels!.includes(m));
+    // v0.4: intersection of the key's and all its ancestors' allowed_models.
+    const allowed = effectiveAllowedModels(getKeyChain(ctx.db, key.id));
+    const models = allowed == null ? allModels : allModels.filter((m) => allowed.includes(m));
     return reply.send({
       object: "list",
       data: models.map((id) => ({
@@ -83,8 +88,13 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
     const key = req.moneyKey!;
     const body = req.body as ChatCompletionsBody;
 
-    function sendPolicyError(code: string, message: string, approvalId?: string | null) {
-      return reply.status(openAiStatusForCode(code)).send(openAiError(message, code, approvalId ?? null));
+    function sendPolicyError(
+      code: string,
+      message: string,
+      approvalId?: string | null,
+      limit?: { limit_scope?: string; limit_key_prefix?: string }
+    ) {
+      return reply.status(openAiStatusForCode(code)).send(openAiError(message, code, approvalId ?? null, limit));
     }
 
     if (!body || typeof body.model !== "string" || !Array.isArray(body.messages)) {
@@ -95,7 +105,8 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!channel) {
       return sendPolicyError("model_not_found", `The model '${body.model}' does not exist or is not served by any enabled channel`);
     }
-    if (key.allowedModels != null && !key.allowedModels.includes(body.model)) {
+    const allowedModels = effectiveAllowedModels(getKeyChain(ctx.db, key.id));
+    if (allowedModels != null && !allowedModels.includes(body.model)) {
       return sendPolicyError("model_not_allowed", `MoneyKey is not allowed to use model '${body.model}'`);
     }
 
@@ -154,7 +165,7 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       const cost = result.payment?.amount ?? "0";
       const txHash = result.payment?.txHash ?? null;
       const network = result.payment?.network ?? null;
-      const remainingToday = formatMicrosToUsdc(key.dailyBudget - usedToday(ctx.db, key.id));
+      const remainingToday = formatMicrosToUsdc(effectiveRemaining(ctx.db, getKeyChain(ctx.db, key.id)).today);
 
       reply.header("X-MoneySwitch-Cost", cost);
       if (txHash) reply.header("X-MoneySwitch-Tx", txHash);
@@ -209,7 +220,12 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
         return sendPolicyError("APPROVAL_REQUIRED", "Payment requires manual approval", e.approvalId);
       }
       if (e instanceof MoneySwitchError) {
-        return sendPolicyError(e.code, humanMessageForCode(e.code));
+        const limit = limitFields(e);
+        const message =
+          limit.limit_scope === "ancestor"
+            ? `${humanMessageForCode(e.code)} (limit set by parent key ${limit.limit_key_prefix})`
+            : humanMessageForCode(e.code);
+        return sendPolicyError(e.code, message, null, limit);
       }
       req.log.error({ err: (e as Error)?.message }, "unexpected /v1/chat/completions error");
       return sendPolicyError("UPSTREAM_ERROR", "Unexpected upstream error");

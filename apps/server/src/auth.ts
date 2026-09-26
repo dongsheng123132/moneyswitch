@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { verifyAdminToken, authenticateMoneyKey, touchLastUsed, MoneySwitchError } from "@moneyswitch/core";
+import { verifyAdminToken, authenticateMoneyKey, touchLastUsed, MoneySwitchError, limitFields } from "@moneyswitch/core";
 import type { MoneyKeyRow } from "@moneyswitch/core";
 import type { AppContext } from "./context.js";
 
@@ -39,7 +39,9 @@ export function requireMoneyKey(ctx: AppContext) {
       req.moneyKey = key;
     } catch (e) {
       const code = e instanceof MoneySwitchError ? e.code : "KEY_INVALID";
-      return reply.status(401).send({ status: "error", code });
+      // v0.4: a key whose ancestor is revoked/expired fails here with
+      // limit_scope "ancestor" (SPEC-v0.4 §A cascade).
+      return reply.status(401).send({ status: "error", code, ...limitFields(e) });
     }
   };
 }
@@ -106,14 +108,20 @@ export function humanMessageForCode(code: string): string {
   }
 }
 
-/** OpenAI-shaped error body, per SPEC-v0.2 §2 step 6. */
-export function openAiError(message: string, code: string, approvalId?: string | null) {
+/** OpenAI-shaped error body, per SPEC-v0.2 §2 step 6 (+ v0.4 limit_scope / limit_key_prefix when known). */
+export function openAiError(
+  message: string,
+  code: string,
+  approvalId?: string | null,
+  limit?: { limit_scope?: string; limit_key_prefix?: string }
+) {
   return {
     error: {
       message,
       type: "moneyswitch_policy",
       code,
       ...(approvalId ? { approval_id: approvalId } : {}),
+      ...(limit ?? {}),
     },
   };
 }
@@ -136,7 +144,12 @@ export function requireMoneyKeyOpenAI(ctx: AppContext) {
       req.moneyKey = key;
     } catch (e) {
       const code = e instanceof MoneySwitchError ? e.code : "KEY_INVALID";
-      return reply.status(openAiStatusForCode(code)).send(openAiError(humanMessageForCode(code), code));
+      const limit = limitFields(e);
+      const message =
+        limit.limit_scope === "ancestor"
+          ? `${humanMessageForCode(code)} (parent key ${limit.limit_key_prefix} is no longer active)`
+          : humanMessageForCode(code);
+      return reply.status(openAiStatusForCode(code)).send(openAiError(message, code, null, limit));
     }
   };
 }

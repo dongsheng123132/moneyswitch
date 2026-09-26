@@ -36,6 +36,12 @@ export const glossary = defineMessages(
     status_unknown:
       "The upstream result could not be determined (timeout/disconnect). It is conservatively counted as spent — check it on the explorer.",
     mock: "Settled by the offline mock facilitator: no real on-chain transfer happened.",
+    canDelegate:
+      "This key's holder may create their own sub-keys (child MoneyKeys). A sub-key can never exceed its parent's limits, and revoking the parent disables every sub-key beneath it.",
+    subtreeUsage:
+      "\"Today\" / \"Total used\" here include this key's own spending PLUS everything its sub-keys have spent — that is what counts against this key's own budget.",
+    ancestorRevoked: "This key itself is still enabled, but a parent key above it was revoked — so it stops working too, immediately.",
+    ancestorExpired: "This key itself hasn't expired, but a parent key above it has — so it stops working too.",
   },
   {
     moneyKey: "一把「花钱的 API Key」（mk_live_…）。给 Agent 的是它，而不是钱包私钥；它触发的每一笔付款都要先过这把 Key 的额度规则。",
@@ -60,5 +66,9 @@ export const glossary = defineMessages(
     status_failed: "付款没有成功，不占用额度。",
     status_unknown: "上游结果无法确定（超时/断连），为了不超支按「已花」计入额度，请到链上浏览器核对。",
     mock: "由离线 mock facilitator 模拟结算，没有真实链上转账。",
+    canDelegate: "这把 Key 的持有人可以再往下切子 Key。子 Key 的额度永远不能超过这把 Key；这把 Key 一旦被撤销，它所有的子 Key 也会立即失效。",
+    subtreeUsage: "这里的「今日」「累计已用」= 这把 Key 自己的花费 + 它所有子 Key 的花费之和 —— 这才是真正会计入这把 Key 额度的数字。",
+    ancestorRevoked: "这把 Key 本身没有被撤销，但它的上级 Key 被撤销了，所以它也立刻不能用了。",
+    ancestorExpired: "这把 Key 本身没有过期，但它的上级 Key 过期了，所以它也不能用了。",
   }
 );

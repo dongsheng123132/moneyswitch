@@ -15,6 +15,14 @@ export interface MoneyKeyRow {
   lastUsedAt: string | null;
   /** v0.2 (SPEC-v0.2 §1): null = allowed to use all enabled channels' models. */
   allowedModels: string[] | null;
+  /** v0.4 (SPEC-v0.4 §A): parent key id; null for a root (admin-created) key. */
+  parentId: string | null;
+  /** v0.4: 0 for a root key, parent.depth + 1 for a child key. */
+  depth: number;
+  /** v0.4: may this key create child keys? */
+  canDelegate: boolean;
+  /** v0.4: "admin" or "key:<parentId>". */
+  createdBy: string;
 }
 
 export type PaymentStatus = "reserved" | "settled" | "failed" | "unknown";
@@ -91,11 +99,34 @@ export type MoneySwitchErrorCode =
   | "UPSTREAM_ERROR"
   | "FORBIDDEN";
 
+/**
+ * v0.4 (SPEC-v0.4 §A): which level of the key chain produced a key/limit
+ * denial — the paying key itself, or one of its ancestors.
+ */
+export type LimitScope = "self" | "ancestor";
+
+export interface LimitInfo {
+  scope: LimitScope;
+  /** key_prefix (public, 12 chars) of the key whose state/limit denied the request. */
+  keyPrefix: string;
+}
+
 export class MoneySwitchError extends Error {
   code: MoneySwitchErrorCode;
-  constructor(code: MoneySwitchErrorCode, message?: string) {
+  /** v0.4: set for key-state and budget denials (KEY_*, *_LIMIT_EXCEEDED, *_BUDGET_EXCEEDED). */
+  limit?: LimitInfo;
+  constructor(code: MoneySwitchErrorCode, message?: string, limit?: LimitInfo) {
     super(message ? `${code}: ${message}` : code);
     this.code = code;
     this.name = "MoneySwitchError";
+    if (limit) this.limit = limit;
   }
+}
+
+/** Wire shape of MoneySwitchError.limit (`limit_scope` / `limit_key_prefix`), or {} when absent. */
+export function limitFields(e: unknown): { limit_scope?: LimitScope; limit_key_prefix?: string } {
+  if (e instanceof MoneySwitchError && e.limit) {
+    return { limit_scope: e.limit.scope, limit_key_prefix: e.limit.keyPrefix };
+  }
+  return {};
 }

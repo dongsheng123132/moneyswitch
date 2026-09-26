@@ -76,6 +76,33 @@
   gap: 10px;
 }
 
+/* SPEC-v0.4.md §A: root/child key expand toggle in "today by agent". */
+.today-agent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -2px 0 4px 8px;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.today-agent-toggle:hover,
+.today-agent-toggle:focus-visible {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.today-agent-row.today-agent-child {
+  margin-left: 20px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .activity-link {
   display: block;
   text-decoration: none;

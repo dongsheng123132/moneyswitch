@@ -1,0 +1,21 @@
+/* Employee "My sub-keys" page (SPEC-v0.4.md §A, src/pages/employee/MySubKeysPage.tsx). */
+
+.subkeys-header-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.subkeys-header-status {
+  flex: 1 1 260px;
+}
+
+.subkeys-share-note {
+  margin: 0 0 16px;
+  color: var(--text-dim, #9aa4b2);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 820px;
+}

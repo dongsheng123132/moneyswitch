@@ -25,6 +25,14 @@ export const moneyKeys = sqliteTable("money_keys", {
   lastUsedAt: text("last_used_at"),
   /** v0.2 (SPEC-v0.2 §1): JSON array of allowed model ids, or NULL = all enabled channels' models. */
   allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
+  /** v0.4 (SPEC-v0.4 §A): parent key id, NULL for a root key (created by the admin). */
+  parentId: text("parent_id"),
+  /** v0.4: 0 for a root key, parent.depth + 1 for a child. */
+  depth: integer("depth").notNull().default(0),
+  /** v0.4: whether this key may create child keys (POST /v1/keys/children). */
+  canDelegate: integer("can_delegate", { mode: "boolean" }).notNull().default(false),
+  /** v0.4: "admin" or "key:<parentId>". */
+  createdBy: text("created_by").notNull().default("admin"),
 });
 
 /** v0.2 (SPEC-v0.2 §1): an upstream that speaks OpenAI protocol and charges via x402. */

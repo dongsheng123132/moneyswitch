@@ -85,6 +85,9 @@ export async function performPaidFetch(
   // parsing an error/response message string (those can be forged by
   // anything upstream — the seller, the facilitator, or a redirect target).
   let ownAbortCode: OwnAbortCode | null = null;
+  // v0.4: limit scope/prefix of our own policy denial (SPEC-v0.4 §A), carried
+  // alongside the code so the route can report limit_scope/limit_key_prefix.
+  let ownAbortLimit: MoneySwitchError["limit"] = undefined;
   let ownAbortApprovalId: string | null = null;
 
   const client = new x402Client()
@@ -125,6 +128,7 @@ export async function performPaidFetch(
         }
         if (e instanceof MoneySwitchError) {
           ownAbortCode = e.code as OwnAbortCode;
+          ownAbortLimit = e.limit;
           return { abort: true, reason: e.code };
         }
         ownAbortCode = "PAYMENT_FAILED";
@@ -185,7 +189,7 @@ export async function performPaidFetch(
       throw new ApprovalRequiredError(ownAbortApprovalId);
     }
     if (ownAbortCode) {
-      throw new MoneySwitchError(ownAbortCode);
+      throw new MoneySwitchError(ownAbortCode, undefined, ownAbortLimit);
     }
     const msg = e instanceof Error ? e.message : String(e);
     // The SDK's own outer spendControls ceiling (set to key.perRequestLimit)

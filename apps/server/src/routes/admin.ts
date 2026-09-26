@@ -7,9 +7,10 @@ import {
   listApprovals,
   decideApproval,
   expireStaleApprovals,
-  usedToday,
-  usedTotal,
   formatMicrosToUsdc,
+  childrenCounts,
+  buildKeyTree,
+  type KeyTreeNode,
   parseUsdcToMicros,
   listAllPayments,
   writeAudit,
@@ -25,6 +26,7 @@ import {
 import { getActiveNetwork } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
+import { keyView, statusFromIndex } from "../keyview.js";
 
 export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
@@ -40,7 +42,11 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       max_payments_per_minute?: number;
       expires_at?: string | null;
       allowed_models?: string[] | null;
+      can_delegate?: boolean;
     };
+    if (body?.can_delegate !== undefined && typeof body.can_delegate !== "boolean") {
+      return reply.status(400).send({ error: "can_delegate must be a boolean" });
+    }
     try {
       const { plaintextKey, row } = createMoneyKey(ctx.db, {
         name: body.name,
@@ -53,8 +59,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         maxPaymentsPerMinute: body.max_payments_per_minute,
         expiresAt: body.expires_at ?? null,
         allowedModels: body.allowed_models ?? null,
+        canDelegate: body.can_delegate === true,
       });
-      writeAudit(ctx.db, "admin", "key.create", { keyId: row.id, name: row.name });
+      writeAudit(ctx.db, "admin", "key.create", { keyId: row.id, name: row.name, canDelegate: row.canDelegate });
       return reply.send({
         id: row.id,
         key: plaintextKey,
@@ -67,41 +74,47 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         max_payments_per_minute: row.maxPaymentsPerMinute,
         expires_at: row.expiresAt,
         allowed_models: row.allowedModels,
+        parent_id: row.parentId,
+        depth: row.depth,
+        can_delegate: row.canDelegate,
+        created_by: row.createdBy,
       });
     } catch (e) {
       return reply.status(400).send({ error: e instanceof Error ? e.message : "invalid_request" });
     }
   });
 
-  app.get("/v1/keys", { preHandler: adminGuard }, async (_req, reply) => {
+  /** v0.4: every key with parent_id/depth/can_delegate/children_count/status (flat, oldest first). */
+  function allKeyViews() {
     const rows = listMoneyKeys(ctx.db);
-    const out = rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      key_prefix: row.keyPrefix,
-      enabled: row.enabled,
-      total_budget: formatMicrosToUsdc(row.totalBudget),
-      daily_budget: formatMicrosToUsdc(row.dailyBudget),
-      per_request_limit: formatMicrosToUsdc(row.perRequestLimit),
-      approval_threshold: row.approvalThreshold != null ? formatMicrosToUsdc(row.approvalThreshold) : null,
-      allowed_hosts: row.allowedHosts,
-      max_payments_per_minute: row.maxPaymentsPerMinute,
-      expires_at: row.expiresAt,
-      created_at: row.createdAt,
-      last_used_at: row.lastUsedAt,
-      used_today: formatMicrosToUsdc(usedToday(ctx.db, row.id)),
-      used_total: formatMicrosToUsdc(usedTotal(ctx.db, row.id)),
-      allowed_models: row.allowedModels,
-    }));
-    return reply.send({ keys: out });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const counts = childrenCounts(ctx.db);
+    return rows.map((row) =>
+      keyView(ctx.db, row, { childrenCount: counts.get(row.id) ?? 0, status: statusFromIndex(row, byId) })
+    );
+  }
+
+  app.get("/v1/keys", { preHandler: adminGuard }, async (_req, reply) => {
+    return reply.send({ keys: allKeyViews() });
+  });
+
+  // v0.4 (SPEC-v0.4 §A): the whole key forest. Each node is the same view
+  // as GET /v1/keys plus `children` (oldest first).
+  app.get("/v1/admin/keys/tree", { preHandler: adminGuard }, async (_req, reply) => {
+    const views = new Map(allKeyViews().map((v) => [v.id, v]));
+    type Node = ReturnType<typeof allKeyViews>[number] & { children: Node[] };
+    const toNode = (n: KeyTreeNode): Node => ({ ...views.get(n.key.id)!, children: n.children.map(toNode) });
+    return reply.send({ tree: buildKeyTree(ctx.db).map(toNode) });
   });
 
   app.post("/v1/keys/:id/revoke", { preHandler: adminGuard }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const row = getMoneyKeyById(ctx.db, id);
     if (!row) return reply.status(404).send({ error: "not_found" });
+    // Cascades to the whole subtree at query time (auth + policy walk the
+    // ancestor chain); descendant rows are intentionally left untouched.
     revokeMoneyKey(ctx.db, id);
-    writeAudit(ctx.db, "admin", "key.revoke", { keyId: id });
+    writeAudit(ctx.db, "admin", "key.revoke", { keyId: id, depth: row.depth, parentId: row.parentId });
     return reply.send({ id, revoked: true });
   });
 

@@ -2,6 +2,8 @@ export * from "./money.js";
 export * from "./moneykey.js";
 export * from "./types.js";
 export * from "./keys.js";
+export * from "./chain.js";
+export * from "./delegation.js";
 export * from "./ledger.js";
 export * from "./audit.js";
 export * from "./approval.js";

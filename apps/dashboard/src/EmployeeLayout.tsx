@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { CircleDollarSign, MessageSquare, History, Plug, LogOut } from "lucide-react";
+import { CircleDollarSign, MessageSquare, History, Plug, LogOut, GitBranch } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { getStatus, ChatApiError } from "./api";
@@ -17,9 +17,12 @@ const NAV = [
   { to: "/me/playground", key: "navChat" as const, icon: MessageSquare },
   { to: "/me/history", key: "navHistory" as const, icon: History },
   { to: "/me/connect", key: "navConnect" as const, icon: Plug },
+  // SPEC-v0.4.md §A: only shown once we know this key can delegate — until
+  // /v1/status answers, status is undefined and the entry stays hidden.
+  { to: "/me/children", key: "navChildren" as const, icon: GitBranch, requiresDelegate: true },
 ];
 
-const KEY_ERROR_CODES = ["KEY_REVOKED", "KEY_EXPIRED", "KEY_INVALID"] as const;
+const KEY_ERROR_CODES = ["KEY_REVOKED", "KEY_EXPIRED", "KEY_INVALID", "KEY_REVOKED_ANCESTOR", "KEY_EXPIRED_ANCESTOR"] as const;
 type KeyErrorCode = (typeof KEY_ERROR_CODES)[number];
 
 function isKeyErrorCode(code: string | null): code is KeyErrorCode {
@@ -39,7 +42,11 @@ export default function EmployeeLayout() {
       setKeyErrorCode(null);
       return res;
     } catch (e) {
-      if (e instanceof ChatApiError) setKeyErrorCode(e.code);
+      if (e instanceof ChatApiError) {
+        // v0.4: distinguish "a key above this sub-key was revoked/expired".
+        const ancestor = e.limitScope === "ancestor" && (e.code === "KEY_REVOKED" || e.code === "KEY_EXPIRED");
+        setKeyErrorCode(ancestor ? `${e.code}_ANCESTOR` : e.code);
+      }
       throw e;
     }
   });
@@ -61,7 +68,7 @@ export default function EmployeeLayout() {
           </div>
         </div>
         <nav>
-          {NAV.map((item) => {
+          {NAV.filter((item) => !item.requiresDelegate || status?.can_delegate).map((item) => {
             const Icon = item.icon;
             return (
               <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : "")}>

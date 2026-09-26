@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { parseMaxKeyDepth } from "@moneyswitch/core";
 
 export interface ServerConfig {
   port: number;
@@ -12,6 +13,8 @@ export interface ServerConfig {
   demoSellerUrl?: string | null;
   /** Absolute path of the packed client CLI tarball served at GET /dl/moneyswitch.tgz (defaults to apps/cli/pack/moneyswitch.tgz). */
   cliTarballPath?: string | null;
+  /** v0.4 (SPEC-v0.4 §A): MONEYSWITCH_MAX_KEY_DEPTH (default 3 = root + 3 levels of child keys). */
+  maxKeyDepth?: number;
 }
 
 function defaultDataDir(): string {
@@ -32,5 +35,6 @@ export function loadConfig(): ServerConfig {
     }
   }
   const demoSellerUrl = process.env.MONEYSWITCH_DEMO_SELLER_URL?.trim() || null;
-  return { port, host, dataDir, dbFilePath, walletPassword, demoSellerUrl };
+  const maxKeyDepth = parseMaxKeyDepth(process.env.MONEYSWITCH_MAX_KEY_DEPTH);
+  return { port, host, dataDir, dbFilePath, walletPassword, demoSellerUrl, maxKeyDepth };
 }

@@ -31,10 +31,16 @@ function runMigrations(sqlite: Database.Database): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
-    sqlite.exec(sql);
-    sqlite
-      .prepare(`INSERT INTO __migrations (name, applied_at) VALUES (?, ?)`)
-      .run(file, new Date().toISOString());
+    // One transaction per migration file (SQLite DDL is transactional): a
+    // migration that fails half-way leaves the database exactly as it was
+    // and unrecorded, so fixing it and restarting re-applies it cleanly
+    // instead of tripping over e.g. an already-added column.
+    sqlite.transaction(() => {
+      sqlite.exec(sql);
+      sqlite
+        .prepare(`INSERT INTO __migrations (name, applied_at) VALUES (?, ?)`)
+        .run(file, new Date().toISOString());
+    })();
   }
 }
 

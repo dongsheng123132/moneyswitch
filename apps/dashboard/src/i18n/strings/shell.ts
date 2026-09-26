@@ -41,6 +41,8 @@ export const shellStrings = defineMessages(
     login_err_KEY_INVALID: "This key is not valid for this server.",
     login_err_KEY_REVOKED: "This key has been revoked. Ask your admin for a new one.",
     login_err_KEY_EXPIRED: "This key has expired. Ask your admin for a new one.",
+    login_err_KEY_REVOKED_ANCESTOR: "This sub-key stopped working because the key it was cut from has been revoked. Ask whoever gave it to you for a new one.",
+    login_err_KEY_EXPIRED_ANCESTOR: "This sub-key stopped working because the key it was cut from has expired. Ask whoever gave it to you for a new one.",
     login_err_generic: "Sign-in failed: {message}",
   },
   {
@@ -80,6 +82,8 @@ export const shellStrings = defineMessages(
     login_err_unreachable: "连不上 MoneySwitch 服务器。",
     login_err_KEY_INVALID: "这把 Key 对这台服务器无效。",
     login_err_KEY_REVOKED: "这把 Key 已被撤销，请联系管理员重新发一把。",
+    login_err_KEY_REVOKED_ANCESTOR: "这把子 Key 已失效：切出它的上级 Key 已被撤销。请找给你 Key 的人重新发一把。",
+    login_err_KEY_EXPIRED_ANCESTOR: "这把子 Key 已失效：切出它的上级 Key 已过期。请找给你 Key 的人重新发一把。",
     login_err_KEY_EXPIRED: "这把 Key 已过期，请联系管理员重新发一把。",
     login_err_generic: "登录失败：{message}",
   }

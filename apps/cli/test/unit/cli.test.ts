@@ -30,11 +30,16 @@ describe("moneyswitch top-level argv dispatch", () => {
     expect(parseTopArgv(["-h"])).toEqual({ kind: "help" });
   });
 
+  it("routes `ui ...` to the desktop console with its own args", () => {
+    expect(parseTopArgv(["ui", "--port", "4999", "--no-open"])).toEqual({ kind: "ui", args: ["--port", "4999", "--no-open"] });
+  });
+
   it("routes unknown top-level commands to unknown", () => {
     expect(parseTopArgv(["bogus"])).toEqual({ kind: "unknown", command: "bogus" });
   });
 
-  it("TOP_HELP documents all four subcommands", () => {
+  it("TOP_HELP documents all five subcommands", () => {
+    expect(TOP_HELP).toContain("moneyswitch ui");
     expect(TOP_HELP).toContain("moneyswitch connect");
     expect(TOP_HELP).toContain("moneyswitch status");
     expect(TOP_HELP).toContain("moneyswitch remove");

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { AppContext } from "./context.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAgentRoutes } from "./routes/agent.js";
+import { registerChildKeyRoutes } from "./routes/children.js";
 import { registerGatewayRoutes } from "./routes/gateway.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 
@@ -55,6 +56,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
 
   registerAdminRoutes(app, ctx);
   registerAgentRoutes(app, ctx);
+  registerChildKeyRoutes(app, ctx);
   registerGatewayRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
 

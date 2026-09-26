@@ -69,7 +69,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (e) {
       if (e instanceof ChatApiError) {
-        setError(e.code ?? (e.status === 401 ? "KEY_INVALID" : "generic"));
+        const code = e.code ?? (e.status === 401 ? "KEY_INVALID" : "generic");
+        // v0.4: a sub-key whose parent/ancestor was revoked or expired.
+        setError(e.limitScope === "ancestor" && (code === "KEY_REVOKED" || code === "KEY_EXPIRED") ? `${code}_ANCESTOR` : code);
         setErrorDetail(e.message);
       } else {
         setError("unreachable");

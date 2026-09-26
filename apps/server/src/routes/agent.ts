@@ -1,7 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import {
   checkRateLimit,
-  checkHostAllowed,
+  checkHostAllowedForChain,
+  getKeyChain,
+  effectiveRemaining,
+  effectivePerRequestLimit,
+  effectiveApprovalThreshold,
+  effectiveExpiresAt,
+  DEFAULT_MAX_KEY_DEPTH,
+  limitFields,
   assertNotSsrf,
   MoneySwitchError,
   ApprovalRequiredError,
@@ -34,17 +41,36 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
     const key = req.moneyKey!;
     const { getActiveNetwork } = await import("@moneyswitch/x402");
     const network = getActiveNetwork();
+    const chain = getKeyChain(ctx.db, key.id);
+    const self = chain[0];
+    const eff = effectiveRemaining(ctx.db, chain);
+    const maxDepth = ctx.config.maxKeyDepth ?? DEFAULT_MAX_KEY_DEPTH;
+    const threshold = effectiveApprovalThreshold(chain);
     return reply.send({
-      remaining_today: formatMicrosToUsdc(key.dailyBudget - usedToday(ctx.db, key.id)),
-      remaining_total: formatMicrosToUsdc(key.totalBudget - usedTotal(ctx.db, key.id)),
-      per_request_limit: formatMicrosToUsdc(key.perRequestLimit),
+      // v0.4: what this key can actually still spend — the minimum over the
+      // key and all its ancestors (for a root key: its own remaining, as before).
+      remaining_today: formatMicrosToUsdc(eff.today),
+      remaining_total: formatMicrosToUsdc(eff.total),
+      per_request_limit: formatMicrosToUsdc(effectivePerRequestLimit(chain)),
       currency: "USDC",
       network: network.caip2,
       // SPEC-v0.3-employee.md §B.0
-      key_name: key.name,
-      key_prefix: key.keyPrefix,
-      daily_budget: formatMicrosToUsdc(key.dailyBudget),
-      total_budget: formatMicrosToUsdc(key.totalBudget),
+      key_name: self.name,
+      key_prefix: self.keyPrefix,
+      daily_budget: formatMicrosToUsdc(self.dailyBudget),
+      total_budget: formatMicrosToUsdc(self.totalBudget),
+      // v0.4 (SPEC-v0.4 §A)
+      used_today: formatMicrosToUsdc(usedToday(ctx.db, self.id)),
+      used_total: formatMicrosToUsdc(usedTotal(ctx.db, self.id)),
+      remaining_today_scope: eff.todayScope,
+      remaining_total_scope: eff.totalScope,
+      approval_threshold: threshold != null ? formatMicrosToUsdc(threshold) : null,
+      expires_at: effectiveExpiresAt(chain),
+      depth: self.depth,
+      max_depth: maxDepth,
+      can_delegate: self.canDelegate,
+      can_create_children: self.canDelegate && self.depth < maxDepth,
+      is_child: self.parentId != null,
     });
   });
 
@@ -85,7 +111,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
     function envelope(
       status: "ok" | "denied" | "approval_required" | "payment_failed" | "error",
       code: string | null,
-      extra: Record<string, unknown> = {}
+      extra: Record<string, unknown> & { limit?: Record<string, string> } = {}
     ) {
       return {
         status,
@@ -95,9 +121,19 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         body: extra.body ?? null,
         payment: extra.payment ?? null,
         approval_id: extra.approval_id ?? null,
-        remaining_today: formatMicrosToUsdc(key.dailyBudget - usedToday(ctx.db, key.id)),
-        remaining_total: formatMicrosToUsdc(key.totalBudget - usedTotal(ctx.db, key.id)),
+        ...(extra.limit ?? {}),
+        ...remaining(),
       };
+    }
+
+    // v0.4: effective remaining (min over the key and its ancestors).
+    function remaining() {
+      try {
+        const eff = effectiveRemaining(ctx.db, getKeyChain(ctx.db, key.id));
+        return { remaining_today: formatMicrosToUsdc(eff.today), remaining_total: formatMicrosToUsdc(eff.total) };
+      } catch {
+        return { remaining_today: "0", remaining_total: "0" };
+      }
     }
 
     let url: URL;
@@ -109,7 +145,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
 
     try {
       checkRateLimit(ctx.db, key);
-      checkHostAllowed(url, key);
+      checkHostAllowedForChain(ctx.db, url, key);
       assertNotSsrf(url, { selfPort: ctx.config.port, allowedHosts: key.allowedHosts });
 
       if (!ctx.wallet.isUnlocked()) {
@@ -153,10 +189,11 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         if (e.code === "PAYMENT_FAILED") {
           return reply.send(envelope("payment_failed", e.code));
         }
+        const limit = limitFields(e);
         if (DENIED_CODES.has(e.code)) {
-          return reply.send(envelope("denied", e.code));
+          return reply.send(envelope("denied", e.code, { limit }));
         }
-        return reply.send(envelope("error", e.code));
+        return reply.send(envelope("error", e.code, { limit }));
       }
       req.log.error({ err: (e as Error)?.message }, "unexpected /v1/fetch error");
       return reply.send(envelope("error", "UPSTREAM_ERROR"));

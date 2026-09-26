@@ -8,7 +8,8 @@ function tomlEscape(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function buildSection(server: string, key: string, mcpCommand: McpCommand): string {
+/** The `[mcp_servers.moneyswitch]` (+ `.env`) TOML text; also used by the v0.4 desktop console to build its preview. */
+export function buildMcpSection(server: string, key: string, mcpCommand: McpCommand): string {
   const argsToml = mcpCommand.args.map((a) => `"${tomlEscape(a)}"`).join(", ");
   return [
     `[${TABLE}]`,
@@ -86,7 +87,7 @@ export function applyCodexConfig(
     fs.writeFileSync(backupPath, original, "utf8");
   }
   const withoutSection = removeMoneySwitchSection(original);
-  const section = buildSection(server, key, mcpCommand);
+  const section = buildMcpSection(server, key, mcpCommand);
   const combined = withoutSection.length > 0 ? `${withoutSection}\n\n${section}\n` : `${section}\n`;
   fs.writeFileSync(configPath, combined, "utf8");
   return { configPath, existed, backupPath };

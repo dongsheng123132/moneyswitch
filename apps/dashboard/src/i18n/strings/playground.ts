@@ -44,6 +44,9 @@ export const playgroundStrings = defineMessages(
     err_network: "Could not reach the MoneySwitch server — check your connection and try again.",
     err_generic: "Something went wrong.",
     walletPageLink: "Wallet page",
+    // SPEC-v0.4.md §A: a denial on a child key may actually be an ancestor's
+    // limit tripping, not this key's own.
+    limitScopeAncestorHint: " (limit set by parent key {prefix})",
 
     // Right panel (PlaygroundPage)
     keyStatusTitle: "Key status",
@@ -95,6 +98,7 @@ export const playgroundStrings = defineMessages(
     err_network: "连不上 MoneySwitch 服务器，请检查网络后重试。",
     err_generic: "出了点问题。",
     walletPageLink: "钱包页",
+    limitScopeAncestorHint: "（上级 Key {prefix} 的额度）",
 
     keyStatusTitle: "Key 状态",
     pasteKnownKey: "在上面粘贴一把已知的 Money Key，就能看到实时额度。",

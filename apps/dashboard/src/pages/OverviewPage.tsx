@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, TrendingUp, TrendingDown, Minus, KeyRound, Zap, Inbox, CheckCircle2, Circle } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Minus, KeyRound, Zap, Inbox, CheckCircle2, Circle, ChevronRight, ChevronDown } from "lucide-react";
 import { usePolling } from "../usePolling";
 import {
   listKeys,
@@ -70,6 +70,19 @@ export default function OverviewPage() {
     }
   });
 
+  // SPEC-v0.4.md §A: "today by agent" aggregates by ROOT key (root rows'
+  // used_today already includes their sub-keys' spend server-side — never
+  // sum used_today across parent+child rows, that would double-count).
+  const [expandedRoots, setExpandedRoots] = useState<Set<string>>(() => new Set());
+  function toggleExpandedRoot(id: string) {
+    setExpandedRoots((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function hideSetup() {
     setSetupHidden(true);
     try {
@@ -115,7 +128,8 @@ export default function OverviewPage() {
   const deltaTone = !hasYesterdayBaseline ? "flat" : deltaMicros > 0n ? "up" : deltaMicros < 0n ? "down" : "flat";
   const deltaPct = hasYesterdayBaseline ? Math.round((Number(deltaMicros) / Number(spentYesterdayMicros)) * 100) : 0;
 
-  const activeKeys = keys.filter((k) => k.enabled).length;
+  // v0.4: a key disabled by a revoked/expired ancestor is not active either (server-computed status; old servers: enabled).
+  const activeKeys = keys.filter((k) => (k.status ? k.status === "active" : k.enabled)).length;
 
   // 7-day daily spend chart (UTC buckets)
   const dayKeys = last7DayKeys(now);
@@ -139,10 +153,20 @@ export default function OverviewPage() {
 
   const keyById = new Map(keys.map((k) => [k.id, k] as const));
 
-  const sortedKeys = [...keys].sort((a, b) => {
+  // Root keys only — a root's used_today is already a subtree total (SPEC-v0.4.md §A),
+  // so sorting/summing roots never double-counts a child's spend.
+  const rootKeys = keys.filter((k) => !k.parent_id);
+  const sortedKeys = [...rootKeys].sort((a, b) => {
     if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
     return toMicros(b.used_today) > toMicros(a.used_today) ? 1 : toMicros(b.used_today) < toMicros(a.used_today) ? -1 : 0;
   });
+  const directChildrenOf = new Map<string, MoneyKeyRow[]>();
+  for (const k of keys) {
+    if (!k.parent_id) continue;
+    const list = directChildrenOf.get(k.parent_id);
+    if (list) list.push(k);
+    else directChildrenOf.set(k.parent_id, [k]);
+  }
 
   // Getting started (A-2): show while setup is incomplete and the user
   // hasn't dismissed the card.
@@ -330,31 +354,74 @@ export default function OverviewPage() {
                 const limitMicros = toMicros(k.daily_budget);
                 const remaining = limitMicros - usedMicros;
                 const r = ratioMicros(usedMicros, limitMicros);
+                const children = directChildrenOf.get(k.id) ?? [];
+                const expanded = expandedRoots.has(k.id);
                 return (
-                  <Link
-                    key={k.id}
-                    to={`/usage?key=${encodeURIComponent(k.id)}&range=today`}
-                    className={`today-agent-row${!k.enabled ? " dimmed" : ""}`}
-                  >
-                    <div className="today-agent-top">
-                      <div className="agent-row">
-                        <Avatar name={k.name} />
-                        <div>
-                          <div className="agent-name">{k.name}</div>
-                          <div className="stat-sub" style={{ marginTop: 0 }}>
-                            {t("usedOfDaily", { used: formatUsdc(k.used_today, { maxDecimals: 4 }), daily: formatUsdc(k.daily_budget, { maxDecimals: 4 }) })}
+                  <div key={k.id}>
+                    <Link to={`/usage?key=${encodeURIComponent(k.id)}&range=today`} className={`today-agent-row${!k.enabled ? " dimmed" : ""}`}>
+                      <div className="today-agent-top">
+                        <div className="agent-row">
+                          <Avatar name={k.name} />
+                          <div>
+                            <div className="agent-name">{k.name}</div>
+                            <div className="stat-sub" style={{ marginTop: 0 }}>
+                              {t("usedOfDaily", { used: formatUsdc(k.used_today, { maxDecimals: 4 }), daily: formatUsdc(k.daily_budget, { maxDecimals: 4 }) })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div className="num" style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                          {remaining > 0n ? t("remainingLeft", { amount: formatUsdc(fromMicros(remaining), { maxDecimals: 4 }) }) : t("remainingZero")}
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div className="num" style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                            {remaining > 0n ? t("remainingLeft", { amount: formatUsdc(fromMicros(remaining), { maxDecimals: 4 }) }) : t("remainingZero")}
+                          </div>
+                          {!k.enabled && <Pill tone="red">{t("revokedBadge")}</Pill>}
                         </div>
-                        {!k.enabled && <Pill tone="red">{t("revokedBadge")}</Pill>}
                       </div>
-                    </div>
-                    <ProgressBar ratio={r} />
-                  </Link>
+                      <ProgressBar ratio={r} />
+                    </Link>
+                    {children.length > 0 && (
+                      <button
+                        type="button"
+                        className="today-agent-toggle"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          toggleExpandedRoot(k.id);
+                        }}
+                      >
+                        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        {expanded ? t("hideSubKeys") : t("showSubKeys", { n: children.length })}
+                      </button>
+                    )}
+                    {expanded &&
+                      children.map((child) => {
+                        const childUsed = toMicros(child.used_today);
+                        const childLimit = toMicros(child.daily_budget);
+                        const childR = ratioMicros(childUsed, childLimit);
+                        return (
+                          <Link
+                            key={child.id}
+                            to={`/usage?key=${encodeURIComponent(child.id)}&range=today`}
+                            className={`today-agent-row today-agent-child${child.status !== "active" ? " dimmed" : ""}`}
+                          >
+                            <div className="today-agent-top">
+                              <div className="agent-row">
+                                <Avatar name={child.name} size={20} />
+                                <div>
+                                  <div className="agent-name">{child.name}</div>
+                                  <div className="stat-sub" style={{ marginTop: 0 }}>
+                                    {t("usedOfDaily", {
+                                      used: formatUsdc(child.used_today, { maxDecimals: 4 }),
+                                      daily: formatUsdc(child.daily_budget, { maxDecimals: 4 }),
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                              {child.status !== "active" && <Pill tone="red">{t("revokedBadge")}</Pill>}
+                            </div>
+                            <ProgressBar ratio={childR} />
+                          </Link>
+                        );
+                      })}
+                  </div>
                 );
               })}
             </div>

@@ -201,10 +201,11 @@ export default function PlaygroundChat({
         setMessages((prev) => [...prev, approvalMsg]);
       } else {
         const friendly = friendlyErrorText(t, err?.code ?? null, audience);
+        const ancestorHint = err?.limitScope === "ancestor" && err.limitKeyPrefix ? t("limitScopeAncestorHint", { prefix: err.limitKeyPrefix }) : "";
         const errMsg: DisplayMessage = {
           id: nextId(),
           role: "error",
-          content: err ? friendly.title : e instanceof Error ? t("err_network") : t("err_generic"),
+          content: (err ? friendly.title : e instanceof Error ? t("err_network") : t("err_generic")) + ancestorHint,
           rawCode: err?.code ?? (err ? String(err.status) : null),
           errLink: err ? friendly.link : undefined,
         };
@@ -248,13 +249,14 @@ export default function PlaygroundChat({
         );
       } else {
         const friendly = friendlyErrorText(t, err?.code ?? null, audience);
+        const ancestorHint = err?.limitScope === "ancestor" && err.limitKeyPrefix ? t("limitScopeAncestorHint", { prefix: err.limitKeyPrefix }) : "";
         setMessages((prev) =>
           prev.map((m) =>
             m.id === msgId
               ? {
                   ...m,
                   role: "error",
-                  content: err ? friendly.title : e instanceof Error ? t("err_network") : t("err_generic"),
+                  content: (err ? friendly.title : e instanceof Error ? t("err_network") : t("err_generic")) + ancestorHint,
                   rawCode: err?.code ?? (err ? String(err.status) : null),
                   errLink: err ? friendly.link : undefined,
                   resending: false,

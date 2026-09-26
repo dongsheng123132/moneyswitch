@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { microsToDbNumber } from "./money.js";
-import { sumUsed, startOfUtcDay } from "./ledger.js";
+import { sumUsedSubtree, startOfUtcDay } from "./ledger.js";
 import { createApproval, validateApprovalForUse, markApprovalUsed } from "./approval.js";
-import { getMoneyKeyById } from "./keys.js";
-import type { MoneyKeyRow } from "./types.js";
+import { getKeyChain, assertChainUsable, scopeAt } from "./chain.js";
+import type { MoneyKeyRow, LimitInfo } from "./types.js";
 import { MoneySwitchError } from "./types.js";
+
+function limitAt(chain: MoneyKeyRow[], i: number): LimitInfo {
+  return { scope: scopeAt(i), keyPrefix: chain[i].keyPrefix };
+}
 
 export class ApprovalRequiredError extends MoneySwitchError {
   approvalId: string;
@@ -55,37 +59,50 @@ export function evaluateAndReserve(
   keyHint: MoneyKeyRow,
   input: PolicyInput
 ): PolicyResult {
-  const key = getMoneyKeyById(db, keyHint.id);
-  if (!key) {
-    throw new MoneySwitchError("KEY_INVALID", "MoneyKey no longer exists");
-  }
-  if (!key.enabled) {
-    throw new MoneySwitchError("KEY_REVOKED", "MoneyKey was revoked after authentication");
-  }
-  if (key.expiresAt && new Date(key.expiresAt).getTime() < Date.now()) {
-    throw new MoneySwitchError("KEY_EXPIRED", "MoneyKey expired after authentication");
-  }
+  const now = new Date();
 
-  if (input.amount > key.perRequestLimit) {
-    throw new MoneySwitchError("PER_REQUEST_LIMIT_EXCEEDED");
-  }
+  // v0.4 (SPEC-v0.4 §A): re-read the key AND its whole ancestor chain fresh,
+  // inside the transaction. Every level must be enabled and unexpired
+  // (revocation/expiry cascades down at query time), and every level's
+  // per-request / daily / total limit must hold, where a level's "used" is
+  // the settled+reserved+unknown sum of its entire subtree. The first
+  // violated level wins; errors carry limit_scope ("self" | "ancestor") and
+  // the violating key's public prefix. For a root key (chain of length 1)
+  // this is exactly the pre-v0.4 behaviour.
+  const chain = getKeyChain(db, keyHint.id);
+  const key = chain[0];
+  assertChainUsable(chain, now.getTime());
+
+  chain.forEach((k, i) => {
+    if (input.amount > k.perRequestLimit) {
+      throw new MoneySwitchError("PER_REQUEST_LIMIT_EXCEEDED", undefined, limitAt(chain, i));
+    }
+  });
   if (input.maxPrice != null && input.amount > input.maxPrice) {
     throw new MoneySwitchError("MAX_PRICE_EXCEEDED");
   }
 
-  const now = new Date();
-  const usedToday = sumUsed(db, key.id, startOfUtcDay(now));
-  if (usedToday + input.amount > key.dailyBudget) {
-    throw new MoneySwitchError("DAILY_BUDGET_EXCEEDED");
-  }
-  const usedTotal = sumUsed(db, key.id);
-  if (usedTotal + input.amount > key.totalBudget) {
-    throw new MoneySwitchError("TOTAL_BUDGET_EXCEEDED");
-  }
+  const dayStart = startOfUtcDay(now);
+  chain.forEach((k, i) => {
+    const usedToday = sumUsedSubtree(db, k.id, dayStart);
+    if (usedToday + input.amount > k.dailyBudget) {
+      throw new MoneySwitchError("DAILY_BUDGET_EXCEEDED", undefined, limitAt(chain, i));
+    }
+  });
+  chain.forEach((k, i) => {
+    const usedTotal = sumUsedSubtree(db, k.id);
+    if (usedTotal + input.amount > k.totalBudget) {
+      throw new MoneySwitchError("TOTAL_BUDGET_EXCEEDED", undefined, limitAt(chain, i));
+    }
+  });
 
   let usedApprovalId: string | null = null;
-  const needsApproval =
-    key.approvalThreshold != null && input.amount >= key.approvalThreshold;
+  // v0.4: the key's own threshold OR any ancestor's triggers approval.
+  // Approvals are still decided by the admin (no parent-holder approval in
+  // v0.4); the approval row is bound to the paying key.
+  const needsApproval = chain.some(
+    (k) => k.approvalThreshold != null && input.amount >= k.approvalThreshold
+  );
 
   if (needsApproval) {
     if (input.approvalId) {
@@ -120,6 +137,8 @@ export function evaluateAndReserve(
 
   const paymentId = randomUUID();
   const nowIso = now.toISOString();
+  // The reservation is recorded against the paying key only; ancestors see
+  // it through their subtree sums.
   db.insert(schema.payments)
     .values({
       id: paymentId,

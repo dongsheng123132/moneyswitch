@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, KeyRound } from "lucide-react";
+import { Plus, KeyRound, ChevronRight, ChevronDown } from "lucide-react";
 import { usePolling } from "../usePolling";
 import { listKeys, createKey, revokeKey, listChannels, ApiError, ChannelRow, CreateMoneyKeyResponse, MoneyKeyRow } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
@@ -47,6 +47,7 @@ interface FormState {
   max_payments_per_minute: string;
   expires_at: string; // yyyy-mm-dd from <input type="date">
   allowed_models: string[];
+  can_delegate: boolean;
 }
 
 function emptyForm(hosts: string): FormState {
@@ -60,7 +61,43 @@ function emptyForm(hosts: string): FormState {
     max_payments_per_minute: "10",
     expires_at: "",
     allowed_models: [],
+    can_delegate: false,
   };
+}
+
+/** SPEC-v0.4.md §A: build the parent/child tree client-side from the flat GET /v1/keys rows
+ * (keeps a single polling source instead of also polling GET /v1/admin/keys/tree). Children
+ * are ordered oldest-first, matching the server's tree endpoint. */
+function buildKeyTree(rows: MoneyKeyRow[]): Map<string | null, MoneyKeyRow[]> {
+  const byParent = new Map<string | null, MoneyKeyRow[]>();
+  for (const row of rows) {
+    const parent = row.parent_id ?? null;
+    const list = byParent.get(parent);
+    if (list) list.push(row);
+    else byParent.set(parent, [row]);
+  }
+  for (const list of byParent.values()) {
+    list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+  return byParent;
+}
+
+interface FlatTreeRow {
+  row: MoneyKeyRow;
+  depth: number;
+}
+
+/** Depth-first flatten, skipping subtrees whose row id is in `collapsed`. */
+function flattenTree(byParent: Map<string | null, MoneyKeyRow[]>, collapsed: Set<string>): FlatTreeRow[] {
+  const out: FlatTreeRow[] = [];
+  function walk(parent: string | null, depth: number) {
+    for (const row of byParent.get(parent) ?? []) {
+      out.push({ row, depth });
+      if (!collapsed.has(row.id)) walk(row.id, depth + 1);
+    }
+  }
+  walk(null, 0);
+  return out;
 }
 
 const PRESETS: Array<{ key: keyof typeof keysStrings.en; patch: Partial<FormState> }> = [
@@ -136,6 +173,20 @@ export default function MoneyKeysPage() {
   const [revokeSuccess, setRevokeSuccess] = useState<string | null>(null);
   const [tab, setTab] = useState<"connect" | "claude" | "codex" | "openai" | "employee">("connect");
   const [employeeLang, setEmployeeLang] = useState<Lang | null>(null);
+  // SPEC-v0.4.md §A: tree rows default expanded; ids in this set are collapsed.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+
+  const treeByParent = useMemo(() => buildKeyTree(keys ?? []), [keys]);
+  const flatRows = useMemo(() => flattenTree(treeByParent, collapsedIds), [treeByParent, collapsedIds]);
+
+  function toggleCollapsed(id: string) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!revokeSuccess) return;
@@ -213,6 +264,7 @@ export default function MoneyKeysPage() {
         max_payments_per_minute: form.max_payments_per_minute ? Number(form.max_payments_per_minute) : undefined,
         expires_at: expiresIso,
         allowed_models: form.allowed_models.length > 0 ? form.allowed_models : null,
+        can_delegate: form.can_delegate,
       });
       setCreated(res);
       refresh();
@@ -305,7 +357,7 @@ export default function MoneyKeysPage() {
                 <th>{t("colAgent")}</th>
                 <th>{t("colKeyPrefix")}</th>
                 <th>
-                  <Term k="dailyBudget">{t("colToday")}</Term>
+                  <Term k="subtreeUsage">{t("colToday")}</Term>
                 </th>
                 <th className="num">
                   <Term k="perRequestLimit">{t("colPerRequest")}</Term>
@@ -322,19 +374,49 @@ export default function MoneyKeysPage() {
               </tr>
             </thead>
             <tbody>
-              {keys.map((k: MoneyKeyRow) => {
+              {flatRows.map(({ row: k, depth }) => {
                 const usedMicros = toMicros(k.used_today);
                 const dMicros = toMicros(k.daily_budget);
                 const r = ratioMicros(usedMicros, dMicros);
-                const expired = Boolean(k.expires_at && new Date(k.expires_at).getTime() < Date.now());
-                const status = !k.enabled ? "revoked" : expired ? "expired" : "active";
-                const statusTone = status === "active" ? "green" : status === "expired" ? "yellow" : "red";
+                // SPEC-v0.4.md §A: status now comes straight from the server
+                // (active/revoked/expired/ancestor_revoked/ancestor_expired) —
+                // it already accounts for cascading ancestor revoke/expiry.
+                const status = k.status;
+                const statusTone = status === "active" ? "green" : status === "expired" || status === "ancestor_expired" ? "yellow" : "red";
+                const isAncestorDisabled = status === "ancestor_revoked" || status === "ancestor_expired";
+                const hasChildren = k.children_count > 0;
+                const collapsed = collapsedIds.has(k.id);
                 return (
                   <tr key={k.id}>
                     <td>
-                      <div className="agent-row">
+                      <div className="agent-row keys-tree-row" style={{ paddingLeft: depth * 20 }}>
+                        {depth > 0 && <span className="keys-tree-connector" aria-hidden="true" />}
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            className="keys-tree-toggle"
+                            onClick={() => toggleCollapsed(k.id)}
+                            aria-label={collapsed ? t("expandRow") : t("collapseRow")}
+                            aria-expanded={!collapsed}
+                          >
+                            {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        ) : (
+                          <span className="keys-tree-toggle-spacer" />
+                        )}
                         <Avatar name={k.name} size={24} />
-                        <span className="agent-name">{k.name}</span>
+                        <div>
+                          <div className="agent-row" style={{ gap: 6 }}>
+                            <span className="agent-name">{k.name}</span>
+                            {k.can_delegate && (
+                              <Term k="canDelegate">
+                                <Pill tone="blue">{t("canDelegatePill")}</Pill>
+                              </Term>
+                            )}
+                          </div>
+                          {k.created_by.startsWith("key:") && <div className="keys-created-by">{t("createdByParent")}</div>}
+                          {hasChildren && <div className="keys-created-by">{t("childrenCount", { n: k.children_count })}</div>}
+                        </div>
                       </div>
                     </td>
                     <td className="mono">{k.key_prefix}••••</td>
@@ -351,13 +433,19 @@ export default function MoneyKeysPage() {
                     <td className="num">{k.approval_threshold ? formatUsdc(k.approval_threshold, { maxDecimals: 4 }) : t("approvalNone")}</td>
                     <td>{k.last_used_at ? relTime(k.last_used_at) : t("lastUsedNever")}</td>
                     <td>
-                      <Pill tone={statusTone}>{t(`status${status[0].toUpperCase()}${status.slice(1)}` as keyof typeof keysStrings.en)}</Pill>
+                      {isAncestorDisabled ? (
+                        <Term k={status === "ancestor_revoked" ? "ancestorRevoked" : "ancestorExpired"}>
+                          <Pill tone={statusTone}>{t(`status${status[0].toUpperCase()}${status.slice(1)}` as keyof typeof keysStrings.en)}</Pill>
+                        </Term>
+                      ) : (
+                        <Pill tone={statusTone}>{t(`status${status[0].toUpperCase()}${status.slice(1)}` as keyof typeof keysStrings.en)}</Pill>
+                      )}
                     </td>
                     <td>
-                      {k.enabled &&
+                      {/* v0.4: an ancestor-disabled key is already dead for good (no un-revoke) */ k.status === "active" &&
                         (revokeConfirmId === k.id ? (
                           <div className="keys-revoke-confirm">
-                            <span>{t("revokeConfirmText")}</span>
+                            <span>{hasChildren ? t("revokeConfirmTextWithChildren", { n: k.children_count }) : t("revokeConfirmText")}</span>
                             <button type="button" className="btn small danger" onClick={() => onRevoke(k.id)} disabled={revokingId === k.id}>
                               {revokingId === k.id ? "…" : t("revokeBtn")}
                             </button>
@@ -395,6 +483,18 @@ export default function MoneyKeysPage() {
               <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("namePlaceholder")} />
               <div className="field-hint">{t("nameHint")}</div>
               {errors.name && <div className="field-error">{errors.name}</div>}
+            </div>
+
+            <label className="keys-can-delegate-toggle">
+              <input
+                type="checkbox"
+                checked={form.can_delegate}
+                onChange={(e) => setForm({ ...form, can_delegate: e.target.checked })}
+              />
+              <span>{t("canDelegateFieldLabel")}</span>
+            </label>
+            <div className="field-hint" style={{ marginTop: -6, marginBottom: 12 }}>
+              {t("canDelegateFieldHint")}
             </div>
 
             <div className="sentence-form">

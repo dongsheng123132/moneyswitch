@@ -10,26 +10,10 @@ import {
 } from "./moneykey.js";
 import type { MoneyKeyRow } from "./types.js";
 import { MoneySwitchError } from "./types.js";
+import { getKeyChain, assertChainUsable } from "./chain.js";
+import { rowToMoneyKey } from "./keyrow.js";
 
-function rowToMoneyKey(row: typeof schema.moneyKeys.$inferSelect): MoneyKeyRow {
-  return {
-    id: row.id,
-    name: row.name,
-    keyPrefix: row.keyPrefix,
-    keyHash: row.keyHash,
-    enabled: row.enabled,
-    totalBudget: dbNumberToMicros(row.totalBudget),
-    dailyBudget: dbNumberToMicros(row.dailyBudget),
-    perRequestLimit: dbNumberToMicros(row.perRequestLimit),
-    approvalThreshold: row.approvalThreshold == null ? null : dbNumberToMicros(row.approvalThreshold),
-    allowedHosts: row.allowedHosts,
-    maxPaymentsPerMinute: row.maxPaymentsPerMinute,
-    expiresAt: row.expiresAt,
-    createdAt: row.createdAt,
-    lastUsedAt: row.lastUsedAt,
-    allowedModels: row.allowedModels ?? null,
-  };
-}
+export { rowToMoneyKey };
 
 export interface CreateMoneyKeyInput {
   name: string;
@@ -42,9 +26,16 @@ export interface CreateMoneyKeyInput {
   expiresAt?: string | null;
   /** v0.2 (SPEC-v0.2 §1): null/omitted = allowed to use all enabled channels' models. */
   allowedModels?: string[] | null;
+  /** v0.4 (SPEC-v0.4 §A): may this (root) key create child keys? Default false. */
+  canDelegate?: boolean;
 }
 
-/** Creates a new MoneyKey. Returns the plaintext key (only available here) plus the stored row. */
+/**
+ * Creates a new ROOT MoneyKey (admin path: parent_id NULL, depth 0,
+ * created_by "admin"). Child keys are created only via createChildKey
+ * (delegation.ts), which enforces the parent-bound constraints.
+ * Returns the plaintext key (only available here) plus the stored row.
+ */
 export function createMoneyKey(
   db: MoneySwitchDb,
   input: CreateMoneyKeyInput
@@ -57,6 +48,9 @@ export function createMoneyKey(
       "FORBIDDEN",
       "approval_threshold must be <= per_request_limit"
     );
+  }
+  if (input.expiresAt != null && Number.isNaN(new Date(input.expiresAt).getTime())) {
+    throw new MoneySwitchError("FORBIDDEN", "expires_at must be an ISO-8601 date-time");
   }
   const plaintextKey = generateMoneyKey();
   const id = randomUUID();
@@ -79,6 +73,10 @@ export function createMoneyKey(
       createdAt: now,
       lastUsedAt: null,
       allowedModels: input.allowedModels ?? null,
+      parentId: null,
+      depth: 0,
+      canDelegate: input.canDelegate ?? false,
+      createdBy: "admin",
     })
     .run();
   const row = db.select().from(schema.moneyKeys).where(eq(schema.moneyKeys.id, id)).get();
@@ -122,11 +120,10 @@ export function authenticateMoneyKey(db: MoneySwitchDb, plaintextKey: string): M
   if (!match) {
     throw new MoneySwitchError("KEY_INVALID", "MoneyKey not found or invalid");
   }
-  if (!match.enabled) {
-    throw new MoneySwitchError("KEY_REVOKED", "MoneyKey has been revoked");
-  }
-  if (match.expiresAt && new Date(match.expiresAt).getTime() < Date.now()) {
-    throw new MoneySwitchError("KEY_EXPIRED", "MoneyKey has expired");
-  }
-  return rowToMoneyKey(match);
+  const key = rowToMoneyKey(match);
+  // v0.4: the key itself first (same errors as before for root keys), then
+  // every ancestor — revoking/expiring an ancestor disables the whole
+  // subtree immediately, evaluated at query time (no batch row updates).
+  assertChainUsable(getKeyChain(db, key.id));
+  return key;
 }

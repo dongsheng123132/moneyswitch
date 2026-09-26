@@ -31,6 +31,7 @@ Once published, the short form is `npx moneyswitch connect …`.
 moneyswitch connect --server <url> --key <mk_live_...> [--apply] [--json]
 moneyswitch status  --server <url> --key <mk_live_...> [--json]
 moneyswitch remove  [--apply] [--json]
+moneyswitch ui      [--port 4318] [--no-open]
 moneyswitch mcp
 ```
 
@@ -39,6 +40,17 @@ moneyswitch mcp
   prints what it would do (dry run).
 - `status` checks a MoneyKey's remaining budget against a running server.
 - `remove` undoes what `connect --apply` did.
+- `ui` opens a local desktop console on `http://127.0.0.1:4318` (loopback
+  only, one-time login link, httpOnly session cookie). One card per agent
+  (Claude Code, Codex; manual steps for OpenClaw / WorkBuddy / Cherry Studio)
+  with a "brain" column (model provider + API key + model, with a connection
+  test) and a "wallet" column (cut a child MoneyKey from yours via
+  `POST /v1/keys/children`, or paste one). Enabling shows the exact config diff
+  first, backs every file up as `<file>.bak-<timestamp>`, verifies by reading
+  back, and rolls back on failure; disabling restores the original values.
+  Your MoneyKey is stored in `~/.moneyswitch/desktop.json` (current user only);
+  model keys are never sent to the MoneySwitch server. Formats and how they
+  were verified: docs/desktop-agents.md in the main repository.
 - `mcp` starts the stdio MCP server directly (this is what `connect` points
   Claude Code / Codex at — normally you never run it by hand). It reads
   `MONEY_API_BASE` and `MONEY_API_KEY` from the environment.

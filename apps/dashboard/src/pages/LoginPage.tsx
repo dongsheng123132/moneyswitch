@@ -56,6 +56,10 @@ export default function LoginPage() {
         return t("login_err_KEY_REVOKED");
       case "KEY_EXPIRED":
         return t("login_err_KEY_EXPIRED");
+      case "KEY_REVOKED_ANCESTOR":
+        return t("login_err_KEY_REVOKED_ANCESTOR");
+      case "KEY_EXPIRED_ANCESTOR":
+        return t("login_err_KEY_EXPIRED_ANCESTOR");
       default:
         return t("login_err_generic", { message: errorDetail ?? error });
     }
