@@ -33,6 +33,15 @@ export function requireMoneyKey(ctx: AppContext) {
     if (!token || token.startsWith("ms_admin_")) {
       return reply.status(401).send({ status: "error", code: "KEY_INVALID" });
     }
+    // v0.5 (SPEC-v0.5 §1): a public 0x address pasted where a MoneyKey belongs.
+    if (/^0x[0-9a-fA-F]{40}$/.test(token)) {
+      return reply.status(401).send({
+        status: "error",
+        code: "KEY_INVALID",
+        hint: "LOOKS_LIKE_ADDRESS",
+        message: "That is a public 0x receiving address, not a MoneyKey. A MoneyKey starts with mk_live_.",
+      });
+    }
     try {
       const key = authenticateMoneyKey(ctx.db, token);
       touchLastUsed(ctx.db, key.id);

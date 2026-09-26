@@ -6,6 +6,7 @@ import { formatUsdc } from "../money";
 import { useT, TFunction } from "../i18n";
 import { playgroundStrings } from "../i18n/strings/playground";
 import TxLink from "./TxLink";
+import { useKeyInputGuard } from "./KeyInputGuard";
 import "../styles/playground.css";
 
 type PgStrings = TFunction<keyof typeof playgroundStrings.en>;
@@ -99,6 +100,7 @@ export default function PlaygroundChat({
   onMessageSettled,
 }: PlaygroundChatProps) {
   const t = useT(playgroundStrings);
+  const keyGuard = useKeyInputGuard();
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState<string>("");
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -286,7 +288,7 @@ export default function PlaygroundChat({
               className="mono pg-key-input"
               placeholder={t("keyPlaceholder")}
               value={apiKey}
-              onChange={(e) => onApiKeyChange(e.target.value)}
+              onChange={(e) => onApiKeyChange(keyGuard.filter(e.target.value))}
               aria-label={t("keyPlaceholder")}
             />
           ) : (
@@ -306,6 +308,7 @@ export default function PlaygroundChat({
             {loadingModels ? t("loading") : t("loadModels")}
           </button>
         </div>
+        {keyGuard.message && <div style={{ margin: "0 14px" }}>{keyGuard.message}</div>}
         {modelsError && (
           <div className="error-banner" style={{ margin: "10px 14px 0" }}>
             {modelsError}

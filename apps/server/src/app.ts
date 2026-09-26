@@ -9,6 +9,7 @@ import { registerAgentRoutes } from "./routes/agent.js";
 import { registerChildKeyRoutes } from "./routes/children.js";
 import { registerGatewayRoutes } from "./routes/gateway.js";
 import { registerSetupRoutes } from "./routes/setup.js";
+import { registerTollboothRoutes } from "./routes/tollbooths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -59,6 +60,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerChildKeyRoutes(app, ctx);
   registerGatewayRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
+  registerTollboothRoutes(app, ctx);
 
   const dashboardDist = resolveDashboardDist();
   const dashboardIndexPath = path.join(dashboardDist, "index.html");
@@ -91,6 +93,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
     if (
       req.method === "GET" &&
       !req.url.startsWith("/v1") &&
+      !req.url.startsWith("/t/") &&
       !req.url.startsWith("/assets/") &&
       dashboardAvailable
     ) {

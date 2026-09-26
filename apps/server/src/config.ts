@@ -15,6 +15,17 @@ export interface ServerConfig {
   cliTarballPath?: string | null;
   /** v0.4 (SPEC-v0.4 §A): MONEYSWITCH_MAX_KEY_DEPTH (default 3 = root + 3 levels of child keys). */
   maxKeyDepth?: number;
+  /**
+   * v0.5 (SPEC-v0.5 §2): x402 facilitator the toll booths verify/settle with.
+   * Defaults to the active network's facilitator (MONEYSWITCH_FACILITATOR_URL).
+   */
+  facilitatorUrl?: string | null;
+  /**
+   * v0.5: public base URL buyers use to reach this server (e.g.
+   * https://pay.example.com), from MONEYSWITCH_PUBLIC_URL. When unset, the
+   * Dashboard shows the origin it was opened from.
+   */
+  publicUrl?: string | null;
 }
 
 function defaultDataDir(): string {
@@ -36,5 +47,6 @@ export function loadConfig(): ServerConfig {
   }
   const demoSellerUrl = process.env.MONEYSWITCH_DEMO_SELLER_URL?.trim() || null;
   const maxKeyDepth = parseMaxKeyDepth(process.env.MONEYSWITCH_MAX_KEY_DEPTH);
-  return { port, host, dataDir, dbFilePath, walletPassword, demoSellerUrl, maxKeyDepth };
+  const publicUrl = process.env.MONEYSWITCH_PUBLIC_URL?.trim().replace(/\/+$/, "") || null;
+  return { port, host, dataDir, dbFilePath, walletPassword, demoSellerUrl, maxKeyDepth, publicUrl };
 }

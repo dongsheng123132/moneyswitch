@@ -42,6 +42,12 @@ export const glossary = defineMessages(
       "\"Today\" / \"Total used\" here include this key's own spending PLUS everything its sub-keys have spent — that is what counts against this key's own budget.",
     ancestorRevoked: "This key itself is still enabled, but a parent key above it was revoked — so it stops working too, immediately.",
     ancestorExpired: "This key itself hasn't expired, but a parent key above it has — so it stops working too.",
+    tollbooth: "A public address (<server>/t/<slug>) that sits in front of one of your APIs. Anyone can call it; MoneySwitch only forwards the request after it's paid in USDC.",
+    payTo: "The address that receives the money for this toll booth — it can be your MoneySwitch wallet or any other address you own.",
+    upstream: "The real service the toll booth protects — the address MoneySwitch forwards paid requests to.",
+    pricingRule: "One line of \"who pays what\": a method + path pattern + a USDC price. The most specific rule wins when several could match.",
+    defaultPrice: "What happens to a request that matches none of your rules: a price to charge, free pass-through, or refuse it outright.",
+    settleOnlyOnSuccess: "The buyer is only charged when your service answers success (2xx/3xx). If it errors or times out, nothing is charged.",
   },
   {
     moneyKey: "一把「花钱的 API Key」（mk_live_…）。给 Agent 的是它，而不是钱包私钥；它触发的每一笔付款都要先过这把 Key 的额度规则。",
@@ -70,5 +76,11 @@ export const glossary = defineMessages(
     subtreeUsage: "这里的「今日」「累计已用」= 这把 Key 自己的花费 + 它所有子 Key 的花费之和 —— 这才是真正会计入这把 Key 额度的数字。",
     ancestorRevoked: "这把 Key 本身没有被撤销，但它的上级 Key 被撤销了，所以它也立刻不能用了。",
     ancestorExpired: "这把 Key 本身没有过期，但它的上级 Key 过期了，所以它也不能用了。",
+    tollbooth: "一个公开地址（<服务器>/t/<后缀>），挂在你的某个 API 前面。任何人都能调用它，付了 USDC 之后 MoneySwitch 才会转发这个请求。",
+    payTo: "这个收费站收到的钱进的地址——可以是你的 MoneySwitch 钱包，也可以是你自己的任意地址。",
+    upstream: "收费站保护的真正服务——付款通过之后 MoneySwitch 会把请求转发到这个地址。",
+    pricingRule: "一条「谁、什么路径、收多少钱」的规则：方法 + 路径模式 + USDC 价格。多条规则都能匹配时，最具体的那条生效。",
+    defaultPrice: "没有匹配到任何规则的请求怎么处理：按一个价格收费、免费放行，或者直接拒绝。",
+    settleOnlyOnSuccess: "只有你的服务返回成功（2xx/3xx）才会扣买家的钱；出错或超时都不收费。",
   }
 );

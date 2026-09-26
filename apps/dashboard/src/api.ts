@@ -38,10 +38,16 @@ export function clearEmployeeKey(): void {
 export class ApiError extends Error {
   status: number;
   code?: string | null;
-  constructor(status: number, message: string, code?: string | null) {
+  /** v0.5: the server's `error` field (e.g. "INVALID_PAY_TO", "SLUG_TAKEN"). */
+  error?: string | null;
+  /** v0.5: finer reason, e.g. "LOOKS_LIKE_MONEYKEY" for INVALID_PAY_TO. */
+  reason?: string | null;
+  constructor(status: number, message: string, code?: string | null, error?: string | null, reason?: string | null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.error = error ?? null;
+    this.reason = reason ?? null;
   }
 }
 
@@ -68,9 +74,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
   if (!res.ok) {
-    const errObj = json as { error?: string; message?: string; code?: string } | null;
+    const errObj = json as { error?: string; message?: string; code?: string; reason?: string } | null;
     const message = errObj?.message || errObj?.error || errObj?.code || res.statusText || "request_failed";
-    throw new ApiError(res.status, message, errObj?.code ?? null);
+    throw new ApiError(res.status, message, errObj?.code ?? null, errObj?.error ?? null, errObj?.reason ?? null);
   }
   return json as T;
 }
@@ -725,6 +731,12 @@ export interface AdminMeta {
   cli_local_path: string | null;
   mcp_local_path: string | null;
   wallet_password_from_env: boolean;
+  /** v0.5: this MoneySwitch wallet's address = default receiving address for toll booths (null if no wallet yet). */
+  wallet_address: string | null;
+  /** v0.5: base URL buyers use, e.g. "http://127.0.0.1:4020" (toll booths live at <public_base>/t/<slug>). */
+  public_base: string;
+  /** v0.5: true when public_base comes from MONEYSWITCH_PUBLIC_URL rather than the browser's origin. */
+  public_base_from_env: boolean;
 }
 
 /** GET /v1/admin/meta — admin only. */
@@ -740,4 +752,196 @@ export async function isCliTarballAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// v0.5 (SPEC-v0.5 §2): toll booths + earnings
+// ---------------------------------------------------------------------------
+
+export type TollMethod = "ANY" | "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+
+export interface TollRouteRow {
+  id: string;
+  method: TollMethod;
+  /** "/v1/chat/completions" (exact) or "/v1/*" (prefix / wildcard). */
+  path_pattern: string;
+  /** USDC decimal string; "0" = free pass-through. */
+  price: string;
+  description: string | null;
+}
+
+export interface TollboothRow {
+  id: string;
+  name: string;
+  slug: string;
+  upstream_url: string;
+  pay_to: string;
+  /** true when pay_to is this MoneySwitch's own wallet. */
+  pay_to_is_wallet: boolean;
+  network: string;
+  enabled: boolean;
+  forward_host_header: boolean;
+  /** Price for requests matching no rule; null = refuse them (404). */
+  default_price: string | null;
+  description: string | null;
+  /** "<public_base>/t/<slug>" — buyers call public_url + "/any/path". */
+  public_url: string;
+  routes: TollRouteRow[];
+  earnings_today: string;
+  paid_calls_today: number;
+  earnings_total: string;
+  paid_calls_total: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TollRouteInput {
+  method: TollMethod;
+  path_pattern: string;
+  price: string;
+  description?: string | null;
+}
+
+export interface CreateTollboothInput {
+  name: string;
+  slug?: string;
+  upstream_url: string;
+  /** Omit to use this MoneySwitch's own wallet address. */
+  pay_to?: string;
+  default_price: string | null;
+  description?: string | null;
+  forward_host_header?: boolean;
+  enabled?: boolean;
+  routes: TollRouteInput[];
+}
+
+export type UpdateTollboothInput = Partial<Omit<CreateTollboothInput, "routes">> & { routes?: TollRouteInput[] };
+
+export async function listTollbooths(): Promise<TollboothRow[]> {
+  const res = await request<{ tollbooths: TollboothRow[] }>("/v1/admin/tollbooths");
+  return res.tollbooths;
+}
+
+export async function getTollbooth(id: string): Promise<TollboothRow> {
+  return request<TollboothRow>(`/v1/admin/tollbooths/${encodeURIComponent(id)}`);
+}
+
+/**
+ * Errors (ApiError.error / ApiError.reason): 400 "INVALID_PAY_TO" with reason
+ * "LOOKS_LIKE_MONEYKEY" | "LOOKS_LIKE_ADMIN_TOKEN" | "LOOKS_LIKE_PRIVATE_KEY" | "LOOKS_LIKE_MNEMONIC" |
+ * "BAD_CHECKSUM" | "NOT_AN_ADDRESS" | "ZERO_ADDRESS" | "EMPTY"; "INVALID_UPSTREAM", "UPSTREAM_IS_SELF",
+ * "INVALID_ROUTE", "INVALID_PRICE", "INVALID_NAME", "INVALID_SLUG", "PAY_TO_REQUIRED"; 409 "SLUG_TAKEN".
+ */
+export async function createTollbooth(input: CreateTollboothInput): Promise<TollboothRow> {
+  return request<TollboothRow>("/v1/admin/tollbooths", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateTollbooth(id: string, input: UpdateTollboothInput): Promise<TollboothRow> {
+  return request<TollboothRow>(`/v1/admin/tollbooths/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function deleteTollbooth(id: string): Promise<{ id: string; deleted: boolean }> {
+  return request(`/v1/admin/tollbooths/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export type UpstreamProbe =
+  | { ok: true; status: number; latency_ms: number; content_type: string | null; healthy: boolean }
+  | { ok: false; error: "UPSTREAM_IS_SELF" | "INVALID_UPSTREAM" | "UPSTREAM_TIMEOUT" | "UPSTREAM_UNREACHABLE" | string; message: string };
+
+/** Free reachability check of an upstream URL (never charges). */
+export async function testUpstream(upstreamUrl: string): Promise<UpstreamProbe> {
+  return request<UpstreamProbe>("/v1/admin/tollbooths/test-upstream", { method: "POST", body: JSON.stringify({ upstream_url: upstreamUrl }) });
+}
+
+export async function testTollbooth(id: string): Promise<UpstreamProbe> {
+  return request<UpstreamProbe>(`/v1/admin/tollbooths/${encodeURIComponent(id)}/test`, { method: "POST" });
+}
+
+export type EarningsRange = "today" | "7d" | "all";
+
+export interface EarningItem {
+  id: string;
+  created_at: string;
+  tollbooth_id: string;
+  tollbooth_slug: string;
+  tollbooth_name: string;
+  route_id: string | null;
+  method: string;
+  path: string;
+  amount: string;
+  payer: string | null;
+  tx_hash: string | null;
+  mock: boolean;
+  network: string;
+  /** settled = money received; failed = upstream error / settlement failed, buyer NOT charged. */
+  status: "settled" | "failed";
+  upstream_status: number | null;
+  error_code: string | null;
+}
+
+export interface EarningsResponse {
+  range: EarningsRange;
+  since: string | null;
+  /** Sum of settled amounts in range. */
+  total: string;
+  settled_count: number;
+  failed_count: number;
+  by_tollbooth: Array<{ tollbooth_id: string; slug: string; name: string; deleted: boolean; total: string; count: number }>;
+  by_route: Array<{
+    tollbooth_id: string;
+    route_id: string | null;
+    method: string;
+    path_pattern: string | null;
+    /** true = income from requests that matched no rule (the toll booth's default price). */
+    is_default: boolean;
+    total: string;
+    count: number;
+  }>;
+  /** Newest first, at most 500. */
+  items: EarningItem[];
+}
+
+export async function getEarnings(range: EarningsRange = "all", tollboothId?: string): Promise<EarningsResponse> {
+  const q = new URLSearchParams({ range });
+  if (tollboothId) q.set("tollbooth", tollboothId);
+  return request<EarningsResponse>(`/v1/admin/earnings?${q.toString()}`);
+}
+
+export interface PaidFetchInput {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  max_price?: string;
+  approval_id?: string;
+}
+
+/** POST /v1/fetch envelope (docs/money-api-v0.md). */
+export interface PaidFetchResponse {
+  status: "ok" | "denied" | "approval_required" | "payment_failed" | "error";
+  code: string | null;
+  http_status: number | null;
+  headers: Record<string, string>;
+  body: string | null;
+  payment: { amount: string; tx_hash: string | null; network: string; mock: boolean } | null;
+  approval_id: string | null;
+  remaining_today: string;
+  remaining_total: string;
+  limit_scope?: string;
+  limit_key_prefix?: string;
+}
+
+/** Pays for an x402 URL with a MoneyKey (the agent path, used by the Playground's "paid fetch" mode). */
+export async function paidFetch(key: string, input: PaidFetchInput): Promise<PaidFetchResponse> {
+  const res = await fetch("/v1/fetch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify(input),
+  });
+  const json = (await res.json().catch(() => null)) as PaidFetchResponse | { code?: string; message?: string; hint?: string } | null;
+  if (!res.ok && (!json || !("status" in json))) {
+    const j = json as { code?: string; message?: string; hint?: string } | null;
+    throw new ApiError(res.status, j?.message ?? j?.code ?? res.statusText, j?.code ?? null, null, j?.hint ?? null);
+  }
+  return json as PaidFetchResponse;
 }

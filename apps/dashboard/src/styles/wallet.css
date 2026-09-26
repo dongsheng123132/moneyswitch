@@ -1,36 +1,54 @@
-/* Wallet page (docs/ux-audit.md A-3, A-4) */
+/* Wallet page (docs/ux-audit.md A-3, A-4; SPEC-v0.5.md §3 "one wallet, receives and pays") */
 
-.wallet-top-cards {
+.wallet-columns-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.wallet-columns-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.wallet-columns {
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   align-items: stretch;
+  margin-bottom: 20px;
 }
 
 @media (max-width: 720px) {
-  .wallet-top-cards {
+  .wallet-columns {
     grid-template-columns: 1fr;
   }
 }
 
-.wallet-top-cards .card {
+.wallet-columns .card {
   display: flex;
   flex-direction: column;
 }
 
-.wallet-address-value {
-  font-size: 18px;
-  font-weight: 650;
-  word-break: break-all;
-  margin: 6px 0 10px;
+.wallet-column-sentence {
+  margin: 14px 0 6px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.wallet-qr-card {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.wallet-column-link {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wallet-column-explorer {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-faint);
 }
 
 .wallet-network-table td:first-child {
@@ -57,6 +75,6 @@
 }
 
 /* side-by-side cards: no stacked-card top margin (keeps both tops aligned) */
-.wallet-top-cards > .card + .card {
+.wallet-columns > .card + .card {
   margin-top: 0;
 }

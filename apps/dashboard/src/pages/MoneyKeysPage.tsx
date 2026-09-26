@@ -13,6 +13,7 @@ import Callout from "../components/Callout";
 import EmptyState from "../components/EmptyState";
 import Term from "../components/Term";
 import Snippet from "../components/Snippet";
+import SecretNotice from "../components/SecretNotice";
 import { SkeletonTable } from "../components/Skeleton";
 import { useT, useLang, Lang } from "../i18n";
 import { useRelativeTime } from "../i18n/format";
@@ -645,11 +646,13 @@ export default function MoneyKeysPage() {
         ) : (
           <div>
             <div className="key-once-banner">{t("createdBanner")}</div>
-            <div className="field">
-              <label>{t("keyFieldLabel")}</label>
-              <div className="key-big">{created.key}</div>
-              <CopyButton text={created.key} />
-            </div>
+            <SecretNotice>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>{t("keyFieldLabel")}</label>
+                <div className="key-big">{created.key}</div>
+                <CopyButton text={created.key} />
+              </div>
+            </SecretNotice>
 
             <div className="next-heading">{t("nextHeading")}</div>
 

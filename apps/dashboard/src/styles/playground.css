@@ -147,3 +147,43 @@
 .pg-right-panel .agent-row {
   margin-bottom: 12px;
 }
+
+/* SPEC-v0.5.md §3: Playground tabs + paid-request (x402) panel */
+
+.pg-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.pg-fetch-card {
+  height: auto;
+  padding: 16px;
+  overflow: visible;
+}
+
+.pg-fetch-form .field {
+  margin-bottom: 14px;
+}
+
+.pg-fetch-result {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border-soft);
+}
+
+.pg-fetch-response {
+  max-height: 320px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pg-fetch-form .secret-notice {
+  margin-bottom: 14px;
+}

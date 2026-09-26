@@ -21,8 +21,12 @@ Usage:
   moneyswitch status --server <url> --key <mk_live_...> [--json]
   moneyswitch remove [--apply] [--json]
   moneyswitch ui [--port 4318] [--no-open]
+  moneyswitch sell --upstream <url> --pay-to <0x…> [--price 0.01] [--route "POST /path=0.01"]...
   moneyswitch mcp
 
+"sell" puts a toll booth in front of your own API: AI agents pay USDC per call
+(x402) straight to your PUBLIC receiving address; no MoneySwitch server needed.
+Run "moneyswitch sell --help" for all options.
 "ui" opens the local desktop console (127.0.0.1 only): give each agent a
 model key and a MoneyKey, preview the config diff, then enable.
 Without --apply, "connect"/"remove" only print planned changes (dry-run).
@@ -35,6 +39,7 @@ Exit codes: 0 ok, 1 failure, 2 bad args.`;
 export type Dispatch =
   | { kind: "mcp" }
   | { kind: "ui"; args: string[] }
+  | { kind: "sell"; args: string[] }
   | { kind: "connect-lib"; args: string[] }
   | { kind: "help" }
   | { kind: "unknown"; command: string };
@@ -47,6 +52,7 @@ export function parseTopArgv(argv: string[]): Dispatch {
   const [sub, ...rest] = argv;
   if (sub === "mcp") return { kind: "mcp" };
   if (sub === "ui") return { kind: "ui", args: rest };
+  if (sub === "sell") return { kind: "sell", args: rest };
   if (sub === "connect") return { kind: "connect-lib", args: rest };
   if (sub === "status" || sub === "remove") return { kind: "connect-lib", args: argv };
   if (sub === undefined || sub === "--help" || sub === "-h") return { kind: "help" };
@@ -64,6 +70,13 @@ async function main(): Promise<void> {
   if (dispatch.kind === "ui") {
     const { runUi } = (await import("./desktop.js")) as { runUi: (argv: string[]) => Promise<number> };
     process.exit(await runUi(dispatch.args));
+    return;
+  }
+
+  if (dispatch.kind === "sell") {
+    // SPEC-v0.5 §4: lazy bundle (express + @x402/* + viem), loaded only for `sell`.
+    const { runSell } = (await import("./sell.js")) as { runSell: (argv: string[]) => Promise<number> };
+    process.exit(await runSell(dispatch.args));
     return;
   }
 

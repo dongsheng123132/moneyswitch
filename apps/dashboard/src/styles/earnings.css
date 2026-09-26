@@ -1,0 +1,15 @@
+/* Earnings page (SPEC-v0.5 §3) */
+
+.earnings-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.earnings-items-card {
+  margin-top: 16px;
+}
+.earnings-items-hint {
+  margin: -4px 0 10px;
+  font-size: 12.5px;
+}

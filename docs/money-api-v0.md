@@ -12,7 +12,9 @@ This is the public HTTP API a **MoneyKey** (`mk_live_…`, `Authorization:
 Bearer mk_live_...`) can call against a running MoneySwitch server. It does
 not cover the admin API (`ms_admin_…`-authenticated routes for creating
 keys, managing channels/wallet/approvals) — see `SPEC.md` §6 and
-`SPEC-v0.2.md` §1 for those.
+`SPEC-v0.2.md` §1 for those — except the toll booth admin routes, which are
+listed with the public toll booth behaviour in
+[Toll booths](#toll-booths-v05-spec-v05-2).
 
 Base URL is wherever you run `apps/server` (default `http://127.0.0.1:4020`).
 
@@ -381,6 +383,136 @@ rows add `parent_id, depth, can_delegate, created_by, children_count,
 status, own_used_today, own_used_total` (`used_today`/`used_total` are
 subtree totals); `GET /v1/admin/keys/tree` returns
 `{ "tree": [ { …row, "children": [ … ] } ] }`.
+
+## Toll booths (v0.5, SPEC-v0.5 §2)
+
+A toll booth sells an existing HTTP API to AI agents: every call is paid in
+USDC over x402 before it is forwarded. It is the **receiving** side of
+MoneySwitch; the paying side is `POST /v1/fetch` above (a MoneyKey can buy
+from any toll booth — on another server, or on this same server).
+
+### Public entry: `ANY /t/{slug}/{path…}`
+
+No MoneySwitch credential is involved: buyers pay with x402. Supported
+methods: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS. Request/response
+bodies are passed through as raw bytes (max 10 MB each).
+
+Processing, in order:
+
+1. **Toll booth lookup.** Unknown or disabled `slug` → `404
+   {"error":"TOLLBOOTH_NOT_FOUND"}`.
+2. **Path normalization** (before any pricing): dot segments resolved
+   (including `%2e`), repeated slashes collapsed, percent-escapes decoded
+   for matching, matching is case-insensitive and ignores a trailing slash.
+   The upstream receives exactly the normalized path, so the path that was
+   priced is the path that is served. Encoded `/` or `\` (`%2F`, `%5C`),
+   backslashes, NUL/control characters → `400 {"error":"BAD_PATH"}`.
+3. **Rule match.** Rules are `METHOD` (or `ANY`) + a path pattern: an exact
+   path (`/v1/chat/completions`) or a pattern with `*` (`/v1/*`, `/files/*.pdf`;
+   `/v1/*` also matches `/v1`). The longest literal prefix wins; on a tie an
+   exact pattern beats a wildcard, then a specific method beats `ANY`.
+   `HEAD` also matches `GET` rules. No match → the toll booth's
+   `default_price`; `default_price: null` → `404 {"error":"NOT_FOR_SALE"}`.
+4. **Price 0** → forwarded for free (no x402 at all).
+5. **Price > 0** → x402 via the official SDK (`@x402/core/server`
+   `x402ResourceServer` + `HTTPFacilitatorClient` + `@x402/evm` `exact`):
+   - no payment → **`402`** with the SDK's `PAYMENT-REQUIRED` header
+     (`accepts[0].payTo` = the toll booth's receiving address, `amount` in
+     USDC atomic units, `network` `eip155:10143`, the testnet USDC `asset`)
+     and a human-readable JSON body:
+     ```json
+     {"error":"payment_required","message":"This API costs 0.01 USDC per call (x402)…",
+      "toll_booth":"Weather API","price_usdc":"0.01","pay_to":"0xAbC…","network":"eip155:10143",
+      "asset":"0x534b…43A3","description":"…","settlement":"You are only charged if the service answers with 2xx/3xx. Errors are never charged."}
+     ```
+     Browsers (`Accept: text/html`) get a small static page with the same facts.
+   - payment present → the facilitator **verifies** it; invalid → `402` (SDK).
+   - the same payment header while it is already being served or after it
+     settled → `409 {"error":"PAYMENT_ALREADY_USED"}`.
+6. **Forward** to `upstream_url + path + ?query` — `redirect: "manual"`
+   (3xx returned as-is, `Location` inside the upstream rewritten to the
+   public `/t/{slug}/…` URL), 30 s timeout (`504 UPSTREAM_TIMEOUT`), 10 MB
+   response cap (`502 UPSTREAM_TOO_LARGE`), unreachable → `502
+   UPSTREAM_UNREACHABLE`.
+   - **Stripped from the buyer's request**: hop-by-hop headers (and any listed
+     in `Connection`), `Host` (unless `forward_host_header`), `Authorization`,
+     `Proxy-Authorization`, `Cookie`, all x402 headers (`PAYMENT-SIGNATURE`,
+     `X-PAYMENT`, …), method-override headers, `Forwarded`/`X-Forwarded-*`/
+     `X-Real-IP`, and any client-supplied `X-MoneySwitch-*`.
+   - **Added for the upstream**: `X-MoneySwitch-Tollbooth: <slug>`,
+     `X-MoneySwitch-Amount: <USDC, "0" for free routes>`,
+     `X-MoneySwitch-Payer: <0x payer>` (paid routes; the payment is verified
+     but **not yet settled** at this point), fresh `X-Forwarded-For/-Host/-Proto`.
+     These headers are only trustworthy if the upstream is reachable
+     exclusively through the toll booth.
+7. **Settle only on success.** Upstream `2xx`/`3xx` → the SDK settles, the
+   buyer gets the upstream response plus the SDK's `PAYMENT-RESPONSE`
+   header, and an earnings row `settled` (with `tx_hash`) is written.
+   Upstream `4xx`/`5xx`, timeout or connection error → the verified payment
+   is **cancelled, never settled**; the buyer gets the upstream status/body
+   (or the 502/504 above) and **is not charged**; an earnings row `failed`
+   with `upstream_status` is written. If the facilitator refuses to settle
+   after a successful upstream call, the buyer gets the SDK's settlement
+   failure `402` instead of the content.
+8. **Response to the buyer**: upstream headers minus hop-by-hop,
+   `Set-Cookie`, `Content-Encoding`/`Content-Length` and any
+   upstream-supplied x402 header; every `/t/*` response carries
+   `Content-Security-Policy: sandbox` and `X-Content-Type-Options: nosniff`
+   (the content is served from MoneySwitch's own origin).
+
+A buyer's own MoneySwitch sees a toll booth like any other x402 seller:
+
+```bash
+curl -s http://<buyer-server>/v1/fetch -H "Authorization: Bearer mk_live_…" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://<seller-server>/t/weather/v1/today"}'
+# → {"status":"ok","http_status":200,"payment":{"amount":"0.01","tx_hash":"0x…",…},…}
+# upstream 500 → {"status":"ok","http_status":500,"payment":null,…}   (not settled)
+```
+
+The buyer key's `allowed_hosts` must list the seller's `host:port`. Buying
+from a toll booth on the **same** server is allowed: the self-port SSRF rule
+makes an exception for paths under `/t/` only (`/v1/*`, the Dashboard and
+everything else on the server's own port stay blocked). On the buyer's
+side, a call that reached the upstream but came back unsettled (e.g. 500) is
+recorded conservatively as `unknown` (see [security notes](security.md)).
+
+### Admin API (`Authorization: Bearer ms_admin_…`)
+
+| Route | Purpose |
+|---|---|
+| `GET /v1/admin/tollbooths` | list (each with `routes`, `public_url`, `earnings_today`, `paid_calls_today`, `earnings_total`, `pay_to_is_wallet`) |
+| `GET /v1/admin/tollbooths/:id` | one toll booth |
+| `POST /v1/admin/tollbooths` | create: `{name, slug?, upstream_url, pay_to?, default_price: "0.01"\|"0"\|null, description?, forward_host_header?, enabled?, routes?: [{method, path_pattern, price, description?}]}`; `pay_to` defaults to this server's wallet address |
+| `PATCH /v1/admin/tollbooths/:id` | same fields; `routes` replaces the whole rule list atomically; `{"enabled":false}` takes it offline |
+| `DELETE /v1/admin/tollbooths/:id` | delete (its earnings history is kept) |
+| `POST /v1/admin/tollbooths/:id/routes`, `PATCH`/`DELETE …/routes/:routeId` | edit single rules |
+| `POST /v1/admin/tollbooths/:id/test`, `POST /v1/admin/tollbooths/test-upstream {upstream_url}` | free reachability probe (one `GET` of the upstream base URL, 5 s, no redirects, never charges) → `{ok:true,status,latency_ms,healthy}` / `{ok:false,error,message}` |
+| `GET /v1/admin/earnings?range=today\|7d\|all&tollbooth=<id>` | `{total, settled_count, failed_count, by_tollbooth[], by_route[], items[]}` (items newest first, max 500; `total` = settled only) |
+| `GET /v1/admin/meta` | now also `wallet_address` (default receiving address) and `public_base` (`MONEYSWITCH_PUBLIC_URL`, else the request origin) |
+
+Validation errors are `400 {"error": CODE, "message": "…", "reason"?: …}`:
+`INVALID_PAY_TO` (with `reason` `LOOKS_LIKE_MONEYKEY`, `LOOKS_LIKE_ADMIN_TOKEN`,
+`LOOKS_LIKE_PRIVATE_KEY`, `LOOKS_LIKE_MNEMONIC`, `NOT_AN_ADDRESS`,
+`BAD_CHECKSUM`, `ZERO_ADDRESS`, `EMPTY` — the rejected value is never echoed),
+`PAY_TO_REQUIRED` (no wallet yet and no `pay_to`), `INVALID_UPSTREAM`,
+`UPSTREAM_IS_SELF` (upstream resolves to this server's own port, in any
+spelling), `INVALID_ROUTE`, `INVALID_PRICE`, `INVALID_NAME`, `INVALID_SLUG`;
+`409 SLUG_TAKEN`. A receiving address may be sent in any case; mixed case
+must match its EIP-55 checksum; it is stored and shown checksummed.
+
+MoneyKey routes additionally answer a `0x…` address sent as a bearer token
+with `401 {"code":"KEY_INVALID","hint":"LOOKS_LIKE_ADDRESS"}`.
+
+### `moneyswitch sell`
+
+The same toll booth as a single local process (no MoneySwitch server):
+`moneyswitch sell --upstream <url> --pay-to <0x…> [--price <usdc>] [--route
+"METHOD /path=<usdc>"]… [--port 4402]`. Identical rules, normalization,
+forwarding and settle-on-success semantics (x402 via the official
+`@x402/express` middleware). Unmatched paths are refused when `--price` is
+omitted. `--pay-to` refuses MoneyKeys, admin tokens, private keys and
+recovery phrases (exit code 2).
 
 ## License
 

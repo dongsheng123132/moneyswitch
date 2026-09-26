@@ -32,6 +32,12 @@ importers:
       '@moneyswitch/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@moneyswitch/tollbooth':
+        specifier: workspace:*
+        version: link:../../packages/tollbooth
+      '@types/express':
+        specifier: 5.0.3
+        version: 5.0.3
       '@types/node':
         specifier: 22.10.5
         version: 22.10.5
@@ -41,9 +47,21 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.7
         version: 18.3.7(@types/react@18.3.31)
+      '@x402/core':
+        specifier: 2.27.0
+        version: 2.27.0
+      '@x402/evm':
+        specifier: 2.27.0
+        version: 2.27.0(typescript@5.7.3)
+      '@x402/express':
+        specifier: 2.27.0
+        version: 2.27.0(ethers@6.17.0)(express@5.2.1)(typescript@5.7.3)
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+      express:
+        specifier: 5.2.1
+        version: 5.2.1
       moneyswitch-connect:
         specifier: workspace:*
         version: link:../connect
@@ -84,6 +102,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@moneyswitch/tollbooth':
+        specifier: workspace:*
+        version: link:../../packages/tollbooth
       lucide-react:
         specifier: ^1.48.0
         version: 1.48.0(react@18.3.1)
@@ -177,12 +198,18 @@ importers:
       '@moneyswitch/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@moneyswitch/tollbooth':
+        specifier: workspace:*
+        version: link:../../packages/tollbooth
       '@moneyswitch/wallet':
         specifier: workspace:*
         version: link:../../packages/wallet
       '@moneyswitch/x402':
         specifier: workspace:*
         version: link:../../packages/x402
+      '@x402/core':
+        specifier: 2.27.0
+        version: 2.27.0
       fastify:
         specifier: 5.12.5
         version: 5.12.5
@@ -223,6 +250,9 @@ importers:
       '@moneyswitch/db':
         specifier: workspace:*
         version: link:../db
+      '@moneyswitch/tollbooth':
+        specifier: workspace:*
+        version: link:../tollbooth
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)
@@ -277,6 +307,28 @@ importers:
       typescript:
         specifier: 5.7.3
         version: 5.7.3
+
+  packages/tollbooth:
+    dependencies:
+      '@x402/core':
+        specifier: 2.27.0
+        version: 2.27.0
+      '@x402/evm':
+        specifier: 2.27.0
+        version: 2.27.0(typescript@5.7.3)
+      viem:
+        specifier: 2.56.9
+        version: 2.56.9(typescript@5.7.3)(zod@3.25.76)
+    devDependencies:
+      '@types/node':
+        specifier: 22.10.5
+        version: 22.10.5
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 5.0.2
+        version: 5.0.2(@types/node@22.10.5)(vite@8.3.1(@types/node@22.10.5)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/wallet:
     dependencies:
@@ -2649,9 +2701,6 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@3.24.2:
-    resolution: {integrity: sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ==}
-
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
@@ -3465,13 +3514,13 @@ snapshots:
 
   '@x402/core@2.27.0':
     dependencies:
-      zod: 3.24.2
+      zod: 3.25.76
 
   '@x402/evm@2.27.0(typescript@5.7.3)':
     dependencies:
       '@x402/core': 2.27.0
-      viem: 2.56.9(typescript@5.7.3)(zod@3.24.2)
-      zod: 3.24.2
+      viem: 2.56.9(typescript@5.7.3)(zod@3.25.76)
+      zod: 3.25.76
     transitivePeerDependencies:
       - bufferutil
       - typescript
@@ -3508,11 +3557,6 @@ snapshots:
   '@x402/fetch@2.27.0':
     dependencies:
       '@x402/core': 2.27.0
-
-  abitype@1.2.3(typescript@5.7.3)(zod@3.24.2):
-    optionalDependencies:
-      typescript: 5.7.3
-      zod: 3.24.2
 
   abitype@1.2.3(typescript@5.7.3)(zod@3.25.76):
     optionalDependencies:
@@ -4145,21 +4189,6 @@ snapshots:
       ws: 8.21.0
       zod: 3.25.76
 
-  ox@0.14.45(typescript@5.7.3)(zod@3.24.2):
-    dependencies:
-      '@adraffy/ens-normalize': 1.11.1
-      '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.1
-      '@noble/hashes': 1.8.0
-      '@scure/bip32': 1.7.0
-      '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@5.7.3)(zod@3.24.2)
-      eventemitter3: 5.0.1
-    optionalDependencies:
-      typescript: 5.7.3
-    transitivePeerDependencies:
-      - zod
-
   ox@0.14.45(typescript@5.7.3)(zod@3.25.76):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
@@ -4502,23 +4531,6 @@ snapshots:
 
   vary@1.1.2: {}
 
-  viem@2.56.9(typescript@5.7.3)(zod@3.24.2):
-    dependencies:
-      '@noble/curves': 1.9.1
-      '@noble/hashes': 1.8.0
-      '@scure/bip32': 1.7.0
-      '@scure/bip39': 1.6.0
-      abitype: 1.2.3(typescript@5.7.3)(zod@3.24.2)
-      isows: 1.0.7(ws@8.21.0)
-      ox: 0.14.45(typescript@5.7.3)(zod@3.24.2)
-      ws: 8.21.0
-    optionalDependencies:
-      typescript: 5.7.3
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-      - zod
-
   viem@2.56.9(typescript@5.7.3)(zod@3.25.76):
     dependencies:
       '@noble/curves': 1.9.1
@@ -4629,7 +4641,5 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
       zod: 3.25.76
-
-  zod@3.24.2: {}
 
   zod@3.25.76: {}

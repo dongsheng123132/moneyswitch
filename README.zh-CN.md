@@ -105,6 +105,71 @@ pnpm demo:local
    直接通过策略引擎请求任意 x402 收费 URL。见
    [`docs/money-api-v0.md`](docs/money-api-v0.md)。
 
+## 收款：收费站（v0.5）
+
+MoneySwitch 也能**收钱**。在你已经在跑的 API 前面立一个「收费站」：AI
+每次调用用 x402 付 USDC，钱直接进你的收款地址，Dashboard 像看营收一样看
+收入。**卖东西不需要任何秘密，只需要一个公开的收款地址；你的服务一行代码
+都不用改。**
+
+### 三样东西（先看这个）
+
+| 东西 | 比喻 | 给谁 | 在 MoneySwitch 里 |
+|---|---|---|---|
+| 私钥 | 保险柜钥匙 | **谁都不给** | 任何地方都不显示；它只（以解密状态）待在服务器内存里 |
+| MoneyKey `mk_live_…` | 给员工的限额副卡 | **只给你自己的 AI** | 🔒 琥珀色，「保密：拿到它的人能在额度内花你的钱，不要发给卖家」 |
+| 收款地址 `0x…` | 收款码 | **可以给任何人** | ✅ 绿色，「公开：别人付钱给你用它，可以放心分享」 |
+
+在任何「收款地址」输入框里粘贴 MoneyKey、管理员口令、私钥或助记词，都会
+被拦截并解释（服务端同样以 `INVALID_PAY_TO` 拒绝）；在 Key 输入框里粘贴
+`0x…` 地址也会被拦截。收款地址默认就是本 MoneySwitch 的钱包（一个钱包，
+收付一体）；也可以改成你自己控制的任意地址（比如冷钱包）——那样
+MoneySwitch 就无法替你花这笔钱。
+
+### 在 Dashboard 里
+
+「收费站 → 新建收费站」：① 把哪个服务挂出去（`http://127.0.0.1:8000`，
+可免费「测试连接」）② 怎么收费（模板：「整个服务每次 $0.01」
+「`/v1/chat/completions` 每次 $0.01，其余免费」……；规则写成 `方法 /路径`
+或 `/前缀/*`，越具体越优先；没匹配到任何规则的路径可以按默认价收费、免费
+放行或直接拒绝）③ 钱进哪里。完成后得到一个公开调用地址
+`https://<server>/t/<slug>/…` 给买家，外加现成的买家调用示例。「收入」页
+按今天 / 7 天 / 全部、按收费站和规则汇总，列出每一笔（付款地址、路由、
+金额、交易、上游状态），可导出 CSV。
+
+```bash
+# 任何人：402 + 价格 + pay_to
+curl -i http://127.0.0.1:4020/t/weather/v1/today
+# 买家，用「他自己的」MoneyKey
+curl -s http://127.0.0.1:4020/v1/fetch \
+  -H "Authorization: Bearer mk_live_xxx" -H "Content-Type: application/json" \
+  -d '{"url":"http://127.0.0.1:4020/t/weather/v1/today"}'
+```
+
+挂在收费站后面的 OpenAI 兼容服务，可以直接作为别人 MoneySwitch 里的一个
+「渠道」（`Base URL = https://<server>/t/<slug>/v1`）。
+
+**只有你的服务返回 2xx/3xx，买家才会被扣钱。** 先验证付款、再转发请求、
+成功才结算；上游 4xx/5xx/超时则取消这笔付款，记为「未扣款」。你的上游会
+收到 `X-MoneySwitch-Payer`、`X-MoneySwitch-Amount`、
+`X-MoneySwitch-Tollbooth`，绝不会收到买家的 `Authorization`/`Cookie` 或付
+款头。只需要让买家访问得到 `/t/*`——管理 API 和 Dashboard 仍然不要对外
+（见 [`docs/security.md`](docs/security.md)）；用 `MONEYSWITCH_PUBLIC_URL`
+设置买家使用的公网地址。接口细节见
+[`docs/money-api-v0.md`](docs/money-api-v0.md#toll-booths-v05-spec-v05-2)。
+
+### 不开服务器：`moneyswitch sell`
+
+```bash
+npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch sell \
+  --upstream http://localhost:8000 --price 0.01 --pay-to 0x你的公开收款地址 \
+  --route "POST /v1/chat/completions=0.02" --route "GET /health=0"
+```
+
+本机单进程收费站（官方 `@x402/express`），和服务端收费站共用同一套规则
+匹配与转发代码。启动时打印公开调用地址和你的（公开）收款地址；把
+MoneyKey 或私钥当 `--pay-to` 会被直接拒绝。
+
 ## 角色
 
 | 角色 | 拿什么 | 在哪用 | 能做什么 |
@@ -112,7 +177,7 @@ pnpm demo:local
 | 管理员（老板/财务） | `ms_admin_…` | Dashboard | 钱包、渠道、给每个 Agent 开/收 Key、审批、看全公司用量 |
 | 员工 | 一把或几把 `mk_live_…` | Dashboard「我的额度」视图 + 桌面 CLI | 看自己额度/流水、Playground、一键把 Key 配进本机 Agent；不能看别人、不能碰钱包 |
 | Agent（Claude Code/Codex/Cherry Studio…） | 环境变量或配置里的 `mk_live_…` | MCP 或 OpenAI 兼容接口 | 花钱，受策略约束 |
-| 卖方 | 无需注册 MoneySwitch | x402 | 收 USDC |
+| 卖方 | 只要一个**公开**收款地址 `0x…`（不需要任何秘密） | MoneySwitch 收费站、`moneyswitch sell` 或任意 x402 服务 | 收 USDC；用收费站还能在「收入」页看账 |
 
 ## 安全模型与护栏
 
@@ -168,8 +233,10 @@ gas（facilitator 为 `exact`/EIP-3009 结算代付 gas），首笔 tx
   Dashboard、离线测试（T1/T2）与测试网只读校验（T3）。
 - **v0.2**（已完成）：OpenAI/NewAPI 兼容网关（`/v1/chat/completions`、`/v1/models`、
   billing 接口）、渠道（Channel）、Playground。
-- **v0.3**（当前）：员工端 Dashboard 视图、一键桌面接入
+- **v0.3**（已完成）：员工端 Dashboard 视图、一键桌面接入
   （`moneyswitch-connect` → npm 包 `moneyswitch`）。
+- **v0.4**（已完成）：子 Key（多级分配）与本机桌面控制台（`moneyswitch ui`）。
+- **v0.5**（当前）：收费站——让任何 API 向 AI 收 USDC（`/t/<slug>`、收入页、`moneyswitch sell`）。
 - **下一步**：按 token 计价（x402 `upto`）、MetaMask / OKX 钱包驱动、
   多用户组织（部门额度、审批流）。
 - 明确不做（完整列表与原因见 [`SPEC.md`](SPEC.md) §12）：导入钱包插件私
@@ -184,7 +251,8 @@ MoneySwitch 按组件分层许可：Agent 或卖方**嵌入自己进程**的部�
 |---|---|
 | `apps/mcp`、`apps/connect`、`apps/cli`（npm 包 `moneyswitch`）——客户端代码 | [Apache-2.0](apps/mcp/LICENSE) |
 | `apps/demo-seller`（x402 卖方示例） | [Apache-2.0](apps/demo-seller/LICENSE) |
-| 其余全部（`apps/server`、`apps/dashboard`、`packages/*`） | [AGPL-3.0-only](LICENSE) |
+| `packages/tollbooth`（收费站规则匹配、转发、收款地址校验——服务端与 `moneyswitch sell` 共用） | [Apache-2.0](packages/tollbooth/LICENSE) |
+| 其余全部（`apps/server`、`apps/dashboard`、其余 `packages/*`） | [AGPL-3.0-only](LICENSE) |
 
 需要在闭源产品中嵌入 server，请开 issue 讨论商业许可。
 

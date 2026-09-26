@@ -103,3 +103,48 @@ export const walletMeta = sqliteTable("wallet_meta", {
   address: text("address"),
   createdAt: text("created_at").notNull(),
 });
+
+/** v0.5 (SPEC-v0.5 §2): a toll booth in front of a seller's own API. */
+export const tollbooths = sqliteTable("tollbooths", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  upstreamUrl: text("upstream_url").notNull(),
+  payTo: text("pay_to").notNull(),
+  network: text("network").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  forwardHostHeader: integer("forward_host_header", { mode: "boolean" }).notNull().default(false),
+  /** micro-USDC for unmatched requests; null = refuse them. */
+  defaultPrice: integer("default_price"),
+  description: text("description"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const tollboothRoutes = sqliteTable("tollbooth_routes", {
+  id: text("id").primaryKey(),
+  tollboothId: text("tollbooth_id").notNull(),
+  method: text("method").notNull(),
+  pathPattern: text("path_pattern").notNull(),
+  price: integer("price").notNull(),
+  description: text("description"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const earnings = sqliteTable("earnings", {
+  id: text("id").primaryKey(),
+  tollboothId: text("tollbooth_id").notNull(),
+  tollboothSlug: text("tollbooth_slug").notNull(),
+  tollboothName: text("tollbooth_name").notNull(),
+  routeId: text("route_id"),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  amount: integer("amount").notNull(),
+  payer: text("payer"),
+  txHash: text("tx_hash"),
+  network: text("network").notNull(),
+  status: text("status", { enum: ["settled", "failed"] }).notNull(),
+  upstreamStatus: integer("upstream_status"),
+  errorCode: text("error_code"),
+  createdAt: text("created_at").notNull(),
+});

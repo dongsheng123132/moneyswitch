@@ -27,7 +27,20 @@ await build({
   ...shared,
   entryPoints: [path.join(__dirname, "src/cli.ts")],
   entryNames: "cli",
-  external: ["./mcp.js", "./desktop.js"],
+  external: ["./mcp.js", "./desktop.js", "./sell.js"],
+});
+
+// dist/sell.js: `moneyswitch sell` (SPEC-v0.5 §4) — express + the official
+// @x402/express/@x402/core/@x402/evm SDK + packages/tollbooth, bundled.
+// Express is CommonJS, so give the ESM bundle a real `require` for node
+// built-ins. @x402/extensions (bazaar) and @x402/paywall are optional
+// runtime-only imports of the SDK that this toll booth never triggers.
+await build({
+  ...shared,
+  entryPoints: [path.join(__dirname, "src/sell.ts")],
+  entryNames: "sell",
+  external: ["@x402/extensions", "@x402/extensions/*", "@x402/paywall"],
+  banner: { js: "import { createRequire as __msCreateRequire } from 'node:module'; const require = __msCreateRequire(import.meta.url);" },
 });
 
 // dist/desktop.js: `moneyswitch ui` (SPEC-v0.4 §B), the local desktop console
@@ -81,4 +94,4 @@ const packed = readdirSync(packDir).find((f) => f.endsWith(".tgz"));
 if (!packed) throw new Error("npm pack produced no tarball");
 renameSync(path.join(packDir, packed), path.join(packDir, "moneyswitch.tgz"));
 
-console.log("built dist/cli.js + dist/mcp.js + dist/desktop.js + dist/ui/ + pack/moneyswitch.tgz");
+console.log("built dist/cli.js + dist/mcp.js + dist/desktop.js + dist/sell.js + dist/ui/ + pack/moneyswitch.tgz");

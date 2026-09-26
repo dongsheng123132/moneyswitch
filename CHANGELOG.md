@@ -4,6 +4,64 @@ All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per the repository's own `SPEC*.md`
 files.
 
+## 0.5.0 — 2026-09-26
+
+Toll booths: let any API charge AI in USDC (`SPEC-v0.5.md`).
+
+- **The three things** (private key / MoneyKey / receiving address) as one
+  mental model across the product: an explainer card (wallet, toll booth,
+  earnings and login pages), MoneyKeys always shown amber with a lock and
+  "secret — never send it to a seller", receiving addresses always green
+  with a share icon and "public — safe to share".
+- **Guard rails**: pasting a MoneyKey / admin token / private key /
+  recovery phrase into a receiving-address field is blocked, cleared and
+  explained (Dashboard), refused by the API (`400 INVALID_PAY_TO` with a
+  `reason`, the value is never echoed) and by `moneyswitch sell --pay-to`
+  (exit 2); a `0x…` address pasted into a key field is blocked too (server:
+  `KEY_INVALID` + `hint: LOOKS_LIKE_ADDRESS`). Addresses are EIP-55 checked
+  and stored checksummed.
+- **Toll booths** (`tollbooths`, `tollbooth_routes`, `earnings` tables;
+  additive migration `0003_v05_tollbooths.sql`, upgrades a v0.4 database in
+  place): public paid proxy `ANY /t/{slug}/*` built on the official x402 SDK
+  (`@x402/core/server` + `@x402/evm`, testnet USDC money parser as in
+  `apps/demo-seller`). Per-route prices (exact / prefix / wildcard, most
+  specific wins, `0` = free), default price or refuse. The payment is
+  verified, the request forwarded (no redirects, 30 s, 10 MB, buyer
+  `Authorization`/`Cookie`/payment headers stripped, `X-MoneySwitch-Payer`
+  / `-Amount` / `-Tollbooth` added), and **settled only if the upstream
+  answered 2xx/3xx** — otherwise the buyer is not charged and the call is
+  recorded as a failed earning with its upstream status.
+- Admin API: `GET/POST /v1/admin/tollbooths`, `GET/PATCH/DELETE
+  /v1/admin/tollbooths/:id`, rule CRUD, free upstream probe
+  (`POST …/:id/test`, `POST …/test-upstream`), `GET /v1/admin/earnings`
+  (today / 7d / all, totals, per toll booth / per rule); `GET
+  /v1/admin/meta` adds `wallet_address` (default receiving address — one
+  wallet receives and pays) and `public_base` (`MONEYSWITCH_PUBLIC_URL`).
+- A MoneyKey may buy from a toll booth on the same server: the self-port
+  SSRF rule has an exception for `/t/…` only. The self-target check now also
+  covers `localhost.`, IPv4-mapped IPv6 and the machine's own interface
+  addresses; toll booth upstreams are additionally checked after DNS
+  resolution, on save and on every request.
+- Dashboard: *Toll booths* (3-step wizard — which service / how to charge /
+  where the money goes — with templates, live price preview, upstream test,
+  completion page with the public address and buyer snippets), *Earnings*
+  (today / 7 days / all, grouped, per-payment rows, CSV export), Overview
+  *Earned today* next to *Spent today*, Wallet page split into *Receive* and
+  *Pays from*, Playground *Paid request (x402)* mode (buy any x402 URL with
+  a MoneyKey through `/v1/fetch`). All copy in English and Chinese.
+- **`moneyswitch sell`** (`apps/cli`, Apache-2.0): a single-process toll
+  booth without a MoneySwitch server, on the official `@x402/express`
+  middleware, sharing rule matching, path normalization, forwarding and
+  pay-to checks with the server through the new Apache-2.0
+  `packages/tollbooth`.
+- Tests: `packages/tollbooth` unit tests (rule matching, path-normalization
+  bypasses, pay-to / key-field checks, header handling, self-target), core
+  toll booth / earnings / migration tests, server + CLI unit tests, and the
+  offline e2e `apps/server/test/e2e/tollbooth-flow.test.ts` (402 with the
+  right `payTo`; MoneyKey purchase through `/v1/fetch`; upstream 500 → no
+  facilitator `/settle`, no settled payment, failed earning; free route;
+  disabled / refused paths; replay; `moneyswitch sell` end to end).
+
 ## 0.3.0 — 2026-09-25
 
 Employee access + one-command desktop connect (`SPEC-v0.3-employee.md`).

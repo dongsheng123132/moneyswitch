@@ -20,6 +20,7 @@ import Callout from "../../components/Callout";
 import EmptyState from "../../components/EmptyState";
 import CopyButton from "../../components/CopyButton";
 import Snippet from "../../components/Snippet";
+import SecretNotice from "../../components/SecretNotice";
 import { SkeletonCard, SkeletonTable } from "../../components/Skeleton";
 import { useT } from "../../i18n";
 import { common } from "../../i18n/strings/common";
@@ -421,11 +422,13 @@ export default function MySubKeysPage() {
         ) : (
           <div>
             <div className="key-once-banner">{t("createdBanner")}</div>
-            <div className="field">
-              <label>{t("keyFieldLabel")}</label>
-              <div className="key-big">{created.key}</div>
-              <CopyButton text={created.key} />
-            </div>
+            <SecretNotice>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>{t("keyFieldLabel")}</label>
+                <div className="key-big">{created.key}</div>
+                <CopyButton text={created.key} />
+              </div>
+            </SecretNotice>
             <Snippet title={te("baseUrlLabel")} code={openaiBase(origin)} />
             <div className="modal-actions">
               <button type="button" className="btn" onClick={closeDrawer}>

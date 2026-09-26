@@ -193,3 +193,51 @@ export function useCliSource(meta?: AdminMeta | null): CliSource {
   if (meta?.cli_local_path) return { kind: "local", cliPath: meta.cli_local_path, mcpPath: meta.mcp_local_path };
   return { kind: "npm" };
 }
+
+// ---------------------------------------------------------------------------
+// v0.5 (SPEC-v0.5 §3): toll booth buyer / seller snippets
+// ---------------------------------------------------------------------------
+
+function shq(s: string): string {
+  // POSIX single-quote escaping: ' → '\''
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Anyone can see the price: an unpaid call answers 402 with the PAYMENT-REQUIRED header + a JSON explanation. */
+export function tollCurl402(url: string): string {
+  return `curl -i ${url}`;
+}
+
+/** Buying through a MoneySwitch (this one or any other) with a MoneyKey: POST /v1/fetch. */
+export function tollBuyViaFetch(buyerOrigin: string, url: string, key = KEY_PLACEHOLDER, method = "GET"): string {
+  const body = method === "GET" ? { url } : { url, method, body: { model: "any-model", messages: [{ role: "user", content: "hello" }] } };
+  return `curl -s ${buyerOrigin}/v1/fetch \\\n  -H "Authorization: Bearer ${key}" \\\n  -H "Content-Type: application/json" \\\n  -d ${shq(JSON.stringify(body))}`;
+}
+
+/** What to tell a desktop agent that has the MoneySwitch MCP tool installed. */
+export function tollMcpPrompt(url: string): string {
+  return `Use the paid_fetch tool to GET ${url}`;
+}
+
+/** An OpenAI-compatible upstream behind a toll booth can be a "channel" in another MoneySwitch. */
+export function tollChannelBaseUrl(publicUrl: string): string {
+  return `${publicUrl.replace(/\/+$/, "")}/v1`;
+}
+
+/** `moneyswitch sell` — the same toll booth without a MoneySwitch server (single process on your machine). */
+export function sellCommand(
+  src: CliSource,
+  upstream: string,
+  defaultPrice: string | null,
+  payTo: string,
+  routes: Array<{ method: string; path_pattern: string; price: string }> = []
+): string {
+  const parts = [`${cliInvoke(src)} sell --upstream ${upstream}`];
+  if (defaultPrice != null) parts.push(`--price ${defaultPrice}`);
+  for (const r of routes) {
+    const spec = `${r.method === "ANY" ? "" : r.method + " "}${r.path_pattern}=${r.price}`;
+    parts.push(`--route "${spec.replace(/"/g, '\\"')}"`);
+  }
+  parts.push(`--pay-to ${payTo}`);
+  return parts.join(" \\\n  ");
+}

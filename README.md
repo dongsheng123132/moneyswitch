@@ -114,6 +114,78 @@ checked against policy (`packages/core`) inside a database transaction
    fetches any x402-priced URL through the policy engine directly. See
    [`docs/money-api-v0.md`](docs/money-api-v0.md).
 
+## Get paid: toll booths (v0.5)
+
+MoneySwitch can also **receive** money. Put a *toll booth* in front of an
+API you already run: AI agents pay USDC per call over x402, the money goes
+straight to your receiving address, and the Dashboard shows it like revenue.
+**You need no secret to sell — only a public receiving address — and your
+service does not change a single line.**
+
+### The three things (read this first)
+
+| Thing | Think of it as | Give it to | In MoneySwitch |
+|---|---|---|---|
+| Private key | the key to the safe | **nobody** | never shown anywhere; it only lives (decrypted) in the server's memory |
+| MoneyKey `mk_live_…` | a capped company card for an employee | **only your own AI** | 🔒 amber, "Secret: whoever holds it can spend within its limits — never send it to a seller" |
+| Receiving address `0x…` | your payment QR code | **anyone** | ✅ green, "Public: people pay you with it, safe to share" |
+
+Paste a MoneyKey, admin token, private key or recovery phrase into any
+receiving-address field and it is blocked and explained (the server refuses
+it too with `INVALID_PAY_TO`); paste a `0x…` address into a key field and it
+is blocked the same way. The receiving address defaults to this
+MoneySwitch's own wallet (one wallet receives and pays); you can point it
+at any other address you control, e.g. a cold wallet — MoneySwitch then
+cannot spend that money for you.
+
+### In the Dashboard
+
+*Toll booths → New toll booth*: ① which service (`http://127.0.0.1:8000`,
+with a free "test connection") ② how to charge (templates such as "the whole
+service, $0.01 per call" or "`/v1/chat/completions` $0.01, everything else
+free"; rules are `METHOD /path` or `/prefix/*`, the most specific wins; paths
+that match no rule are charged a default price, passed through free, or
+refused) ③ where the money goes. You get a public address
+`https://<server>/t/<slug>/…` to hand to buyers, plus ready-made buyer
+snippets. *Earnings* shows today / 7 days / all, per toll booth and per
+rule, every payment (payer, route, amount, tx, upstream status) and a CSV
+export.
+
+```bash
+# anyone: 402 + price + pay_to
+curl -i http://127.0.0.1:4020/t/weather/v1/today
+# a buyer, with THEIR OWN MoneyKey
+curl -s http://127.0.0.1:4020/v1/fetch \
+  -H "Authorization: Bearer mk_live_xxx" -H "Content-Type: application/json" \
+  -d '{"url":"http://127.0.0.1:4020/t/weather/v1/today"}'
+```
+
+An OpenAI-compatible upstream behind a toll booth can be added as a
+*channel* in another MoneySwitch (`Base URL = https://<server>/t/<slug>/v1`).
+
+**Buyers are only charged when your service answers 2xx/3xx.** The payment
+is verified first, the request is forwarded, and it is settled only on
+success; on 4xx/5xx/timeouts it is cancelled and recorded as "not charged".
+Your upstream receives `X-MoneySwitch-Payer`, `X-MoneySwitch-Amount` and
+`X-MoneySwitch-Tollbooth`, never the buyer's `Authorization`/`Cookie` or
+payment headers. Only `/t/*` has to be reachable by buyers — keep the admin
+API and Dashboard private (see [`docs/security.md`](docs/security.md)); set
+`MONEYSWITCH_PUBLIC_URL` to the address buyers use. API details:
+[`docs/money-api-v0.md`](docs/money-api-v0.md#toll-booths-v05-spec-v05-2).
+
+### Without a server: `moneyswitch sell`
+
+```bash
+npx -y --package=http://127.0.0.1:4020/dl/moneyswitch.tgz moneyswitch sell \
+  --upstream http://localhost:8000 --price 0.01 --pay-to 0xYourPublicAddress \
+  --route "POST /v1/chat/completions=0.02" --route "GET /health=0"
+```
+
+A single process on your machine (official `@x402/express`), with the same
+rule matching and forwarding code as the server's toll booths. It prints the
+public address and your (public) receiving address, and refuses a MoneyKey
+or private key as `--pay-to`.
+
 ## Roles
 
 | Role | Holds | Uses | Can do |
@@ -121,7 +193,7 @@ checked against policy (`packages/core`) inside a database transaction
 | Admin (owner / finance) | `ms_admin_…` | Dashboard | wallet, channels, issue/revoke MoneyKeys, approve payments, see all usage |
 | Employee | one or more `mk_live_…` | Dashboard "My Budget" view + desktop CLI | see own budget/history, Playground, one-command connect to their own local agent; cannot see others, cannot touch the wallet |
 | Agent (Claude Code / Codex / Cherry Studio / …) | `mk_live_…` in env or MCP config | MCP or OpenAI-compatible interface | spend money, bounded by policy |
-| Seller | no MoneySwitch account needed | x402 | receive USDC |
+| Seller | only a **public** receiving address `0x…` (no secret) | a MoneySwitch toll booth, `moneyswitch sell`, or any x402 server | receive USDC; with a toll booth, see income under *Earnings* |
 
 ## Security model & guardrails
 
@@ -186,8 +258,10 @@ gas for `exact`/EIP-3009 settlement), first tx `0x1c83a45d…4d4d` (block
   MCP, Dashboard, offline (T1/T2) and testnet-read (T3) test suites.
 - **v0.2** (done): OpenAI/NewAPI-compatible gateway (`/v1/chat/completions`,
   `/v1/models`, billing endpoints), channels, Playground.
-- **v0.3** (current): employee-facing Dashboard view, one-command desktop
+- **v0.3** (done): employee-facing Dashboard view, one-command desktop
   connect (`moneyswitch-connect` → the `moneyswitch` npm package).
+- **v0.4** (done): child MoneyKeys (multi-level delegation) and the local desktop console (`moneyswitch ui`).
+- **v0.5** (current): toll booths — sell any API to AI for USDC (`/t/<slug>`, Earnings, `moneyswitch sell`).
 - **Next**: per-token pricing (x402 `upto`), MetaMask / OKX wallet drivers,
   multi-user organizations with department budgets and approval flows.
 - Not planned (see [`SPEC.md`](SPEC.md) §12 for the full list and why):
@@ -203,7 +277,8 @@ copyleft so that hosted forks give improvements back.
 |---|---|
 | `apps/mcp`, `apps/connect`, `apps/cli` (the `moneyswitch` npm package) — client-side code | [Apache-2.0](apps/mcp/LICENSE) |
 | `apps/demo-seller` (x402 seller example) | [Apache-2.0](apps/demo-seller/LICENSE) |
-| Everything else (`apps/server`, `apps/dashboard`, `packages/*`) | [AGPL-3.0-only](LICENSE) |
+| `packages/tollbooth` (toll booth rules, forwarding, pay-to checks — shared by the server and `moneyswitch sell`) | [Apache-2.0](packages/tollbooth/LICENSE) |
+| Everything else (`apps/server`, `apps/dashboard`, the other `packages/*`) | [AGPL-3.0-only](LICENSE) |
 
 To embed the server in a closed-source product, open an issue to discuss a
 commercial license.

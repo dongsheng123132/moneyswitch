@@ -24,6 +24,9 @@ import Callout from "../components/Callout";
 import Snippet from "../components/Snippet";
 import CopyButton from "../components/CopyButton";
 import Term from "../components/Term";
+import SecretNotice from "../components/SecretNotice";
+import PublicAddress from "../components/PublicAddress";
+import { ThreeThingsButton } from "../components/ThreeThings";
 import { useAdminMeta } from "../useAdminMeta";
 import { connectCommand, openaiBase, useCliSource } from "../snippets";
 import { FundingGuide } from "./WalletPage";
@@ -386,6 +389,9 @@ function WalletStep({ wallet, refresh }: { wallet: Awaited<ReturnType<typeof get
         <p className="setup-text">
           <Term k="wallet">{t("s2_createIntro")}</Term>
         </p>
+        <div style={{ marginBottom: 10 }}>
+          <ThreeThingsButton />
+        </div>
         <div className="field-row">
           <div className="field">
             <label htmlFor="setup-pw">{t("s2_password")}</label>
@@ -430,7 +436,7 @@ function WalletStep({ wallet, refresh }: { wallet: Awaited<ReturnType<typeof get
       <div className="setup-wallet">
         <div className="setup-wallet-main">
           <div className="stat-label">{t("s2_address")}</div>
-          <div className="mono setup-address">{wallet.address}</div>
+          {wallet.address && <PublicAddress address={wallet.address} qr="never" />}
           <div className="setup-balance" role="status" aria-live="polite">
             {balance == null ? (
               <Callout tone="warn">{t("s2_rpcDown")}</Callout>
@@ -566,8 +572,10 @@ function KeyStep({
     return (
       <div>
         <Callout tone="warn">{t("s4_created")}</Callout>
-        <div className="key-big">{created.key}</div>
-        <CopyButton text={created.key} />
+        <SecretNotice>
+          <div className="key-big">{created.key}</div>
+          <CopyButton text={created.key} />
+        </SecretNotice>
         <p className="setup-note">{t("s4_more")}</p>
       </div>
     );

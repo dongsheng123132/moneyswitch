@@ -8,12 +8,15 @@ import { shellStrings } from "../i18n/strings/shell";
 import LangSwitch from "../components/LangSwitch";
 import Callout from "../components/Callout";
 import Snippet from "../components/Snippet";
+import { useKeyInputGuard } from "../components/KeyInputGuard";
+import { ThreeThingsButton } from "../components/ThreeThings";
 
 const RESET_CMD = "pnpm admin:reset-token -- --data-dir <MONEYSWITCH_DATA_DIR>";
 
 export default function LoginPage() {
   const t = useT(shellStrings);
   const { loginAdmin, loginEmployee, loading, error, errorDetail } = useAuth();
+  const keyGuard = useKeyInputGuard();
   const [token, setToken] = useState("");
   const [reveal, setReveal] = useState(false);
   const [formatError, setFormatError] = useState(false);
@@ -97,7 +100,7 @@ export default function LoginPage() {
                   spellCheck={false}
                   value={token}
                   onChange={(e) => {
-                    setToken(e.target.value);
+                    setToken(keyGuard.filter(e.target.value));
                     setFormatError(false);
                   }}
                   placeholder={t("login_placeholder")}
@@ -108,6 +111,7 @@ export default function LoginPage() {
                   {reveal ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
+              {keyGuard.message}
             </div>
             {err && (
               <div id="login-error">
@@ -128,6 +132,9 @@ export default function LoginPage() {
               <p>{t("login_lostBody")}</p>
               <Snippet code={RESET_CMD} />
             </details>
+            <div style={{ marginTop: 10 }}>
+              <ThreeThingsButton />
+            </div>
           </div>
           <div className="login-footnote">USDC · Monad · x402</div>
         </div>

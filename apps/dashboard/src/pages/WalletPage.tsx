@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import { Link } from "react-router-dom";
 import { usePolling } from "../usePolling";
 import { getWallet, createWallet, unlockWallet } from "../api";
 import { formatUsdc, shortAddr } from "../money";
@@ -7,6 +7,8 @@ import CopyButton from "../components/CopyButton";
 import Callout from "../components/Callout";
 import Term from "../components/Term";
 import { SkeletonBlock } from "../components/Skeleton";
+import PublicAddress from "../components/PublicAddress";
+import { ThreeThingsCard, ThreeThingsButton } from "../components/ThreeThings";
 import { useT } from "../i18n";
 import { walletStrings } from "../i18n/strings/wallet";
 import { common } from "../i18n/strings/common";
@@ -158,6 +160,9 @@ export default function WalletPage() {
             <Callout tone="success">{t("createSuccess")}</Callout>
           </div>
         )}
+        <div style={{ marginTop: 14 }}>
+          <ThreeThingsButton />
+        </div>
       </div>
     );
   }
@@ -195,20 +200,33 @@ export default function WalletPage() {
         </div>
       )}
 
-      <div className="wallet-top-cards">
-        <div className="card">
-          <div className="stat-label">{t("addressLabel")}</div>
-          <div className="mono wallet-address-value">{wallet.address ?? "-"}</div>
-          {wallet.address && (
-            <div className="btn-group">
-              <CopyButton text={wallet.address} />
-              <a className="btn secondary small" href={`${explorerBase}/address/${wallet.address}`} target="_blank" rel="noreferrer">
-                {t("viewOnExplorer")}
-              </a>
-            </div>
-          )}
+      <div className="wallet-columns-heading">
+        <h2>{t("oneWalletHeading")}</h2>
+        <ThreeThingsButton />
+      </div>
 
-          <div style={{ marginTop: 20, display: "flex", gap: 24, flexWrap: "wrap" }}>
+      <div className="wallet-columns">
+        <div className="card wallet-receive-card">
+          <div className="stat-label">{t("receiveTitle")}</div>
+          {wallet.address ? (
+            <PublicAddress address={wallet.address} qr="always" size="lg" />
+          ) : (
+            <div className="empty-state">{t("qrEmpty")}</div>
+          )}
+          <p className="wallet-column-sentence">{t("receiveSentence")}</p>
+          <Link className="wallet-column-link" to="/tollbooths">
+            {t("receiveTollboothLink")}
+          </Link>
+          {wallet.address && (
+            <a className="wallet-column-explorer" href={`${explorerBase}/address/${wallet.address}`} target="_blank" rel="noreferrer">
+              {t("viewOnExplorer")}
+            </a>
+          )}
+        </div>
+
+        <div className="card wallet-pays-card">
+          <div className="stat-label">{t("paysFromTitle")}</div>
+          <div style={{ marginTop: 8, display: "flex", gap: 24, flexWrap: "wrap" }}>
             <div>
               <div className="stat-label">{t("balanceLabel")}</div>
               <div className="stat-value num">{balance != null ? formatUsdc(balance, { maxDecimals: 4 }) : "-"}</div>
@@ -233,6 +251,11 @@ export default function WalletPage() {
               <div className="stat-sub">{t("balanceWaiting")}</div>
             ) : null}
           </div>
+
+          <p className="wallet-column-sentence">{t("paysFromSentence")}</p>
+          <Link className="wallet-column-link" to="/keys">
+            {t("paysFromKeysLink")}
+          </Link>
 
           <div className="form-section" style={{ marginTop: 22 }}>
             <div className="form-section-title">{t("networkTitle")}</div>
@@ -260,20 +283,9 @@ export default function WalletPage() {
 
           <FundingGuide address={wallet.address ?? ""} />
         </div>
-
-        <div className="card wallet-qr-card">
-          <div className="stat-label" style={{ marginBottom: 12 }}>
-            {t("qrTitle")}
-          </div>
-          {wallet.address ? (
-            <div className="qr-wrap">
-              <QRCodeSVG value={wallet.address} size={168} />
-            </div>
-          ) : (
-            <div className="empty-state">{t("qrEmpty")}</div>
-          )}
-        </div>
       </div>
+
+      <ThreeThingsCard />
     </div>
   );
 }

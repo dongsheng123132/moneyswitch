@@ -50,6 +50,15 @@ export const walletStrings = defineMessages(
     networkLabel: "Network",
     chainIdLabel: "Chain ID",
     usdcContractLabel: "USDC contract",
+
+    oneWalletHeading: "One wallet — receives and pays",
+    receiveTitle: "Receive",
+    receiveSentence:
+      "Anyone — including an AI buying from your toll booth — pays you at this address. It can only receive money, so it's safe to share.",
+    receiveTollboothLink: "Charge AI with a toll booth →",
+    paysFromTitle: "Pays from",
+    paysFromSentence: "Every MoneyKey you hand out spends from this same balance. The private key stays in the server's memory — never shown.",
+    paysFromKeysLink: "Manage Money Keys →",
   },
   {
     createTitle: "还没有钱包",
@@ -99,5 +108,13 @@ export const walletStrings = defineMessages(
     networkLabel: "网络",
     chainIdLabel: "链 ID",
     usdcContractLabel: "USDC 合约",
+
+    oneWalletHeading: "一个钱包，收付一体",
+    receiveTitle: "收款",
+    receiveSentence: "别人（包括买你收费站的 AI）付钱给你就用这个地址。它只能收钱，可以放心分享。",
+    receiveTollboothLink: "用收费站让 AI 付钱给你 →",
+    paysFromTitle: "付款来源",
+    paysFromSentence: "你发出去的 MoneyKey 都从这里扣钱；私钥只在服务器内存里，永不显示。",
+    paysFromKeysLink: "管理 Money Keys →",
   }
 );

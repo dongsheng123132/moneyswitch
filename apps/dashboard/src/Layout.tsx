@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
-import { Gauge, MessageSquare, KeyRound, Radio, Activity, ShieldAlert, Wallet, Plug, LogOut, Compass, Lock } from "lucide-react";
+import { Gauge, MessageSquare, KeyRound, Radio, Activity, ShieldAlert, Wallet, Plug, LogOut, Compass, Lock, TrafficCone, HandCoins } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { getWallet, listApprovals } from "./api";
@@ -10,8 +10,19 @@ import LangSwitch from "./components/LangSwitch";
 import { useT } from "./i18n";
 import { shellStrings } from "./i18n/strings/shell";
 import { common } from "./i18n/strings/common";
+import "./styles/tollbooths.css";
 
-type NavKey = "nav_overview" | "nav_playground" | "nav_keys" | "nav_channels" | "nav_usage" | "nav_approvals" | "nav_wallet" | "nav_connect";
+type NavKey =
+  | "nav_overview"
+  | "nav_playground"
+  | "nav_keys"
+  | "nav_channels"
+  | "nav_usage"
+  | "nav_approvals"
+  | "nav_wallet"
+  | "nav_connect"
+  | "nav_tollbooths"
+  | "nav_earnings";
 
 const NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof Gauge }> = [
   { to: "/", label: "nav_overview", end: true, icon: Gauge },
@@ -24,6 +35,14 @@ const NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof Gauge }
   { to: "/connect", label: "nav_connect", end: false, icon: Plug },
 ];
 
+// SPEC-v0.5 §3: toll booths + earnings, visually grouped under "Get paid" /
+// "收款" below the existing items — kept separate from NAV so the group
+// label can be rendered once above them.
+const RECEIVE_NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof Gauge }> = [
+  { to: "/tollbooths", label: "nav_tollbooths", end: false, icon: TrafficCone },
+  { to: "/earnings", label: "nav_earnings", end: false, icon: HandCoins },
+];
+
 export default function Layout() {
   const t = useT(shellStrings);
   const tc = useT(common);
@@ -33,7 +52,8 @@ export default function Layout() {
   const { data: pending } = usePolling(() => listApprovals("pending"), 3000);
   const pendingCount = pending?.length ?? 0;
 
-  const current = NAV.find((n) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)));
+  const ALL_NAV = [...NAV, ...RECEIVE_NAV];
+  const current = ALL_NAV.find((n) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)));
   const title = current ? t(current.label) : "MoneySwitch";
 
   return (
@@ -61,6 +81,16 @@ export default function Layout() {
                     {pendingCount}
                   </span>
                 )}
+              </NavLink>
+            );
+          })}
+          <div className="sidebar-group-label">{t("nav_group_receive")}</div>
+          {RECEIVE_NAV.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? "active" : "")}>
+                <Icon size={16} strokeWidth={2} aria-hidden />
+                <span>{t(item.label)}</span>
               </NavLink>
             );
           })}

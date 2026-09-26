@@ -15,6 +15,10 @@ import WalletPage from "./pages/WalletPage";
 import ConnectAgentPage from "./pages/ConnectAgentPage";
 import ChannelsPage from "./pages/ChannelsPage";
 import PlaygroundPage from "./pages/PlaygroundPage";
+import TollboothsPage from "./pages/TollboothsPage";
+import TollboothWizardPage from "./pages/TollboothWizardPage";
+import TollboothDetailPage from "./pages/TollboothDetailPage";
+import EarningsPage from "./pages/EarningsPage";
 import MyBudgetPage from "./pages/employee/MyBudgetPage";
 import EmployeePlaygroundPage from "./pages/employee/EmployeePlaygroundPage";
 import EmployeeHistoryPage from "./pages/employee/EmployeeHistoryPage";
@@ -60,6 +64,10 @@ function Routed() {
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="wallet" element={<WalletPage />} />
         <Route path="connect" element={<ConnectAgentPage />} />
+        <Route path="tollbooths" element={<TollboothsPage />} />
+        <Route path="tollbooths/new" element={<TollboothWizardPage />} />
+        <Route path="tollbooths/:id" element={<TollboothDetailPage />} />
+        <Route path="earnings" element={<EarningsPage />} />
       </Route>
 
       {/* SPEC-v0.3-employee.md §A — employee view, separate route tree, own

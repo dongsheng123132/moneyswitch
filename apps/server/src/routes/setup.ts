@@ -6,6 +6,7 @@ import { writeAudit } from "@moneyswitch/core";
 import { getActiveNetwork } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
+import { publicBase } from "./tollbooths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -51,7 +52,7 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.send({ admin_token: result.adminToken });
   });
 
-  app.get("/v1/admin/meta", { preHandler: adminGuard }, async (_req, reply) => {
+  app.get("/v1/admin/meta", { preHandler: adminGuard }, async (req, reply) => {
     const network = getActiveNetwork();
     const chainId = Number(network.caip2.split(":")[1] ?? 0) || null;
     const cliJs = path.join(cliDir(), "dist", "cli.js");
@@ -68,6 +69,11 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       cli_local_path: fs.existsSync(cliJs) ? cliJs.replace(/\\/g, "/") : null,
       mcp_local_path: fs.existsSync(mcpJs) ? mcpJs.replace(/\\/g, "/") : null,
       wallet_password_from_env: Boolean(ctx.config.walletPassword),
+      // v0.5 (SPEC-v0.5 §2): default receiving address for toll booths (the
+      // wallet receives and pays) + the base URL buyers use (/t/<slug>/…).
+      wallet_address: ctx.wallet.getAddress(),
+      public_base: publicBase(ctx, req),
+      public_base_from_env: Boolean(ctx.config.publicUrl),
     });
   });
 

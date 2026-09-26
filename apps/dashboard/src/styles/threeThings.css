@@ -1,0 +1,301 @@
+/* SPEC-v0.5 §1 — three things: private key (never shown) / MoneyKey (secret, amber) / address (public, green) */
+
+.three-things {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.three-things-head h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.three-things-head p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.three-things-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.three-things.compact .three-things-grid {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 860px) {
+  .three-things-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.thing {
+  position: relative;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 14px 14px 12px;
+  background: var(--panel-2);
+}
+.thing h4 {
+  margin: 8px 0 2px;
+  font-size: 14.5px;
+}
+.thing p {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.thing-illus {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+}
+.thing-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.thing-metaphor {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.thing-who {
+  font-size: 12px;
+  margin-top: 2px;
+  font-weight: 600;
+}
+.thing-private .thing-illus {
+  background: var(--gray-bg);
+  color: var(--text-dim);
+}
+.thing-private .thing-badge {
+  background: var(--gray-bg);
+  color: var(--text-dim);
+}
+.thing-private .thing-who {
+  color: var(--text-dim);
+}
+.thing-secret {
+  border-color: color-mix(in srgb, var(--yellow) 45%, var(--panel-border));
+}
+.thing-secret .thing-illus,
+.thing-secret .thing-badge {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+.thing-secret .thing-who {
+  color: var(--yellow);
+}
+.thing-public {
+  border-color: color-mix(in srgb, var(--green) 45%, var(--panel-border));
+}
+.thing-public .thing-illus,
+.thing-public .thing-badge {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.thing-public .thing-who {
+  color: var(--green);
+}
+.three-things-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* <PublicAddress> — green, shareable */
+.public-address {
+  border: 1px solid color-mix(in srgb, var(--green) 45%, var(--panel-border));
+  background: var(--green-bg);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.public-address-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.public-badge,
+.secret-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.public-badge {
+  background: color-mix(in srgb, var(--green) 22%, transparent);
+  color: var(--green);
+}
+.public-address-label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.public-address-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.public-address-value {
+  color: var(--green);
+  font-weight: 650;
+  word-break: break-all;
+  background: transparent;
+  padding: 0;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.public-address.size-lg .public-address-value {
+  font-size: 17px;
+}
+.public-address.size-sm .public-address-value {
+  font-size: 12.5px;
+}
+.public-address-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.public-address-qr {
+  align-self: flex-start;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px;
+}
+.public-address-note {
+  font-size: 12px;
+  color: var(--green);
+}
+
+/* <SecretNotice> — amber, lock */
+.secret-notice {
+  border: 1px solid color-mix(in srgb, var(--yellow) 50%, var(--panel-border));
+  background: var(--yellow-bg);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.secret-notice-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.secret-badge {
+  background: color-mix(in srgb, var(--yellow) 24%, transparent);
+  color: var(--yellow);
+}
+.secret-notice-title {
+  font-weight: 650;
+  font-size: 13px;
+  color: var(--yellow);
+}
+.secret-notice-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  word-break: break-all;
+}
+.secret-notice-body {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* pay-to field */
+.payto-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.payto-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.payto-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.payto-option.selected {
+  border-color: var(--accent-border);
+  background: var(--accent-dim);
+}
+.payto-option input {
+  margin-top: 3px;
+}
+.payto-option-title {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.payto-option-hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.payto-external {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.payto-input.is-valid {
+  border-color: var(--green);
+}
+.payto-input.is-invalid {
+  border-color: var(--red);
+}
+
+/* blocked-secret alert (pay-to and key inputs) */
+.guard-blocked {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid color-mix(in srgb, var(--red) 55%, var(--panel-border));
+  background: var(--red-bg);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.guard-blocked svg {
+  color: var(--red);
+  flex: none;
+  margin-top: 2px;
+}
+.guard-blocked-title {
+  font-weight: 700;
+  color: var(--red);
+}
+.guard-blocked-sub {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.secret-notice-content > .field {
+  flex: 1 1 100%;
+  min-width: 0;
+}

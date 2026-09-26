@@ -15,8 +15,10 @@
     "@fastify/static": "10.1.4",
     "@moneyswitch/core": "workspace:*",
     "@moneyswitch/db": "workspace:*",
+    "@moneyswitch/tollbooth": "workspace:*",
     "@moneyswitch/wallet": "workspace:*",
     "@moneyswitch/x402": "workspace:*",
+    "@x402/core": "2.27.0",
     "fastify": "5.12.5"
   },
   "devDependencies": {
