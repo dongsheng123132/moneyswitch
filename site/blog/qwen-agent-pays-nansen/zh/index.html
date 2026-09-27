@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据 — MoneySwitch</title>
+<meta name="description" content="Qwen 3.8 Max 拿到一把 0.09 美元预算的 MoneyKey，通过 x402 在 Monad 主网上自己买了 Nansen 的数据 —— 五笔真实的 USDC 付款，全程没有碰到私钥。">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/">
+<link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/">
+<link rel="icon" href="../../../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../../../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="../../../assets/img/apple-touch-icon.png">
+
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据">
+<meta property="og:description" content="Qwen 3.8 Max 拿到一把 0.09 美元预算的 MoneyKey，通过 x402 在 Monad 主网上自己买了 Nansen 的数据 —— 五笔真实的 USDC 付款，全程没有碰到私钥。">
+<meta property="og:url" content="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/">
+<meta property="og:image" content="https://moneyswitch.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据">
+<meta name="twitter:description" content="Qwen 3.8 Max 拿到一把 0.09 美元预算的 MoneyKey，通过 x402 在 Monad 主网上自己买了 Nansen 的数据 —— 五笔真实的 USDC 付款，全程没有碰到私钥。">
+<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
+
+<link rel="stylesheet" href="../../../assets/css/site.css">
+<link rel="stylesheet" href="../../../assets/css/blog.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../../../index.html" aria-label="MoneySwitch home">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span class="brand-name">Money<b>Switch</b></span>
+    </a>
+    <nav class="nav-links" aria-label="Blog">
+      <a href="../index.html">← 博客</a>
+    </nav>
+    <div class="nav-actions">
+      <div class="lang" role="group" aria-label="Language">
+        <a href="../">EN</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="section blog-article">
+  <div class="wrap narrow">
+    <p class="eyebrow">发布于 2026-09-27</p>
+<h1>我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据</h1>
+<p><em>Monad Metropolis 黑客松稿件（Qwen 3.8 Max 与 Nansen 赏金）。文中每一笔交易都在 Monad 主网上，可以在 monadvision.com 查到。</em></p>
+<h2>问题</h2>
+<p>「Monad 上最近 24 小时什么最热？聪明钱在买吗？」</p>
+<p>这个问题问起来容易，答好却要花钱。数据是现成的：Nansen 有代币排行、资金流向、聪明钱标签，也都支持 Monad，但它是按次收费的。所以真正的问题是：<strong>AI Agent 能不能自己判断哪些数据值得买，自己付钱，并且不超出人给它设的预算？</strong></p>
+<p>MoneySwitch 就是干这个的。它给 Agent 发一把 <code>mk_live_…</code> 开头的 <strong>MoneyKey</strong>，也就是「花钱用的 API Key」。它不是私钥，也不是钱，而是一张可以随时吊销的花钱许可：有总额度、单次上限和允许访问的网站白名单。Agent 调用 <code>POST /v1/fetch</code>，MoneySwitch <strong>先检查策略，再签名</strong>，然后从本地一个只放小钱的钱包里，用 USDC 付掉卖方的 x402 账单。Agent 自始至终碰不到私钥。</p>
+<p>这次运行用的 MoneyKey 只能访问 <code>api.nansen.ai</code>，单次最多 0.05 美元，<strong>总共 0.09 美元</strong>。</p>
+<h2>为什么是 Nansen</h2>
+<p>Nansen 通过 <strong>x402 v2</strong> 出售它的 API。更关键的是，它的 402 账单<strong>接受 Monad 主网上的 USDC</strong>（<code>eip155:143</code>），通过 Molandak 结算，这也是 Monad 官方文档里用的那一家。不用注册 Nansen 账号，也不用 API key：不带凭证发请求，会先收到 <code>402 Payment Required</code>；客户端签一个 EIP-3009 的 USDC 授权后重发，就能拿到数据。基础接口每次 0.01 美元，聪明钱接口每次 0.05 美元。</p>
+<p>Agent 的目录里有 5 个接口，链参数都是 <code>monad</code>：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>接口</th><th>价格</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>POST /api/v1/token-screener</code></td><td>$0.01</td><td>代币排行：成交量、涨跌幅、买卖量、净流入、流动性；可按 <code>only_smart_money</code>、<code>include_stablecoins</code> 等筛选</td></tr>
+<tr><td><code>POST /api/v1/tgm/flow-intelligence</code></td><td>$0.01</td><td>单个代币按人群划分的净流入：聪明交易者、巨鲸、盈利榜、公众人物、交易所、新钱包</td></tr>
+<tr><td><code>POST /api/v1/tgm/dex-trades</code></td><td>$0.01</td><td>某个代币在一段时间内的 DEX 逐笔成交</td></tr>
+<tr><td><code>POST /api/v1/smart-money/netflow</code></td><td>$0.05</td><td>全链聪明钱净流入，可按 <code>net_flow_24h_usd</code> 排序</td></tr>
+<tr><td><code>POST /api/v1/smart-money/holdings</code></td><td>$0.05</td><td>聪明钱当前持仓</td></tr>
+</tbody></table></div>
+<p>这些请求的参数格式有自动测试守着，拿来和 Nansen 公开的 OpenAPI 定义（<code>https://api.nansen.ai/openapi.json</code>）逐项比对。为什么要这样做，后面会讲。</p>
+<h2>为什么是 Qwen 3.8 Max</h2>
+<p>这个 Agent 就是一个普通的工具调用循环。Qwen 3.8 Max（<code>qwen3.8-max</code>，走阿里云的 OpenAI 兼容接口）拿到两个工具：<code>money_status</code>（查还剩多少预算）和 <code>nansen_query</code>（从目录里买一次数据），再加一段系统提示：你是一名链上分析师，USDC 预算是硬上限；先说出计划；优先买能回答问题的最便宜的数据；不买重复的数据；下一次买不起就停；每一分钱都要交代清楚。</p>
+<p>没有任何写死的「研究流程」。下面每一个决定，买什么、按什么顺序、什么时候升级到 0.05 的接口、什么时候停，都是 Qwen 自己做的。</p>
+<h2>它实际做了什么</h2>
+<p><strong>1. 先查预算，买最便宜的（$0.01）。</strong> 代币排行，Monad，24 小时，按成交量排序。结果：USDC 1060 万美元，MUSD 430 万，WMON 170 万，WETH 160 万，EURW 150 万。</p>
+<p>Qwen 的判断是：<em>「几乎全是稳定币和包装资产，谈不上『热』。」</em> 它没有拿这个结果交差，而是又花了一分钱。</p>
+<p><strong>2. 换个问法重新问（$0.01）。</strong> 还是代币排行，但排除稳定币，改按 24 小时涨幅排序。真正在涨的币这才出现：ANAGO +18.8%、EMO +13.7%、SHRAMP +13.1%、FLING +7.0%、BOB +4.5%，全是小市值币。</p>
+<p><strong>3. 付高价之前，先便宜地查涨幅第一的币（$0.01）。</strong> 查 ANAGO 的资金流向：聪明交易者、巨鲸、盈利榜、公众人物、新钱包，所有有标签的人群<strong>净流入都是 0</strong>，只有交易所那一栏有变动（−1320 美元）。</p>
+<p><strong>4. 再便宜地查全链（$0.01）。</strong> 代币排行加上 <code>only_smart_money: true</code>：<strong>0 条结果</strong>。</p>
+<p><strong>5. 到这一步才花钱买高价信号（$0.05）。</strong> Qwen 注意到「0 条结果」有两种可能：聪明钱真的没来，或者只是筛选条件把结果滤掉了。所以它买了专门回答这个问题的接口：全链聪明钱净流入，按 24 小时净流入排序，并且<strong>特意把稳定币和原生代币也包含进来</strong>，「这样结果就不会因为筛选条件而变空」。结果：<strong>全链 0 条</strong>。</p>
+<p><strong>结论：</strong> Monad 小币这 24 小时的上涨来自散户和机器人，ANAGO、EMO、SHRAMP、FLING、BOB 背后都没有聪明钱参与。ANAGO 的 +18.8% 只靠大约 <strong>2100 美元的成交量</strong>推起来，而它的流动性只有 1.47 万美元。Qwen 还主动说明了自己的不确定（「无法区分『聪明钱真的没来』和『Nansen 在 Monad 上的聪明钱覆盖还不完整』」），并且没有采用明显有问题的字段，比如部署日期显示为 1970-01-01 的代币年龄数据。</p>
+<p>最后它给出一张账单：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>调用</th><th>价格</th><th>交易（Monad 主网）</th></tr></thead>
+<tbody>
+<tr><td>代币排行，按成交量</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0xb227e30f125cac1ab20977a5b9479ae538dacdec4295262173d643febc7ad540" rel="noopener" target="_blank"><code>0xb227e30f…d540</code></a></td></tr>
+<tr><td>代币排行，按涨幅</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0xc739c43296ed40a239bd148b60d6be230bae7a53c5795f68e389056520fc163f" rel="noopener" target="_blank"><code>0xc739c432…163f</code></a></td></tr>
+<tr><td>资金流向，ANAGO</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0x99bf9da63699c1e6fd6e487bbbbfea882e882e29af30c6c178b0d277c82a2cb8" rel="noopener" target="_blank"><code>0x99bf9da6…2cb8</code></a></td></tr>
+<tr><td>代币排行，只看聪明钱</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0x5fab3819a066e3f67e57109c2d6ff7f5a460d74fd6b9df4127c4bfbf4f4cf33b" rel="noopener" target="_blank"><code>0x5fab3819…f33b</code></a></td></tr>
+<tr><td>聪明钱净流入（高价）</td><td>$0.05</td><td><a class="tx-link" href="https://monadvision.com/tx/0xb7df99767f8ac3cff9ad05a3ebabe5e57a9a1ef9cc622ccad0afacab652de0b6" rel="noopener" target="_blank"><code>0xb7df9976…e0b6</code></a></td></tr>
+<tr><td><strong>合计</strong></td><td><strong>$0.09</strong></td><td>预算正好用完，一分没超</td></tr>
+</tbody></table></div>
+<p>5 笔我们都独立核实过：每一笔的交易回执状态都是成功，里面都有一条从 Agent 钱包转到 Nansen 收款地址的 USDC <code>Transfer</code>；钱包链上余额正好少了 0.09 美元。钱包里 <strong>一个 MON 都没有</strong>，gas 由结算方代付。</p>
+<h2>Qwen 带来了什么</h2>
+<ul>
+<li><strong>看着价目表做规划。</strong> 它把 0.01 和 0.05 当成真实的取舍：先用三次便宜的查询缩小问题，最后才用一次贵的查询确认。一个天真的 Agent 会一上来就调最贵的接口。</li>
+<li><strong>会换问法，而不只是重试。</strong> 第一次排行结果严格说也算一个答案，但 Qwen 意识到那是错的答案，于是改了排序和筛选条件。</li>
+<li><strong>诚实面对不确定性。</strong> 「0 条结果」被它当成一个需要验证的说法，而不是直接当结论；最后的回答也写明了数据回答不了什么。</li>
+<li><strong>会记账。</strong> 它把真正<em>花掉</em>的钱（有交易哈希）和只是<em>冻结</em>的钱（见下一节）分开，两样都报告。</li>
+</ul>
+<h2>那次让它变得更好的失败</h2>
+<p>第一次真实运行出了一个很有教育意义的错。我们手写的两个接口参数格式和 Nansen 的实际 API 对不上：<code>smart-money/netflow</code> 根本没有 <code>timeframe</code> 字段；<code>flow-intelligence</code> 要的是单数 <code>chain</code>，时间范围要写 <code>1d</code> 而不是 <code>24h</code>。对这两个已付款的请求，Nansen 返回了 <strong>HTTP 422，而且没有结算</strong>。</p>
+<p>接下来发生了三件事，现在我们都依赖它们：</p>
+<ol>
+<li><strong>钱一分没动。</strong> 钱包余额只少了那一笔成功的 0.01 美元。</li>
+<li><strong>MoneySwitch 选择冻结额度，而不是去猜。</strong> 签过名的 EIP-3009 授权在过期前一直有效，卖方理论上还能晚点结算。所以那 0.06 美元被冻结，而不是马上退回。授权过期后，MoneySwitch 的对账程序去问 USDC 合约（<code>authorizationState</code>）这些授权有没有被用过，确认没有之后，把它们标成 <code>NOT_SETTLED_EXPIRED</code>，额度随即恢复。</li>
+<li><strong>Agent 学会了说「冻结，没花」。</strong> 第一次运行里，Qwen 把那 0.06 美元报成「被扣了，却没有交易哈希可以申诉」，这个抱怨很合理。现在工具会明确告诉它哪笔钱只是冻结、等待过期；接口目录也改成按 Nansen 的 OpenAPI 定义来写，并配了测试，两边一旦对不上，测试就会失败。</li>
+</ol>
+<h2>这件事为什么重要</h2>
+<p>给 Agent 用的付费 API 正在到来，x402 已经把「付钱」这一步变简单了。难的是「授权」这一步：这个 Agent 能花多少、能花在哪、怎么叫停。MoneyKey 用开发者早就熟悉的方式回答这个问题：它就像一个 API Key，有预算、有白名单、有一键吊销，而且策略在任何签名<strong>之前</strong>就执行。</p>
+<p>Qwen 3.8 Max 展示了另一半：给它预算和价目表，一个能干的模型花起钱来像分析师，而不是像一个死循环。</p>
+<p><strong>试一试：</strong> <code>npx moneyswitch demo</code>（离线演示）· 代码：<a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">https://github.com/dongsheng123132/moneyswitch</a> · Agent：<code>apps/qwen-agent</code> · 操作手册：<code>docs/nansen-mainnet.md</code></p>
+  </div>
+</article>
+</main>
+
+<footer class="footer">
+  <div class="wrap foot">
+    <div>
+      <a class="brand" href="../../../index.html"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
+      <p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

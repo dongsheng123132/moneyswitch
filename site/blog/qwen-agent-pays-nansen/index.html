@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I gave Qwen 3.8 Max a $0.09 budget and a MoneyKey. It bought its own Nansen data on Monad mainnet. — MoneySwitch</title>
+<meta name="description" content="Qwen 3.8 Max was given a $0.09 MoneyKey budget and bought its own Nansen data on Monad mainnet over x402 — five real USDC payments, no private key.">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/">
+<link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/">
+<link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../../assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="I gave Qwen 3.8 Max a $0.09 budget and a MoneyKey. It bought its own Nansen data on Monad mainnet.">
+<meta property="og:description" content="Qwen 3.8 Max was given a $0.09 MoneyKey budget and bought its own Nansen data on Monad mainnet over x402 — five real USDC payments, no private key.">
+<meta property="og:url" content="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/">
+<meta property="og:image" content="https://moneyswitch.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="I gave Qwen 3.8 Max a $0.09 budget and a MoneyKey. It bought its own Nansen data on Monad mainnet.">
+<meta name="twitter:description" content="Qwen 3.8 Max was given a $0.09 MoneyKey budget and bought its own Nansen data on Monad mainnet over x402 — five real USDC payments, no private key.">
+<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
+
+<link rel="stylesheet" href="../../assets/css/site.css">
+<link rel="stylesheet" href="../../assets/css/blog.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../../index.html" aria-label="MoneySwitch home">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span class="brand-name">Money<b>Switch</b></span>
+    </a>
+    <nav class="nav-links" aria-label="Blog">
+      <a href="../index.html">← Blog</a>
+    </nav>
+    <div class="nav-actions">
+      <div class="lang" role="group" aria-label="Language">
+        <a href="zh/">中文</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<article class="section blog-article">
+  <div class="wrap narrow">
+    <p class="eyebrow">Published 2026-09-27</p>
+<h1>I gave Qwen 3.8 Max a $0.09 budget and a MoneyKey. It bought its own Nansen data on Monad mainnet.</h1>
+<p><em>Draft for the Monad Metropolis hackathon (Qwen 3.8 Max and Nansen bounties). Every transaction below is on Monad mainnet and can be checked on monadvision.com.</em></p>
+<h2>The question</h2>
+<p>"What's hot on Monad in the last 24 hours, and is smart money buying it?"</p>
+<p>That's an easy question to ask and an expensive one to answer well. The data exists — Nansen has token screeners, flow intelligence and smart-money labels for Monad — but it's pay-per-call. So the real question is: <strong>can an AI agent decide what data is worth buying, pay for it itself, and stay inside a budget a human set?</strong></p>
+<p>That's what MoneySwitch is for. MoneySwitch gives an agent a <code>mk_live_…</code> <strong>MoneyKey</strong>: an API key for money. It is not a private key and it is not money — it's a revocable spending permission with a total budget, a per-request cap and a host allowlist. The agent calls <code>POST /v1/fetch</code>; MoneySwitch checks the policy <em>before</em> signing, then pays the seller's x402 invoice in USDC from a local, low-balance vault. The agent never touches a private key.</p>
+<p>For this run the MoneyKey was scoped to <code>api.nansen.ai</code>, $0.05 max per request, <strong>$0.09 total</strong>.</p>
+<h2>Why Nansen fits perfectly</h2>
+<p>Nansen sells its API over <strong>x402 v2</strong>, and — the part that made this possible — its 402 invoice accepts <strong>USDC on Monad mainnet</strong> (<code>eip155:143</code>, settled via the Molandak facilitator, the same one Monad's docs use). No Nansen account, no API key: a request without credentials gets a <code>402 Payment Required</code>, the client signs an EIP-3009 USDC authorization, retries, and gets data back. Basic endpoints cost $0.01, smart-money endpoints $0.05.</p>
+<p>The agent had five endpoints in its catalog, all with <code>monad</code> as the chain:</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Endpoint</th><th>Price</th><th>What it's for</th></tr></thead>
+<tbody>
+<tr><td><code>POST /api/v1/token-screener</code></td><td>$0.01</td><td>ranked tokens: volume, price change, buy/sell volume, netflow, liquidity; filters incl. <code>only_smart_money</code>, <code>include_stablecoins</code></td></tr>
+<tr><td><code>POST /api/v1/tgm/flow-intelligence</code></td><td>$0.01</td><td>per-token net flow by cohort: smart traders, whales, top PnL, public figures, exchanges, fresh wallets</td></tr>
+<tr><td><code>POST /api/v1/tgm/dex-trades</code></td><td>$0.01</td><td>individual DEX trades for a token over a date range</td></tr>
+<tr><td><code>POST /api/v1/smart-money/netflow</code></td><td>$0.05</td><td>chain-wide smart-money net flow, sortable by <code>net_flow_24h_usd</code></td></tr>
+<tr><td><code>POST /api/v1/smart-money/holdings</code></td><td>$0.05</td><td>what smart money currently holds</td></tr>
+</tbody></table></div>
+<p>The request schemas are checked in CI against Nansen's published OpenAPI spec (<code>https://api.nansen.ai/openapi.json</code>) — more on why below.</p>
+<h2>Why Qwen 3.8 Max</h2>
+<p>The agent is a plain tool-calling loop: Qwen 3.8 Max (<code>qwen3.8-max</code> via Alibaba Cloud's OpenAI-compatible endpoint) gets two tools — <code>money_status</code> (how much budget is left) and <code>nansen_query</code> (buy one catalog endpoint) — and a system prompt that says: you are an on-chain analyst with a hard USDC budget; state a plan; prefer the cheapest data that answers the question; don't buy redundant data; stop when the next call isn't affordable; and account for every cent you spend.</p>
+<p>There is no hard-coded "research flow". Every decision below — what to buy, in which order, when to escalate to the $0.05 endpoint, when to stop — was Qwen's.</p>
+<h2>What it actually did</h2>
+<p><strong>1. Checked the budget, bought the cheapest thing ($0.01).</strong> Token screener, Monad, 24h, sorted by volume. Result: USDC $10.6M, MUSD $4.3M, WMON $1.7M, WETH $1.6M, EURW $1.5M.</p>
+<p>Qwen's read: <em>"almost entirely stablecoins and wrapped natives — not really 'hot' in the speculative sense."</em> Instead of answering with that, it spent another cent.</p>
+<p><strong>2. Re-asked the question properly ($0.01).</strong> Same screener, stablecoins excluded, sorted by 24h price change. Now the real movers appear: ANAGO +18.8%, EMO +13.7%, SHRAMP +13.1%, FLING +7.0%, BOB +4.5% — all micro-caps.</p>
+<p><strong>3. Checked the top mover cheaply before paying premium ($0.01).</strong> Flow intelligence on ANAGO: every labeled cohort — smart traders, whales, top PnL, public figures, fresh wallets — at <strong>$0 net flow</strong>. Only exchange flow moved (−$1,320).</p>
+<p><strong>4. Checked the whole chain cheaply ($0.01).</strong> Screener with <code>only_smart_money: true</code>: <strong>zero rows</strong>.</p>
+<p><strong>5. Only now paid for the premium signal ($0.05).</strong> Qwen noted that zero rows is ambiguous — genuine absence vs. a filter artifact — so it bought the endpoint built for exactly this question: smart-money netflow, ranked by 24h net flow, with stablecoins and native tokens <em>included</em> "so the call can't come back empty for filter reasons". Result: <strong>zero rows chain-wide</strong>.</p>
+<p><strong>Answer:</strong> the 24h strength in Monad micro-caps is retail/bot flow; there is no smart-money participation behind ANAGO, EMO, SHRAMP, FLING or BOB. ANAGO's +18.8% came on about <strong>$2.1k of volume</strong> against $14.7k of liquidity. Qwen also flagged its own uncertainty ("can't distinguish 'smart money is absent' from 'Nansen's smart-money coverage on Monad is still thin'") and refused to use token-age fields that were obviously broken (deployment dates of 1970-01-01).</p>
+<p>It ended with a ledger:</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Call</th><th>Price</th><th>Tx (Monad mainnet)</th></tr></thead>
+<tbody>
+<tr><td>token-screener, by volume</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0xb227e30f125cac1ab20977a5b9479ae538dacdec4295262173d643febc7ad540" rel="noopener" target="_blank"><code>0xb227e30f…d540</code></a></td></tr>
+<tr><td>token-screener, by price change</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0xc739c43296ed40a239bd148b60d6be230bae7a53c5795f68e389056520fc163f" rel="noopener" target="_blank"><code>0xc739c432…163f</code></a></td></tr>
+<tr><td>flow-intelligence, ANAGO</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0x99bf9da63699c1e6fd6e487bbbbfea882e882e29af30c6c178b0d277c82a2cb8" rel="noopener" target="_blank"><code>0x99bf9da6…2cb8</code></a></td></tr>
+<tr><td>token-screener, only_smart_money</td><td>$0.01</td><td><a class="tx-link" href="https://monadvision.com/tx/0x5fab3819a066e3f67e57109c2d6ff7f5a460d74fd6b9df4127c4bfbf4f4cf33b" rel="noopener" target="_blank"><code>0x5fab3819…f33b</code></a></td></tr>
+<tr><td>smart-money-netflow (premium)</td><td>$0.05</td><td><a class="tx-link" href="https://monadvision.com/tx/0xb7df99767f8ac3cff9ad05a3ebabe5e57a9a1ef9cc622ccad0afacab652de0b6" rel="noopener" target="_blank"><code>0xb7df9976…e0b6</code></a></td></tr>
+<tr><td><strong>Total</strong></td><td><strong>$0.09</strong></td><td>budget exhausted, nothing over</td></tr>
+</tbody></table></div>
+<p>We verified all five independently: each receipt has status 1 and a USDC <code>Transfer</code> from the agent's vault to Nansen's payTo address, and the vault's on-chain balance dropped by exactly $0.09. The vault holds <strong>0 MON</strong> — the facilitator pays gas.</p>
+<h2>What Qwen brought</h2>
+<ul>
+<li><strong>Planning under a price list.</strong> It treated $0.01 vs $0.05 as a real trade-off: three cheap queries to narrow the question before one expensive one to confirm it. A naive agent calls the premium endpoint first.</li>
+<li><strong>Reformulating, not just retrying.</strong> The first screener result was technically an answer; Qwen recognized it was the wrong answer and changed the sort and filters.</li>
+<li><strong>Honest uncertainty.</strong> Zero rows got treated as a claim to be tested, not a conclusion — and the final answer says what the data can't tell you.</li>
+<li><strong>Accounting.</strong> It separated money <em>spent</em> (has a tx hash) from money merely <em>held</em> (see below), and reported both.</li>
+</ul>
+<h2>The failure that made it better</h2>
+<p>The first live run went wrong in an instructive way. Two of our hand-written request schemas didn't match Nansen's API (<code>smart-money/netflow</code> has no <code>timeframe</code>; <code>flow-intelligence</code> wants a singular <code>chain</code> and <code>1d</code>, not <code>24h</code>). Nansen answered those paid requests with <strong>HTTP 422 — and never settled them</strong>.</p>
+<p>Three things happened, all of which we now rely on:</p>
+<ol>
+<li><strong>No money moved.</strong> The vault balance went down by exactly the one successful $0.01 call.</li>
+<li><strong>MoneySwitch held the budget instead of guessing.</strong> A signed EIP-3009 authorization stays valid until it expires, and a seller <em>could</em> still settle it late — so the $0.06 was reserved, not released. After expiry, MoneySwitch's reconciler asked the USDC contract (<code>authorizationState</code>) whether those authorizations were ever used, found they weren't, marked them <code>NOT_SETTLED_EXPIRED</code>, and restored the budget.</li>
+<li><strong>The agent learned to say "held, not spent".</strong> In that first run Qwen reported the $0.06 as "deducted with no tx hash to dispute" — a fair complaint. The tool now tells it explicitly when an amount is held pending expiry, and the catalog is generated against Nansen's OpenAPI spec with a test that fails if they drift.</li>
+</ol>
+<h2>Why this matters</h2>
+<p>Paid APIs for agents are coming — x402 makes the payment part simple. The hard part is the <strong>permission</strong> part: how much can this agent spend, on what, and how do you stop it. A MoneyKey answers that the way developers already understand: like an API key, with a budget, an allowlist and a revoke button, and with the policy enforced <em>before</em> anything is signed.</p>
+<p>Qwen 3.8 Max showed the other half: given a budget and a price list, a capable model spends like an analyst, not like a loop.</p>
+<p><strong>Try it:</strong> <code>npx moneyswitch demo</code> (offline) · code: <a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">https://github.com/dongsheng123132/moneyswitch</a> · agent: <code>apps/qwen-agent</code> · runbook: <code>docs/nansen-mainnet.md</code></p>
+  </div>
+</article>
+</main>
+
+<footer class="footer">
+  <div class="wrap foot">
+    <div>
+      <a class="brand" href="../../index.html"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
+      <p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

@@ -8,6 +8,7 @@ window.MS_I18N_ZH = {
   'nav.proof': '链上证据',
   'nav.start': '快速开始',
   'nav.roadmap': '路线图',
+  'nav.blog': '博客',
   'star': 'Star',
   'hero.badge': 'v0.5 · 开源 · 已在 Monad 测试网真实付款',
   'hero.title': '让 AI 花钱，像用 <span class="hl">API Key</span> 一样。',
