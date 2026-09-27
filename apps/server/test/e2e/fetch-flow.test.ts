@@ -64,6 +64,7 @@ beforeAll(async () => {
       DEMO_SELLER_PORT: String(SELLER_PORT),
       DEMO_SELLER_PAY_TO: PAY_TO,
       DEMO_SELLER_FACILITATOR_URL: mockFacilitator.url,
+      DEMO_SELLER_TEST_ROUTES: "1",
     },
     stdio: "pipe",
   });
@@ -195,6 +196,50 @@ describe("T2 offline e2e: MCP-shaped call -> server -> demo-seller -> mock-facil
     const historyBody = history.json();
     expect(historyBody.history[0].status).toBe("settled");
     expect(historyBody.history[0].tx_hash).toMatch(/^0xmock/);
+  });
+
+  it("GET /always-rejected: facilitator /verify 400s the paid retry -> payment_failed/PAYMENT_REJECTED, budget held (not lost, not settled)", async () => {
+    const key = await createKey();
+    const statusBefore = await app.inject({
+      method: "GET",
+      url: "/v1/status",
+      headers: { authorization: `Bearer ${key}` },
+    });
+    expect(statusBefore.json().remaining_today).toBe("5");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/fetch",
+      headers: { authorization: `Bearer ${key}` },
+      payload: { url: `http://127.0.0.1:${SELLER_PORT}/always-rejected` },
+    });
+    const body = res.json();
+    expect(body.status).toBe("payment_failed");
+    expect(body.code).toBe("PAYMENT_REJECTED");
+    expect(body.payment).toBeNull();
+    expect(typeof body.reason).toBe("string");
+    expect(body.reason).toContain("insufficient_funds");
+    expect(body.reserved_until_expiry).toBe(true);
+
+    // Budget is HELD (reduced), not lost outright and not settled: the
+    // signed authorization is still technically usable by the seller until
+    // it expires.
+    const statusAfter = await app.inject({
+      method: "GET",
+      url: "/v1/status",
+      headers: { authorization: `Bearer ${key}` },
+    });
+    expect(Number(statusAfter.json().remaining_today)).toBeLessThan(5);
+
+    const history = await app.inject({
+      method: "GET",
+      url: "/v1/history",
+      headers: { authorization: `Bearer ${key}` },
+    });
+    const historyBody = history.json();
+    expect(historyBody.history[0].status).toBe("unknown");
+    expect(historyBody.history[0].error_code).toBe("PAYMENT_REJECTED");
+    expect(historyBody.history[0].tx_hash).toBeNull();
   });
 
   it("GET /greedy (5.00) is blocked by per_request_limit=1 before any signature is created", async () => {

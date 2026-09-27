@@ -111,7 +111,11 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
     function envelope(
       status: "ok" | "denied" | "approval_required" | "payment_failed" | "error",
       code: string | null,
-      extra: Record<string, unknown> & { limit?: Record<string, string> } = {}
+      extra: Record<string, unknown> & {
+        limit?: Record<string, string>;
+        reason?: string | null;
+        reserved_until_expiry?: boolean;
+      } = {}
     ) {
       return {
         status,
@@ -121,6 +125,10 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         body: extra.body ?? null,
         payment: extra.payment ?? null,
         approval_id: extra.approval_id ?? null,
+        ...(extra.reason !== undefined ? { reason: extra.reason } : {}),
+        ...(extra.reserved_until_expiry !== undefined
+          ? { reserved_until_expiry: extra.reserved_until_expiry }
+          : {}),
         ...(extra.limit ?? {}),
         ...remaining(),
       };
@@ -165,6 +173,24 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         maxPrice,
         approvalId: body.approval_id ?? null,
       });
+
+      if (result.paymentRejected) {
+        // We signed and sent a payment but the seller answered 402 AGAIN (its
+        // facilitator rejected our payment, e.g. insufficient_funds). The
+        // reservation is kept `unknown`, not released: the signed EIP-3009
+        // authorization stays valid until it expires, and the on-chain
+        // reconcile loop (packages/core/src/reconcile.ts) releases the held
+        // budget then if the seller never actually settles it.
+        return reply.send(
+          envelope("payment_failed", "PAYMENT_REJECTED", {
+            http_status: result.httpStatus,
+            headers: result.headers,
+            body: result.body,
+            reason: result.paymentRejected.reason,
+            reserved_until_expiry: true,
+          })
+        );
+      }
 
       return reply.send(
         envelope("ok", null, {

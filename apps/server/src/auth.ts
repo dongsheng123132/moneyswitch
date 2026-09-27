@@ -70,6 +70,7 @@ export function openAiStatusForCode(code: string): number {
     case "MAX_PRICE_EXCEEDED":
     case "DAILY_BUDGET_EXCEEDED":
     case "TOTAL_BUDGET_EXCEEDED":
+    case "PAYMENT_REJECTED":
       return 402;
     case "APPROVAL_REQUIRED":
     case "APPROVAL_INVALID":
@@ -102,6 +103,8 @@ export function humanMessageForCode(code: string): string {
       return "This MoneyKey's daily budget is exhausted";
     case "TOTAL_BUDGET_EXCEEDED":
       return "This MoneyKey's total budget is exhausted";
+    case "PAYMENT_REJECTED":
+      return "Seller rejected our signed payment (its facilitator declined it); the held budget is released automatically once the authorization expires";
     case "APPROVAL_REQUIRED":
       return "Payment requires manual approval";
     case "APPROVAL_INVALID":
@@ -122,7 +125,8 @@ export function openAiError(
   message: string,
   code: string,
   approvalId?: string | null,
-  limit?: { limit_scope?: string; limit_key_prefix?: string }
+  limit?: { limit_scope?: string; limit_key_prefix?: string },
+  extra?: { reason?: string | null; reserved_until_expiry?: boolean }
 ) {
   return {
     error: {
@@ -131,6 +135,10 @@ export function openAiError(
       code,
       ...(approvalId ? { approval_id: approvalId } : {}),
       ...(limit ?? {}),
+      ...(extra?.reason !== undefined ? { reason: extra.reason } : {}),
+      ...(extra?.reserved_until_expiry !== undefined
+        ? { reserved_until_expiry: extra.reserved_until_expiry }
+        : {}),
     },
   };
 }

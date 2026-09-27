@@ -17,6 +17,7 @@ const app = createDemoSellerApp({
   facilitatorUrl: FACILITATOR_URL,
   upstreamKey: DEMO_LLM_UPSTREAM_KEY,
   upstreamModel: DEMO_LLM_UPSTREAM_MODEL,
+  testRoutes: process.env.DEMO_SELLER_TEST_ROUTES === "1",
 });
 
 assertOpenRouterModelAvailable(DEMO_LLM_UPSTREAM_KEY, DEMO_LLM_UPSTREAM_MODEL)

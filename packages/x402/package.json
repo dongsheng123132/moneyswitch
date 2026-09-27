@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"no unit tests in x402 package (covered by server test:e2e + test:testnet)\" && exit 0",
+    "test": "vitest run",
     "test:testnet": "tsx test/testnet.readonly.ts"
   },
   "dependencies": {

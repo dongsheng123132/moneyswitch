@@ -12,6 +12,7 @@ import { shellStrings } from "./i18n/strings/shell";
 import { common } from "./i18n/strings/common";
 import { useDemoMode } from "./demoMode";
 import { demoStrings } from "./i18n/strings/demo";
+import { useAdminMeta } from "./useAdminMeta";
 import "./styles/tollbooths.css";
 
 type NavKey =
@@ -50,6 +51,7 @@ export default function Layout() {
   const tc = useT(common);
   const td = useT(demoStrings);
   const demo = useDemoMode();
+  const meta = useAdminMeta();
   const { logout } = useAuth();
   const location = useLocation();
   const { data: wallet, loading: walletLoading } = usePolling(getWallet);
@@ -114,7 +116,7 @@ export default function Layout() {
           <div className="topbar-right">
             <span className={`network-badge${demo ? " demo" : ""}`}>
               <span className="network-dot" />
-              {demo ? td("networkBadge") : tc("networkTestnet")}
+              {demo ? td("networkBadge") : meta?.network_label ?? (meta?.is_mainnet ? tc("networkMainnet") : tc("networkTestnet"))}
             </span>
             {walletLoading && !wallet ? (
               <span className="wallet-chip dim">{t("walletLoading")}</span>

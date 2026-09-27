@@ -122,11 +122,29 @@ function fakeMockTxHash(): string {
   return "0xmock" + randomBytes(29).toString("hex");
 }
 
+/**
+ * v0.5.2 test-only sentinel: an atomic amount ("13") no real demo-seller
+ * route otherwise uses. Lets an e2e/unit test reproduce the "seller returns
+ * 402 again after we paid" bug reported on Monad mainnet — a real
+ * facilitator's /verify can 400 for reasons unrelated to signature validity
+ * (e.g. insufficient_funds), which @x402/core's HTTPFacilitatorClient turns
+ * into an `Error` that the resource server surfaces as another 402 with
+ * `error: "Facilitator verify failed (400): ..."`. Only reproducible here by
+ * actually answering /verify with a non-2xx status (isValid:false alone,
+ * with a 200 status, is a different — already-handled — code path).
+ */
+export const FORCE_VERIFY_REJECT_AMOUNT = "13";
+
 export function buildMockFacilitator() {
   const app = Fastify({ logger: false });
 
   app.post("/verify", async (req, reply) => {
     const body = req.body as { paymentPayload: PaymentPayload; paymentRequirements: PaymentRequirements };
+    if (body.paymentRequirements?.amount === FORCE_VERIFY_REJECT_AMOUNT) {
+      // See FORCE_VERIFY_REJECT_AMOUNT: a real facilitator's /verify returning
+      // non-2xx (not just isValid:false) is what actually reproduces the bug.
+      return reply.status(400).send({ isValid: false, invalidReason: "insufficient_funds" });
+    }
     try {
       const result = await verifyPayment(body.paymentPayload, body.paymentRequirements);
       return reply.send(result);

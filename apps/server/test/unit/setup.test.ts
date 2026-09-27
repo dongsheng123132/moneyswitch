@@ -84,6 +84,10 @@ describe("First-run setup link", () => {
     expect(body.chain_id).toBe(10143);
     expect(body.demo_seller_url).toBe("http://127.0.0.1:18021");
     expect(typeof body.cli_tarball_available).toBe("boolean");
+    expect(body.explorer_base).toBe("https://testnet.monadvision.com");
+    expect(body.network_label).toBe("Monad testnet");
+    expect(body.is_mainnet).toBe(false);
+    expect(body.faucet_url).toBe("https://faucet.circle.com/");
     expect(JSON.stringify(body)).not.toContain("ms_admin_");
   });
 

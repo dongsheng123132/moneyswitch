@@ -34,7 +34,8 @@
     "dev:seller": "pnpm --filter @moneyswitch/demo-seller dev",
     "demo:local": "node scripts/demo-local.mjs",
     "demo:testnet": "node scripts/demo-testnet.mjs",
-    "admin:reset-token": "node scripts/admin-reset-token.mjs"
+    "admin:reset-token": "node scripts/admin-reset-token.mjs",
+    "nansen:mainnet": "node scripts/nansen-mainnet.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",

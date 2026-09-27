@@ -10,6 +10,7 @@ import { common } from "./i18n/strings/common";
 import { employeeStrings } from "./i18n/strings/employee";
 import LangSwitch from "./components/LangSwitch";
 import Callout from "./components/Callout";
+import { useAdminMeta } from "./useAdminMeta";
 import "./styles/employee.css";
 
 const NAV = [
@@ -34,6 +35,9 @@ export default function EmployeeLayout() {
   const location = useLocation();
   const t = useT(employeeStrings);
   const tc = useT(common);
+  // Employee sessions don't hold an admin token, so this 403s and stays null —
+  // the badge below falls back to the testnet label, same as before.
+  const meta = useAdminMeta();
   const [keyErrorCode, setKeyErrorCode] = useState<string | null>(null);
 
   const { data: status } = usePolling(async () => {
@@ -90,7 +94,7 @@ export default function EmployeeLayout() {
             <LangSwitch />
             <span className="network-badge">
               <span className="network-dot" />
-              {tc("networkTestnet")}
+              {meta?.network_label ?? (meta?.is_mainnet ? tc("networkMainnet") : tc("networkTestnet"))}
             </span>
             <span className="wallet-chip">
               <span className="mono">{keyLabel || shortAddr(employeeKey)}</span>

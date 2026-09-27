@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { writeAudit } from "@moneyswitch/core";
-import { getActiveNetwork } from "@moneyswitch/x402";
+import { getActiveNetwork, isMainnet } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
 import { publicBase } from "./tollbooths.js";
@@ -19,7 +19,6 @@ export function defaultCliTarballPath(): string {
   return path.join(cliDir(), "pack", "moneyswitch.tgz");
 }
 
-const EXPLORER_BASE = "https://testnet.monadvision.com";
 const FAUCET_URL = "https://faucet.circle.com/";
 
 /**
@@ -68,8 +67,11 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       network: network.caip2,
       chain_id: chainId,
       usdc_address: network.usdcAddress,
-      explorer_base: EXPLORER_BASE,
-      faucet_url: FAUCET_URL,
+      explorer_base: network.explorerBase,
+      network_label: network.label,
+      is_mainnet: isMainnet(),
+      // Circle's faucet only mints testnet USDC — pointing it at mainnet would be misleading.
+      faucet_url: isMainnet() ? null : FAUCET_URL,
       demo_seller_url: ctx.config.demoSellerUrl ?? null,
       cli_tarball_available: fs.existsSync(tarball),
       cli_local_path: fs.existsSync(cliJs) ? cliJs.replace(/\\/g, "/") : null,

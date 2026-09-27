@@ -44,6 +44,44 @@ export interface PaidFetchResult {
   approvalId: string | null;
   /** v0.2: id of the payment row this call reserved/settled, or null if no payment was attempted. */
   paymentId: string | null;
+  /**
+   * v0.5.2: set when we signed and sent a payment but the seller answered
+   * 402 AGAIN (e.g. its facilitator's /verify rejected it — insufficient
+   * funds, bad signature, etc). The reservation is kept `unknown` (see
+   * markUnknown(..., "PAYMENT_REJECTED") below), not failed/released: the
+   * signed EIP-3009 authorization stays valid until validBefore and could
+   * still be settled by the seller later; reconcile.ts releases it after
+   * expiry if it was never used on-chain.
+   */
+  paymentRejected: { reason: string | null } | null;
+}
+
+const REJECTION_REASON_MAX_LEN = 300;
+
+/**
+ * Best-effort extraction of the seller's stated rejection reason from a 402
+ * response. Untrusted, seller-controlled text — never used for any logic
+ * decision, only surfaced to the caller for debugging. Strips control chars
+ * and truncates defensively before it ever reaches a log or HTTP response.
+ */
+function extractRejectionReason(parsedBody: unknown, rawBody: string): string | null {
+  let candidate: unknown;
+  if (parsedBody && typeof parsedBody === "object" && "error" in (parsedBody as Record<string, unknown>)) {
+    candidate = (parsedBody as Record<string, unknown>).error;
+  } else if (typeof rawBody === "string" && rawBody.length > 0) {
+    try {
+      const asJson = JSON.parse(rawBody);
+      if (asJson && typeof asJson === "object" && "error" in asJson) {
+        candidate = (asJson as Record<string, unknown>).error;
+      }
+    } catch {
+      // not JSON; nothing to extract.
+    }
+  }
+  if (typeof candidate !== "string" || candidate.length === 0) return null;
+  // eslint-disable-next-line no-control-regex
+  const stripped = candidate.replace(/[\x00-\x1F\x7F]/g, "");
+  return stripped.length > REJECTION_REASON_MAX_LEN ? stripped.slice(0, REJECTION_REASON_MAX_LEN) : stripped;
 }
 
 /** Error codes our own onBeforePaymentCreation hook can abort with (closure-trusted, never parsed from response/error text). */
@@ -279,6 +317,7 @@ export async function performPaidFetch(
   }
 
   let payment: PaidFetchResult["payment"] = null;
+  let paymentRejected: PaidFetchResult["paymentRejected"] = null;
   if (paymentId && reservedAmount != null) {
     if (parsed.paymentStatus === "settled" && parsed.header && "success" in parsed.header) {
       const settle = parsed.header as { success: boolean; transaction: string; extra?: Record<string, unknown> };
@@ -295,6 +334,27 @@ export async function performPaidFetch(
       }
     } else if (parsed.paymentStatus === "settle_failed") {
       failPayment(db, paymentId, "PAYMENT_FAILED");
+    } else if (parsed.status === 402) {
+      // We already signed and sent an EIP-3009 payment for this request (paymentId
+      // is set), yet the seller answered 402 again — its facilitator rejected our
+      // payment (e.g. insufficient_funds), or it otherwise declined to honor it.
+      // Do NOT release/fail the reservation: the signed authorization stays valid
+      // until validBefore and the seller could still settle it later; the on-chain
+      // reconcile loop (packages/core/src/reconcile.ts) releases it after expiry
+      // if it was never used.
+      let rejectionReason: string | null = null;
+      if (
+        parsed.header &&
+        !("success" in parsed.header) &&
+        typeof (parsed.header as { error?: unknown }).error === "string"
+      ) {
+        rejectionReason = extractRejectionReason(parsed.header, "");
+      }
+      if (rejectionReason == null) {
+        rejectionReason = extractRejectionReason(parsed.body, rawBody);
+      }
+      markUnknown(db, paymentId, "PAYMENT_REJECTED");
+      paymentRejected = { reason: rejectionReason };
     } else {
       // No settlement info at all (transport-level oddity after payment was
       // reserved): keep the reservation, mark unknown per SPEC §6 step 6.
@@ -309,5 +369,6 @@ export async function performPaidFetch(
     payment,
     approvalId: approvalIdUsed,
     paymentId,
+    paymentRejected,
   };
 }

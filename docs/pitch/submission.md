@@ -7,9 +7,10 @@ MoneySwitch
 Give your AI an API key for money — x402 USDC payments on Monad, plug-and-play.
 中文：让 AI 花钱，像用 API Key 一样。x402，即插即用。
 
-## 赛道建议
-主：Consumer Products & Payments（Agent 支付 / USDC / x402）
-次：Trust, Identity & AI Infrastructure（AI 授权、预算、风控）
+## 赛道与赏金（平台已选，2026-09-27）
+主赛道：Trust, Identity & AI Infrastructure（Track 04 —— 给其他应用用的基础设施，不是独立 C 端产品）
+赏金：Mera: One Passkey, Many Keys · Best use of Nansen · Best Builds with Qwen 3.8 Max
+截止：2026-10-14 11:59 GMT+8（10-02 开放提交）
 
 ## 简介（短，~300 字符）
 x402 lets AI agents pay per request in USDC, but using it today means putting a private key inside every agent and wiring 402 / EIP-3009 / facilitators by hand. MoneySwitch turns it into something everyone already knows: an API key. Agents get a revocable `mk_live_` MoneyKey with budgets, per-request limits and human approval; MoneySwitch checks policy before signing and settles in USDC on Monad. Works with any OpenAI/NewAPI client, MCP (Claude Code, Codex) and a one-click desktop console. Sellers can put a toll booth in front of any API to get paid — no secrets, just a public address.
@@ -26,6 +27,8 @@ x402 lets AI agents pay per request in USDC, but using it today means putting a 
 - **Safety UX for normal people**: "three things" everywhere — private key (never shown), MoneyKey (secret), receiving address (public) — with paste guards that block putting a MoneyKey into an address field.
 
 **Built on existing rails, no new protocol or token**: official x402 SDK (`@x402/*`), Monad, Circle USDC, Monad's x402 facilitator.
+
+**Proof on Monad mainnet** (real money): an agent's MoneyKey (scoped to api.nansen.ai, $0.01/request, $0.03 total) bought Nansen's Token Screener for Monad over x402 — 0.01 USDC settled on Monad mainnet (tx 0x98297ba48601af6b2acc032f280db1c292de1071c754921d24a27464e3ce5e9c, block 108465232), gas paid by the Molandak facilitator.
 
 **Proof on Monad testnet** (all on-chain): 12 real x402 USDC settlements, 0 mock — including Claude Code paying by itself via MCP (tx 0x1cdf773ecc03c84f3aabaa8b4426fb6d4fd2cfd1c87e77cb8869cd2870dc2729), an admin-approved payment (0x7f599d6831f269f58f28726fe2c88f7a2d115636b5ca323ac4ab423b6b08e165), an OpenAI-SDK chat paid per message (0xd3697cadea90194c9878f5584d7d22eeb5d877b94006da76021cfb539f9680ad) and a toll booth purchase (0x6239ce7d620807ae8a6963ab3b84b1d53c6ab6b8009cdc9da608c0e92742d38c). The agent vault needs 0 MON — the facilitator pays gas. 300+ automated tests.
 

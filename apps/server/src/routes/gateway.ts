@@ -149,6 +149,22 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
         model: body.model,
       });
 
+      if (result.paymentRejected) {
+        // We signed and sent a payment but the seller answered 402 AGAIN (its
+        // facilitator rejected it). Consistent with the other payment-failure
+        // paths above: OpenAI-shaped error, 402, reason surfaced. The
+        // reservation is kept `unknown` (not released) until the signed
+        // authorization expires — see performPaidFetch/reconcile.ts.
+        return reply
+          .status(openAiStatusForCode("PAYMENT_REJECTED"))
+          .send(
+            openAiError(humanMessageForCode("PAYMENT_REJECTED"), "PAYMENT_REJECTED", null, undefined, {
+              reason: result.paymentRejected.reason,
+              reserved_until_expiry: true,
+            })
+          );
+      }
+
       let upstreamJson: Record<string, unknown>;
       try {
         upstreamJson = JSON.parse(result.body);

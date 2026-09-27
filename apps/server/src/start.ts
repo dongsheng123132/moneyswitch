@@ -3,6 +3,7 @@ import type { ServerConfig } from "./config.js";
 import { buildContext, type AppContext, type BuildContextOptions } from "./context.js";
 import { buildApp } from "./app.js";
 import { startReconcileLoop } from "./reconcileJob.js";
+import { getActiveNetwork, isMainnet } from "@moneyswitch/x402";
 
 export { loadConfig, type ServerConfig, type DemoModeInfo } from "./config.js";
 export type { AppContext, FirstRunSecrets, BuildContextOptions } from "./context.js";
@@ -21,6 +22,20 @@ export interface RunningServer {
  * the `moneyswitch-server` npm package (self-host + offline demo).
  */
 export async function startServer(config: ServerConfig, opts: BuildContextOptions = {}): Promise<RunningServer> {
+  if (isMainnet()) {
+    const network = getActiveNetwork();
+    if (!network.rpcUrl) {
+      throw new Error(
+        "MONEYSWITCH_MAINNET_ENABLED=true but the mainnet rpcUrl is empty — refusing to start " +
+          "(set MONEYSWITCH_MAINNET_RPC_URL, or leave MONEYSWITCH_MAINNET_ENABLED unset to use testnet)."
+      );
+    }
+    // Loud, one-time: this mode moves REAL USDC on Monad mainnet.
+    console.warn(
+      `[moneyswitch] WARNING: MONEYSWITCH_MAINNET_ENABLED=true — this server pays with REAL USDC on ${network.label} ` +
+        `(${network.caip2}, rpc ${network.rpcUrl}). There is no undo. Make sure this is intentional.`
+    );
+  }
   const ctx = await buildContext(config, opts);
   const app = buildApp(ctx);
   try {

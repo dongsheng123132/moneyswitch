@@ -727,7 +727,11 @@ export interface AdminMeta {
   chain_id: number | null;
   usdc_address: string;
   explorer_base: string;
-  faucet_url: string;
+  /** Human-readable network name, e.g. "Monad testnet" / "Monad mainnet". */
+  network_label?: string;
+  /** True when the active network is Monad mainnet (real USDC). */
+  is_mainnet?: boolean;
+  faucet_url: string | null;
   demo_seller_url: string | null;
   cli_tarball_available: boolean;
   cli_local_path: string | null;

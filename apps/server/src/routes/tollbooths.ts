@@ -253,7 +253,7 @@ export function registerTollboothRoutes(app: FastifyInstance, ctx: AppContext) {
           usdcAddress: n.usdcAddress,
           usdcDomainName: n.usdcDomainName,
           usdcDomainVersion: n.usdcDomainVersion,
-          label: n.caip2 === "eip155:10143" ? "Monad testnet" : n.caip2,
+          label: n.label,
         },
       });
     }

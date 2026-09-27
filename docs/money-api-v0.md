@@ -173,6 +173,7 @@ errors)
 | `APPROVAL_INVALID` | `approval_id` given but not valid (wrong key/url/method/body, expired, already used, or not yet approved) | (fetch-only; `denied`) |
 | `WALLET_LOCKED` | The server's wallet is locked; cannot sign | (fetch-only; `error`) |
 | `PAYMENT_FAILED` | Payment definitively failed | (fetch-only; `payment_failed`) |
+| `PAYMENT_REJECTED` | Seller answered 402 again after we signed and sent payment (its facilitator rejected it); reservation kept `unknown`, held until the signed authorization expires, then auto-released | (fetch-only; `payment_failed`) |
 | `UPSTREAM_ERROR` | Unexpected error reaching the priced resource / channel | (fetch-only; `error`) |
 | `FORBIDDEN` | Malformed request (e.g. invalid `url`) | (fetch-only; `error`) |
 | `model_not_found` | `/v1/chat/completions`: no enabled channel serves the requested `model` | 404 |

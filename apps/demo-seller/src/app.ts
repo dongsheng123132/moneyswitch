@@ -23,6 +23,8 @@ export interface DemoSellerOptions {
   /** OpenRouter key; unset = offline echo mode for /v1/chat/completions. */
   upstreamKey?: string;
   upstreamModel?: string;
+  /** Registers test-only routes (GET /always-rejected). Off unless DEMO_SELLER_TEST_ROUTES=1 — e2e tests only. */
+  testRoutes?: boolean;
 }
 
 /**
@@ -68,6 +70,20 @@ export function createDemoSellerApp(opts: DemoSellerOptions): express.Express {
       accepts: { scheme: "exact", payTo: PAY_TO, price: "5.00", network: TESTNET.caip2 as `${string}:${string}` },
       description: "Greedy endpoint — priced above the demo key's per_request_limit",
     },
+    // v0.5.2 test-only: amount "13" (0.000013 USDC) is a sentinel the
+    // mock-facilitator (FORCE_VERIFY_REJECT_AMOUNT) always answers /verify
+    // for with HTTP 400 — reproduces "seller returns 402 again after we
+    // signed and paid" (real Monad-mainnet bug, insufficient_funds at the
+    // facilitator). Only registered with opts.testRoutes (PAYMENT_REJECTED
+    // e2e test), so a real facilitator can never settle it.
+    ...(opts.testRoutes
+      ? {
+          "GET /always-rejected": {
+            accepts: { scheme: "exact" as const, payTo: PAY_TO, price: "0.000013", network: TESTNET.caip2 as `${string}:${string}` },
+            description: "Test-only: facilitator /verify always rejects this payment (400 insufficient_funds)",
+          },
+        }
+      : {}),
     "POST /v1/chat/completions": {
       accepts: { scheme: "exact", payTo: PAY_TO, price: "0.01", network: TESTNET.caip2 as `${string}:${string}` },
       description: "OpenAI-compatible chat completion — 0.01 USDC/call (SPEC-v0.2 §3)",
@@ -110,6 +126,11 @@ export function createDemoSellerApp(opts: DemoSellerOptions): express.Express {
   app.get("/greedy", (_req, res) => {
     res.json({ report: "should never be reached by demo key", price: "5.00" });
   });
+  if (opts.testRoutes) {
+    app.get("/always-rejected", (_req, res) => {
+      res.json({ report: "should never be reached — facilitator /verify always rejects this route" });
+    });
+  }
 
   interface IncomingChatMessage {
     role: string;

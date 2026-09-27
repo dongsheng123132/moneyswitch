@@ -19,6 +19,10 @@ export interface NetworkConfig {
   usdcDecimals: number;
   /** x402 facilitator base URL. */
   facilitatorUrl: string;
+  /** Human-readable name shown in the Dashboard/CLI, e.g. "Monad testnet". */
+  label: string;
+  /** Block explorer base URL (no trailing slash), e.g. "https://testnet.monadvision.com". */
+  explorerBase: string;
 }
 
 function env(name: string, fallback: string): string {
@@ -39,11 +43,14 @@ export const TESTNET: NetworkConfig = {
     "MONEYSWITCH_FACILITATOR_URL",
     "https://x402-facilitator.molandak.org"
   ),
+  label: env("MONEYSWITCH_TESTNET_LABEL", "Monad testnet"),
+  explorerBase: env("MONEYSWITCH_TESTNET_EXPLORER_BASE", "https://testnet.monadvision.com"),
 };
 
 export const MAINNET: NetworkConfig = {
   caip2: env("MONEYSWITCH_MAINNET_CAIP2", "eip155:143"),
-  rpcUrl: env("MONEYSWITCH_MAINNET_RPC_URL", ""),
+  // Verified 2026-09-27: https://rpc.monad.xyz responds with chainId 0x8f (143).
+  rpcUrl: env("MONEYSWITCH_MAINNET_RPC_URL", "https://rpc.monad.xyz"),
   usdcAddress: env(
     "MONEYSWITCH_MAINNET_USDC_ADDRESS",
     "0x754704Bc059F8C67012fEd69BC8A327a5aafb603"
@@ -55,14 +62,21 @@ export const MAINNET: NetworkConfig = {
     "MONEYSWITCH_FACILITATOR_URL",
     "https://x402-facilitator.molandak.org"
   ),
+  label: env("MONEYSWITCH_MAINNET_LABEL", "Monad mainnet"),
+  explorerBase: env("MONEYSWITCH_MAINNET_EXPLORER_BASE", "https://monadvision.com"),
 };
 
-/** v0.1: mainnet is defined but disabled by default; only testnet is used unless explicitly enabled. */
+/** Mainnet is defined but disabled by default (MONEYSWITCH_MAINNET_ENABLED=true opts in); testnet is used otherwise. */
 export const MAINNET_ENABLED = env("MONEYSWITCH_MAINNET_ENABLED", "false") === "true";
 
 export function getActiveNetwork(): NetworkConfig {
   if (MAINNET_ENABLED) return MAINNET;
   return TESTNET;
+}
+
+/** True when the active network is Monad mainnet (real USDC, real funds). */
+export function isMainnet(): boolean {
+  return getActiveNetwork() === MAINNET;
 }
 
 export const SCHEME = "exact" as const;
