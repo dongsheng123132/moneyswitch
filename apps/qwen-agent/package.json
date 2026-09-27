@@ -1,0 +1,27 @@
+{
+  "name": "@moneyswitch/qwen-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo research agent: Qwen (OpenAI-compatible tool calling) buys Nansen on-chain data through MoneySwitch under a USDC budget to answer questions about Monad activity.",
+  "type": "module",
+  "main": "./dist/cli.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run test/unit",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "openai": "^7.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.5",
+    "typescript": "5.7.3",
+    "vitest": "5.0.2"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
+    "directory": "apps/qwen-agent"
+  }
+}
