@@ -26,6 +26,8 @@
   // ---------- page number inside each slide (also shows in print) ----------
   slides.forEach(function (s, i) {
     var pg = s.querySelector(".ftr .pg");
+    var sec = s.querySelector(".hdr .sec");
+    if (sec) sec.textContent = String(i).padStart(2, "0") + " · " + sec.textContent;
     if (pg) pg.innerHTML = "<b>" + String(i + 1).padStart(2, "0") + "</b> / " + String(total).padStart(2, "0");
   });
 
