@@ -38,7 +38,8 @@ x402 lets AI agents pay per request in USDC, but using it today means putting a 
 
 ## 链接
 - GitHub: https://github.com/dongsheng123132/moneyswitch
-- 官网: https://moneyswitch.dev （DNS 生效前用 https://dongsheng123132.github.io/moneyswitch/）
+- 官网: https://moneyswitch.dev （2026-09-27 上线，HTTPS）
+- 博客: https://moneyswitch.dev/blog/qwen-agent-pays-nansen/ （中文 /zh/）
 - npm: https://www.npmjs.com/package/moneyswitch
 - 演示视频: https://github.com/dongsheng123132/moneyswitch/releases （v0.5.1 Release 附 89 秒视频；v0.4.0 已附 70 秒版）
 - Pitch deck PDF: 同 Release 附件
