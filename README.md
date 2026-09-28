@@ -250,6 +250,29 @@ or private key as `--pay-to`.
 Full threat model: [`docs/security.md`](docs/security.md) /
 [`SECURITY.md`](SECURITY.md).
 
+## Behind a proxy (Clash / v2rayN)
+
+If outbound HTTPS to the facilitator, an RPC endpoint, or a seller (e.g. a
+`*.vercel.app` host) times out because you're behind a regional/corporate
+proxy, the server and CLI (`sell`/`demo`) auto-detect one and route every
+outbound `fetch` through it — no code changes needed. Resolution order:
+
+1. `MONEYSWITCH_PROXY` — `"off"` (never proxy), `"auto"` (default), or a
+   literal proxy URL (`http://127.0.0.1:7897`, or bare `127.0.0.1:7897`).
+2. Standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` (either case).
+3. On Windows only, the system proxy toggle (Settings → Network → Proxy;
+   the same one Clash Verge/v2rayN turn on for you).
+
+`localhost`, loopback, and private/CGNAT ranges (`10/8`, `172.16/12`,
+`192.168/16`, `100.64/10`) always connect directly, so the toll booth's own
+`--upstream`, the local MoneySwitch server itself and other LAN services
+stay reachable even with a proxy installed; `NO_PROXY`/`no_proxy` (and, on
+Windows, the proxy's bypass list) add more direct-connect hosts on top of
+that. The server logs the source it picked on startup
+(`outbound proxy: http://127.0.0.1:7897 (source: windows-system)`, or
+`outbound proxy: none (direct)`) and exposes `host:port` + source (never
+credentials) at `GET /v1/admin/meta`'s `outbound_proxy` field.
+
 ## Monad testnet
 
 MoneySwitch's x402 client and mock-facilitator test suite are built against

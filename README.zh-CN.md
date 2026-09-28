@@ -228,6 +228,27 @@ MoneyKey 或私钥当 `--pay-to` 会被直接拒绝。
 完整威胁模型：[`docs/security.md`](docs/security.md) /
 [`SECURITY.md`](SECURITY.md)。
 
+## 在代理后面使用（Clash / v2rayN）
+
+如果出站 HTTPS（facilitator、RPC、卖方，例如某个 `*.vercel.app` 域名）因为你在
+大陆/公司网络的代理后面而超时，server 和 CLI（`sell`/`demo`）会自动探测代理并
+让所有出站 `fetch` 走它，不需要改代码。解析优先级：
+
+1. `MONEYSWITCH_PROXY`——`"off"`（永远不代理）、`"auto"`（默认）、或一个具体的
+   代理 URL（`http://127.0.0.1:7897`，或裸 `127.0.0.1:7897`）。
+2. 标准的 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY`（大小写都认）。
+3. 仅 Windows：系统代理开关（设置 → 网络 → 代理；Clash Verge/v2rayN 帮你打开的
+   就是这个）。
+
+`localhost`、loopback、以及私网/CGNAT 网段（`10/8`、`172.16/12`、`192.168/16`、
+`100.64/10`）永远直连——这样收费站自己的 `--upstream`、本机 MoneySwitch 自身、
+以及局域网里的其他服务，即使装了代理也照样可达；`NO_PROXY`/`no_proxy`（在
+Windows 上还有代理的例外名单）会在此基础上追加更多直连的主机。Server 启动时会
+打印它选中的来源（`outbound proxy: http://127.0.0.1:7897 (source:
+windows-system)`，或 `outbound proxy: none (direct)`），并在
+`GET /v1/admin/meta` 的 `outbound_proxy` 字段里暴露 `host:port` + 来源（不含
+认证信息）。
+
 ## Monad 测试网
 
 MoneySwitch 的 x402 客户端与 mock-facilitator 测试套件基于下表这些测试网

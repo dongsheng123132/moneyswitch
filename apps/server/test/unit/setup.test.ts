@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect, afterEach } from "vitest";
+import { getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { SetupTokenStore } from "@moneyswitch/core";
+import { installOutboundProxy } from "@moneyswitch/net";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 
 let t: TestCtx;
@@ -89,6 +91,24 @@ describe("First-run setup link", () => {
     expect(body.is_mainnet).toBe(false);
     expect(body.faucet_url).toBe("https://faucet.circle.com/");
     expect(JSON.stringify(body)).not.toContain("ms_admin_");
+  });
+
+  it("/v1/admin/meta outbound_proxy: null/none before install, host:port + source (no credentials) after", async () => {
+    t = await buildTestApp();
+    const before = await t.app.inject({ method: "GET", url: "/v1/admin/meta", headers: { authorization: `Bearer ${t.adminToken}` } });
+    expect(before.json().outbound_proxy).toEqual({ host_port: null, source: "none" });
+
+    const originalDispatcher = getGlobalDispatcher();
+    try {
+      installOutboundProxy({ env: { MONEYSWITCH_PROXY: "http://user:secret@127.0.0.1:7897" }, platform: "linux" });
+      const after = await t.app.inject({ method: "GET", url: "/v1/admin/meta", headers: { authorization: `Bearer ${t.adminToken}` } });
+      const body = after.json();
+      expect(body.outbound_proxy).toEqual({ host_port: "127.0.0.1:7897", source: "MONEYSWITCH_PROXY" });
+      expect(JSON.stringify(body)).not.toContain("secret");
+      expect(JSON.stringify(body)).not.toContain("user:secret");
+    } finally {
+      setGlobalDispatcher(originalDispatcher);
+    }
   });
 
   it("/dl/moneyswitch.tgz serves the packed CLI when present, JSON 404 otherwise", async () => {

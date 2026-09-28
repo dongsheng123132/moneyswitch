@@ -28,6 +28,9 @@ MONEYSWITCH_DATA_DIR=.data/mainnet MONEYSWITCH_MAINNET_ENABLED=true MONEYSWITCH_
   node apps/server/dist/index.js
 ```
 
+（如果 Nansen/RPC/facilitator 这些出站请求因为在代理后面而超时，server 会自动
+跟随 Clash/v2rayN 之类的代理——见 README「在代理后面使用」一节，无需额外配置。）
+
 启动时会打印一条醒目的一次性警告（`WARNING: ... REAL USDC on Monad mainnet ...`）。如果
 `MONEYSWITCH_MAINNET_ENABLED=true` 但 mainnet 的 `rpcUrl` 被显式清空，server 会拒绝启动并报错，
 不会带着一个没有 RPC 的主网配置静默跑起来。

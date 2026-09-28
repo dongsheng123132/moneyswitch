@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
+import { installOutboundProxy } from "@moneyswitch/net";
 import { x402HTTPResourceServer } from "@x402/core/server";
 import type { HTTPRequestContext, RouteConfig } from "@x402/core/server";
 import { paymentMiddlewareFromHTTPServer } from "@x402/express";
@@ -406,6 +407,11 @@ export async function runSell(argv: string[]): Promise<number> {
     process.stdout.write(SELL_HELP + "\n");
     return 0;
   }
+  // Earliest point before any real work: outbound calls this makes (the
+  // x402 facilitator, forwarding to --upstream when it's a public host)
+  // should follow whatever proxy the user has configured
+  // (Clash/v2rayN/etc.) — see the README "behind a proxy" section.
+  installOutboundProxy();
   const parsed = parseSellArgs(argv);
   if (!parsed.ok) {
     process.stderr.write(`moneyswitch sell: ${parsed.error}\n\nRun "moneyswitch sell --help" for usage.\n`);

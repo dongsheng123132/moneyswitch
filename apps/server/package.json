@@ -22,6 +22,7 @@
     "@fastify/static": "10.1.4",
     "@moneyswitch/core": "workspace:*",
     "@moneyswitch/db": "workspace:*",
+    "@moneyswitch/net": "workspace:*",
     "@moneyswitch/tollbooth": "workspace:*",
     "@moneyswitch/wallet": "workspace:*",
     "@moneyswitch/x402": "workspace:*",
@@ -38,6 +39,7 @@
     "openai": "^7.23.0",
     "tsx": "4.23.15",
     "typescript": "5.7.3",
+    "undici": "7.30.0",
     "vitest": "5.0.2"
   },
   "license": "AGPL-3.0-only",

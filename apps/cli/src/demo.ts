@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { installOutboundProxy } from "@moneyswitch/net";
 
 /**
  * `moneyswitch demo` — thin launcher for the offline demo, which lives in the
@@ -128,6 +129,12 @@ export async function runDemoLauncher(args: string[], version: string): Promise<
 `);
     return 1;
   }
+  // Installs this process's outbound proxy (see the README "behind a proxy"
+  // section). Note this only affects fetch calls made directly by this CLI
+  // process; the actual download below runs as a separate `npx` child
+  // process, which follows its own npm/proxy config (HTTP_PROXY etc. in its
+  // inherited env), not this dispatcher.
+  installOutboundProxy();
   process.stderr.write(
     `moneyswitch demo: running ${inv.spec} (separate package, AGPL-3.0-only) via npx — first run downloads it…\n`
   );

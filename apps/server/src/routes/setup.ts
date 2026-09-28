@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { writeAudit } from "@moneyswitch/core";
 import { getActiveNetwork, isMainnet } from "@moneyswitch/x402";
+import { getInstalledOutboundProxy, hostPortOf } from "@moneyswitch/net";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
 import { publicBase } from "./tollbooths.js";
@@ -63,6 +64,7 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
     const cliJs = path.join(cliDir(), "dist", "cli.js");
     const mcpJs = path.join(cliDir(), "dist", "mcp.js");
     const tarball = ctx.config.cliTarballPath ?? defaultCliTarballPath();
+    const proxy = getInstalledOutboundProxy();
     return reply.send({
       network: network.caip2,
       chain_id: chainId,
@@ -83,6 +85,11 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       public_base: publicBase(ctx, req),
       public_base_from_env: Boolean(ctx.config.publicUrl),
       demo: Boolean(ctx.config.demo),
+      // Read-only: host:port + source only, never credentials (see
+      // packages/net's redactProxyUrl/hostPortOf and the README "behind a
+      // proxy" section).
+      outbound_proxy:
+        proxy && proxy.url ? { host_port: hostPortOf(proxy.url), source: proxy.source } : { host_port: null, source: proxy?.source ?? "none" },
     });
   });
 

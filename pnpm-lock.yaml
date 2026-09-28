@@ -22,7 +22,7 @@ importers:
         version: 6.17.0
       openai:
         specifier: ^7.23.0
-        version: 7.23.0(ws@8.21.0)(zod@3.25.76)
+        version: 7.23.0(undici@7.30.0)(ws@8.21.0)(zod@3.25.76)
       typescript:
         specifier: 5.7.3
         version: 5.7.3
@@ -32,6 +32,9 @@ importers:
       '@moneyswitch/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@moneyswitch/net':
+        specifier: workspace:*
+        version: link:../../packages/net
       '@moneyswitch/tollbooth':
         specifier: workspace:*
         version: link:../../packages/tollbooth
@@ -191,7 +194,7 @@ importers:
     dependencies:
       openai:
         specifier: ^7.23.0
-        version: 7.23.0(ws@8.21.0)(zod@3.25.76)
+        version: 7.23.0(undici@7.30.0)(ws@8.21.0)(zod@3.25.76)
     devDependencies:
       '@types/node':
         specifier: 22.10.5
@@ -214,6 +217,9 @@ importers:
       '@moneyswitch/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@moneyswitch/net':
+        specifier: workspace:*
+        version: link:../../packages/net
       '@moneyswitch/tollbooth':
         specifier: workspace:*
         version: link:../../packages/tollbooth
@@ -250,13 +256,16 @@ importers:
         version: 6.17.0
       openai:
         specifier: ^7.23.0
-        version: 7.23.0(ws@8.21.0)(zod@3.25.76)
+        version: 7.23.0(undici@7.30.0)(ws@8.21.0)(zod@3.25.76)
       tsx:
         specifier: 4.23.15
         version: 4.23.15
       typescript:
         specifier: 5.7.3
         version: 5.7.3
+      undici:
+        specifier: 7.30.0
+        version: 7.30.0
       vitest:
         specifier: 5.0.2
         version: 5.0.2(@types/node@26.6.2)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(tsx@4.23.15))
@@ -363,6 +372,22 @@ importers:
       typescript:
         specifier: 5.7.3
         version: 5.7.3
+
+  packages/net:
+    dependencies:
+      undici:
+        specifier: 7.30.0
+        version: 7.30.0
+    devDependencies:
+      '@types/node':
+        specifier: 22.10.5
+        version: 22.10.5
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 5.0.2
+        version: 5.0.2(@types/node@22.10.5)(vite@8.3.1(@types/node@22.10.5)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/tollbooth:
     dependencies:
@@ -2587,6 +2612,10 @@ packages:
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
+  undici@7.30.0:
+    resolution: {integrity: sha512-dkrQXeHSaoamnItlYbmzG0wFYrM0ZwDxCIg0A7aKjTyyhh9svRzCNFEzV+Vm05/yehjCzjDZ31KXfGEjYSztDQ==}
+    engines: {node: '>=20.18.1'}
+
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
     engines: {node: '>= 0.8'}
@@ -4240,8 +4269,9 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@7.23.0(ws@8.21.0)(zod@3.25.76):
+  openai@7.23.0(undici@7.30.0)(ws@8.21.0)(zod@3.25.76):
     optionalDependencies:
+      undici: 7.30.0
       ws: 8.21.0
       zod: 3.25.76
 
@@ -4576,6 +4606,8 @@ snapshots:
 
   undici-types@8.9.0:
     optional: true
+
+  undici@7.30.0: {}
 
   unpipe@1.0.0: {}
 
