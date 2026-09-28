@@ -89,6 +89,9 @@ importers:
       '@moneyswitch/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@moneyswitch/net':
+        specifier: workspace:*
+        version: link:../../packages/net
     devDependencies:
       '@types/node':
         specifier: 22.10.5
@@ -288,6 +291,9 @@ importers:
       '@moneyswitch/mock-facilitator':
         specifier: workspace:*
         version: link:../../packages/mock-facilitator
+      '@moneyswitch/net':
+        specifier: workspace:*
+        version: link:../../packages/net
       '@moneyswitch/server':
         specifier: workspace:*
         version: link:../server

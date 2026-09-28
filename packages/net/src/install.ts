@@ -70,6 +70,50 @@ class RoutingDispatcher extends Dispatcher {
 }
 
 let installed: ProxyResolution | null = null;
+let installedDispatcher: RoutingDispatcher | null = null;
+let closingDispatcher: Promise<void> | null = null;
+let beforeExitHooked = false;
+
+/**
+ * Closes the currently-installed RoutingDispatcher exactly once. Safe to
+ * call repeatedly (from repeated `beforeExit` passes): after the first call
+ * clears `installedDispatcher`, later calls are no-ops that resolve
+ * immediately, so they don't schedule further work and the process is
+ * allowed to actually go idle.
+ */
+function closeInstalledDispatcher(): Promise<void> {
+  if (!installedDispatcher) return closingDispatcher ?? Promise.resolve();
+  const dispatcher = installedDispatcher;
+  installedDispatcher = null;
+  closingDispatcher = dispatcher.close().catch(() => undefined);
+  return closingDispatcher;
+}
+
+/**
+ * On win32 (Node 24.19, confirmed via a minimal repro under Node's bundled
+ * undici + this package's undici@7.30.0 running side by side), leaving the
+ * RoutingDispatcher's keep-alive sockets/timers open through Node's normal
+ * uv_loop teardown at process exit can crash with
+ * "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file
+ * src\win\async.c" (exit code 127) even though every fetch it made
+ * completed and printed successfully. Closing the dispatcher ourselves,
+ * while the loop is otherwise idle (`beforeExit`, not a signal handler:
+ * `process.exit()` from a SIGINT/SIGTERM handler skips `beforeExit`
+ * entirely, but this codebase's own SIGINT/SIGTERM handlers — apps/server-
+ * pkg's cli.ts `stop()`, apps/cli's sell.ts/demo.ts — already own their
+ * graceful shutdown + exit code, and racing a second, competing close
+ * against those risks the same kind of double-close instead of fixing it),
+ * gives those handles a chance to finish an orderly libuv close before
+ * Node's final native teardown walks them. Hooked once per process
+ * regardless of how many times `installOutboundProxy()` is called.
+ */
+function hookBeforeExit(): void {
+  if (beforeExitHooked) return;
+  beforeExitHooked = true;
+  process.on("beforeExit", () => {
+    void closeInstalledDispatcher();
+  });
+}
 
 /** Strips userinfo (auth) from a proxy URL — never log/expose credentials. */
 export function redactProxyUrl(url: string): string {
@@ -105,7 +149,10 @@ export function installOutboundProxy(opts: ResolveOutboundProxyOptions = {}): Pr
   const resolution = resolveOutboundProxy(opts);
   installed = resolution;
   if (resolution.url) {
-    setGlobalDispatcher(new RoutingDispatcher(resolution.url, resolution.noProxy));
+    const dispatcher = new RoutingDispatcher(resolution.url, resolution.noProxy);
+    installedDispatcher = dispatcher;
+    setGlobalDispatcher(dispatcher);
+    hookBeforeExit();
   }
   return resolution;
 }
@@ -113,4 +160,16 @@ export function installOutboundProxy(opts: ResolveOutboundProxyOptions = {}): Pr
 /** The resolution from the most recent `installOutboundProxy()` call in this process, or null before that. */
 export function getInstalledOutboundProxy(): ProxyResolution | null {
   return installed;
+}
+
+/**
+ * Gracefully closes the RoutingDispatcher installed by `installOutboundProxy()`
+ * (no-op if none is installed, or it's already closed). `beforeExit` (see
+ * `hookBeforeExit`) calls this automatically for processes that exit
+ * naturally; call it explicitly, and `await` it, before any call site that
+ * itself calls `process.exit()` — `process.exit()` skips `beforeExit`
+ * entirely, so those call sites are not covered by the automatic hook.
+ */
+export function closeOutboundProxy(): Promise<void> {
+  return closeInstalledDispatcher();
 }

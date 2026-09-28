@@ -28,7 +28,8 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@moneyswitch/mcp": "workspace:*"
+    "@moneyswitch/mcp": "workspace:*",
+    "@moneyswitch/net": "workspace:*"
   },
   "devDependencies": {
     "typescript": "5.7.3",

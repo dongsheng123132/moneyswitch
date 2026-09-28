@@ -53,6 +53,7 @@
     "@moneyswitch/db": "workspace:*",
     "@moneyswitch/demo-seller": "workspace:*",
     "@moneyswitch/mock-facilitator": "workspace:*",
+    "@moneyswitch/net": "workspace:*",
     "@moneyswitch/server": "workspace:*",
     "@moneyswitch/wallet": "workspace:*",
     "@types/node": "22.10.5",

@@ -1,9 +1,24 @@
 import os from "node:os";
 import path from "node:path";
+import { installOutboundProxy, redactProxyUrl } from "@moneyswitch/net";
 import { loadConfig, startServer } from "@moneyswitch/server/start";
 import { parseArgs, DEFAULT_HOST, DEFAULT_PORT } from "./args.js";
 import { bundledDashboardDir, bundledMigrationsDir } from "./paths.js";
 import { runDemo } from "./demo.js";
+
+// Earliest possible point: before parseArgs()/serve()/runDemo() make any
+// outbound call themselves (facilitator, viem RPC, toll booth forwarding,
+// paid_fetch all go through the global fetch dispatcher this installs) —
+// mirrors apps/server/src/index.ts, which this npx-installed package does
+// not import (it consumes @moneyswitch/server/start directly, not its
+// entrypoint), so the proxy install here is this package's own copy of the
+// same "earliest point" wiring, not a duplicate of an already-installed one.
+const outboundProxy = installOutboundProxy();
+console.log(
+  outboundProxy.url
+    ? `[moneyswitch] outbound proxy: ${redactProxyUrl(outboundProxy.url)} (source: ${outboundProxy.source})`
+    : "[moneyswitch] outbound proxy: none (direct)"
+);
 
 declare const __MONEYSWITCH_SERVER_VERSION__: string | undefined;
 export const VERSION = typeof __MONEYSWITCH_SERVER_VERSION__ === "string" ? __MONEYSWITCH_SERVER_VERSION__ : "0.0.0-dev";
