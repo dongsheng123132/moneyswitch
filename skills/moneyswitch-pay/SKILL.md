@@ -14,7 +14,7 @@ Read two environment variables:
 - `MONEY_API_BASE`: URL of the user's MoneySwitch server
 - `MONEY_API_KEY`: the user's MoneyKey (`mk_live_...`)
 
-If either is missing, do not guess: ask the user to paste their MoneySwitch skill (the text they copy from the MoneySwitch dashboard: Money Keys > "Give this to your AI"). That text contains both values and replaces this file.
+If either is missing, do not guess: ask the user to paste their MoneySwitch skill (the text they copy from the MoneySwitch dashboard: Money Keys > "Give this to your AI"). That text holds both values and says where to save it. It replaces this generic skill: follow it and do not keep two copies.
 
 **The key is a secret.** Never print it or repeat it in chat, logs, code or git. Never put it in a URL or query string. Send it only to the MoneySwitch server (`MONEY_API_BASE`), in the `Authorization` header, never to a seller or any other host.
 
@@ -41,7 +41,7 @@ curl -sS --max-time 120 "$MONEY_API_BASE/v1/fetch" \
 ```powershell
 $base = $env:MONEY_API_BASE
 $key = $env:MONEY_API_KEY
-$req = @{ url = "https://api.example.com/paid-data"; method = "GET"; max_price = "0.05" }
+$req = [ordered]@{ url = "https://api.example.com/paid-data"; method = "GET"; max_price = "0.05" }
 $json = $req | ConvertTo-Json -Depth 10
 Invoke-RestMethod -Method Post -Uri "$base/v1/fetch" -TimeoutSec 120 `
   -Headers @{ Authorization = "Bearer $key" } -ContentType "application/json; charset=utf-8" `
@@ -63,7 +63,7 @@ except urllib.error.HTTPError as e:  # 401 etc. also carry a JSON body
 print(result["status"], result.get("charged"), result.get("code"))
 ```
 
-In PowerShell always pass `-Depth` (10 or more) to `ConvertTo-Json` when `headers` or `body` are nested; the default depth of 2 silently flattens them. To resend after an approval, send the same JSON again with `"approval_id"` added.
+In PowerShell build every object you send (the request, and a nested `headers` or `body`) with `[ordered]@{...}`: a plain `@{...}` gets a different key order in every PowerShell 7 process, and an approval only matches a `body` with the same keys in the same order. Always pass `-Depth` (10 or more) to `ConvertTo-Json` when `headers` or `body` are nested; the default depth of 2 silently flattens them. To resend after an approval, send the same request again (same `body`, same key order) with `"approval_id"` added.
 
 ## Read the result
 

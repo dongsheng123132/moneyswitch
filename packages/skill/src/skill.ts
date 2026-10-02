@@ -63,7 +63,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
       "- `MONEY_API_KEY`: the user's MoneyKey (`mk_live_...`)",
       "",
       "If either is missing, do not guess: ask the user to paste their MoneySwitch skill (the text they copy from the MoneySwitch dashboard: Money Keys > \"Give this to your AI\"). " +
-        "That text contains both values and replaces this file."
+        "That text holds both values and says where to save it. It replaces this generic skill: follow it and do not keep two copies."
     );
   }
   push("");
@@ -110,7 +110,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     ...fence("powershell", [
       personal ? `$base = "${base}"` : "$base = $env:MONEY_API_BASE",
       personal ? `$key = "${key}"` : "$key = $env:MONEY_API_KEY",
-      `$req = @{ url = "${EXAMPLE_URL}"; method = "GET"; max_price = "0.05" }`,
+      `$req = [ordered]@{ url = "${EXAMPLE_URL}"; method = "GET"; max_price = "0.05" }`,
       "$json = $req | ConvertTo-Json -Depth 10",
       'Invoke-RestMethod -Method Post -Uri "$base/v1/fetch" -TimeoutSec 120 `',
       '  -Headers @{ Authorization = "Bearer $key" } -ContentType "application/json; charset=utf-8" `',
@@ -136,8 +136,10 @@ export function renderSkill(input: RenderSkillInput = {}): string {
   );
   push("");
   push(
-    "In PowerShell always pass `-Depth` (10 or more) to `ConvertTo-Json` when `headers` or `body` are nested; the default depth of 2 silently flattens them. " +
-      'To resend after an approval, send the same JSON again with `"approval_id"` added.',
+    "In PowerShell build every object you send (the request, and a nested `headers` or `body`) with `[ordered]@{...}`: a plain `@{...}` gets a different key order in every PowerShell 7 process, " +
+      "and an approval only matches a `body` with the same keys in the same order. " +
+      "Always pass `-Depth` (10 or more) to `ConvertTo-Json` when `headers` or `body` are nested; the default depth of 2 silently flattens them. " +
+      'To resend after an approval, send the same request again (same `body`, same key order) with `"approval_id"` added.',
     ""
   );
 

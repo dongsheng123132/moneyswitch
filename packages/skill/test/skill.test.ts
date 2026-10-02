@@ -10,9 +10,12 @@ import {
   SKILL_END_MARKER,
   SKILL_AGENTS,
   AGENT_INFO,
+  SHARED_SKILLS_ROOT,
   guessAgentFromName,
   isSkillAgent,
   normalizeBaseUrl,
+  type AgentInfo,
+  type SkillAgent,
 } from "../src/index.js";
 
 const BASE = "https://pay.example.com";
@@ -21,6 +24,8 @@ const KEY_SHAPE = /mk_live_[A-Za-z0-9]{8,}/;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const nl = (s: string) => s.replace(/\r\n/g, "\n");
+/** The instruction part of an install prompt (everything before the BEGIN marker). */
+const headOf = (prompt: string) => prompt.slice(0, prompt.indexOf(SKILL_BEGIN_MARKER));
 
 describe("renderSkill: personalized", () => {
   const text = renderSkill({ baseUrl: BASE, key: KEY, keyName: "Codex" });
@@ -157,6 +162,38 @@ describe("renderSkill: content contract", () => {
   });
 });
 
+// An approval is bound to sha256(JSON.stringify(body)) in the key order the client sent. A plain @{...} hashtable has a
+// different key order in every PowerShell 7 process (verified: six `pwsh` runs, six orders), so a body rebuilt in a new
+// process after the user approved would be refused as APPROVAL_INVALID. [ordered]@{...} keeps the order we wrote.
+describe("renderSkill: PowerShell keeps key order (approval resend)", () => {
+  const variants: Array<[string, string]> = [
+    ["personalized", renderSkill({ baseUrl: BASE, key: KEY })],
+    ["generic", renderSkill({})],
+  ];
+
+  it.each(variants)("%s: the example builds the request with [ordered]@{...}, never a plain hashtable", (_name, text) => {
+    const ps = /```powershell\n([\s\S]*?)\n```/.exec(text)![1];
+    expect(ps).toContain("$req = [ordered]@{");
+    expect(ps).not.toMatch(/\$req\s*=\s*@\{/);
+  });
+
+  it.each(variants)("%s: tells the agent to use [ordered] for nested headers/body and to resend the same body with the same key order", (_name, text) => {
+    expect(text).toContain("`[ordered]@{...}`");
+    expect(text).toContain("a different key order in every PowerShell 7 process");
+    expect(text).toContain("an approval only matches a `body` with the same keys in the same order");
+    expect(text).toContain("(same `body`, same key order)");
+  });
+});
+
+describe("renderSkill: the generic skill is replaced by the personalized one, not kept next to it", () => {
+  it("says the pasted text says where to save it and replaces the generic skill", () => {
+    const generic = renderSkill({});
+    expect(generic).toContain("says where to save it");
+    expect(generic).toContain("It replaces this generic skill: follow it and do not keep two copies");
+    expect(generic).not.toContain("replaces this file");
+  });
+});
+
 describe("renderSkill: input safety (the text is pasted into shells)", () => {
   it.each([
     ['a"b'],
@@ -224,10 +261,9 @@ describe("renderInstallPrompt", () => {
   });
 
   it.each([
-    ["codex", "~/.agents/skills/moneyswitch-pay/SKILL.md", "%USERPROFILE%\\.agents\\skills\\moneyswitch-pay\\SKILL.md"],
+    ["codex", "~/.codex/skills/moneyswitch-pay/SKILL.md", "%USERPROFILE%\\.codex\\skills\\moneyswitch-pay\\SKILL.md"],
     ["claude-code", "~/.claude/skills/moneyswitch-pay/SKILL.md", "%USERPROFILE%\\.claude\\skills\\moneyswitch-pay\\SKILL.md"],
-    ["openclaw", "~/.openclaw/skills/moneyswitch-pay/SKILL.md", "%USERPROFILE%\\.openclaw\\skills\\moneyswitch-pay\\SKILL.md"],
-    ["hermes", "~/.hermes/skills/moneyswitch-pay/SKILL.md", "%USERPROFILE%\\.hermes\\skills\\moneyswitch-pay\\SKILL.md"],
+    ["openclaw", "~/.openclaw/workspace/skills/moneyswitch-pay/SKILL.md", "%USERPROFILE%\\.openclaw\\workspace\\skills\\moneyswitch-pay\\SKILL.md"],
   ] as const)("%s saves to %s (Windows: %s)", (agent, p, win) => {
     const text = renderInstallPrompt({ ...base, agent });
     const head = text.slice(0, text.indexOf(SKILL_BEGIN_MARKER));
@@ -241,16 +277,47 @@ describe("renderInstallPrompt", () => {
     }
   });
 
-  it("Codex mentions its second, legacy-but-still-read location in a hint", () => {
-    const text = renderInstallPrompt({ ...base, agent: "codex" });
-    expect(text.slice(0, text.indexOf(SKILL_BEGIN_MARKER))).toContain("Codex also reads ~/.codex/skills/moneyswitch-pay/SKILL.md");
+  it("Codex: its own $CODEX_HOME/skills, never the cross-agent ~/.agents/skills that OpenClaw also reads", () => {
+    const head = headOf(renderInstallPrompt({ ...base, agent: "codex" }));
+    expect(head).toContain("    ~/.codex/skills/moneyswitch-pay/SKILL.md\n");
+    expect(head).toContain("or $CODEX_HOME/skills/moneyswitch-pay/SKILL.md if CODEX_HOME is set");
+    expect(head).not.toContain("    ~/.agents/skills/moneyswitch-pay");
+    expect(head).not.toContain("Codex also reads");
+  });
+
+  it("OpenClaw: the per-agent workspace skills folder (outranks the shared folders and is where a ClawHub install lands), not the shared ~/.openclaw/skills", () => {
+    const head = headOf(renderInstallPrompt({ ...base, agent: "openclaw" }));
+    expect(head).toContain("    ~/.openclaw/workspace/skills/moneyswitch-pay/SKILL.md\n");
+    expect(head).toContain("use <workspace>/skills/moneyswitch-pay/SKILL.md there");
+    // ~/.openclaw/skills is only named as the thing NOT to use
+    expect(head).not.toContain("    ~/.openclaw/skills/moneyswitch-pay");
+    expect(head).toContain("Not ~/.openclaw/skills");
+  });
+
+  it("Hermes: $HERMES_HOME/skills (default ~/.hermes, native Windows %LOCALAPPDATA%\\hermes, profiles have their own), not a hard-coded %USERPROFILE%\\.hermes", () => {
+    const head = headOf(renderInstallPrompt({ ...base, agent: "hermes" }));
+    expect(head).toContain("    $HERMES_HOME/skills/moneyswitch-pay/SKILL.md\n");
+    expect(head).toContain("HERMES_HOME is ~/.hermes by default, " + ["%LOCALAPPDATA%", "hermes"].join("\\") + " on native Windows");
+    expect(head).toContain("a Hermes profile has its own HERMES_HOME");
+    expect(head).not.toContain(["%USERPROFILE%", ".hermes"].join("\\"));
+    expect(head).not.toContain("    ~/.hermes/skills/moneyswitch-pay");
   });
 
   it("'other' does not guess a path: generic skills-directory phrase", () => {
     const text = renderInstallPrompt({ ...base, agent: "other" });
-    const head = text.slice(0, text.indexOf(SKILL_BEGIN_MARKER));
+    const head = headOf(text);
     expect(head).toContain("inside your skills directory");
-    expect(head).not.toMatch(/~\/\.\w+\/skills/);
+    // no suggested location: the only skills folder named is the one NOT to use
+    expect(head).not.toMatch(/^ {4}[~$]\S*skills/m);
+  });
+
+  it.each(SKILL_AGENTS)("%s: replace an existing moneyswitch-pay skill in place (ClawHub / /skill.md copy), never keep two, never use a shared folder", (agent) => {
+    const head = headOf(renderInstallPrompt({ ...base, agent }));
+    expect(head).toContain("overwrite it in place instead of keeping two copies");
+    expect(head).toContain("if that copy sits in a folder shared with other agents, leave it and save yours at the path above");
+    expect(head).toContain(`Never save it in a folder that other agents share (for example ${SHARED_SKILLS_ROOT})`);
+    expect(head).toMatch(/覆盖它/);
+    expect(head).toMatch(/共用的目录/);
   });
 
   it("validates its inputs like renderSkill", () => {
@@ -272,6 +339,58 @@ describe("agents", () => {
     expect(isSkillAgent("codex")).toBe(true);
     expect(isSkillAgent("cursor")).toBe(false);
     expect(isSkillAgent(undefined)).toBe(false);
+  });
+});
+
+// One key per agent: the personalized skill holds that agent's own key, so it has to be saved where ONLY that agent
+// loads it. Codex and OpenClaw both read ~/.agents/skills, and OpenClaw ranks it above ~/.openclaw/skills, so a Codex
+// skill saved there would make OpenClaw pay with Codex's key (verified with OpenClaw 2026.9.3: "Skill precedence collision").
+describe("agents: no agent's install folder is loaded by another agent", () => {
+  /** (writer, reader) pairs where `reader` also loads the folder `writer` saves its key into. */
+  function conflicts(info: Record<SkillAgent, AgentInfo>): string[] {
+    const out: string[] = [];
+    for (const writer of SKILL_AGENTS) {
+      const root = info[writer].installRoot;
+      if (!root) continue;
+      for (const reader of SKILL_AGENTS) {
+        if (reader !== writer && info[reader].loads.includes(root)) out.push(`${writer} saves into ${root}, which ${reader} also loads`);
+      }
+    }
+    return out;
+  }
+
+  it("holds for every agent", () => {
+    expect(conflicts(AGENT_INFO)).toEqual([]);
+  });
+
+  it("is not vacuous: the old layout (Codex into the shared ~/.agents/skills) is reported as a conflict with OpenClaw", () => {
+    const old = { ...AGENT_INFO, codex: { ...AGENT_INFO.codex, installRoot: SHARED_SKILLS_ROOT } };
+    expect(conflicts(old)).toContain(`codex saves into ${SHARED_SKILLS_ROOT}, which openclaw also loads`);
+    // OpenClaw's shared managed folder is reported too when another agent saves its key there
+    const viaManaged = { ...AGENT_INFO, hermes: { ...AGENT_INFO.hermes, installRoot: "~/.openclaw/skills" } };
+    expect(conflicts(viaManaged)).toContain("hermes saves into ~/.openclaw/skills, which openclaw also loads");
+  });
+
+  it("nothing is installed into the shared ~/.agents/skills, and every path sits inside its install folder", () => {
+    for (const a of SKILL_AGENTS) {
+      const info = AGENT_INFO[a];
+      expect(info.installRoot, a).not.toBe(SHARED_SKILLS_ROOT);
+      if (info.path) {
+        expect(info.path, a).not.toContain(".agents/skills");
+        expect(info.path, a).toBe(`${info.installRoot}/moneyswitch-pay/SKILL.md`);
+        // every agent loads its own install folder, or the skill would never be found
+        expect(info.loads, a).toContain(info.installRoot);
+      } else {
+        expect(info.installRoot, a).toBeNull();
+      }
+    }
+  });
+
+  it("records the sharing that motivates the rule: Codex and OpenClaw both load ~/.agents/skills", () => {
+    expect(AGENT_INFO.codex.loads).toContain(SHARED_SKILLS_ROOT);
+    expect(AGENT_INFO.openclaw.loads).toContain(SHARED_SKILLS_ROOT);
+    // OpenClaw does not read Codex's own folder (its docs: "$CODEX_HOME/skills is not an OpenClaw skill root")
+    expect(AGENT_INFO.openclaw.loads).not.toContain("~/.codex/skills");
   });
 });
 

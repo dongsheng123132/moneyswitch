@@ -7,6 +7,7 @@ export {
   AGENT_INFO,
   SKILL_AGENTS,
   SKILL_NAME,
+  SHARED_SKILLS_ROOT,
   isSkillAgent,
   guessAgentFromName,
   type AgentInfo,
