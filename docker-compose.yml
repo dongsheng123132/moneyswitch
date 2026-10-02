@@ -32,4 +32,4 @@ volumes:
 
 secrets:
   wallet_password:
-    file: ./deploy/secrets/wallet_password
+    file: ${MONEYSWITCH_WALLET_PASSWORD_PATH:-./deploy/secrets/wallet_password}

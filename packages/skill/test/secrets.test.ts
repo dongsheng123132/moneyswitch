@@ -36,4 +36,3 @@ describe("pay_to validation (SPEC-v0.5 §1 防呆)", () => {
     expect(detectSecretShape(CHECKSUMMED)).toBeNull();
   });
 });
-
