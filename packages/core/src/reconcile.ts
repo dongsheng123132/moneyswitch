@@ -28,6 +28,12 @@ export interface AuthorizationReader {
     nonce: string;
     /** The payment row's created_at, as epoch milliseconds — used to bound the log search window. */
     paymentCreatedAtMs: number;
+    /**
+     * The authorization's validBefore (unix seconds): the settle tx can only
+     * have been mined between the payment's creation and this time, so
+     * [paymentCreatedAtMs, validBeforeSec] bounds the block range to scan.
+     */
+    validBeforeSec?: number | null;
   }): Promise<string | null>;
 }
 
@@ -123,6 +129,7 @@ export async function reconcileUnknownPayments(
         authorizer: authFrom,
         nonce: authNonce,
         paymentCreatedAtMs: new Date(payment.createdAt).getTime(),
+        validBeforeSec: payment.authValidBefore,
       });
     } catch {
       // Confirmed used on-chain but the log lookup itself failed — still

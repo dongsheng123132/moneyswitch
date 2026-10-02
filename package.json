@@ -30,6 +30,7 @@
     "test": "pnpm --filter @moneyswitch/tollbooth test && pnpm --filter @moneyswitch/net test && pnpm --filter @moneyswitch/db test && pnpm --filter @moneyswitch/core test && pnpm --filter @moneyswitch/wallet test && pnpm --filter @moneyswitch/x402 test && pnpm --filter @moneyswitch/mock-facilitator test && pnpm --filter @moneyswitch/demo-seller test && pnpm --filter @moneyswitch/server test && pnpm --filter @moneyswitch/mcp test && pnpm --filter @moneyswitch/qwen-agent test && pnpm --filter moneyswitch-connect test && pnpm --filter moneyswitch test && pnpm --filter moneyswitch-server test",
     "test:e2e": "pnpm --filter @moneyswitch/server test:e2e && pnpm --filter moneyswitch-server test:e2e",
     "test:testnet": "pnpm --filter @moneyswitch/x402 test:testnet",
+    "test:incident": "pnpm --filter @moneyswitch/x402 test:incident",
     "dev:server": "pnpm --filter @moneyswitch/server dev",
     "dev:seller": "pnpm --filter @moneyswitch/demo-seller dev",
     "demo:local": "node scripts/demo-local.mjs",
