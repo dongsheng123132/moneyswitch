@@ -438,6 +438,9 @@ importers:
       '@moneyswitch/db':
         specifier: workspace:*
         version: link:../db
+      '@moneyswitch/net':
+        specifier: workspace:*
+        version: link:../net
       '@moneyswitch/wallet':
         specifier: workspace:*
         version: link:../wallet
