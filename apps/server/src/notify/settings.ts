@@ -84,16 +84,36 @@ export function secretsOf(config: NotifyConfig): string[] {
 
 const DOTS = "••••";
 
-/** `https://host/••••abcd`: origin and the last 4 characters only (tokens can sit anywhere in the path or query). */
+/**
+ * Hides the host's identifying part. Webhook URLs are often secret in the
+ * host too (Pipedream endpoint ids, tunnel subdomains, a private domain), so
+ * only the last two labels of a host with three or more labels survive
+ * (`open.feishu.cn` -> `••••.feishu.cn`); IP addresses, single-label and
+ * two-label hosts (the name itself may be the secret) are hidden entirely.
+ */
+function maskHost(hostname: string): string {
+  const isIp = hostname.includes(":") || /^\d+(\.\d+){3}$/.test(hostname);
+  const labels = hostname.split(".");
+  if (isIp || labels.length < 3) return DOTS;
+  return `${DOTS}.${labels.slice(-2).join(".")}`;
+}
+
+/**
+ * `https://••••.example.com/••••abcd`: scheme, the masked host (see maskHost)
+ * and the last 4 characters of the path + query when those are long enough to
+ * make that safe. No port, no userinfo. Tokens can sit anywhere in the URL, so
+ * nothing else is shown.
+ */
 export function maskUrl(url: string): string {
-  let origin: string;
+  let u: URL;
   try {
-    origin = new URL(url).origin;
+    u = new URL(url);
   } catch {
     return DOTS + DOTS;
   }
-  const tail = url.length > 24 ? url.slice(-4) : "";
-  return `${origin}/${DOTS}${tail}`;
+  const rest = u.pathname + u.search;
+  const tail = rest.length > 12 ? rest.slice(-4) : "";
+  return `${u.protocol}//${maskHost(u.hostname)}/${DOTS}${tail}`;
 }
 
 export function maskToken(token: string): string {

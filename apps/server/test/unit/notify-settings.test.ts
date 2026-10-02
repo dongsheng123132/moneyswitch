@@ -26,16 +26,43 @@ beforeEach(() => {
 afterEach(() => sqlite.close());
 
 describe("masking", () => {
-  it("maskUrl keeps only the origin and the last 4 characters", () => {
+  it("maskUrl keeps only the scheme, the last two host labels and the last 4 characters of the path", () => {
     const masked = maskUrl(FEISHU);
-    expect(masked).toBe("https://open.feishu.cn/••••6789");
+    expect(masked).toBe("https://••••.feishu.cn/••••6789");
     expect(masked).not.toContain("0a1b2c3d");
-    expect(maskUrl(WECOM)).toBe("https://qyapi.weixin.qq.com/••••5aaa");
+    expect(maskUrl(WECOM)).toBe("https://••••.qq.com/••••5aaa");
     expect(maskUrl(WECOM)).not.toContain("693a91f6");
+    expect(maskUrl(WECOM)).not.toContain("weixin");
+  });
+
+  it("maskUrl hides a host that is itself the secret (Pipedream ids, tunnel subdomains)", () => {
+    const pipedream = maskUrl("https://eo1a2b3c4d5e6f7.m.pipedream.net");
+    expect(pipedream).toBe("https://••••.pipedream.net/••••");
+    expect(pipedream).not.toContain("eo1a2b3c4d5e6f7");
+    const tunnel = maskUrl("https://quiet-river-4821.trycloudflare.com/hooks/approvals-9f8e7d6c");
+    expect(tunnel).toBe("https://••••.trycloudflare.com/••••7d6c");
+    expect(tunnel).not.toContain("quiet-river");
+    expect(maskUrl("https://hooks.secretname.example.co.uk/x/abcdefghijkl")).toBe("https://••••.co.uk/••••ijkl");
+  });
+
+  it("maskUrl hides IP addresses, single- and two-label hosts, ports and userinfo completely", () => {
+    for (const url of [
+      "http://127.0.0.1:8123/hook/abcdefghij",
+      "http://[::1]:8123/hook/abcdefghij",
+      "http://localhost:8123/hook/abcdefghij",
+      "http://intranet-box/hook/abcdefghij",
+      "https://private-hook-name.com/hook/abcdefghij",
+    ]) {
+      expect(maskUrl(url), url).toMatch(/^https?:\/\/••••\/••••ghij$/);
+    }
+    const withUserinfo = maskUrl("https://user:hunter2@hooks.example.com:8443/v1/pay/token-0123456789");
+    expect(withUserinfo).toBe("https://••••.example.com/••••6789");
+    for (const leak of ["user", "hunter2", "8443", "hooks."]) expect(withUserinfo).not.toContain(leak);
   });
 
   it("maskUrl never reveals a short URL's tail and survives garbage", () => {
-    expect(maskUrl("http://a.io/x")).toBe("http://a.io/••••");
+    expect(maskUrl("http://a.io/x")).toBe("http://••••/••••");
+    expect(maskUrl("https://eo1a2b3c4d5e6f7.m.pipedream.net/")).toBe("https://••••.pipedream.net/••••");
     expect(maskUrl("nonsense")).toBe("••••••••");
   });
 
@@ -172,7 +199,7 @@ describe("admin view never contains a full secret", () => {
     expect(json).not.toContain("XXXXXXXXXXXXXXXX");
     expect(view.channels.feishu).toEqual({
       configured: true,
-      webhook: { set: true, masked: "https://open.feishu.cn/••••6789", source: "db" },
+      webhook: { set: true, masked: "https://••••.feishu.cn/••••6789", source: "db" },
       secret: { set: true, masked: null, source: "db" },
     });
     expect(view.channels.telegram.chat_id).toEqual({ set: true, masked: null, value: "-100777", source: "db" });

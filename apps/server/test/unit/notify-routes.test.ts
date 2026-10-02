@@ -112,12 +112,12 @@ describe("GET / PUT /v1/admin/notify", () => {
     const get = await t.app.inject({ method: "GET", url: "/v1/admin/notify", headers: admin() });
     for (const res of [put, get]) {
       const raw = res.body;
-      for (const secret of [feishu, "0a1b2c3d-4e5f", "SuperSecretSigningKey", TG_TOKEN, "AAE-abcdefghijklmnopqrstuvwxyz", "XXXX-secret-path-token"]) {
+      for (const secret of [feishu, "0a1b2c3d-4e5f", "SuperSecretSigningKey", TG_TOKEN, "AAE-abcdefghijklmnopqrstuvwxyz", "XXXX-secret-path-token", "127.0.0.1"]) {
         expect(raw).not.toContain(secret);
       }
       const ch = res.json().channels;
       expect(ch.feishu).toMatchObject({ configured: true, webhook: { set: true, source: "db" }, secret: { set: true, masked: null } });
-      expect(ch.feishu.webhook.masked).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/••••6789$/);
+      expect(ch.feishu.webhook.masked).toBe("http://••••/••••6789"); // the host (here an IP) is hidden too
       expect(ch.telegram).toMatchObject({ configured: true, bot_token: { masked: "••••2345" }, chat_id: { value: "-100777" } });
       expect(ch.wecom.configured).toBe(false);
       expect(ch.webhook.configured).toBe(true);
