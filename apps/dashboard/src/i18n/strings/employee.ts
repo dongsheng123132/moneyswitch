@@ -77,7 +77,7 @@ export const employeeStrings = defineMessages(
     // --- Connect page ---
     connectIntroTitle: "Connect this key to an agent on your computer",
     connectIntroBody: "Pick whichever way fits the agent you use.",
-    section1Title: "① One-click connect (recommended)",
+    section1Title: "① One-click connect (CLI + MCP)",
     section1Body: "Run this in a terminal on your own computer (needs Node.js 20+). It finds Claude Code / Codex on this machine and configures them for you.",
     previewLabel: "Preview (changes nothing)",
     applyLabel: "One-click connect (writes the config)",
@@ -165,7 +165,7 @@ export const employeeStrings = defineMessages(
 
     connectIntroTitle: "把这把 Key 接到你本机的 Agent",
     connectIntroBody: "任选一种方式，跟你在用的 Agent 对上就行。",
-    section1Title: "① 一键接入（推荐）",
+    section1Title: "① 一键接入（命令行 + MCP）",
     section1Body: "在你自己电脑的终端里运行（需要 Node.js 20+）。它会自动找到本机的 Claude Code / Codex 并配置好。",
     previewLabel: "预览（不改任何配置）",
     applyLabel: "一键接入（会写入配置）",

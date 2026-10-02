@@ -169,6 +169,20 @@ export async function revokeKey(id: string): Promise<{ id: string; revoked: bool
   return request(`/v1/keys/${id}/revoke`, { method: "POST" });
 }
 
+/** POST /v1/keys/:id/rotate — new secret for the same key id; the old one stops working at once. The plaintext is returned only here. */
+export interface RotateKeyResponse {
+  id: string;
+  key: string;
+  name: string;
+  key_prefix: string;
+  parent_id: string | null;
+  depth: number;
+}
+
+export async function rotateKey(id: string): Promise<RotateKeyResponse> {
+  return request<RotateKeyResponse>(`/v1/keys/${encodeURIComponent(id)}/rotate`, { method: "POST" });
+}
+
 /** GET /v1/admin/keys/tree — same rows as GET /v1/keys, nested under their parent (roots = parent_id null). */
 export async function getKeyTree(): Promise<MoneyKeyTreeNode[]> {
   const res = await request<{ tree: MoneyKeyTreeNode[] }>("/v1/admin/keys/tree");

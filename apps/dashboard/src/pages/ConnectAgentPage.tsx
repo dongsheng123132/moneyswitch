@@ -22,24 +22,30 @@ import {
   KEY_PLACEHOLDER,
 } from "../snippets";
 import Snippet from "../components/Snippet";
+import SkillForAi from "../components/SkillForAi";
 import Callout from "../components/Callout";
 import Term from "../components/Term";
 import { useT } from "../i18n";
 import { connectStrings } from "../i18n/strings/connect";
+import { skillStrings } from "../i18n/strings/skill";
+import { skillBaseUrl } from "../skillText";
 import "../styles/connect.css";
 
-type Tab = "mcp" | "openai" | "rest";
+type Tab = "skill" | "mcp" | "openai" | "rest";
 
 export default function ConnectAgentPage() {
   const t = useT(connectStrings);
+  const ts = useT(skillStrings);
   const meta = useAdminMeta();
   const src = useCliSource(meta);
   const { data: channels } = usePolling(listChannels);
 
   const [rawKey, setRawKey] = useState("");
-  const [tab, setTab] = useState<Tab>("mcp");
+  // The skill (one paste into the AI) is the first way; MCP / OpenAI / REST are the other ways.
+  const [tab, setTab] = useState<Tab>("skill");
 
   const origin = window.location.origin;
+  const skillBase = skillBaseUrl(meta, origin);
   const key = rawKey.trim() || KEY_PLACEHOLDER;
   const displayKey = rawKey.trim() ? maskKey(rawKey.trim()) : KEY_PLACEHOLDER;
 
@@ -71,15 +77,20 @@ export default function ConnectAgentPage() {
         </div>
       </div>
 
-      {src.kind === "tarball" && <Callout tone="info">{t("cliTarballNote")}</Callout>}
-      {src.kind === "local" && <Callout tone="info">{t("cliLocalNote")}</Callout>}
-      {src.kind === "npm" && (
+      {tab !== "skill" && src.kind === "tarball" && <Callout tone="info">{t("cliTarballNote")}</Callout>}
+      {tab !== "skill" && src.kind === "local" && <Callout tone="info">{t("cliLocalNote")}</Callout>}
+      {tab !== "skill" && src.kind === "npm" && (
         <Callout tone="warn" title={t("cliNpmWarnTitle")}>
           {t("cliNpmWarnBody")}
         </Callout>
       )}
 
-      <div className="tabs" style={{ marginTop: 12, marginBottom: 16 }}>
+      <div className="tabs skill-top-tabs" style={{ marginTop: 12, marginBottom: 16 }}>
+        <button type="button" className={`tab-btn ${tab === "skill" ? "active" : ""}`} onClick={() => setTab("skill")}>
+          {ts("tabSkill")}
+          <span className="skill-reco">{ts("recommended")}</span>
+        </button>
+        <span className="skill-tabs-sep">{ts("tabOther")}</span>
         <button type="button" className={`tab-btn ${tab === "mcp" ? "active" : ""}`} onClick={() => setTab("mcp")}>
           {t("tabMcp")}
         </button>
@@ -90,6 +101,12 @@ export default function ConnectAgentPage() {
           {t("tabRest")}
         </button>
       </div>
+
+      {tab === "skill" && (
+        <div className="card connect-section">
+          <SkillForAi baseUrl={skillBase} secret={rawKey.trim()} showLostKeyHint />
+        </div>
+      )}
 
       {tab === "mcp" && (
         <div>

@@ -1,0 +1,158 @@
+/* "Give this to your AI (skill)" block + key secret reset. */
+
+.skill-block {
+  margin-bottom: 14px;
+}
+
+.skill-title {
+  font-weight: 650;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.skill-body {
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin-bottom: 8px;
+}
+
+.skill-nudge {
+  font-size: 12px;
+  color: var(--accent-strong);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.skill-pick-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.skill-agents {
+  margin-bottom: 12px;
+}
+
+.skill-agent-btn {
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.skill-agent-btn.is-active {
+  opacity: 1;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.skill-copy-wrap {
+  flex: 1 1 100%;
+}
+
+.skill-copy-wrap .btn.big {
+  white-space: normal;
+}
+
+.btn.big.copy-btn.is-copied {
+  background: var(--green);
+  color: white;
+}
+
+.skill-where {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 10px 0 6px;
+  word-break: break-all;
+}
+
+.skill-steps {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin: 10px 0;
+}
+
+.skill-steps-title {
+  font-weight: 650;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.skill-steps ol {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}
+
+.skill-secret-hint,
+.skill-lost {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin: 8px 0;
+}
+
+.skill-preview {
+  margin-top: 8px;
+}
+
+.skill-preview summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.skill-preview-text {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  word-break: normal;
+}
+
+.skill-other-intro {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: 0 0 10px;
+}
+
+.skill-top-tabs .tab-btn .skill-reco {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--green);
+}
+
+.keys-row-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.confirm-body {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.skill-tabs-sep {
+  align-self: center;
+  margin: 0 6px 0 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--panel-border);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* The row action text is long ("Reset secret and copy skill"): wrap it so the keys table keeps fitting its card. */
+.keys-row-actions .btn {
+  white-space: normal;
+  text-align: left;
+  min-width: 104px;
+  max-width: 150px;
+  line-height: 1.25;
+}

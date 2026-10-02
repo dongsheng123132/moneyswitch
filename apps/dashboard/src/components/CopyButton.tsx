@@ -8,7 +8,21 @@ import { common } from "../i18n/strings/common";
  * button (still labelled for screen readers). Feedback text is localized and
  * announced via aria-live.
  */
-export default function CopyButton({ text, className = "", label }: { text: string; className?: string; label?: string }) {
+export default function CopyButton({
+  text,
+  className = "",
+  label,
+  copiedLabel,
+  big = false,
+}: {
+  text: string;
+  className?: string;
+  label?: string;
+  /** Text shown for a moment after copying (default: the localized "Copied"). */
+  copiedLabel?: string;
+  /** Large primary variant, for the one action a view is about. */
+  big?: boolean;
+}) {
   const t = useT(common);
   const [copied, setCopied] = useState(false);
   const iconOnly = className.split(" ").includes("icon-only");
@@ -29,16 +43,16 @@ export default function CopyButton({ text, className = "", label }: { text: stri
     setTimeout(() => setCopied(false), 1500);
   }
 
-  const shown = copied ? t("copied") : label ?? t("copy");
+  const shown = copied ? copiedLabel ?? t("copied") : label ?? t("copy");
   return (
     <button
       type="button"
-      className={`btn small secondary copy-btn ${copied ? "is-copied" : ""} ${className}`}
+      className={`btn ${big ? "big" : "small secondary"} copy-btn ${copied ? "is-copied" : ""} ${className}`}
       onClick={copy}
       aria-label={iconOnly ? shown : undefined}
       title={iconOnly ? shown : undefined}
     >
-      {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+      {copied ? <Check size={big ? 16 : 12} aria-hidden /> : <Copy size={big ? 16 : 12} aria-hidden />}
       {!iconOnly && <span aria-live="polite">{shown}</span>}
     </button>
   );
