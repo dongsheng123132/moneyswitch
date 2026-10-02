@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 
 const ENV_KEYS = [
+  "MONEYSWITCH_NETWORKS", "MONEYSWITCH_DEFAULT_NETWORK",
   "MONEYSWITCH_MAINNET_ENABLED",
   "MONEYSWITCH_TESTNET_LABEL",
   "MONEYSWITCH_TESTNET_EXPLORER_BASE",
@@ -25,6 +26,17 @@ async function freshNetworks() {
 }
 
 describe("networks", () => {
+  it("only enables explicitly configured chains and rejects unknown/default mismatches", async () => {
+    const n = await freshNetworks();
+    process.env.MONEYSWITCH_NETWORKS = "eip155:10143,eip155:84532";
+    expect(n.getEnabledNetworks().map((x) => x.caip2)).toEqual(["eip155:10143", "eip155:84532"]);
+    process.env.MONEYSWITCH_DEFAULT_NETWORK = "eip155:84532";
+    expect(n.getActiveNetwork()).toBe(n.BASE_SEPOLIA);
+    process.env.MONEYSWITCH_DEFAULT_NETWORK = "eip155:8453";
+    expect(() => n.getActiveNetwork()).toThrow(/must be enabled/);
+    process.env.MONEYSWITCH_NETWORKS = "eip155:56";
+    expect(() => n.getEnabledNetworks()).toThrow(/Unsupported/);
+  });
   it("TESTNET has the expected default label + explorer base", async () => {
     delete process.env.MONEYSWITCH_TESTNET_LABEL;
     delete process.env.MONEYSWITCH_TESTNET_EXPLORER_BASE;

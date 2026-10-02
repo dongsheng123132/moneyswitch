@@ -2,7 +2,7 @@ import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
 import { bootstrapAdminToken, SetupTokenStore, type AuthorizationReader } from "@moneyswitch/core";
-import { createEvmAuthorizationReader } from "@moneyswitch/x402";
+import { createMultiNetworkAuthorizationReader } from "@moneyswitch/x402";
 import type { ServerConfig } from "./config.js";
 import type { NotifyRuntimeOptions } from "./notify/types.js";
 
@@ -61,13 +61,14 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
   const wallet = new LocalWalletDriver(config.dataDir);
 
   const setup = new SetupTokenStore();
+  const setupBase = config.publicUrl?.replace(/\/+$/, "") || `http://${browsableHost(config.host)}:${config.port}`;
   const freshAdminToken = bootstrapAdminToken(db);
   if (freshAdminToken && opts.onFirstRun) {
     const setupToken = setup.issue(freshAdminToken);
     opts.onFirstRun({
       adminToken: freshAdminToken,
       setupToken,
-      setupUrl: `http://${browsableHost(config.host)}:${config.port}/setup#${setupToken}`,
+      setupUrl: `${setupBase}/setup#${setupToken}`,
     });
   } else if (freshAdminToken) {
     // Only place this ever gets printed. Never logged again, never stored
@@ -80,7 +81,7 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
     const setupToken = setup.issue(freshAdminToken);
     console.log(
       `[moneyswitch] First-run setup: open this one-time link in your browser (valid 30 min, single use):\n` +
-        `  http://${browsableHost(config.host)}:${config.port}/setup#${setupToken}\n`
+        `  ${setupBase}/setup#${setupToken}\n`
     );
   }
 
@@ -96,7 +97,7 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
   // Demo mode settles through the mock facilitator only (0xmock… hashes that
   // never exist on chain): leave the reader unset so reconcile is a no-op and
   // nothing ever talks to a real RPC endpoint.
-  const chainReader = config.demo ? undefined : createEvmAuthorizationReader();
+  const chainReader = config.demo ? undefined : createMultiNetworkAuthorizationReader();
 
   return { db, sqlite, wallet, config, setup, chainReader };
 }

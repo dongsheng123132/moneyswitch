@@ -6,8 +6,6 @@ import { usePolling } from "../usePolling";
 import { useAdminMeta } from "../useAdminMeta";
 import {
   useCliSource,
-  connectCommand,
-  statusCommand,
   claudeMcpCommand,
   codexToml,
   mcpJson,
@@ -110,14 +108,6 @@ export default function ConnectAgentPage() {
 
       {tab === "mcp" && (
         <div>
-          <div className="card connect-section">
-            <div className="connect-section-title">{t("oneLineTitle")}</div>
-            <div className="connect-section-note">{t("oneLineBody")}</div>
-            <Snippet title={t("previewLabel")} code={connectCommand(src, origin, key, false)} />
-            <Snippet title={t("applyLabel")} code={connectCommand(src, origin, key, true)} />
-            <Snippet title={t("statusLabel")} code={statusCommand(src, origin, key)} />
-          </div>
-
           <div className="card connect-section">
             <div className="connect-section-title">{t("claudeManualTitle")}</div>
             <div className="connect-section-note">{t("claudeManualNote")}</div>

@@ -30,7 +30,7 @@ import PublicAddress from "../components/PublicAddress";
 import { ThreeThingsButton } from "../components/ThreeThings";
 import { useAdminMeta } from "../useAdminMeta";
 import { skillBaseUrl } from "../skillText";
-import { connectCommand, openaiBase, useCliSource } from "../snippets";
+import { claudeMcpCommand, openaiBase, useCliSource } from "../snippets";
 import { FundingGuide } from "./WalletPage";
 import { addDemoChannel } from "./ChannelsPage";
 import { fetchDemoMode, PLAYGROUND_KEY_STORAGE } from "../demoMode";
@@ -724,7 +724,7 @@ export function ConnectStep({
         <summary>{t("s5_otherWays")}</summary>
         <p className="setup-text">{t("s5_intro")}</p>
         {cliSrc.kind === "npm" && <Callout tone="warn">{t("s5_npmWarn")}</Callout>}
-        <Snippet title={t("s5_cmd")} code={connectCommand(cliSrc, origin, created.key, true)} note={t("s5_cmdNote")} />
+        <Snippet title={t("s5_cmd")} code={claudeMcpCommand(cliSrc, origin, created.key)} />
         <div className="setup-sub">
           <div className="snippet-title">{t("s5_openai")}</div>
           <p className="setup-note">{t("s5_openaiNote", { base: openaiBase(origin) })}</p>

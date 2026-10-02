@@ -12,7 +12,6 @@ import { registerGatewayRoutes } from "./routes/gateway.js";
 import { registerNotifyRoutes } from "./routes/notify.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerSkillRoutes } from "./routes/skill.js";
-import { registerTollboothRoutes } from "./routes/tollbooths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -66,7 +65,6 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerNotifyRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
   registerSkillRoutes(app, ctx);
-  registerTollboothRoutes(app, ctx);
 
   const dashboardDist = ctx.config.dashboardDir || resolveDashboardDist();
   const dashboardIndexPath = path.join(dashboardDist, "index.html");

@@ -70,7 +70,7 @@ describe("moneyswitch-server demo (built bundle)", () => {
     expect([401, 403]).toContain((await j("/v1/keys", {}, "")).status);
   });
 
-  it("is pre-loaded: mock wallet, channel, two keys, toll booth, mock-settled payments", async () => {
+  it("is pre-loaded: mock wallet, channel, two keys, mock-settled payments", async () => {
     const wallet = await j("/v1/admin/wallet");
     expect(wallet.body).toMatchObject({ unlocked: true, has_keystore: true, simulated: true });
     expect(Number(wallet.body.usdc_balance)).toBeGreaterThan(19);
@@ -78,14 +78,10 @@ describe("moneyswitch-server demo (built bundle)", () => {
     expect(keys.body.keys.map((k: { name: string }) => k.name).sort()).toEqual(["Claude Code", "Codex"]);
     const channels = await j("/v1/admin/channels");
     expect(channels.body.channels?.length ?? channels.body.length).toBe(1);
-    const booths = await j("/v1/admin/tollbooths");
-    expect(JSON.stringify(booths.body)).toContain("Demo Weather API");
     const usage = await j("/v1/admin/usage");
     const payments = usage.body.payments ?? usage.body;
     expect(payments.length).toBeGreaterThanOrEqual(7);
     expect(payments.every((p: { tx_hash: string | null }) => !p.tx_hash || p.tx_hash.startsWith("0xmock"))).toBe(true);
-    const earnings = await j("/v1/admin/earnings?range=all");
-    expect(JSON.stringify(earnings.body)).toContain("0.06");
   });
 
   it("the demo key chats ($0.01) and a $5 purchase is blocked", async () => {

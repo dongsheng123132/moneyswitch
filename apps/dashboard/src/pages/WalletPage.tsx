@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePolling } from "../usePolling";
 import { getWallet, createWallet, unlockWallet } from "../api";
@@ -27,10 +27,15 @@ const DEFAULT_FAUCET_URL = "https://faucet.circle.com/";
  * wizard can reuse it verbatim; fetches admin meta itself so callers only
  * need to pass the address.
  */
-export function FundingGuide({ address }: { address: string }) {
+export function FundingGuide({ address, network }: { address: string; network?: string }) {
   const t = useT(walletStrings);
   const meta = useAdminMeta();
   const faucetUrl = meta?.faucet_url || DEFAULT_FAUCET_URL;
+  const chain = meta?.networks?.find((n) => n.network === network);
+  const label = chain?.network_label || meta?.network_label || "Monad Testnet";
+  if (chain?.is_mainnet || (!chain && meta?.is_mainnet)) {
+    return <div className="form-section"><div className="form-section-title">{t("fundingTitle")}</div><p>{t("fundingMainnet", { network: label })}</p></div>;
+  }
   return (
     <div className="form-section">
       <div className="form-section-title">{t("fundingTitle")}</div>
@@ -43,7 +48,7 @@ export function FundingGuide({ address }: { address: string }) {
           <a href={faucetUrl} target="_blank" rel="noreferrer">
             {t("fundingStep2Link")}
           </a>
-          {t("fundingStep2Suffix")}
+          {t("fundingStep2Suffix", { network: label })}
         </li>
         <li>{t("fundingStep3")}</li>
       </ol>
@@ -58,7 +63,9 @@ export function FundingGuide({ address }: { address: string }) {
 }
 
 export default function WalletPage() {
-  const { data: wallet, error, loading, refresh } = usePolling(getWallet);
+  const [selectedNetwork, setSelectedNetwork] = useState<string>();
+  const { data: wallet, error, loading, refresh } = usePolling(() => getWallet(selectedNetwork));
+  useEffect(() => { refresh(); }, [selectedNetwork, refresh]);
   const meta = useAdminMeta();
   const t = useT(walletStrings);
   const tc = useT(common);
@@ -120,10 +127,11 @@ export default function WalletPage() {
     return error ? <Callout tone="error">{tc("requestFailed", { message: error })}</Callout> : null;
   }
 
-  const explorerBase = meta?.explorer_base || DEFAULT_EXPLORER_BASE;
-  const chainId = meta?.chain_id ?? DEFAULT_CHAIN_ID;
-  const usdcContract = meta?.usdc_address || DEFAULT_USDC_CONTRACT;
-  const network = meta?.network ?? wallet.network;
+  const selected = meta?.networks?.find((n) => n.network === wallet.network);
+  const explorerBase = selected?.explorer_base || meta?.explorer_base || DEFAULT_EXPLORER_BASE;
+  const chainId = selected?.chain_id ?? meta?.chain_id ?? DEFAULT_CHAIN_ID;
+  const usdcContract = selected?.usdc_address || meta?.usdc_address || DEFAULT_USDC_CONTRACT;
+  const network = wallet.network;
 
   if (!wallet.has_keystore) {
     return (
@@ -202,6 +210,11 @@ export default function WalletPage() {
 
       <div className="wallet-columns-heading">
         <h2>{t("oneWalletHeading")}</h2>
+        {meta?.networks && meta.networks.length > 1 && (
+          <select aria-label="USDC network" value={wallet.network} onChange={(e) => setSelectedNetwork(e.target.value)}>
+            {meta.networks.map((n) => <option key={n.network} value={n.network}>{n.network_label}</option>)}
+          </select>
+        )}
         <ThreeThingsButton />
       </div>
 
@@ -214,9 +227,6 @@ export default function WalletPage() {
             <div className="empty-state">{t("qrEmpty")}</div>
           )}
           <p className="wallet-column-sentence">{t("receiveSentence")}</p>
-          <Link className="wallet-column-link" to="/tollbooths">
-            {t("receiveTollboothLink")}
-          </Link>
           {wallet.address && (
             <a className="wallet-column-explorer" href={`${explorerBase}/address/${wallet.address}`} target="_blank" rel="noreferrer">
               {t("viewOnExplorer")}
@@ -281,7 +291,7 @@ export default function WalletPage() {
             </table>
           </div>
 
-          <FundingGuide address={wallet.address ?? ""} />
+          <FundingGuide address={wallet.address ?? ""} network={wallet.network} />
         </div>
       </div>
 

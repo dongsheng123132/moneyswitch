@@ -4,7 +4,7 @@ import { buildContext, type AppContext, type BuildContextOptions } from "./conte
 import { buildApp } from "./app.js";
 import { startReconcileLoop } from "./reconcileJob.js";
 import { DEFAULT_NOTIFY_INTERVAL_MS, startNotifyLoop } from "./notify/outbox.js";
-import { getActiveNetwork, isMainnet } from "@moneyswitch/x402";
+import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork } from "@moneyswitch/x402";
 
 export { loadConfig, type ServerConfig, type DemoModeInfo } from "./config.js";
 export type { AppContext, FirstRunSecrets, BuildContextOptions } from "./context.js";
@@ -23,8 +23,8 @@ export interface RunningServer {
  * the `moneyswitch-server` npm package (self-host + offline demo).
  */
 export async function startServer(config: ServerConfig, opts: BuildContextOptions = {}): Promise<RunningServer> {
-  if (isMainnet()) {
-    const network = getActiveNetwork();
+  getActiveNetwork(); // Validate the configured default before opening a database.
+  for (const network of getEnabledNetworks().filter(isMainnetNetwork)) {
     if (!network.rpcUrl) {
       throw new Error(
         "MONEYSWITCH_MAINNET_ENABLED=true but the mainnet rpcUrl is empty — refusing to start " +

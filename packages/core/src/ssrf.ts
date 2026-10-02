@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { isSelfTarget } from "@moneyswitch/tollbooth";
+import { isSelfTarget } from "./self-target.js";
 import { MoneySwitchError } from "./types.js";
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0", "[::1]"]);
@@ -35,21 +35,8 @@ export interface SsrfGuardOptions {
   selfPort: number;
   /** Explicit allowed "host:port" or bare host entries from the MoneyKey. */
   allowedHosts: string[];
-  /**
-   * v0.5 (SPEC-v0.5 §2): a MoneyKey may buy from a toll booth on this very
-   * MoneySwitch ("同一 MoneySwitch 的 MoneyKey 买自家收费站：允许"). When set,
-   * a self-target whose path is under /t/ (the public toll booth entry, which
-   * never reaches admin or agent APIs) is not blocked by the self-port rule.
-   * The private-host allowlist below still applies.
-   */
-  allowSelfTollbooth?: boolean;
 }
 
-function isTollboothPath(url: URL): boolean {
-  // url.pathname is already dot-segment-resolved by WHATWG URL parsing, so
-  // "/t/../v1/keys" arrives here as "/v1/keys" and is NOT a toll booth path.
-  return /^\/t\/[^/]+(\/|$)/.test(url.pathname);
-}
 
 /**
  * SSRF guard per SPEC §6 step 2:
@@ -67,7 +54,7 @@ export function assertNotSsrf(url: URL, opts: SsrfGuardOptions): void {
     isSelfTarget(url, opts.selfPort) ||
     (LOOPBACK_HOSTNAMES.has(hostname.toLowerCase()) && port === opts.selfPort) ||
     (isIP(hostname) === 4 && isPrivateOrLoopbackIPv4(hostname) && port === opts.selfPort);
-  if (selfTarget && !(opts.allowSelfTollbooth && isTollboothPath(url))) {
+  if (selfTarget) {
     throw new MoneySwitchError("SSRF_BLOCKED", "Refusing to target MoneySwitch's own listening address");
   }
 

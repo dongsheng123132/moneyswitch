@@ -1,4 +1,4 @@
-import { Wallet, JsonRpcProvider, Contract, getAddress } from "ethers";
+import { Wallet, JsonRpcProvider, Contract, getAddress, FetchRequest } from "ethers";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -126,9 +126,14 @@ export class LocalWalletDriver {
   async getUsdcBalance(rpcUrl: string, usdcAddress: string): Promise<bigint> {
     const address = this.getAddress();
     if (!address) throw new Error("No wallet address available");
-    const provider = new JsonRpcProvider(rpcUrl);
-    const contract = new Contract(usdcAddress, ERC20_ABI, provider);
-    const balance: bigint = await contract.balanceOf(address);
-    return balance;
+    const request = new FetchRequest(rpcUrl);
+    request.timeout = 15_000;
+    const provider = new JsonRpcProvider(request);
+    try {
+      const contract = new Contract(usdcAddress, ERC20_ABI, provider);
+      return await contract.balanceOf(address) as bigint;
+    } finally {
+      provider.destroy();
+    }
   }
 }

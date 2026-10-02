@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, TrendingUp, TrendingDown, Minus, KeyRound, Zap, Inbox, CheckCircle2, Circle, ChevronRight, ChevronDown, HandCoins } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Minus, KeyRound, Zap, Inbox, CheckCircle2, Circle, ChevronRight, ChevronDown } from "lucide-react";
 import { usePolling } from "../usePolling";
 import {
   listKeys,
@@ -8,7 +8,6 @@ import {
   listApprovals,
   listChannels,
   getWallet,
-  getEarnings,
   isCountedStatus,
   MoneyKeyRow,
   PaymentRow,
@@ -66,10 +65,6 @@ export default function OverviewPage() {
   const demo = useDemoMode();
   const { data, error, loading } = usePolling(fetchOverview);
   const { data: wallet } = usePolling(getWallet);
-  // SPEC-v0.5.md §3: polled separately from the rest of the overview data so
-  // a failing/absent earnings backend never breaks the page (it's still
-  // being built concurrently by another engineer).
-  const { data: earningsToday, error: earningsError } = usePolling(() => getEarnings("today"));
   const [setupHidden, setSetupHidden] = useState(() => {
     try {
       return localStorage.getItem(SETUP_HIDDEN_KEY) === "1";
@@ -313,23 +308,6 @@ export default function OverviewPage() {
               : t("vsYesterday", { pct: `${deltaPct > 0 ? "+" : ""}${deltaPct}%` })}
           </div>
         </div>
-        <Link to={earningsToday && earningsToday.settled_count > 0 ? "/earnings?range=today" : "/tollbooths/new"} className="kpi-card kpi-card-link">
-          <div className="kpi-icon">
-            <HandCoins size={16} />
-          </div>
-          <div className="stat-label">{t("kpiEarnedToday")}</div>
-          <div className="stat-value num">
-            {earningsToday ? formatUsdc(earningsToday.total, { maxDecimals: 2 }) : "-"}{" "}
-            <span style={{ fontSize: 13, color: "var(--text-faint)", fontWeight: 500 }}>{tc("usdc")}</span>
-          </div>
-          <div className="stat-sub">
-            {earningsError
-              ? t("earningsUnavailable")
-              : earningsToday && earningsToday.settled_count > 0
-              ? t("earnedTodayCount", { n: earningsToday.settled_count })
-              : t("earnedTodayEmpty")}
-          </div>
-        </Link>
         <div className="kpi-card">
           <div className="kpi-icon">
             <KeyRound size={16} />

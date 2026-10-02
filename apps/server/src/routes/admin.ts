@@ -23,7 +23,7 @@ import {
   assertNotSsrf,
   MoneySwitchError,
 } from "@moneyswitch/core";
-import { getActiveNetwork } from "@moneyswitch/x402";
+import { getActiveNetwork, getEnabledNetworks } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
 import { keyView, statusFromIndex } from "../keyview.js";
@@ -362,8 +362,10 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.send({ id, deleted: true });
   });
 
-  app.get("/v1/admin/wallet", { preHandler: adminGuard }, async (_req, reply) => {
-    const network = getActiveNetwork();
+  app.get("/v1/admin/wallet", { preHandler: adminGuard }, async (req, reply) => {
+    const requested = (req.query as { network?: string }).network;
+    const network = requested ? getEnabledNetworks().find((n) => n.caip2 === requested) : getActiveNetwork();
+    if (!network) return reply.status(400).send({ error: "UNSUPPORTED_NETWORK" });
     const address = ctx.wallet.getAddress();
     let balance: string | null = null;
     if (address && ctx.config.demo) {
@@ -418,6 +420,5 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
 function demoBalanceMicros(ctx: AppContext): number {
   const start = ctx.config.demo?.startingBalanceMicros ?? 0;
   const spent = ctx.sqlite.prepare(`SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE status = 'settled'`).get() as { s: number };
-  const earned = ctx.sqlite.prepare(`SELECT COALESCE(SUM(amount), 0) AS s FROM earnings WHERE status = 'settled'`).get() as { s: number };
-  return Math.max(0, start - Number(spent.s) + Number(earned.s));
+  return Math.max(0, start - Number(spent.s));
 }

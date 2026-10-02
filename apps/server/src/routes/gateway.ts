@@ -125,7 +125,6 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
         selfPort: ctx.config.port,
         allowedHosts: [...key.allowedHosts, `${url.hostname}:${url.port || (url.protocol === "https:" ? 443 : 80)}`],
         // v0.5: a channel may be a toll booth on this same server (/t/…).
-        allowSelfTollbooth: true,
       });
 
       if (!ctx.wallet.isUnlocked()) {

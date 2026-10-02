@@ -69,6 +69,32 @@ const EXPIRED = Math.floor(NOW.getTime() / 1000) - 3600; // 1h in the past
 const NOT_YET_EXPIRED = Math.floor(NOW.getTime() / 1000) + 3600; // 1h in the future
 
 describe("reconcileUnknownPayments", () => {
+  it("reads each payment's recorded chain rather than the current default", async () => {
+    const { db } = freshDb();
+    const key = makeKey(db);
+    const ids = ["eip155:10143", "eip155:84532"].map((network, index) => {
+      const { paymentId } = evaluateAndReserve(db, key, baseInput({ network }));
+      markUnknown(db, paymentId, "NO_SETTLE_HEADER");
+      recordPaymentAuthorization(db, paymentId, {
+        from: "0x000000000000000000000000000000000000aa",
+        nonce: "0x" + String(index + 1).repeat(64),
+        validBefore: EXPIRED,
+      });
+      return paymentId;
+    });
+    const reader = fakeReader({
+      authorizationState: vi.fn(async (_from, _nonce, network) => network === "eip155:84532"),
+      findAuthorizationUsedTx: vi.fn(async () => "0xbase"),
+    });
+    const result = await reconcileUnknownPayments({ db, reader, now: NOW });
+    expect(result.failed).toBe(1);
+    expect(result.settledWithTx).toBe(1);
+    expect(getPayment(db, ids[0])!.status).toBe("failed");
+    expect(getPayment(db, ids[1])!.txHash).toBe("0xbase");
+    expect(reader.authorizationState).toHaveBeenCalledWith(expect.any(String), expect.any(String), "eip155:84532");
+    expect(reader.findAuthorizationUsedTx).toHaveBeenCalledWith(expect.objectContaining({ network: "eip155:84532" }));
+  });
+
   it("authorizationState=false -> failed/NOT_SETTLED_EXPIRED and quota is released", async () => {
     const { db } = freshDb();
     const key = makeKey(db);

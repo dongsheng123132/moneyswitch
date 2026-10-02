@@ -242,7 +242,7 @@ describe("the examples in the personalized skill work as written", () => {
     const skill = renderSkill({ baseUrl: BASE, key: "mk_live_" + "x".repeat(32) });
     const r = await run(PYTHON_CMD, ["-c", codeBlock(skill, "python")]);
     expect(r.code, r.out).toBe(0);
-    expect(r.out.trim().split(/\s+/)).toEqual(["error", "None", "KEY_INVALID"]);
+    expect(r.out.trim().split(/\s+/)).toEqual(["error", "no", "KEY_INVALID"]);
   }, 60000);
 });
 

@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./secrets": {
+      "types": "./dist/secrets.d.ts",
+      "default": "./dist/secrets.js"
     }
   },
   "scripts": {
@@ -27,5 +31,8 @@
     "type": "git",
     "url": "git+https://github.com/dongsheng123132/moneyswitch.git",
     "directory": "packages/skill"
+  },
+  "dependencies": {
+    "viem": "2.56.9"
   }
 }

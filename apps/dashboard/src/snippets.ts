@@ -2,6 +2,7 @@
 // the real origin + the real way to get the client CLI (docs/ux-audit.md
 // A-10/A-11/A-12/C-1/C-2). Never hard-code a host, port or local path here.
 import { useEffect, useState } from "react";
+import { renderInstallPrompt } from "@moneyswitch/skill";
 import { isCliTarballAvailable, type AdminMeta } from "./api";
 
 /** How this machine / an employee's machine can run the `moneyswitch` client CLI. */
@@ -25,14 +26,6 @@ export function cliInvoke(src: CliSource): string {
   if (src.kind === "tarball") return `npx -y --package=${src.url} moneyswitch`;
   if (src.kind === "local") return `node ${q(src.cliPath)}`;
   return "npx -y moneyswitch";
-}
-
-export function connectCommand(src: CliSource, origin: string, key: string, apply = true): string {
-  return `${cliInvoke(src)} connect --server ${origin} --key ${key}${apply ? " --apply" : ""}`;
-}
-
-export function statusCommand(src: CliSource, origin: string, key: string): string {
-  return `${cliInvoke(src)} status --server ${origin} --key ${key}`;
 }
 
 /** The process an MCP client should spawn for the MoneySwitch stdio MCP server. */
@@ -131,53 +124,17 @@ export function newApiSnippet(origin: string, key: string): string {
  * (SPEC-v0.3-employee.md §A.7). Only commands that actually work.
  */
 export function employeeMessage(lang: "zh" | "en", p: { origin: string; name: string; key: string; src: CliSource }): string {
-  const cmd = connectCommand(p.src, p.origin, p.key, true);
-  if (lang === "zh") {
-    return [
-      `【MoneySwitch】${p.name} 的 AI 付费额度已开通`,
-      "",
-      `① 看额度 / 流水 / 直接对话：打开 ${p.origin}/login ，粘贴下面的 Key 登录`,
-      `Key：${p.key}`,
-      "",
-      "② 一键接入本机 Claude Code / Codex（需要 Node.js 20+，在终端运行）：",
-      cmd,
-      "（去掉末尾的 --apply 只预览、不改任何配置）",
-      "",
-      "③ 其他支持 OpenAI 协议的客户端（Cherry Studio / Open WebUI 等）：",
-      `Base URL：${openaiBase(p.origin)}`,
-      "API Key：同上",
-      "",
-      "这把 Key 有额度上限，只发给你本人，请不要转发。",
-    ].join("\n");
-  }
-  return [
-    `[MoneySwitch] Spending key for ${p.name} is ready`,
-    "",
-    `1) Budget / history / chat: open ${p.origin}/login and paste this key`,
-    `Key: ${p.key}`,
-    "",
-    "2) Connect Claude Code / Codex on your machine (needs Node.js 20+, run in a terminal):",
-    cmd,
-    "(drop the trailing --apply to preview without changing anything)",
-    "",
-    "3) Any OpenAI-compatible client (Cherry Studio, Open WebUI, ...):",
-    `Base URL: ${openaiBase(p.origin)}`,
-    "API Key: same as above",
-    "",
-    "This key has spending limits and is for you only - please don't forward it.",
-  ].join("\n");
+  return `${lang === "zh" ? "查看额度和流水" : "View budget and history"}: ${p.origin}/login
+
+` +
+    renderInstallPrompt({ baseUrl: p.origin, key: p.key, keyName: p.name, agent: "other" });
 }
 
-/** Masks the middle of a secret for on-screen display; copy buttons still copy the full value. */
 export function maskKey(key: string): string {
   if (!key.startsWith("mk_live_") || key.length <= 16) return key;
   return `${key.slice(0, 12)}${"•".repeat(8)}${key.slice(-4)}`;
 }
 
-/**
- * Resolves the best CliSource: the server-hosted tarball when it exists,
- * else (admin only) the absolute local path, else the npm name.
- */
 export function useCliSource(meta?: AdminMeta | null): CliSource {
   const [tarball, setTarball] = useState<boolean | null>(null);
   useEffect(() => {
@@ -195,49 +152,3 @@ export function useCliSource(meta?: AdminMeta | null): CliSource {
 }
 
 // ---------------------------------------------------------------------------
-// v0.5 (SPEC-v0.5 §3): toll booth buyer / seller snippets
-// ---------------------------------------------------------------------------
-
-function shq(s: string): string {
-  // POSIX single-quote escaping: ' → '\''
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
-/** Anyone can see the price: an unpaid call answers 402 with the PAYMENT-REQUIRED header + a JSON explanation. */
-export function tollCurl402(url: string): string {
-  return `curl -i ${url}`;
-}
-
-/** Buying through a MoneySwitch (this one or any other) with a MoneyKey: POST /v1/fetch. */
-export function tollBuyViaFetch(buyerOrigin: string, url: string, key = KEY_PLACEHOLDER, method = "GET"): string {
-  const body = method === "GET" ? { url } : { url, method, body: { model: "any-model", messages: [{ role: "user", content: "hello" }] } };
-  return `curl -s ${buyerOrigin}/v1/fetch \\\n  -H "Authorization: Bearer ${key}" \\\n  -H "Content-Type: application/json" \\\n  -d ${shq(JSON.stringify(body))}`;
-}
-
-/** What to tell a desktop agent that has the MoneySwitch MCP tool installed. */
-export function tollMcpPrompt(url: string): string {
-  return `Use the paid_fetch tool to GET ${url}`;
-}
-
-/** An OpenAI-compatible upstream behind a toll booth can be a "channel" in another MoneySwitch. */
-export function tollChannelBaseUrl(publicUrl: string): string {
-  return `${publicUrl.replace(/\/+$/, "")}/v1`;
-}
-
-/** `moneyswitch sell` — the same toll booth without a MoneySwitch server (single process on your machine). */
-export function sellCommand(
-  src: CliSource,
-  upstream: string,
-  defaultPrice: string | null,
-  payTo: string,
-  routes: Array<{ method: string; path_pattern: string; price: string }> = []
-): string {
-  const parts = [`${cliInvoke(src)} sell --upstream ${upstream}`];
-  if (defaultPrice != null) parts.push(`--price ${defaultPrice}`);
-  for (const r of routes) {
-    const spec = `${r.method === "ANY" ? "" : r.method + " "}${r.path_pattern}=${r.price}`;
-    parts.push(`--route "${spec.replace(/"/g, '\\"')}"`);
-  }
-  parts.push(`--pay-to ${payTo}`);
-  return parts.join(" \\\n  ");
-}

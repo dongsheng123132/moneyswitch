@@ -1,34 +1,35 @@
-# v0.1: docker-compose is written per SPEC.md §2.1/2.7 but is NOT the
-# validated path in this environment (Docker Desktop daemon is not running
-# here). `pnpm dev` / `pnpm start` running directly on the host is the P0
-# path; this compose file has not been started/tested.
 services:
   server:
+    image: ${MONEYSWITCH_IMAGE:-moneyswitch:local}
     build:
       context: .
       dockerfile: apps/server/Dockerfile
     ports:
-      - "4020:4020"
+      - "127.0.0.1:${MONEYSWITCH_LOCAL_PORT:-4020}:4020"
     environment:
-      MONEYSWITCH_PORT: "4020"
-      MONEYSWITCH_HOST: "0.0.0.0"
-      MONEYSWITCH_DATA_DIR: "/data"
-      MONEYSWITCH_WALLET_PASSWORD_FILE: "/run/secrets/wallet_password"
+      MONEYSWITCH_PUBLIC_URL: ${MONEYSWITCH_PUBLIC_URL:-http://localhost:4020}
+      MONEYSWITCH_NETWORKS: ${MONEYSWITCH_NETWORKS:-eip155:10143,eip155:84532}
+      MONEYSWITCH_DEFAULT_NETWORK: ${MONEYSWITCH_DEFAULT_NETWORK:-eip155:10143}
+      MONEYSWITCH_WALLET_PASSWORD_FILE: /run/secrets/wallet_password
     volumes:
       - moneyswitch-data:/data
+    secrets:
+      - wallet_password
     restart: unless-stopped
-
-  demo-seller:
-    build:
-      context: .
-      dockerfile: apps/demo-seller/Dockerfile
-    ports:
-      - "4021:4021"
-    environment:
-      DEMO_SELLER_PORT: "4021"
-      DEMO_SELLER_PAY_TO: "${DEMO_SELLER_PAY_TO}"
-      DEMO_SELLER_FACILITATOR_URL: "${DEMO_SELLER_FACILITATOR_URL:-https://x402-facilitator.molandak.org}"
-    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   moneyswitch-data:
+
+secrets:
+  wallet_password:
+    file: ./deploy/secrets/wallet_password

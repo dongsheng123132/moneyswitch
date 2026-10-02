@@ -69,14 +69,60 @@ export const MAINNET: NetworkConfig = {
 /** Mainnet is defined but disabled by default (MONEYSWITCH_MAINNET_ENABLED=true opts in); testnet is used otherwise. */
 export const MAINNET_ENABLED = env("MONEYSWITCH_MAINNET_ENABLED", "false") === "true";
 
+/** Circle-issued USDC, verified against https://developers.circle.com/stablecoins/usdc-contract-addresses. */
+export const BASE: NetworkConfig = {
+  caip2: "eip155:8453",
+  rpcUrl: env("MONEYSWITCH_BASE_RPC_URL", "https://mainnet.base.org"),
+  usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  usdcDomainName: "USD Coin", usdcDomainVersion: "2", usdcDecimals: 6,
+  facilitatorUrl: "https://api.cdp.coinbase.com/platform/v2/x402",
+  label: "Base mainnet", explorerBase: "https://basescan.org",
+};
+
+export const BASE_SEPOLIA: NetworkConfig = {
+  caip2: "eip155:84532",
+  rpcUrl: env("MONEYSWITCH_BASE_SEPOLIA_RPC_URL", "https://sepolia.base.org"),
+  usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  usdcDomainName: "USDC", usdcDomainVersion: "2", usdcDecimals: 6,
+  facilitatorUrl: "https://x402.org/facilitator",
+  label: "Base Sepolia", explorerBase: "https://sepolia.basescan.org",
+};
+
+export const NETWORKS: Readonly<Record<string, NetworkConfig>> = Object.freeze(
+  Object.fromEntries([TESTNET, MAINNET, BASE, BASE_SEPOLIA].map((n) => [n.caip2, n]))
+);
+
+export function getNetwork(caip2: string): NetworkConfig {
+  const network = NETWORKS[caip2];
+  if (!network) throw new Error(`Unsupported payment network: ${caip2}`);
+  return network;
+}
+
+/** Explicit list is also the operator's opt-in to any mainnet in it; legacy installations keep their old network. */
+export function getEnabledNetworks(): NetworkConfig[] {
+  const raw = process.env.MONEYSWITCH_NETWORKS;
+  if (raw === undefined) return [MAINNET_ENABLED ? MAINNET : TESTNET];
+  const ids = [...new Set(raw.split(",").map((id) => id.trim()).filter(Boolean))];
+  if (!ids.length) throw new Error("MONEYSWITCH_NETWORKS must name at least one CAIP-2 network");
+  return ids.map(getNetwork);
+}
+
 export function getActiveNetwork(): NetworkConfig {
-  if (MAINNET_ENABLED) return MAINNET;
-  return TESTNET;
+  const networks = getEnabledNetworks();
+  const requested = process.env.MONEYSWITCH_DEFAULT_NETWORK;
+  if (!requested) return networks[0];
+  const network = networks.find((n) => n.caip2 === requested);
+  if (!network) throw new Error("MONEYSWITCH_DEFAULT_NETWORK must be enabled in MONEYSWITCH_NETWORKS");
+  return network;
 }
 
 /** True when the active network is Monad mainnet (real USDC, real funds). */
 export function isMainnet(): boolean {
-  return getActiveNetwork() === MAINNET;
+  return isMainnetNetwork(getActiveNetwork());
+}
+
+export function isMainnetNetwork(network: NetworkConfig): boolean {
+  return network === MAINNET || network === BASE;
 }
 
 export const SCHEME = "exact" as const;

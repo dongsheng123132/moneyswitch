@@ -4,8 +4,6 @@ import { useT } from "../../i18n";
 import { employeeStrings } from "../../i18n/strings/employee";
 import {
   useCliSource,
-  connectCommand,
-  statusCommand,
   openaiBase,
   claudeMcpCommand,
   codexToml,
@@ -25,9 +23,6 @@ export default function EmployeeConnectPage() {
   const t = useT(employeeStrings);
   const ts = useT(skillStrings);
 
-  const previewCmd = connectCommand(src, origin, key, false);
-  const applyCmd = connectCommand(src, origin, key, true);
-  const checkCmd = statusCommand(src, origin, key);
   const base = openaiBase(origin);
   const claudeCmd = claudeMcpCommand(src, origin, key);
   const codexSnippet = codexToml(src, origin, key);
@@ -49,38 +44,7 @@ export default function EmployeeConnectPage() {
         <SkillForAi baseUrl={skillBaseUrl(null, origin)} secret={key} showNudge={false} />
       </div>
 
-      <div className="card connect-section">
-        <div className="card-header">
-          <h3>{t("section1Title")}</h3>
-        </div>
-        <div className="connect-section-body">{t("section1Body")}</div>
 
-        {src.kind === "npm" && <Callout tone="warn">{t("npmUnavailableWarn")}</Callout>}
-
-        <div className="connect-subhead">{t("previewLabel")}</div>
-        <Snippet code={previewCmd} display={previewCmd.replace(key, masked)} />
-
-        <div className="connect-subhead">{t("applyLabel")}</div>
-        <Snippet code={applyCmd} display={applyCmd.replace(key, masked)} />
-
-        <div className="connect-subhead">{t("checkTitle")}</div>
-        <Snippet code={checkCmd} display={checkCmd.replace(key, masked)} />
-      </div>
-
-      <div className="card connect-section">
-        <div className="card-header">
-          <h3>{t("section2Title")}</h3>
-        </div>
-        <div className="connect-section-body">{t("section2Body")}</div>
-        <div className="field">
-          <label>{t("baseUrlLabel")}</label>
-          <Snippet code={base} />
-        </div>
-        <div className="field">
-          <label>{t("apiKeyLabel")}</label>
-          <Snippet code={key} display={masked} />
-        </div>
-      </div>
 
       <div className="card connect-section">
         <div className="card-header">

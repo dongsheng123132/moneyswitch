@@ -5,7 +5,7 @@ import {
   decodePaymentSignatureHeader,
   encodePaymentResponseHeader,
 } from "@x402/core/http";
-import { TESTNET } from "@moneyswitch/x402";
+import { TESTNET, type NetworkConfig } from "@moneyswitch/x402";
 
 /**
  * A scriptable x402 seller for the "paid but no delivery" tests. Unlike the
@@ -90,7 +90,8 @@ export interface StubSeller {
 }
 
 /** Listens on an ephemeral port (parallel test files and other sessions never collide). */
-export async function startStubSeller(opts: { facilitatorUrl: string; payTo: string }): Promise<StubSeller> {
+export async function startStubSeller(opts: { facilitatorUrl: string; payTo: string; network?: NetworkConfig }): Promise<StubSeller> {
+  const network = opts.network ?? TESTNET;
   let behavior: SellerBehavior = { ...DEFAULT_BEHAVIOR };
   const requests: SellerRequest[] = [];
   let settles = 0;
@@ -138,12 +139,12 @@ export async function startStubSeller(opts: { facilitatorUrl: string; payTo: str
       accepts: [
         {
           scheme: "exact",
-          network: TESTNET.caip2,
+          network: network.caip2,
           amount: b.amount,
-          asset: TESTNET.usdcAddress,
+          asset: network.usdcAddress,
           payTo: opts.payTo,
           maxTimeoutSeconds: 60,
-          extra: { name: TESTNET.usdcDomainName, version: TESTNET.usdcDomainVersion },
+          extra: { name: network.usdcDomainName, version: network.usdcDomainVersion },
         },
       ],
     });

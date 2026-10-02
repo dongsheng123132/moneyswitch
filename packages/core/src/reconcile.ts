@@ -17,7 +17,7 @@ import type { PaymentRow } from "./types.js";
  */
 export interface AuthorizationReader {
   /** USDC.authorizationState(authorizer, nonce) — true once the authorization has been consumed. */
-  authorizationState(authorizer: string, nonce: string): Promise<boolean>;
+  authorizationState(authorizer: string, nonce: string, network?: string): Promise<boolean>;
   /**
    * Best-effort lookup of the tx that consumed the authorization, via the
    * `AuthorizationUsed(authorizer indexed, nonce indexed)` event. Only called
@@ -26,6 +26,7 @@ export interface AuthorizationReader {
    * error_code SETTLED_TX_UNKNOWN rather than treating this as a failure).
    */
   findAuthorizationUsedTx(input: {
+    network?: string;
     authorizer: string;
     nonce: string;
     /** The payment row's created_at, as epoch milliseconds — used to bound the log search window. */
@@ -120,7 +121,7 @@ export async function reconcileUnknownPayments(
 
     let used: boolean;
     try {
-      used = await reader.authorizationState(authFrom, authNonce);
+      used = await reader.authorizationState(authFrom, authNonce, payment.network);
     } catch (e) {
       result.rpcErrors++;
       continue;
@@ -148,6 +149,7 @@ export async function reconcileUnknownPayments(
       try {
         txHash = await reader.findAuthorizationUsedTx({
           authorizer: authFrom,
+          network: payment.network,
           nonce: authNonce,
           paymentCreatedAtMs: new Date(payment.createdAt).getTime(),
           validBeforeSec: payment.authValidBefore,
@@ -194,6 +196,7 @@ export async function reconcileUnknownPayments(
       try {
         txHash = await reader.findAuthorizationUsedTx({
           authorizer: payment.authFrom!,
+          network: payment.network,
           nonce: payment.authNonce!,
           paymentCreatedAtMs: new Date(payment.createdAt).getTime(),
           validBeforeSec: payment.authValidBefore,

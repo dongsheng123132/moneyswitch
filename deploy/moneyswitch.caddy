@@ -1,0 +1,11 @@
+app.moneyswitch.dev {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        -Server
+    }
+    reverse_proxy 127.0.0.1:4020 {
+        flush_interval -1
+    }
+}

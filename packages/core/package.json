@@ -11,8 +11,7 @@
   },
   "dependencies": {
     "@moneyswitch/db": "workspace:*",
-    "drizzle-orm": "0.45.3",
-    "@moneyswitch/tollbooth": "workspace:*"
+    "drizzle-orm": "0.45.3"
   },
   "devDependencies": {
     "vitest": "5.0.2",

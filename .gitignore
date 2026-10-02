@@ -29,3 +29,4 @@ docs/pitch/deck-v2/shots/
 docs/pitch/deck-v2/tools/
 
 .vercel
+deploy/secrets/

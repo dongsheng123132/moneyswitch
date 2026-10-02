@@ -1,48 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { parseTopArgv, TOP_HELP } from "../../src/cli.js";
 
-describe("moneyswitch top-level argv dispatch", () => {
-  it("routes `mcp` to the mcp bundle", () => {
+describe("buyer CLI", () => {
+  it("retains MCP and the offline demo", () => {
     expect(parseTopArgv(["mcp"])).toEqual({ kind: "mcp" });
+    expect(parseTopArgv(["demo", "--no-open"])).toEqual({ kind: "demo", args: ["--no-open"] });
+    expect(TOP_HELP).toContain("MoneyKey");
   });
-
-  it("routes `connect ...` to connect-lib with the `connect` token stripped (runCli defaults to connect)", () => {
-    expect(parseTopArgv(["connect", "--server", "http://s", "--key", "mk_live_x", "--apply"])).toEqual({
-      kind: "connect-lib",
-      args: ["--server", "http://s", "--key", "mk_live_x", "--apply"],
-    });
+  it.each(["ui", "connect", "remove", "status", "sell"])("rejects the retired %s command", (command) => {
+    expect(parseTopArgv([command])).toEqual({ kind: "unknown", command });
   });
-
-  it("routes `status ...` to connect-lib keeping the `status` token (runCli's own subcommand)", () => {
-    expect(parseTopArgv(["status", "--server", "http://s", "--key", "mk_live_x"])).toEqual({
-      kind: "connect-lib",
-      args: ["status", "--server", "http://s", "--key", "mk_live_x"],
-    });
-  });
-
-  it("routes `remove --apply` to connect-lib keeping the `remove` token", () => {
-    expect(parseTopArgv(["remove", "--apply"])).toEqual({ kind: "connect-lib", args: ["remove", "--apply"] });
-  });
-
-  it("routes no args / --help / -h to help", () => {
+  it("shows help and version", () => {
     expect(parseTopArgv([])).toEqual({ kind: "help" });
     expect(parseTopArgv(["--help"])).toEqual({ kind: "help" });
-    expect(parseTopArgv(["-h"])).toEqual({ kind: "help" });
-  });
-
-  it("routes `ui ...` to the desktop console with its own args", () => {
-    expect(parseTopArgv(["ui", "--port", "4999", "--no-open"])).toEqual({ kind: "ui", args: ["--port", "4999", "--no-open"] });
-  });
-
-  it("routes unknown top-level commands to unknown", () => {
-    expect(parseTopArgv(["bogus"])).toEqual({ kind: "unknown", command: "bogus" });
-  });
-
-  it("TOP_HELP documents all five subcommands", () => {
-    expect(TOP_HELP).toContain("moneyswitch ui");
-    expect(TOP_HELP).toContain("moneyswitch connect");
-    expect(TOP_HELP).toContain("moneyswitch status");
-    expect(TOP_HELP).toContain("moneyswitch remove");
-    expect(TOP_HELP).toContain("moneyswitch mcp");
+    expect(parseTopArgv(["--version"])).toEqual({ kind: "version" });
   });
 });

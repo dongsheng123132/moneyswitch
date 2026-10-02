@@ -35,70 +35,12 @@ importers:
       '@moneyswitch/net':
         specifier: workspace:*
         version: link:../../packages/net
-      '@moneyswitch/tollbooth':
-        specifier: workspace:*
-        version: link:../../packages/tollbooth
-      '@types/express':
-        specifier: 5.0.3
-        version: 5.0.3
       '@types/node':
         specifier: 22.10.5
         version: 22.10.5
-      '@types/react':
-        specifier: 18.3.31
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.3.7
-        version: 18.3.7(@types/react@18.3.31)
-      '@x402/core':
-        specifier: 2.27.0
-        version: 2.27.0
-      '@x402/evm':
-        specifier: 2.27.0
-        version: 2.27.0(typescript@5.7.3)
-      '@x402/express':
-        specifier: 2.27.0
-        version: 2.27.0(ethers@6.17.0)(express@5.2.1)(typescript@5.7.3)
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
-      express:
-        specifier: 5.2.1
-        version: 5.2.1
-      moneyswitch-connect:
-        specifier: workspace:*
-        version: link:../connect
-      react:
-        specifier: 18.3.1
-        version: 18.3.1
-      react-dom:
-        specifier: 18.3.1
-        version: 18.3.1(react@18.3.1)
-      smol-toml:
-        specifier: ^1.9.0
-        version: 1.9.0
-      typescript:
-        specifier: 5.7.3
-        version: 5.7.3
-      vitest:
-        specifier: 5.0.2
-        version: 5.0.2(@types/node@22.10.5)(vite@8.3.1(@types/node@22.10.5)(esbuild@0.28.2)(tsx@4.23.15))
-
-  apps/connect:
-    dependencies:
-      '@moneyswitch/mcp':
-        specifier: workspace:*
-        version: link:../mcp
-      '@moneyswitch/net':
-        specifier: workspace:*
-        version: link:../../packages/net
-    devDependencies:
-      '@types/node':
-        specifier: 22.10.5
-        version: 22.10.5
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
       typescript:
         specifier: 5.7.3
         version: 5.7.3
@@ -111,9 +53,6 @@ importers:
       '@moneyswitch/skill':
         specifier: workspace:*
         version: link:../../packages/skill
-      '@moneyswitch/tollbooth':
-        specifier: workspace:*
-        version: link:../../packages/tollbooth
       lucide-react:
         specifier: ^1.48.0
         version: 1.48.0(react@18.3.1)
@@ -232,9 +171,6 @@ importers:
       '@moneyswitch/skill':
         specifier: workspace:*
         version: link:../../packages/skill
-      '@moneyswitch/tollbooth':
-        specifier: workspace:*
-        version: link:../../packages/tollbooth
       '@moneyswitch/wallet':
         specifier: workspace:*
         version: link:../../packages/wallet
@@ -330,9 +266,6 @@ importers:
       '@moneyswitch/db':
         specifier: workspace:*
         version: link:../db
-      '@moneyswitch/tollbooth':
-        specifier: workspace:*
-        version: link:../tollbooth
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.3)
@@ -405,25 +338,7 @@ importers:
         version: 5.0.2(@types/node@22.10.5)(vite@8.3.1(@types/node@22.10.5)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/skill:
-    devDependencies:
-      '@types/node':
-        specifier: 22.10.5
-        version: 22.10.5
-      typescript:
-        specifier: 5.7.3
-        version: 5.7.3
-      vitest:
-        specifier: 5.0.2
-        version: 5.0.2(@types/node@22.10.5)(vite@8.3.1(@types/node@22.10.5)(esbuild@0.28.2)(tsx@4.23.15))
-
-  packages/tollbooth:
     dependencies:
-      '@x402/core':
-        specifier: 2.27.0
-        version: 2.27.0
-      '@x402/evm':
-        specifier: 2.27.0
-        version: 2.27.0(typescript@5.7.3)
       viem:
         specifier: 2.56.9
         version: 2.56.9(typescript@5.7.3)(zod@3.25.76)
@@ -2560,10 +2475,6 @@ packages:
     resolution: {integrity: sha512-6x6dK6zJdpTzF4sQeNYxwtvBzf6Eg4GtlesS94HOvTudUeyK2WXAaIfmDgsyslYrRBeFIlsi54AYsFGUuhmvrQ==}
     engines: {node: '>= 0.4'}
 
-  smol-toml@1.9.0:
-    resolution: {integrity: sha512-hpd+HLON7HdZXqYchMM/+LaTTbdK0AU3NngIJ4KVyWbY9bfQqdL9cD+4yf6dUoU2Ap4VsU0JkQi6FxAI1B2mXQ==}
-    engines: {node: '>= 18'}
-
   sonic-boom@4.2.1:
     resolution: {integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==}
 
@@ -4573,8 +4484,6 @@ snapshots:
       side-channel-list: 1.0.1
       side-channel-map: 1.0.1
       side-channel-weakmap: 1.0.2
-
-  smol-toml@1.9.0: {}
 
   sonic-boom@4.2.1:
     dependencies:

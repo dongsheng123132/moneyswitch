@@ -18,7 +18,7 @@ import {
   resolveRequestBody,
   type MoneyKeyRow,
 } from "@moneyswitch/core";
-import { getActiveNetwork, SCHEME } from "./networks.js";
+import { getActiveNetwork, getEnabledNetworks, SCHEME } from "./networks.js";
 
 export interface PaidFetchInput {
   url: string;
@@ -203,7 +203,8 @@ export async function performPaidFetch(
   signer: EvmTypedDataSigner,
   input: PaidFetchInput
 ): Promise<PaidFetchResult> {
-  const network = getActiveNetwork();
+  const networks = getEnabledNetworks();
+  let network = getActiveNetwork();
   const { probeMs, paidMs } = resolvePaidFetchTimeouts();
   let paymentId: string | null = null;
   let approvalIdUsed: string | null = null;
@@ -248,17 +249,19 @@ export async function performPaidFetch(
   // The seller's PAYMENT-RESPONSE said success:false: it could not (or could not yet) confirm the settlement.
   let settleUnconfirmed: { reason: string | null } | null = null;
 
-  const client = new x402Client()
-    .register(network.caip2 as `${string}:${string}`, new ExactEvmScheme(signer as any))
-    .registerPolicy((_version, reqs) =>
+  const client = new x402Client();
+  for (const enabled of networks) {
+    client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(signer as any));
+  }
+  client.registerPolicy((_version, reqs) =>
       reqs.filter(
         (r: PaymentRequirements) =>
           r.scheme === SCHEME &&
-          r.network === network.caip2 &&
-          r.asset.toLowerCase() === network.usdcAddress.toLowerCase()
+          networks.some((n) => r.network === n.caip2 && r.asset.toLowerCase() === n.usdcAddress.toLowerCase())
       )
     )
     .onBeforePaymentCreation(async (ctx) => {
+      network = networks.find((n) => n.caip2 === ctx.selectedRequirements.network)!;
       // The probe deadline may already have expired: @x402/fetch swallows an
       // aborted read of the 402 body and carries on with the PAYMENT-REQUIRED
       // header, so we can get here after the controller was aborted. Reserve
@@ -366,13 +369,13 @@ export async function performPaidFetch(
   const dollarCeiling = "$" + formatMicrosToUsdc(key.perRequestLimit > 0n ? key.perRequestLimit : 1_000_000n);
   client.setSpendControls({
     maxAmountPerPayment: dollarCeiling,
-    allowedAssets: [
+    allowedAssets: networks.map((n) => (
       {
-        network: network.caip2 as `${string}:${string}`,
-        asset: network.usdcAddress,
+        network: n.caip2 as `${string}:${string}`,
+        asset: n.usdcAddress,
         maxAmountPerPayment: key.perRequestLimit.toString(),
-      },
-    ],
+      }
+    )),
   });
 
   const httpClient = new x402HTTPClient(client);

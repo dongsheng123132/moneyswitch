@@ -3,11 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { writeAudit } from "@moneyswitch/core";
-import { getActiveNetwork, isMainnet } from "@moneyswitch/x402";
+import { getActiveNetwork, getEnabledNetworks, isMainnet, isMainnetNetwork } from "@moneyswitch/x402";
 import { getInstalledOutboundProxy, hostPortOf } from "@moneyswitch/net";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
-import { publicBase } from "./tollbooths.js";
+import { publicBase } from "../public-base.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,6 +67,10 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
     const proxy = getInstalledOutboundProxy();
     return reply.send({
       network: network.caip2,
+      networks: getEnabledNetworks().map((n) => ({
+        network: n.caip2, chain_id: Number(n.caip2.split(":")[1]), usdc_address: n.usdcAddress,
+        network_label: n.label, explorer_base: n.explorerBase, is_mainnet: isMainnetNetwork(n),
+      })),
       chain_id: chainId,
       usdc_address: network.usdcAddress,
       explorer_base: network.explorerBase,

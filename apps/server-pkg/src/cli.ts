@@ -44,7 +44,7 @@ demo — fully offline 30-second tour, no real money:
   Starts a mock x402 facilitator, a demo seller (LLM echo mode) and a
   server on free ports (from --port, default ${DEFAULT_PORT}) with a throwaway
   data directory, pre-loads a mock wallet, a demo channel, two MoneyKeys
-  ("Claude Code", "Codex"), a toll booth and a few payments, then opens the
+  ("Claude Code", "Codex") and a few payments, then opens the
   Dashboard already signed in. Settlement is simulated (0xmock… hashes);
   nothing touches a real chain. Ctrl+C stops everything and deletes the data.
   --no-open          print the link instead of opening a browser

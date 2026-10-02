@@ -36,7 +36,6 @@ export interface DemoOptions {
 /** Simulated starting balance of the demo wallet (USDC). */
 const DEMO_START_BALANCE_MICROS = 20_000_000;
 const DEMO_MODEL = "moneyswitch-demo-chat";
-const TOLLBOOTH_NAME = "Demo Weather API";
 
 function log(msg: string) {
   process.stdout.write(`[demo] ${msg}\n`);
@@ -114,11 +113,10 @@ async function api<T>(base: string, token: string, method: string, url: string, 
 interface Seeded {
   claudeKey: string;
   codexKey: string;
-  tollboothSlug: string;
   payments: number;
 }
 
-/** Pre-loads the demo: channel, two MoneyKeys, a toll booth, and a few real (mock-settled) payments. */
+/** Pre-loads the demo: channel, two MoneyKeys, a few real (mock-settled) payments. */
 async function seed(base: string, adminToken: string, sellerUrl: string): Promise<Seeded> {
   const sellerHost = new URL(sellerUrl).host;
   const serverHost = new URL(base).host;
@@ -146,14 +144,6 @@ async function seed(base: string, adminToken: string, sellerUrl: string): Promis
     allowed_hosts: [sellerHost, serverHost],
   });
 
-  const booth = await api<{ slug: string }>(base, adminToken, "POST", "/v1/admin/tollbooths", {
-    name: TOLLBOOTH_NAME,
-    upstream_url: sellerUrl,
-    description: "Demo: a free weather API, now charging AI $0.02 per call.",
-    default_price: null,
-    routes: [{ method: "GET", path_pattern: "/weather", price: "0.02", description: "one forecast" }],
-  });
-
   let payments = 0;
   const chat = async (key: string, content: string) => {
     const r = await fetch(`${base}/v1/chat/completions`, {
@@ -173,12 +163,12 @@ async function seed(base: string, adminToken: string, sellerUrl: string): Promis
   await chat(codex.key, "Write a one-line commit message for a typo fix.");
   await chat(claude.key, "Summarize today's stand-up in one sentence.");
   await paidFetch(claude.key, `${sellerUrl}/premium-report`);
-  await paidFetch(codex.key, `${base}/t/${booth.slug}/weather?city=Tokyo`);
-  await paidFetch(claude.key, `${base}/t/${booth.slug}/weather?city=Berlin`);
-  await paidFetch(codex.key, `${base}/t/${booth.slug}/weather?city=Shanghai`);
+  await paidFetch(codex.key, `${sellerUrl}/premium-report`);
+  await paidFetch(claude.key, `${sellerUrl}/premium-report`);
+  await paidFetch(codex.key, `${sellerUrl}/premium-report`);
   await chat(codex.key, "Explain x402 in ten words.");
 
-  return { claudeKey: claude.key, codexKey: codex.key, tollboothSlug: booth.slug, payments };
+  return { claudeKey: claude.key, codexKey: codex.key, payments };
 }
 
 function removeDir(dir: string) {
@@ -307,7 +297,7 @@ export async function runDemo(opts: DemoOptions): Promise<void> {
     const s = secrets as FirstRunSecrets | null;
     if (!s) throw new Error("fresh demo data dir did not produce a first-run setup link");
 
-    // 5. pre-load channel, keys, toll booth, a few payments
+    // 5. pre-load channel, keys, a few payments
     const base = `http://${opts.host === "0.0.0.0" || opts.host === "::" ? "127.0.0.1" : opts.host}:${serverPort}`;
     const seeded = await seed(base, s.adminToken, sellerUrl);
 
@@ -323,11 +313,10 @@ export async function runDemo(opts: DemoOptions): Promise<void> {
         `    ${link}`,
         "",
         `  Pre-loaded: mock wallet (20 USDC simulated) · channel "Demo LLM (x402)"`,
-        `              MoneyKeys "Claude Code" + "Codex" · toll booth "${TOLLBOOTH_NAME}"`,
+        `              MoneyKeys "Claude Code" + "Codex"`,
         `              ${seeded.payments} demo payments (settled by the mock facilitator)`,
         "",
         "  Try: Playground → send a message ($0.01) · buy the $5 report (blocked) ·",
-        "       Earnings → toll booth income",
         "",
         `  Demo admin token (to sign in from another browser): ${s.adminToken}`,
         `  Services: server ${base} · demo seller ${sellerUrl} · mock facilitator ${facilitatorUrl}`,

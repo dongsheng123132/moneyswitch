@@ -164,7 +164,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       checkRateLimit(ctx.db, key);
       checkHostAllowedForChain(ctx.db, url, key);
       // v0.5: buying from a toll booth on this same server (/t/…) is allowed.
-      assertNotSsrf(url, { selfPort: ctx.config.port, allowedHosts: key.allowedHosts, allowSelfTollbooth: true });
+      assertNotSsrf(url, { selfPort: ctx.config.port, allowedHosts: key.allowedHosts });
 
       if (!ctx.wallet.isUnlocked()) {
         return reply.send(envelope("error", "WALLET_LOCKED", "no"));

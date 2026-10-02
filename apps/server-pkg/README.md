@@ -1,67 +1,18 @@
 # moneyswitch-server
 
-Give your AI an API key for money — the self-hosted
-[MoneySwitch](https://github.com/dongsheng123132/moneyswitch) server and
-Dashboard in one command.
+Self-hosted MoneySwitch service and Dashboard for personal, team and enterprise use. AGPL-3.0-only; Node.js 22+.
 
-MoneySwitch lets an AI agent hold a `mk_live_…` **MoneyKey** instead of a
-wallet private key and spend USDC (Monad testnet) on
-[x402](https://x402.org)-priced APIs, policy-checked before every payment
-(budgets, per-request limits, host allowlist, human approval). It also puts a
-**toll booth** in front of your own API so AI agents pay you per call.
-
-## 30-second demo (offline, no real money)
-
-```bash
-npx moneyswitch-server demo
+```sh
+moneyswitch-server --data-dir ./data --port 4020
+moneyswitch-server demo --no-open
 ```
 
-Starts a throwaway MoneySwitch on free local ports (from 4020 up) with a mock
-x402 facilitator and a demo seller, pre-loads a mock wallet, a demo channel,
-two MoneyKeys ("Claude Code", "Codex"), a toll booth and a few payments, and
-opens the Dashboard already signed in (the server's own one-time setup link).
-Every screen says **DEMO · simulated settlement — no real money moves**.
-Ctrl+C stops everything and deletes the temporary data. `--no-open` prints
-the link instead of opening a browser.
+The first start prints a one-time setup link and administrator credentials to the private terminal. The service stores SQLite data and an encrypted wallet in the selected directory. Copy a personalized skill and capped MoneyKey from the Dashboard to your AI. Use HTTPS for remote access.
 
-## Self-host
+The offline demo uses disposable data, real payment signatures and simulated settlement. It does not move real funds. Ctrl+C stops the demo.
 
-```bash
-npx moneyswitch-server                       # http://127.0.0.1:4020
-npx moneyswitch-server --data-dir /srv/moneyswitch --port 4020 --host 127.0.0.1
-```
+For persistent production use, see [the source deployment guide](https://github.com/dongsheng123132/moneyswitch/blob/main/deploy/README.zh-CN.md). Docker Compose runs behind HTTPS with a durable volume, health checks, backups and rollback.
 
-- Data (SQLite database + encrypted wallet keystore) lives in
-  `~/.moneyswitch/server` by default (`--data-dir` or `MONEYSWITCH_DATA_DIR`).
-- The first start of a data directory prints the admin token and a one-time
-  setup link (valid 30 minutes, single use). Open it to create the wallet,
-  add a channel and cut the first MoneyKey.
-- Keep it on `127.0.0.1` unless it sits behind HTTPS / a reverse proxy.
-  Other settings use the same `MONEYSWITCH_*` environment variables as the
-  repository (`MONEYSWITCH_WALLET_PASSWORD(_FILE)`, `MONEYSWITCH_PUBLIC_URL`,
-  `MONEYSWITCH_FACILITATOR_URL`, …).
+`MONEYSWITCH_NETWORKS` enables an explicit list of Monad/Base mainnet or testnet CAIP-2 IDs. The default is Monad testnet; selecting mainnet permits real USDC spending. No swaps or cross-chain transfers. Ledger entries retain their actual network.
 
-Connect an agent: create a MoneyKey per agent in the Dashboard (name it after
-the agent), press **Give this to your AI**, and paste the copied block into
-Codex / Claude Code / OpenClaw / Hermes. It installs a `moneyswitch-pay`
-skill that carries this server's address and that agent's key. `GET /skill.md`
-serves the generic skill without a key; a lost key is replaced with **Reset
-secret and copy skill**. Advanced alternative, the client CLI (separate package,
-Apache-2.0) wiring up MCP:
-`npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply`.
-
-## What's inside
-
-One JavaScript bundle (server, core, db, x402, wallet, toll booth, mock
-facilitator, demo seller and their dependencies), the prebuilt Dashboard and
-the SQL migrations. The only runtime dependency is `better-sqlite3` (native, not bundled); its
-npm package already contains prebuilt binaries for Windows, macOS and Linux
-(glibc + musl), x64 and arm64 — no compiler and no extra download at install.
-Requires Node.js 22 or newer (as does better-sqlite3 13).
-
-## License
-
-AGPL-3.0-only. See [LICENSE](./LICENSE). If you run a modified version as a
-network service, you must offer its source to its users. The client CLI
-[`moneyswitch`](https://www.npmjs.com/package/moneyswitch) is a separate
-Apache-2.0 package.
+v0.6 focuses on buyer infrastructure. Seller toll booths are removed; historical database tables are preserved. This source must be built before packaging; older npm releases do not represent these changes.

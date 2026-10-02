@@ -5,7 +5,6 @@ import { keysStrings } from "../i18n/strings/keys";
 import { skillStrings } from "../i18n/strings/skill";
 import type { Handoff } from "../keyHandoff";
 import {
-  connectCommand,
   claudeMcpCommand,
   codexToml,
   openaiBase,
@@ -111,8 +110,7 @@ export default function KeyHandoff({
 
           {tab === "connect" && (
             <div>
-              <Snippet title={t("connectRecommended")} code={connectCommand(src, apiBase, handoff.key, true)} note={t("connectNote")} />
-              <Snippet title={t("connectDryRunLabel")} code={connectCommand(src, apiBase, handoff.key, false)} />
+              <Snippet title="Claude Code MCP" code={claudeMcpCommand(src, apiBase, handoff.key)} />
               {src.kind === "tarball" && <div className="connect-source-note">{t("sourceNoteTarball")}</div>}
               {src.kind === "local" && <div className="connect-source-note">{t("sourceNoteLocal")}</div>}
               {src.kind === "npm" && <Callout tone="info" title={t("sourceNoteNpmTitle")}>{t("sourceNoteNpm")}</Callout>}

@@ -27,7 +27,6 @@ const MOCK_FACILITATOR_PORT = 15099;
 const SERVER_PORT = 15020;
 const TOOL_UPSTREAM_PORT = 15023;
 const PAY_TO = EthersWallet.createRandom().address;
-const TOOL_PAY_TO = EthersWallet.createRandom().address;
 const DEMO_MODEL = "moneyswitch-demo-chat";
 const FAKE_TOOL_MODEL = "moneyswitch-fake-tool-chat";
 const TOOL_CALL_TRIGGER = "TRIGGER_TOOL_CALL";
@@ -41,7 +40,6 @@ let adminToken: string;
 let mockFacilitator: Awaited<ReturnType<typeof startMockFacilitator>>;
 let sellerProc: ChildProcess;
 let toolFakeUpstream: http.Server;
-let toolboothSlug: string;
 
 async function waitForHttp(url: string, timeoutMs = 15000): Promise<void> {
   const start = Date.now();
@@ -70,14 +68,14 @@ async function createChannel(models: string[] = [DEMO_MODEL]) {
   return res.json();
 }
 
-/** Channel that resolves to the self-tollbooth fronting `toolFakeUpstream` (SPEC-v0.5 §5: `allowSelfTollbooth`). */
+/** Independent controllable upstream for the OpenAI SSE adapter. */
 async function createToolChannel(models: string[] = [FAKE_TOOL_MODEL]) {
   const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/v1/admin/channels`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({
-      name: "Fake tool-call channel (self-tollbooth)",
-      base_url: `http://127.0.0.1:${SERVER_PORT}/t/${toolboothSlug}/v1`,
+      name: "Fake tool-call channel",
+      base_url: `http://127.0.0.1:${TOOL_UPSTREAM_PORT}/v1`,
       models,
     }),
   });
@@ -155,21 +153,14 @@ beforeAll(async () => {
     dataDir: tmpDir,
     dbFilePath: ":memory:",
     walletPassword: null,
-    // v0.5: only needed so a self-tollbooth (used below as a fully-controllable
-    // fake upstream for the stream-emulation tests) settles against the same
-    // offline mock-facilitator as the rest of this file, instead of the real
-    // testnet default. The buyer-side calls to demo-seller above never consult
-    // this (only the seller/toll-booth side calls the facilitator).
     facilitatorUrl: mockFacilitator.url,
   };
   const ctx: AppContext = { db, sqlite, wallet, config };
   app = buildApp(ctx);
   await app.listen({ port: SERVER_PORT, host: "127.0.0.1" });
 
-  // Fake upstream for the SSE tool_calls emulation tests below: a plain HTTP
-  // server (not x402-aware) fronted by a self-tollbooth, so its JSON response
-  // is fully controllable per-request (demo-seller's echo mode can only ever
-  // return a fixed content/finish_reason shape, never tool_calls).
+  // Plain HTTP upstream with controllable tool_calls and usage. Paid gateway
+  // behavior is covered separately by the x402 demo-seller above.
   toolFakeUpstream = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on("data", (c) => chunks.push(c));
@@ -221,19 +212,6 @@ beforeAll(async () => {
   });
   await new Promise<void>((resolve) => toolFakeUpstream.listen(TOOL_UPSTREAM_PORT, "127.0.0.1", resolve));
 
-  const tollbooth = await (
-    await fetch(`http://127.0.0.1:${SERVER_PORT}/v1/admin/tollbooths`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({
-        name: "Fake tool-call upstream",
-        upstream_url: `http://127.0.0.1:${TOOL_UPSTREAM_PORT}`,
-        pay_to: TOOL_PAY_TO,
-        routes: [{ method: "POST", path_pattern: "/v1/chat/completions", price: "0.01" }],
-      }),
-    })
-  ).json();
-  toolboothSlug = tollbooth.slug;
 }, 30000);
 
 afterAll(async () => {

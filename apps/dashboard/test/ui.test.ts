@@ -99,9 +99,10 @@ describe("employee portal: connect page", () => {
     store.set("moneyswitch_employee_key", KEY);
     const html = render(h(AuthProvider, null, h(EmployeeConnectPage)));
     const skillAt = html.indexOf("Give your AI the ability to pay");
-    const cliAt = html.indexOf("One-click connect (CLI + MCP)");
+    const cliAt = html.indexOf("claude mcp add");
     assert.ok(skillAt >= 0, "skill section present");
-    assert.ok(cliAt > skillAt, "the existing CLI/MCP sections come after the skill");
+    assert.ok(cliAt > skillAt, "manual MCP comes after the skill");
+    assert.ok(!html.includes("moneyswitch connect"), "retired config-writing command is absent");
     assert.ok(html.includes("Copy for Codex"));
     assert.ok(html.includes("name: moneyswitch-pay"));
     assert.ok(html.includes("mk_live_Ab3d"));

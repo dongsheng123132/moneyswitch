@@ -24,7 +24,6 @@
     "@moneyswitch/db": "workspace:*",
     "@moneyswitch/net": "workspace:*",
     "@moneyswitch/skill": "workspace:*",
-    "@moneyswitch/tollbooth": "workspace:*",
     "@moneyswitch/wallet": "workspace:*",
     "@moneyswitch/x402": "workspace:*",
     "@x402/core": "2.27.0",

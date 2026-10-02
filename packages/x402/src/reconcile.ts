@@ -1,6 +1,6 @@
 import { createPublicClient, http, toHex, type Address, type Hex } from "viem";
 import type { AuthorizationReader } from "@moneyswitch/core";
-import { getActiveNetwork, type NetworkConfig } from "./networks.js";
+import { getActiveNetwork, NETWORKS, type NetworkConfig } from "./networks.js";
 import { findAuthorizationUsedTxViaLogs, scanOptionsFromEnv, type LogRpc } from "./authorization-logs.js";
 
 /** EIP-3009 `authorizationState(address,bytes32) view returns (bool)` — standard on USDC and compatible tokens. */
@@ -72,5 +72,24 @@ export function createEvmAuthorizationReader(network: NetworkConfig = getActiveN
         scanOptionsFromEnv()
       );
     },
+  };
+}
+
+/** Old payment rows still reconcile after a network is disabled for new purchases. Unknown chains stay untouched. */
+export function createMultiNetworkAuthorizationReader(): AuthorizationReader {
+  const readers = new Map<string, AuthorizationReader>();
+  const readerFor = (id?: string) => {
+    const network = id ? NETWORKS[id] : getActiveNetwork();
+    if (!network) throw new Error(`Cannot reconcile unsupported network ${id}`);
+    let reader = readers.get(network.caip2);
+    if (!reader) {
+      reader = createEvmAuthorizationReader(network);
+      readers.set(network.caip2, reader);
+    }
+    return reader;
+  };
+  return {
+    authorizationState: (authorizer, nonce, network) => readerFor(network).authorizationState(authorizer, nonce),
+    findAuthorizationUsedTx: (input) => readerFor(input.network).findAuthorizationUsedTx(input),
   };
 }
