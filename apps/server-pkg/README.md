@@ -41,7 +41,13 @@ npx moneyswitch-server --data-dir /srv/moneyswitch --port 4020 --host 127.0.0.1
   repository (`MONEYSWITCH_WALLET_PASSWORD(_FILE)`, `MONEYSWITCH_PUBLIC_URL`,
   `MONEYSWITCH_FACILITATOR_URL`, …).
 
-Connect an agent with the client CLI (separate package, Apache-2.0):
+Connect an agent: create a MoneyKey per agent in the Dashboard (name it after
+the agent), press **Give this to your AI**, and paste the copied block into
+Codex / Claude Code / OpenClaw / Hermes. It installs a `moneyswitch-pay`
+skill that carries this server's address and that agent's key. `GET /skill.md`
+serves the generic skill without a key; a lost key is replaced with **Reset
+secret and copy skill**. Advanced alternative, the client CLI (separate package,
+Apache-2.0) wiring up MCP:
 `npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply`.
 
 ## What's inside

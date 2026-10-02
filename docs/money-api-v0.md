@@ -515,6 +515,19 @@ forwarding and settle-on-success semantics (x402 via the official
 omitted. `--pay-to` refuses MoneyKeys, admin tokens, private keys and
 recovery phrases (exit code 2).
 
+## Handing a key to an AI: the skill (`packages/skill`)
+
+The primary way to connect an agent is a paste-able text block (a `SKILL.md`
+in the Agent Skills format) that carries this server's address and the agent's
+own MoneyKey. The Dashboard builds it ("Give this to your AI"); these endpoints
+support it.
+
+| Endpoint | Auth | |
+|---|---|---|
+| `GET /skill.md` | none | The generic skill (never contains a key), `text/markdown; charset=utf-8`. Base URL = `MONEYSWITCH_PUBLIC_URL` when set, else the request origin (only if it forms a plain http(s) origin, otherwise the skill is server-agnostic and reads `MONEY_API_BASE` / `MONEY_API_KEY`). |
+| `GET /v1/approvals/:id` | MoneyKey | After `/v1/fetch` answered `approval_required`: the key's own approval, `{ "id", "status": "pending"\|"approved"\|"denied"\|"expired"\|"used", "amount", "currency": "USDC", "url", "method", "expires_at" }`. Another key's id and unknown ids both answer `404 { "status": "error", "code": "APPROVAL_NOT_FOUND" }`. Poll about every 15 s; an approval lives 10 minutes. |
+| `POST /v1/keys/:id/rotate` | admin | Only a hash of a key is stored, so a lost secret cannot be shown again. This issues a new secret for the same key id: budgets, usage history, approvals, child keys and settings are kept, the old secret stops working immediately, an audit row `key.rotate` (key prefixes only) is written. Returns `{ id, key, name, key_prefix, parent_id, depth }`; `key` (the new plaintext) is shown only here. `404` unknown id, `409 KEY_REVOKED` for a revoked key (rotating never revives a key). |
+
 ## License
 
 This document is licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).

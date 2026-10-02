@@ -52,7 +52,20 @@ npx moneyswitch-server            # http://127.0.0.1:4020，数据在 ~/.moneysw
 打开即登录，并带你走完 钱包 → 渠道 → 第一把 Key → 接入 Agent。可用
 `--data-dir`、`--port`、`--host` 改默认值。
 
-**把本机的 Claude Code / Codex 接到 MoneySwitch**（用一把 MoneyKey）：
+**让 AI Agent 学会付费——粘贴一次就行。** 在 Dashboard 里新建一把 MoneyKey
+（一个 Agent 一把，用 Agent 的名字命名：`Codex`、`OpenClaw`……），点
+**交给你的 AI**，选好 Agent 后复制，粘贴给 Codex、Claude Code、OpenClaw、
+Hermes 或任何读取 `SKILL.md` 的 Agent。这段文字是一句安装说明加一个
+`moneyswitch-pay` skill，里面有本服务器的地址和**该 Agent 自己的** MoneyKey；
+Agent 把它存成 skill、汇报剩余额度，之后遇到 x402（HTTP 402）接口就会通过
+`POST /v1/fetch` 付费。key 找不到了？key 只存哈希，请在 key 列表点
+**重置密钥并复制 skill**（旧密钥立刻失效，额度和历史不变）。Dashboard 的「接入
+Agent」页和员工端也有同一段文字；`GET /skill.md` 提供本服务器的通用 skill（不含 key）。
+文字由同一个渲染器（`packages/skill`）生成，
+[`skills/moneyswitch-pay/SKILL.md`](skills/moneyswitch-pay/SKILL.md) 是它的
+通用版本，从环境变量 `MONEY_API_BASE`、`MONEY_API_KEY` 读取地址和 key。
+
+**进阶：不用 skill，改在本机接 MCP**（用一把 MoneyKey）：
 
 ```bash
 npx moneyswitch connect --server http://127.0.0.1:4020 --key mk_live_xxx --apply
@@ -116,19 +129,23 @@ demo x402 卖方、和带 Dashboard 界面的 MoneySwitch 服务器——全程�
 程从始至终拿不到它。每一笔付款在产生签名**之前**都要在一个数据库事务里过完
 策略检查（`packages/core`）。
 
-## 三种接入方式
+## 四种接入方式
 
-1. **MCP**（`apps/mcp`，stdio）——`money_status`、`paid_fetch`、
+1. **Skill（推荐）**——粘贴一次，Agent 就得到带有本服务器地址和它自己
+   MoneyKey 的 `moneyswitch-pay` skill（Agent Skills 的 `SKILL.md`）。
+   Dashboard：*Money Keys → 交给你的 AI*。不需要 MCP 和配置文件，Agent 直接调下面的
+   REST 接口。文字只在 `packages/skill` 里生成一份；`GET /skill.md` 提供通用版本。
+2. **MCP**（`apps/mcp`，stdio）——`money_status`、`paid_fetch`、
    `money_history` 三个工具。`npx moneyswitch mcp`，或用 `moneyswitch
    connect --apply` 自动接入 Claude Code / Codex。见
    [`docs/claude.md`](docs/claude.md)、[`docs/codex.md`](docs/codex.md)。
-2. **OpenAI / NewAPI 兼容网关**——在任意支持 OpenAI SDK 协议的客户端
+3. **OpenAI / NewAPI 兼容网关**——在任意支持 OpenAI SDK 协议的客户端
    （openai SDK、Cherry Studio、Open WebUI、NewAPI 上游渠道）里填
    `Base URL = http://<server>/v1`、`API Key = mk_live_xxx`。已实现
    `GET /v1/models`、`POST /v1/chat/completions` 与旧版 OpenAI billing 接
    口——见 [`SPEC-v0.2.md`](SPEC-v0.2.md) 与
    [`docs/money-api-v0.md`](docs/money-api-v0.md)。
-3. **REST**——`POST /v1/fetch { url, method?, headers?, body?, max_price? }`
+4. **REST**——`POST /v1/fetch { url, method?, headers?, body?, max_price? }`
    直接通过策略引擎请求任意 x402 收费 URL。见
    [`docs/money-api-v0.md`](docs/money-api-v0.md)。
 
@@ -301,6 +318,7 @@ MoneySwitch 按组件分层许可：Agent 或卖方**嵌入自己进程**的部�
 | `apps/mcp`、`apps/connect`、`apps/cli`（npm 包 `moneyswitch`）——客户端代码 | [Apache-2.0](apps/mcp/LICENSE) |
 | `apps/server-pkg`（npm 包 `moneyswitch-server`：为 `npx` 打包好的服务端 + Dashboard） | [AGPL-3.0-only](apps/server-pkg/LICENSE) |
 | `apps/demo-seller`（x402 卖方示例） | [Apache-2.0](apps/demo-seller/LICENSE) |
+| `packages/skill` 与 `skills/`（粘贴给 Agent 的 skill 文字及其渲染器） | [Apache-2.0](packages/skill/LICENSE) |
 | `packages/tollbooth`（收费站规则匹配、转发、收款地址校验——服务端与 `moneyswitch sell` 共用） | [Apache-2.0](packages/tollbooth/LICENSE) |
 | 其余全部（`apps/server`、`apps/dashboard`、其余 `packages/*`） | [AGPL-3.0-only](LICENSE) |
 
