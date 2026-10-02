@@ -2,6 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { formatPaidFetchResult } from "./paid-fetch-result.js";
 
 /**
  * MoneySwitch MCP server (SPEC §7): stdio, pure HTTP client against the
@@ -85,28 +86,7 @@ server.registerTool(
       approval_id: args.approval_id,
     });
 
-    if (json?.status === "approval_required") {
-      return {
-        content: [
-          {
-            type: "text",
-            text:
-              `已提交人工审批 approval_id=${json.approval_id}，等用户批准后用同一参数加 approval_id 重试。\n` +
-              `(Submitted for manual approval, approval_id=${json.approval_id}. ` +
-              `Wait for the user to approve it, then retry paid_fetch with the exact same url/method/body plus approval_id="${json.approval_id}".)`,
-          },
-        ],
-      };
-    }
-
-    if (status !== 200 || json?.status === "denied" || json?.status === "error" || json?.status === "payment_failed") {
-      return {
-        content: [{ type: "text", text: `paid_fetch failed: ${JSON.stringify(json ?? { http_status: status })}` }],
-        isError: true,
-      };
-    }
-
-    return { content: [{ type: "text", text: JSON.stringify(json, null, 2) }] };
+    return formatPaidFetchResult(status, json);
   }
 );
 
