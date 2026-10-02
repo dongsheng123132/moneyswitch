@@ -108,6 +108,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@moneyswitch/skill':
+        specifier: workspace:*
+        version: link:../../packages/skill
       '@moneyswitch/tollbooth':
         specifier: workspace:*
         version: link:../../packages/tollbooth
@@ -136,6 +139,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@5.4.21(@types/node@26.6.2)(lightningcss@1.33.0))
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       typescript:
         specifier: 5.7.3
         version: 5.7.3
@@ -223,6 +229,9 @@ importers:
       '@moneyswitch/net':
         specifier: workspace:*
         version: link:../../packages/net
+      '@moneyswitch/skill':
+        specifier: workspace:*
+        version: link:../../packages/skill
       '@moneyswitch/tollbooth':
         specifier: workspace:*
         version: link:../../packages/tollbooth
@@ -384,6 +393,18 @@ importers:
       undici:
         specifier: 7.30.0
         version: 7.30.0
+    devDependencies:
+      '@types/node':
+        specifier: 22.10.5
+        version: 22.10.5
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 5.0.2
+        version: 5.0.2(@types/node@22.10.5)(vite@8.3.1(@types/node@22.10.5)(esbuild@0.28.2)(tsx@4.23.15))
+
+  packages/skill:
     devDependencies:
       '@types/node':
         specifier: 22.10.5
