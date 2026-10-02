@@ -250,8 +250,10 @@ describe("renderInstallPrompt", () => {
     const head = p.slice(0, p.indexOf(SKILL_BEGIN_MARKER));
     expect(head).toMatch(/[一-鿿]/);
     expect(head).toMatch(/Save everything between the BEGIN and END markers, verbatim/);
-    expect(head).toMatch(/If you cannot write there, show me the path and the content/);
+    expect(head).toMatch(/If you cannot write there, report the path and blocker, without the key/);
     expect(head).toContain(`GET ${BASE}/v1/status`);
+    expect(head).toContain("do not make a payment during installation");
+    expect(head).toContain("Reply in at most two sentences");
     expect(head).toMatch(/never repeat it in chat/);
     expect(head).toMatch(/never commit it to git/);
     expect(head).not.toContain(KEY);
@@ -313,11 +315,12 @@ describe("renderInstallPrompt", () => {
 
   it.each(SKILL_AGENTS)("%s: replace an existing moneyswitch-pay skill in place (ClawHub / /skill.md copy), never keep two, never use a shared folder", (agent) => {
     const head = headOf(renderInstallPrompt({ ...base, agent }));
-    expect(head).toContain("overwrite it in place instead of keeping two copies");
-    expect(head).toContain("if that copy sits in a folder shared with other agents, leave it and save yours at the path above");
+    expect(head).toContain("Replace this agent's existing moneyswitch-pay atomically (back up first)");
+    expect(head).toContain("do not search unrelated agents' folders");
+    expect(head).toContain("leave shared copies unchanged");
     expect(head).toContain(`Never save it in a folder that other agents share (for example ${SHARED_SKILLS_ROOT})`);
-    expect(head).toMatch(/覆盖它/);
-    expect(head).toMatch(/共用的目录/);
+    expect(head).toMatch(/留底后原子替换/);
+    expect(head).toMatch(/共用目录/);
   });
 
   it("validates its inputs like renderSkill", () => {

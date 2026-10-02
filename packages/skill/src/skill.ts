@@ -44,9 +44,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
   push("---", `name: ${SKILL_NAME}`, `description: ${JSON.stringify(SKILL_DESCRIPTION)}`, "---", "");
   push("# MoneySwitch: pay for x402 APIs", "");
   push(
-    "MoneySwitch is a payment gateway run by the user. It holds the USDC wallet, enforces the budget and signs payments. " +
-      "You hold only a **MoneyKey** (`mk_live_...`): a spending permission with a daily/total budget, a per-request limit and a host allowlist. " +
-      "It is not money and not a private key, and you cannot spend more than it allows.",
+    "MoneySwitch holds the user's USDC wallet and enforces spending rules. Your **MoneyKey** is a budget-limited permission, not money and not a private key.",
     ""
   );
 
@@ -71,6 +69,14 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     "**The key is a secret.** Never print it or repeat it in chat, logs, code or git. Never put it in a URL or query string. " +
       (personal ? "Send it only to the MoneySwitch server above" : "Send it only to the MoneySwitch server (`MONEY_API_BASE`)") +
       ", in the `Authorization` header, never to a seller or any other host.",
+    ""
+  );
+
+  push(
+    "Use one available HTTP client; the examples below are alternatives. On Windows, prefer Python if available. " +
+      "`curl.exe` and PowerShell may fail with `SEC_E_NO_CREDENTIALS` in a restricted sandbox even when they work outside it. " +
+      "After that TLS-handshake failure, try Python or Node with normal certificate verification; do not diagnose a broken Windows installation or change system security settings. " +
+      "A timeout after sending a paid request is different: do not resend it with another client.",
     ""
   );
 
@@ -146,24 +152,23 @@ export function renderSkill(input: RenderSkillInput = {}): string {
   // --- Result ------------------------------------------------------------
   push("## Read the result", "");
   push(
-    "The reply is one JSON object: `status`, `code`, `charged`, `payment` (`amount`, `tx_hash`, `network`), `http_status`, `body` (the seller's answer), `approval_id`, `remaining_today`, `remaining_total`. " +
-      "`charged` tells you if money moved: `yes` = a payment was confirmed, `no` = nothing was signed or charged, `maybe` = a payment was signed but the outcome is unknown. " +
-      "(An older server may omit it: treat `ok` as yes, `denied` as no, anything else as maybe.)",
+    "Read `status`, `code`, `charged`, `payment` (`amount`, `tx_hash`, `network`), `http_status`, `body`, `approval_id`, `remaining_today`, `remaining_total`. " +
+      "`charged`: `yes` = confirmed payment, `no` = no charge, `maybe` = outcome unknown. Missing `charged` also means unknown; do not infer a charge from HTTP 200 alone.",
     ""
   );
   push(
     "| status | what it means | what you do |",
     "|---|---|---|",
-    "| `ok` | The seller answered (and `payment` says what was paid). | Use `body`. Tell the user the amount, the seller host and the `tx_hash`. |",
-    "| `denied` | MoneySwitch refused before signing anything (`charged` is `no`). `code` names the limit: `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `APPROVAL_INVALID`. | Tell the user which limit stopped it. Do not retry and do not work around it (other host, bigger `max_price`, another key). |",
-    "| `approval_required` | The price is above the user's approval threshold; a human must approve first. The reply has `approval_id`. | Tell the user the `approval_id` and the amount, and that they approve it in the MoneySwitch dashboard (Approvals). Poll `GET " +
+    "| `ok` | Request completed; `payment` may be null for a free service. | Use `body`. Report any amount paid, seller host and `tx_hash`. |",
+    "| `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. |",
+    "| `approval_required` | Human approval needed. | Get the quote from `GET " +
       B +
-      "/v1/approvals/{approval_id}` about every 15 seconds (same `Authorization` header) until `status` is `approved`, `denied` or `expired` (about 10 minutes; the reply has `id`, `status`, `amount`, `currency`, `url`, `method`, `expires_at`). If `approved`, resend the exact same request plus `approval_id`. If `denied` or `expired`, stop and tell the user. |",
-    "| `payment_unknown` | A payment was signed but the answer was lost (`code` `TIMEOUT_AFTER_PAYMENT` or `UPSTREAM_ERROR_AFTER_PAYMENT`), so `charged` is `maybe`. The same applies if your own HTTP call timed out or dropped after you sent the request. | **NEVER retry automatically**: you could pay twice. Tell the user it may have been charged. Check `GET " +
+      "/v1/approvals/{approval_id}`, tell the user to approve in the dashboard, and poll every 15 seconds (same Authorization; expires in about 10 minutes). If approved, resend the exact same request plus `approval_id`. If denied or expired, stop. |",
+    "| `payment_unknown` | `TIMEOUT_AFTER_PAYMENT` / `UPSTREAM_ERROR_AFTER_PAYMENT`; `charged` is `maybe`. Also applies if your client times out after sending. | **NEVER retry automatically**: payment could repeat. Check `GET " +
       B +
       "/v1/history` later and let the user decide. |",
-    "| `payment_failed` | The seller rejected the payment (`PAYMENT_REJECTED`) or signing failed (`PAYMENT_FAILED`). | If `charged` is `maybe`, do not retry (treat it like `payment_unknown`). Otherwise report it to the user and do not loop. |",
-    '| `error` | Something failed (e.g. `WALLET_LOCKED`, `KEY_INVALID`, `KEY_REVOKED`, `KEY_EXPIRED`, `UPSTREAM_ERROR`). | If `charged` is `no`, you may retry once later. For `WALLET_LOCKED` or a key problem tell the user instead (a dead key can be replaced in the dashboard: Money Keys > "Reset secret and copy skill"). |',
+    "| `payment_failed` | `PAYMENT_REJECTED` or `PAYMENT_FAILED`. | If `charged` is `maybe`, do not retry. Otherwise report the failure; do not loop. |",
+    '| `error` | `WALLET_LOCKED`, invalid/revoked/expired key, or upstream error. | If `charged` is `no`, you may retry once later. Wallet/key problems need the user; replace a dead key via "Reset secret and copy skill". |',
     ""
   );
   push(
