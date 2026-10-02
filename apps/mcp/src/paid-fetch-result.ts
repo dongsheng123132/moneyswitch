@@ -60,6 +60,48 @@ export function chargedMaybeNote(json: Json): string {
   );
 }
 
+/**
+ * The HTTP exchange with MoneySwitch itself failed (connection reset, our own
+ * client deadline, truncated response). `err` is a MoneyApiTransportError
+ * (duck-typed: `kind` "not_sent" | "unknown"). Unless the request provably never
+ * left this machine, the server may still be processing the call — or have
+ * finished it and charged — so the agent must be told NOT to retry blindly.
+ */
+export function formatPaidFetchTransportError(err: unknown): PaidFetchToolResult {
+  const kind = (err as { kind?: string } | null)?.kind;
+  const detail = err instanceof Error ? err.message : String(err);
+  if (kind === "not_sent") {
+    return {
+      content: [
+        {
+          type: "text",
+          text:
+            `无法连接 MoneySwitch：请求没有发出，没有扣款（${detail}）。检查 MONEY_API_BASE 和服务是否在运行，之后可以重试。\n` +
+            `Could not reach MoneySwitch: the request was never sent, so nothing was charged (${detail}). ` +
+            `Check MONEY_API_BASE and that the server is running; retrying later is safe.`,
+        },
+      ],
+      isError: true,
+    };
+  }
+  return {
+    content: [
+      {
+        type: "text",
+        text:
+          `paid_fetch 的结果未知：请求发出后，到 MoneySwitch 的连接中断或超时（${detail}）。` +
+          `服务端可能仍在处理这次调用，也可能已经签名并扣款。请不要自动重试：重试可能再付一次钱。` +
+          `先用 money_history 查看最近一笔付款的状态（settled = 已扣款，unknown = 未确认、预算仍被占用，failed = 未扣款），确认之后再决定。\n` +
+          `The outcome of this paid_fetch is UNKNOWN: the connection to MoneySwitch broke or timed out after the request was sent (${detail}). ` +
+          `The server may still be processing the call, and you MAY have been charged. ` +
+          `Do NOT retry automatically — a retry can pay a second time. ` +
+          `Check money_history first (settled = charged, unknown = unconfirmed and still holding budget, failed = not charged), then decide.`,
+      },
+    ],
+    isError: true,
+  };
+}
+
 export function formatPaidFetchResult(httpStatus: number, json: Json): PaidFetchToolResult {
   if (json?.status === "approval_required") {
     return {

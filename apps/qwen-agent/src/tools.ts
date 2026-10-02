@@ -170,6 +170,9 @@ export async function runNansenQuery(
     endpoint: endpointName,
     status: envelope.status,
     code: envelope.code,
+    // "yes" | "no" | "maybe": whether this call cost money. "maybe" (status payment_unknown,
+    // PAYMENT_REJECTED, ...) means a payment was signed and its outcome is unknown: never retry blindly.
+    charged: envelope.charged ?? null,
     reason: envelope.reason ?? null,
     http_status: httpStatus,
     price_usd: entry.price_usd,
