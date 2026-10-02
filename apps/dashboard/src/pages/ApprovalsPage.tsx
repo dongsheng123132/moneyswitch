@@ -8,6 +8,7 @@ import { SkeletonBlock } from "../components/Skeleton";
 import Avatar from "../components/Avatar";
 import Callout from "../components/Callout";
 import EmptyState from "../components/EmptyState";
+import NotifySettings from "../components/NotifySettings";
 import Pill from "../components/Pill";
 import Term from "../components/Term";
 import { useT } from "../i18n";
@@ -212,6 +213,8 @@ export default function ApprovalsPage() {
           </div>
         </div>
       )}
+
+      <NotifySettings />
     </div>
   );
 }
