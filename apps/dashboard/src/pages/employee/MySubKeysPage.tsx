@@ -20,6 +20,7 @@ import Callout from "../../components/Callout";
 import EmptyState from "../../components/EmptyState";
 import CopyButton from "../../components/CopyButton";
 import Snippet from "../../components/Snippet";
+import SkillForAi from "../../components/SkillForAi";
 import SecretNotice from "../../components/SecretNotice";
 import { SkeletonCard, SkeletonTable } from "../../components/Skeleton";
 import { useT } from "../../i18n";
@@ -27,6 +28,8 @@ import { common } from "../../i18n/strings/common";
 import { subkeysStrings } from "../../i18n/strings/subkeys";
 import { keysStrings } from "../../i18n/strings/keys";
 import { employeeStrings } from "../../i18n/strings/employee";
+import { skillStrings } from "../../i18n/strings/skill";
+import { skillBaseUrl } from "../../skillText";
 import "../../styles/subkeys.css";
 
 const DECIMAL_RE = /^\d+(\.\d{1,6})?$/;
@@ -73,13 +76,44 @@ async function fetchMySubKeys(key: string) {
   return { status, children };
 }
 
+/**
+ * What a key holder sees right after creating a sub-key. One key per agent is the
+ * point of sub-keys, so the skill for that agent (with THIS new key, not the
+ * holder's own) comes first; the raw key and the OpenAI base URL are the other way.
+ * Exported for render tests.
+ */
+export function SubKeyCreated({ created, origin, onDone }: { created: CreateChildKeyResponse; origin: string; onDone: () => void }) {
+  const t = useT(subkeysStrings);
+  const te = useT(employeeStrings);
+  const ts = useT(skillStrings);
+  return (
+    <div>
+      <div className="key-once-banner">{t("createdBanner")}</div>
+      <SecretNotice>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>{t("keyFieldLabel")}</label>
+          <div className="key-big">{created.key}</div>
+          <CopyButton text={created.key} />
+        </div>
+      </SecretNotice>
+      <SkillForAi baseUrl={skillBaseUrl(null, origin)} secret={created.key} keyName={created.name} />
+      <div className="skill-other-intro">{ts("tabOther")}</div>
+      <Snippet title={te("baseUrlLabel")} code={openaiBase(origin)} />
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onDone}>
+          {t("doneBtn")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function MySubKeysPage() {
   const { employeeKey } = useAuth();
   const key = employeeKey as string;
   const t = useT(subkeysStrings);
   const tc = useT(common);
   const tk = useT(keysStrings);
-  const te = useT(employeeStrings);
 
   const { data, error, loading, refresh } = usePolling(() => fetchMySubKeys(key));
   const status = data?.status ?? null;
@@ -420,22 +454,7 @@ export default function MySubKeysPage() {
             </div>
           </form>
         ) : (
-          <div>
-            <div className="key-once-banner">{t("createdBanner")}</div>
-            <SecretNotice>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>{t("keyFieldLabel")}</label>
-                <div className="key-big">{created.key}</div>
-                <CopyButton text={created.key} />
-              </div>
-            </SecretNotice>
-            <Snippet title={te("baseUrlLabel")} code={openaiBase(origin)} />
-            <div className="modal-actions">
-              <button type="button" className="btn" onClick={closeDrawer}>
-                {t("doneBtn")}
-              </button>
-            </div>
-          </div>
+          <SubKeyCreated created={created} origin={origin} onDone={closeDrawer} />
         )}
       </Drawer>
     </div>

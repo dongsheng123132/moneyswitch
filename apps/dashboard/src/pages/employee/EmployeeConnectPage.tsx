@@ -13,6 +13,9 @@ import {
 } from "../../snippets";
 import Snippet from "../../components/Snippet";
 import Callout from "../../components/Callout";
+import SkillForAi from "../../components/SkillForAi";
+import { skillStrings } from "../../i18n/strings/skill";
+import { skillBaseUrl } from "../../skillText";
 
 export default function EmployeeConnectPage() {
   const { employeeKey } = useAuth();
@@ -20,6 +23,7 @@ export default function EmployeeConnectPage() {
   const origin = window.location.origin;
   const src = useCliSource();
   const t = useT(employeeStrings);
+  const ts = useT(skillStrings);
 
   const previewCmd = connectCommand(src, origin, key, false);
   const applyCmd = connectCommand(src, origin, key, true);
@@ -34,6 +38,15 @@ export default function EmployeeConnectPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 4 }}>{t("connectIntroTitle")}</div>
         <div className="stat-sub">{t("connectIntroBody")}</div>
+      </div>
+
+      {/* The skill is the first way: the logged-in key holder already has their key, so the text carries their real key. */}
+      <div className="card connect-section">
+        <div className="card-header">
+          <h3>{ts("employeeTitle")}</h3>
+        </div>
+        <div className="connect-section-body">{ts("employeeBody")}</div>
+        <SkillForAi baseUrl={skillBaseUrl(null, origin)} secret={key} showNudge={false} />
       </div>
 
       <div className="card connect-section">

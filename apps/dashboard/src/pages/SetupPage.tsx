@@ -22,12 +22,14 @@ import { common } from "../i18n/strings/common";
 import LangSwitch from "../components/LangSwitch";
 import Callout from "../components/Callout";
 import Snippet from "../components/Snippet";
+import SkillForAi from "../components/SkillForAi";
 import CopyButton from "../components/CopyButton";
 import Term from "../components/Term";
 import SecretNotice from "../components/SecretNotice";
 import PublicAddress from "../components/PublicAddress";
 import { ThreeThingsButton } from "../components/ThreeThings";
 import { useAdminMeta } from "../useAdminMeta";
+import { skillBaseUrl } from "../skillText";
 import { connectCommand, openaiBase, useCliSource } from "../snippets";
 import { FundingGuide } from "./WalletPage";
 import { addDemoChannel } from "./ChannelsPage";
@@ -304,7 +306,12 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
             />
           )}
           {current === "connect" && (
-            <ConnectStep created={createdKey} usedAt={createdKey ? keys?.find((k) => k.id === createdKey.id)?.last_used_at ?? null : null} cliSrc={cliSrc} />
+            <ConnectStep
+              created={createdKey}
+              usedAt={createdKey ? keys?.find((k) => k.id === createdKey.id)?.last_used_at ?? null : null}
+              cliSrc={cliSrc}
+              skillBase={skillBaseUrl(meta, window.location.origin)}
+            />
           )}
 
           <div className="setup-actions">
@@ -674,14 +681,18 @@ function KeyStep({
 
 // --- Step 5 ------------------------------------------------------------------
 
-function ConnectStep({
+/** Last wizard step. Exported so a render test can pin that the skill is offered first and the CLI/MCP command only under "other ways". */
+export function ConnectStep({
   created,
   usedAt,
   cliSrc,
+  skillBase,
 }: {
   created: CreateMoneyKeyResponse | null;
   usedAt: string | null;
   cliSrc: ReturnType<typeof useCliSource>;
+  /** Address to write into the skill (MONEYSWITCH_PUBLIC_URL, else this page's origin). */
+  skillBase: string;
 }) {
   const t = useT(setupStrings);
   const navigate = useNavigate();
@@ -698,9 +709,8 @@ function ConnectStep({
   }
   return (
     <div>
-      <p className="setup-text">{t("s5_intro")}</p>
-      {cliSrc.kind === "npm" && <Callout tone="warn">{t("s5_npmWarn")}</Callout>}
-      <Snippet title={t("s5_cmd")} code={connectCommand(cliSrc, origin, created.key, true)} note={t("s5_cmdNote")} />
+      {/* The skill is the first way: ONE block for the AI that carries this server's address and this key. */}
+      <SkillForAi baseUrl={skillBase} secret={created.key} keyName={created.name} />
       <div className="setup-status" role="status" aria-live="polite">
         {usedAt ? (
           <Callout tone="success">{t("s5_connected")}</Callout>
@@ -710,10 +720,16 @@ function ConnectStep({
           </div>
         )}
       </div>
-      <div className="setup-sub">
-        <div className="snippet-title">{t("s5_openai")}</div>
-        <p className="setup-note">{t("s5_openaiNote", { base: openaiBase(origin) })}</p>
-      </div>
+      <details className="setup-other">
+        <summary>{t("s5_otherWays")}</summary>
+        <p className="setup-text">{t("s5_intro")}</p>
+        {cliSrc.kind === "npm" && <Callout tone="warn">{t("s5_npmWarn")}</Callout>}
+        <Snippet title={t("s5_cmd")} code={connectCommand(cliSrc, origin, created.key, true)} note={t("s5_cmdNote")} />
+        <div className="setup-sub">
+          <div className="snippet-title">{t("s5_openai")}</div>
+          <p className="setup-note">{t("s5_openaiNote", { base: openaiBase(origin) })}</p>
+        </div>
+      </details>
       <button
         type="button"
         className="btn secondary"
