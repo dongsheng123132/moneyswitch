@@ -39,21 +39,23 @@ const SENDERS: Record<NotifyChannelId, Sender> = {
 };
 
 /**
- * Sends one event to every configured channel, in parallel. Never throws: a
- * failing (or hanging, or throwing) channel only affects its own result entry,
- * and failures are logged without any secret.
+ * Sends one event to every configured channel (or only to `only`), in
+ * parallel. Never throws: a failing (or hanging, or throwing) channel only
+ * affects its own result entry, and failures are logged without any secret.
+ * `only` lets the outbox drive each channel on its own schedule.
  */
 export async function dispatchEvent(
   event: NotifyEvent,
   config: NotifyConfig,
   deps: SendDeps,
-  log: NotifyLogger
+  log: NotifyLogger,
+  only?: readonly NotifyChannelId[]
 ): Promise<ChannelResult[]> {
   const now = deps.now();
   const content: Content = { text: renderText(event, now), json: renderJson(event, now) };
   const secrets = secretsOf(config);
 
-  const runs = NOTIFY_CHANNELS.map(async (channel): Promise<ChannelResult | null> => {
+  const runs = NOTIFY_CHANNELS.filter((c) => !only || only.includes(c)).map(async (channel): Promise<ChannelResult | null> => {
     let pending: Promise<void> | null;
     try {
       pending = SENDERS[channel](config, content, deps);

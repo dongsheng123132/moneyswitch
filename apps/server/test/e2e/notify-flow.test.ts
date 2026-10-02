@@ -243,12 +243,15 @@ describe("approval push notification e2e", () => {
     expect(Date.now() - t0).toBeLessThan(3000);
     await waitFor(() => received.length >= 1);
     await sleep(300);
-    const row = sqlite.prepare(`SELECT notified_at, notify_attempts FROM approvals WHERE id = ?`).get(r.approval_id) as {
-      notified_at: string | null;
-      notify_attempts: number;
-    };
+    const row = sqlite
+      .prepare(
+        `SELECT a.notified_at AS notified_at, d.attempts AS attempts, d.delivered_at AS delivered_at
+           FROM approvals a JOIN approval_notify_deliveries d ON d.approval_id = a.id AND d.channel = 'webhook' WHERE a.id = ?`
+      )
+      .get(r.approval_id) as { notified_at: string | null; attempts: number; delivered_at: string | null };
     expect(row.notified_at).toBeNull();
-    expect(row.notify_attempts).toBe(1);
+    expect(row.delivered_at).toBeNull();
+    expect(row.attempts).toBe(1);
     expect(received).toHaveLength(1); // back-off: not hammered
   });
 
@@ -322,6 +325,73 @@ describe("approval push notification e2e", () => {
       if (saved === undefined) delete process.env.MONEYSWITCH_NOTIFY_WEBHOOK_URL;
       else process.env.MONEYSWITCH_NOTIFY_WEBHOOK_URL = saved;
       for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  it("offline demo: ignores MONEYSWITCH_NOTIFY_* from the environment, but delivers to a channel saved in the demo's own database", async () => {
+    const saved = process.env.MONEYSWITCH_NOTIFY_WEBHOOK_URL;
+    process.env.MONEYSWITCH_NOTIFY_WEBHOOK_URL = `http://127.0.0.1:${WEBHOOK_PORT}/from-env`;
+    webhookMode = "ok";
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-notify-demo-"));
+    let demoAdmin = "";
+    let running: Awaited<ReturnType<typeof startServer>> | null = null;
+    try {
+      running = await startServer(
+        {
+          port: await freePort(),
+          host: "127.0.0.1",
+          dataDir: dir,
+          dbFilePath: path.join(dir, "ms.sqlite"),
+          walletPassword: null,
+          reconcileIntervalMs: 0,
+          notifyIntervalMs: 50,
+          demo: { startingBalanceMicros: 0 },
+        },
+        { onFirstRun: (s) => (demoAdmin = s.adminToken) }
+      );
+      const auth = { authorization: `Bearer ${demoAdmin}` };
+      // the environment's webhook is not part of the demo: it is neither used nor shown
+      const before = await running.app.inject({ method: "GET", url: "/v1/admin/notify", headers: auth });
+      expect(before.json().channels.webhook).toMatchObject({ configured: false, url: { set: false } });
+
+      // what the Dashboard does: save a channel
+      const put = await running.app.inject({
+        method: "PUT",
+        url: "/v1/admin/notify",
+        headers: auth,
+        payload: { webhook: { url: `http://127.0.0.1:${WEBHOOK_PORT}/from-demo-db` } },
+      });
+      expect(put.statusCode).toBe(200);
+      expect(put.json().channels.webhook).toMatchObject({ configured: true, url: { set: true, source: "db" } });
+
+      received.length = 0;
+      const { row: key } = createMoneyKey(running.ctx.db, {
+        name: "demo-key",
+        totalBudget: 10_000_000n,
+        dailyBudget: 5_000_000n,
+        perRequestLimit: 1_000_000n,
+        approvalThreshold: 100_000n,
+        allowedHosts: ["api.example.com"],
+      });
+      createApproval(running.ctx.db, {
+        keyId: key.id,
+        url: "https://api.example.com/x",
+        method: "GET",
+        body: undefined,
+        network: "eip155:10143",
+        asset: "0xusdc",
+        payTo: "0xpay",
+        amount: 150_000n,
+      });
+      await waitFor(() => received.some((r) => r.url === "/from-demo-db"));
+      await sleep(400);
+      expect(received.filter((r) => r.url === "/from-demo-db").map((r) => r.body.approval.key_name)).toEqual(["demo-key"]);
+      expect(received.filter((r) => r.url === "/from-env")).toHaveLength(0);
+    } finally {
+      await running?.close();
+      if (saved === undefined) delete process.env.MONEYSWITCH_NOTIFY_WEBHOOK_URL;
+      else process.env.MONEYSWITCH_NOTIFY_WEBHOOK_URL = saved;
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 });

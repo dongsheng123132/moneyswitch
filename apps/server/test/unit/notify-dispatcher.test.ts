@@ -100,6 +100,20 @@ describe("dispatchEvent", () => {
     expect(results[2].error).toContain("Unauthorized");
   });
 
+  it("`only` restricts the fan-out to the named channels (the outbox drives each channel on its own schedule)", async () => {
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      urls.push(url);
+      return json(200, { code: 0, errcode: 0, ok: true });
+    }) as unknown as typeof fetch;
+    const { log } = capture();
+    const results = await dispatchEvent(EVENT, ALL, depsWith(fetchImpl), log, ["wecom"]);
+    expect(results).toEqual([{ channel: "wecom", ok: true }]);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("weixin");
+    expect(await dispatchEvent(EVENT, ALL, depsWith(fetchImpl), log, [])).toEqual([]);
+  });
+
   it("a channel that hangs times out on its own without delaying the rest past the timeout", async () => {
     const fetchImpl = ((url: string, init: RequestInit) => {
       if (url.includes("feishu")) {

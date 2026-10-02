@@ -6,7 +6,7 @@ export const notifyStrings = defineMessages(
     title: "Notifications",
     subtitle: "Get a message on your phone the moment a payment needs your approval.",
     intro:
-      "When a payment reaches a key's approval threshold, MoneySwitch sends one message to every channel you set up below, with a link to approve it here. Approvals expire after 10 minutes. Webhook URLs and tokens are secrets: they are stored on this server and only ever shown masked.",
+      "When a payment reaches a key's approval threshold, MoneySwitch sends one message to every channel you set up below, with a link to approve it here. Approvals expire after 10 minutes. A request the agent repeats while the first one is still pending is not announced again, and a key that floods approvals gets one summary message instead of one per approval. Webhook URLs and tokens are secrets: they are stored on this server and only ever shown masked.",
     linkIs: "The link in the message:",
     noPublicUrl:
       "MONEYSWITCH_PUBLIC_URL is not set on the server, so the message will not contain a link; it will tell you to open this Approvals page instead.",
@@ -63,7 +63,7 @@ export const notifyStrings = defineMessages(
     title: "通知",
     subtitle: "有付款需要你审批时，第一时间把消息推到你的手机上。",
     intro:
-      "某笔付款达到 Key 的审批阈值时，MoneySwitch 会向下面你配置的每个渠道各发一条消息，并附上到这里审批的链接。审批 10 分钟后过期。Webhook 地址和令牌都是机密：保存在这台服务器上，页面上只显示打码后的样子。",
+      "某笔付款达到 Key 的审批阈值时，MoneySwitch 会向下面你配置的每个渠道各发一条消息，并附上到这里审批的链接。审批 10 分钟后过期。同一个请求在第一条还没处理时被重复发起，不会重复提醒；某个 Key 短时间内产生大量审批时，只发一条汇总消息。Webhook 地址和令牌都是机密：保存在这台服务器上，页面上只显示打码后的样子。",
     linkIs: "消息里的链接：",
     noPublicUrl: "服务器没有设置 MONEYSWITCH_PUBLIC_URL，所以消息里不会带链接，只会提示你打开本审批页面。",
 

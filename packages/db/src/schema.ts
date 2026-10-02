@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
 
 /**
  * All money fields are stored as SQLite INTEGER (micro-USDC, 6 decimals).
@@ -90,13 +90,36 @@ export const approvals = sqliteTable("approvals", {
   expiresAt: text("expires_at").notNull(),
   decidedAt: text("decided_at"),
   createdAt: text("created_at").notNull(),
-  /** Push-notification outbox: set once a message reached at least one channel (NULL = not yet / not at all). */
+  /**
+   * Push-notification outbox: set once the outbox is done with this approval
+   * and at least one channel received it (NULL = still being delivered, given
+   * up on, or deliberately not announced). Per-channel state: approval_notify_deliveries.
+   */
   notifiedAt: text("notified_at"),
-  /** Push-notification outbox: delivery attempts claimed so far (bounded retries). */
+  /** Superseded by approval_notify_deliveries (migration 0006); no longer written, kept so 0005 databases stay valid. */
   notifyAttempts: integer("notify_attempts").notNull().default(0),
-  /** Push-notification outbox: when the latest attempt started (retry back-off / lease). */
+  /** Superseded by approval_notify_deliveries (migration 0006); no longer written. */
   notifyAttemptAt: text("notify_attempt_at"),
 });
+
+/**
+ * Push-notification outbox, one row per (approval, channel): attempts and
+ * back-off, delivery time, or why nothing is sent (duplicate / rate_limited).
+ */
+export const approvalNotifyDeliveries = sqliteTable(
+  "approval_notify_deliveries",
+  {
+    approvalId: text("approval_id").notNull(),
+    channel: text("channel").notNull(),
+    kind: text("kind").notNull().default("approval"),
+    attempts: integer("attempts").notNull().default(0),
+    attemptAt: text("attempt_at"),
+    deliveredAt: text("delivered_at"),
+    skipped: text("skipped"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.approvalId, t.channel] })]
+);
 
 /** Admin-editable push-notification channel settings (key/value; env vars override at read time). */
 export const notifySettings = sqliteTable("notify_settings", {

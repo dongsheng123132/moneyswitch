@@ -83,8 +83,16 @@ function newApproval(ctx: AppContext, url = "https://api.example.com/deep-report
   };
 }
 
+/** Approval row plus its delivery state; attempts are per (approval, channel) in approval_notify_deliveries, and these tests configure one channel. */
 function rowOf(ctx: AppContext, id: string) {
-  return ctx.sqlite.prepare(`SELECT status, notified_at, notify_attempts, notify_attempt_at FROM approvals WHERE id = ?`).get(id) as {
+  return ctx.sqlite
+    .prepare(
+      `SELECT a.status AS status, a.notified_at AS notified_at,
+              COALESCE((SELECT max(d.attempts) FROM approval_notify_deliveries d WHERE d.approval_id = a.id), 0) AS notify_attempts,
+              (SELECT max(d.attempt_at) FROM approval_notify_deliveries d WHERE d.approval_id = a.id) AS notify_attempt_at
+         FROM approvals a WHERE a.id = ?`
+    )
+    .get(id) as {
     status: string;
     notified_at: string | null;
     notify_attempts: number;
@@ -273,7 +281,7 @@ describe("approval notification outbox", () => {
     expect(rowOf(ctx, approval.id).notified_at).not.toBeNull();
   });
 
-  it("counts as notified when at least one channel took it; the failing channel is not retried", async () => {
+  it("with two channels, one failing: the first tick tries each once, the working one is never repeated, the failing one stays owed", async () => {
     const rec = recorder();
     const ctx = memCtx(rec, {
       env: { MONEYSWITCH_NOTIFY_WEBHOOK_URL: HOOK, MONEYSWITCH_NOTIFY_WECOM_WEBHOOK: "http://wecom.test/send?key=abc" },
@@ -284,10 +292,10 @@ describe("approval notification outbox", () => {
     });
     const { approval } = newApproval(ctx);
     const outbox = createApprovalOutbox(ctx);
-    expect(await outbox.tick()).toMatchObject({ delivered: 1, failed: 0 });
-    await outbox.tick();
+    expect(await outbox.tick()).toEqual({ attempted: 2, delivered: 1, failed: 1, gaveUp: 0 });
+    await outbox.tick(); // WeCom is inside its back-off window, the webhook is done
     expect(rec.calls).toHaveLength(2); // one per channel, once
-    expect(rowOf(ctx, approval.id).notified_at).not.toBeNull();
+    expect(rowOf(ctx, approval.id).notified_at).toBeNull(); // WeCom still owes it (retry behaviour: notify-outbox-channels.test.ts)
     expect(rec.lines.some((l) => l.includes("WeCom delivery failed"))).toBe(true);
   });
 

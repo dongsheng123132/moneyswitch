@@ -75,6 +75,26 @@ const RENDERERS: { [T in NotifyEvent["type"]]: Renderer<EventOf<T>> } = {
       };
     },
   },
+  approval_digest: {
+    text(event) {
+      return [
+        "[MoneySwitch] 同一个 Key 的审批请求过多",
+        `Key：${cleanInline(event.keyName, 60)}`,
+        `现在有 ${event.pending} 笔付款在等你审批。为避免刷屏，这个 Key 一分钟内后续的审批不再逐条推送。`,
+        linkLine(event.approveUrl),
+      ].join("\n");
+    },
+    json(event) {
+      return {
+        event: "approval_digest",
+        approval: null,
+        key_name: event.keyName,
+        key_prefix: event.keyPrefix,
+        pending_count: event.pending,
+        approve_url: event.approveUrl,
+      };
+    },
+  },
   test: {
     text(event) {
       return ["[MoneySwitch] 这是一条测试通知", "收到这条消息，说明这个通知渠道已经配置成功。", linkLine(event.approveUrl)].join("\n");

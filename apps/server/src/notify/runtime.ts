@@ -2,6 +2,7 @@ import type { NotifyLogger, NotifyRuntimeOptions, SendDeps } from "./types.js";
 
 export const DEFAULT_SEND_TIMEOUT_MS = 8_000;
 export const DEFAULT_MAX_ATTEMPTS = 5;
+export const DEFAULT_LANE_CONCURRENCY = 4;
 export const DEFAULT_TELEGRAM_API_BASE = "https://api.telegram.org";
 
 /** 15s, 30s, 60s, 120s, ... after attempt n started. All of it fits inside the 10 minute approval lifetime. */

@@ -47,8 +47,10 @@ export async function startServer(config: ServerConfig, opts: BuildContextOption
   }
   const reconcile = startReconcileLoop(ctx, config.demo ? 0 : config.reconcileIntervalMs ?? 60_000);
   // Approval push notifications: a decoupled outbox loop, never on the payment path.
-  // Off in the offline demo, so demo approvals never reach real channels configured in the environment.
-  const notify = startNotifyLoop(ctx, config.demo ? 0 : config.notifyIntervalMs ?? DEFAULT_NOTIFY_INTERVAL_MS);
+  // The offline demo runs it too, so a channel configured in the demo Dashboard really delivers; but it ignores
+  // MONEYSWITCH_NOTIFY_* from the environment, so demo approvals never reach channels set up for a real deployment.
+  if (config.demo) ctx.notify = { ...ctx.notify, env: {} };
+  const notify = startNotifyLoop(ctx, config.notifyIntervalMs ?? DEFAULT_NOTIFY_INTERVAL_MS);
   return {
     app,
     ctx,

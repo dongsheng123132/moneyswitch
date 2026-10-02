@@ -3,7 +3,8 @@
  *
  * Shape of the feature, so the next event type is an addition, not a rewrite:
  *
- *   outbox.ts      finds work (today: pending approvals) and builds a NotifyEvent
+ *   outbox.ts      finds work (today: pending approvals), decides per (approval, channel) whether and
+ *                  what to send (coalescing, flood cap), and builds a NotifyEvent
  *   message.ts     one renderer per event type: zh text for chat channels + JSON for the generic webhook
  *   channels.ts    one sender per channel; they only ever see rendered text / JSON, never an event type
  *   dispatcher.ts  fan-out to every configured channel, one failing channel never blocks the others
@@ -52,6 +53,11 @@ export interface ApprovalNotifyInfo {
 
 export type NotifyEvent =
   | { type: "approval_required"; approval: ApprovalNotifyInfo; approveUrl: string | null }
+  /**
+   * One summary instead of a flood: a key produced more approvals than the per-minute push cap allows.
+   * Carries no request details (the dashboard has them).
+   */
+  | { type: "approval_digest"; keyName: string; keyPrefix: string; pending: number; approveUrl: string | null }
   /** Sent by POST /v1/admin/notify/test. */
   | { type: "test"; approveUrl: string | null };
 
@@ -90,10 +96,12 @@ export interface NotifyRuntimeOptions {
   telegramApiBase?: string;
   /** Per-channel HTTP timeout. Default 8000. */
   sendTimeoutMs?: number;
-  /** Delivery attempts per approval before giving up. Default 5. */
+  /** Delivery attempts per approval and channel before giving up. Default 5. */
   maxAttempts?: number;
   /** Wait before attempt n+1 after attempt n started (n >= 1), ms. Default 15s, 30s, 60s, 120s... */
   retryBackoffMs?: (attemptsMade: number) => number;
+  /** Sends in flight at once per channel (channels run in parallel with each other). Default 4. */
+  laneConcurrency?: number;
   now?: () => Date;
 }
 

@@ -33,7 +33,8 @@ Channels (use any combination, each gets its own copy):
 
 **Dashboard:** Approvals page → *Notifications*. Fill in a channel, *Save*, then
 *Send test message*; every configured channel reports ok or the reason it
-failed. Saved secrets are shown masked (`https://open.feishu.cn/••••6789`) and
+failed. Saved secrets are shown masked (`https://••••.feishu.cn/••••6789`: the
+host is hidden too, since for many webhook services the host is the secret) and
 are never returned in full; leave a box empty to keep the stored value.
 
 **Environment variables** (headless deploys; each one overrides the stored value
@@ -98,19 +99,40 @@ curl -s -X POST http://127.0.0.1:4020/v1/admin/notify/test -H "Authorization: Be
   ```
 
   `POST /v1/admin/notify/test` sends `{"event":"test","approval":null,"approve_url":…}`.
+  When one key floods the approval queue (see below) you get one summary
+  instead: `{"event":"approval_digest","approval":null,"key_name":"Codex",
+  "key_prefix":"mk_live_ab12","pending_count":7,"approve_url":…}`.
 
 ## How delivery behaves
 
 - It runs beside the HTTP server and is never on the payment path: a slow,
   failing or unreachable webhook cannot slow down or fail `/v1/fetch`.
-- The state lives in the `approvals` table (`notified_at`), so it survives
-  restarts: anything still pending and unexpired that was not announced yet is
-  sent after a restart. Each approval is announced once, also when two server
-  processes share a database.
-- An approval counts as delivered once at least one channel took it. If every
-  channel fails, it is retried with back-off (15 s, 30 s, 60 s, 120 s) up to 5
-  attempts and then dropped with a `warn` log line; the approval itself stays
-  pending in the Dashboard.
+- The state lives in the database (`approvals.notified_at` and the table
+  `approval_notify_deliveries`, one row per approval and channel), so it
+  survives restarts: anything still pending and unexpired that was not
+  announced yet is sent after a restart. Each approval is announced once per
+  channel, also when two server processes share a database. An approval that
+  expired while it waited is never sent.
+- Every channel is delivered and retried on its own. If Telegram times out
+  while the generic webhook answered, Telegram is retried with back-off (15 s,
+  30 s, 60 s, 120 s) up to 5 attempts and then dropped with a `warn` log line,
+  while the webhook is not sent the same approval again. The approval itself
+  stays pending in the Dashboard.
+- Channels do not hold each other up: a black-holed channel only delays its
+  own messages (a few sends in flight per channel, each bounded by an 8 s
+  timeout), not the ones for the other channels.
+- No flood. A request the agent repeats while the first one is still pending
+  and already announced (same key, URL, method, body, payee and price; e.g. an
+  OpenAI SDK retrying a `409 APPROVAL_REQUIRED` answer, or an agent looping on
+  a blocked call) is not announced again; the Approvals page still lists every
+  one. Beyond that, one key gets at most 5 approval messages per minute and
+  channel, then a single summary message ("this key has N approvals waiting"),
+  then silence until the minute is over. Other keys are not affected, and the
+  decision is stored, so it is never reversed later.
+- The offline demo (`moneyswitch-server demo`) delivers too, but only to
+  channels you save in the demo Dashboard: `MONEYSWITCH_NOTIFY_*` from the
+  environment are ignored there, so demo approvals never reach the channels of
+  a real deployment.
 - Outbound requests use the same proxy as the rest of the server
   (`MONEYSWITCH_PROXY`, `HTTPS_PROXY`, Windows system proxy). Redirects are not
   followed.
