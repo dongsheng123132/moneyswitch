@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import http from "node:http";
 import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
@@ -24,8 +25,12 @@ import OpenAI from "openai";
 const SELLER_PORT = 15021;
 const MOCK_FACILITATOR_PORT = 15099;
 const SERVER_PORT = 15020;
+const TOOL_UPSTREAM_PORT = 15023;
 const PAY_TO = EthersWallet.createRandom().address;
+const TOOL_PAY_TO = EthersWallet.createRandom().address;
 const DEMO_MODEL = "moneyswitch-demo-chat";
+const FAKE_TOOL_MODEL = "moneyswitch-fake-tool-chat";
+const TOOL_CALL_TRIGGER = "TRIGGER_TOOL_CALL";
 
 let tmpDir: string;
 let db: MoneySwitchDb;
@@ -35,6 +40,8 @@ let app: ReturnType<typeof buildApp>;
 let adminToken: string;
 let mockFacilitator: Awaited<ReturnType<typeof startMockFacilitator>>;
 let sellerProc: ChildProcess;
+let toolFakeUpstream: http.Server;
+let toolboothSlug: string;
 
 async function waitForHttp(url: string, timeoutMs = 15000): Promise<void> {
   const start = Date.now();
@@ -61,6 +68,38 @@ async function createChannel(models: string[] = [DEMO_MODEL]) {
     }),
   });
   return res.json();
+}
+
+/** Channel that resolves to the self-tollbooth fronting `toolFakeUpstream` (SPEC-v0.5 §5: `allowSelfTollbooth`). */
+async function createToolChannel(models: string[] = [FAKE_TOOL_MODEL]) {
+  const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/v1/admin/channels`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      name: "Fake tool-call channel (self-tollbooth)",
+      base_url: `http://127.0.0.1:${SERVER_PORT}/t/${toolboothSlug}/v1`,
+      models,
+    }),
+  });
+  return res.json();
+}
+
+/** Raw (non-SDK) SSE call: parses `data: ...` events into JSON, dropping `[DONE]`. */
+async function chatStreamRaw(key: string, payload: Record<string, unknown>): Promise<{ status: number; events: Array<Record<string, unknown>> }> {
+  const res = await fetch(`http://127.0.0.1:${SERVER_PORT}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  const events = text
+    .split("\n\n")
+    .map((chunk) => chunk.trim())
+    .filter((chunk) => chunk.startsWith("data: "))
+    .map((chunk) => chunk.slice("data: ".length))
+    .filter((data) => data !== "[DONE]")
+    .map((data) => JSON.parse(data));
+  return { status: res.status, events };
 }
 
 async function createKey(overrides: Record<string, unknown> = {}) {
@@ -116,16 +155,92 @@ beforeAll(async () => {
     dataDir: tmpDir,
     dbFilePath: ":memory:",
     walletPassword: null,
+    // v0.5: only needed so a self-tollbooth (used below as a fully-controllable
+    // fake upstream for the stream-emulation tests) settles against the same
+    // offline mock-facilitator as the rest of this file, instead of the real
+    // testnet default. The buyer-side calls to demo-seller above never consult
+    // this (only the seller/toll-booth side calls the facilitator).
+    facilitatorUrl: mockFacilitator.url,
   };
   const ctx: AppContext = { db, sqlite, wallet, config };
   app = buildApp(ctx);
   await app.listen({ port: SERVER_PORT, host: "127.0.0.1" });
+
+  // Fake upstream for the SSE tool_calls emulation tests below: a plain HTTP
+  // server (not x402-aware) fronted by a self-tollbooth, so its JSON response
+  // is fully controllable per-request (demo-seller's echo mode can only ever
+  // return a fixed content/finish_reason shape, never tool_calls).
+  toolFakeUpstream = http.createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      let parsedBody: { messages?: Array<{ content?: string }>; model?: string } = {};
+      try {
+        parsedBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      } catch {
+        // ignore, use defaults below
+      }
+      const lastContent = parsedBody.messages?.[parsedBody.messages.length - 1]?.content ?? "";
+      const model = parsedBody.model || FAKE_TOOL_MODEL;
+      const usage = { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 };
+      const base = { id: "chatcmpl-fake-tool-001", object: "chat.completion", created: 1700000000, model };
+      let json: Record<string, unknown>;
+      if (lastContent === TOOL_CALL_TRIGGER) {
+        json = {
+          ...base,
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant",
+                content: null,
+                tool_calls: [
+                  {
+                    type: "function",
+                    index: 0,
+                    id: "call_00_abc123",
+                    function: { name: "get_weather", arguments: JSON.stringify({ city: "Shenzhen" }) },
+                  },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+          usage,
+        };
+      } else {
+        json = {
+          ...base,
+          choices: [{ index: 0, message: { role: "assistant", content: `plain: ${lastContent}` }, finish_reason: "stop" }],
+          usage,
+        };
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(json));
+    });
+  });
+  await new Promise<void>((resolve) => toolFakeUpstream.listen(TOOL_UPSTREAM_PORT, "127.0.0.1", resolve));
+
+  const tollbooth = await (
+    await fetch(`http://127.0.0.1:${SERVER_PORT}/v1/admin/tollbooths`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        name: "Fake tool-call upstream",
+        upstream_url: `http://127.0.0.1:${TOOL_UPSTREAM_PORT}`,
+        pay_to: TOOL_PAY_TO,
+        routes: [{ method: "POST", path_pattern: "/v1/chat/completions", price: "0.01" }],
+      }),
+    })
+  ).json();
+  toolboothSlug = tollbooth.slug;
 }, 30000);
 
 afterAll(async () => {
   await app?.close();
   sellerProc?.kill();
   await mockFacilitator?.close();
+  await new Promise((r) => toolFakeUpstream?.close(r));
   if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -337,5 +452,83 @@ describe("Gateway approval round-trip (docs/ux-audit.md B-3)", () => {
     const pending = await chat(created.key, { approval_id: first.body.error.approval_id });
     expect(pending.status).toBe(409);
     expect(pending.body.error.code).toBe("APPROVAL_INVALID");
+  });
+});
+
+describe("stream:true SSE emulation preserves tool_calls (gateway.ts POST /v1/chat/completions bug fix)", () => {
+  it("upstream returning tool_calls -> SSE chunk carries name/arguments/id/index 0, final finish_reason 'tool_calls'", async () => {
+    await createToolChannel();
+    const created = await createKey({ allowed_models: [FAKE_TOOL_MODEL] });
+
+    const { status, events } = await chatStreamRaw(created.key, {
+      model: FAKE_TOOL_MODEL,
+      messages: [{ role: "user", content: TOOL_CALL_TRIGGER }],
+      stream: true,
+    });
+    expect(status).toBe(200);
+    expect(events.length).toBe(2); // first chunk + final chunk (no usage chunk asked for)
+
+    const first = events[0] as { choices: Array<{ delta: { role: string; content: unknown; tool_calls?: unknown[] }; finish_reason: unknown }> };
+    expect(first.choices[0].finish_reason).toBeNull();
+    expect(first.choices[0].delta.role).toBe("assistant");
+    expect(first.choices[0].delta.content).toBeNull(); // upstream content was null, tool_calls present
+    const toolCalls = first.choices[0].delta.tool_calls as Array<{ index: number; id: string; type: string; function: { name: string; arguments: string } }>;
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]).toMatchObject({
+      index: 0,
+      id: "call_00_abc123",
+      type: "function",
+      function: { name: "get_weather", arguments: JSON.stringify({ city: "Shenzhen" }) },
+    });
+
+    const final = events[1] as { choices: Array<{ delta: Record<string, unknown>; finish_reason: string }> };
+    expect(final.choices[0].finish_reason).toBe("tool_calls");
+    expect(final.choices[0].delta).toEqual({});
+  });
+
+  it("upstream plain text (no tool_calls) -> content and finish_reason unchanged from today", async () => {
+    await createToolChannel();
+    const created = await createKey({ allowed_models: [FAKE_TOOL_MODEL] });
+
+    const { status, events } = await chatStreamRaw(created.key, {
+      model: FAKE_TOOL_MODEL,
+      messages: [{ role: "user", content: "just chatting" }],
+      stream: true,
+    });
+    expect(status).toBe(200);
+    expect(events.length).toBe(2);
+
+    const first = events[0] as { choices: Array<{ delta: { role: string; content: string; tool_calls?: unknown }; finish_reason: unknown }> };
+    expect(first.choices[0].delta.content).toBe("plain: just chatting");
+    expect(first.choices[0].delta.tool_calls).toBeUndefined();
+    expect(first.choices[0].finish_reason).toBeNull();
+
+    const final = events[1] as { choices: Array<{ finish_reason: string }> };
+    expect(final.choices[0].finish_reason).toBe("stop"); // upstream said "stop" — same result as before the fix
+  });
+
+  it("stream_options.include_usage true + upstream usage -> one usage chunk (empty choices) before [DONE]; without it, no usage chunk", async () => {
+    await createToolChannel();
+    const created = await createKey({ allowed_models: [FAKE_TOOL_MODEL] });
+
+    const withUsage = await chatStreamRaw(created.key, {
+      model: FAKE_TOOL_MODEL,
+      messages: [{ role: "user", content: "usage please" }],
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+    expect(withUsage.status).toBe(200);
+    expect(withUsage.events.length).toBe(3); // first + final + usage chunk
+    const usageChunk = withUsage.events[2] as { choices: unknown[]; usage: Record<string, number> };
+    expect(usageChunk.choices).toEqual([]);
+    expect(usageChunk.usage).toEqual({ prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 });
+
+    const withoutUsage = await chatStreamRaw(created.key, {
+      model: FAKE_TOOL_MODEL,
+      messages: [{ role: "user", content: "no usage please" }],
+      stream: true,
+    });
+    expect(withoutUsage.status).toBe(200);
+    expect(withoutUsage.events.length).toBe(2); // no usage chunk, unchanged behavior
   });
 });

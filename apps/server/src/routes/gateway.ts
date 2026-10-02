@@ -194,29 +194,75 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
         });
-        const choices = (upstreamJson.choices as Array<{ message?: { role?: string; content?: string } }>) ?? [];
-        const content = choices[0]?.message?.content ?? "";
-        const role = choices[0]?.message?.role ?? "assistant";
+        interface UpstreamToolCall {
+          id?: string;
+          type?: string;
+          function?: { name?: string; arguments?: string };
+        }
+        const choices =
+          (upstreamJson.choices as
+            | Array<{
+                message?: { role?: string; content?: string | null; tool_calls?: UpstreamToolCall[] };
+                finish_reason?: string;
+              }>
+            | undefined) ?? [];
+        const message = choices[0]?.message;
+        const role = message?.role ?? "assistant";
+        const upstreamContent = message?.content;
+        const toolCalls = Array.isArray(message?.tool_calls) && message!.tool_calls!.length > 0 ? message!.tool_calls! : null;
+        // Upstream content is a string -> pass through; null with tool_calls present ->
+        // null (OpenAI-shaped: assistant turns with only tool calls have no text);
+        // anything else (missing, or null without tool_calls) -> "" as before.
+        const content: string | null =
+          typeof upstreamContent === "string" ? upstreamContent : upstreamContent === null && toolCalls ? null : "";
         const id = (upstreamJson.id as string) ?? `chatcmpl-${Date.now()}`;
         const created = (upstreamJson.created as number) ?? Math.floor(Date.now() / 1000);
         const model = (upstreamJson.model as string) ?? body.model;
+
+        const delta: { role: string; content: string | null; tool_calls?: unknown[] } = { role, content };
+        if (toolCalls) {
+          delta.tool_calls = toolCalls.map((tc, i) => ({
+            index: i,
+            id: tc?.id,
+            type: "function",
+            function: { name: tc?.function?.name, arguments: tc?.function?.arguments },
+          }));
+        }
+
+        const upstreamFinishReason = choices[0]?.finish_reason;
+        const finishReason = typeof upstreamFinishReason === "string" && upstreamFinishReason.length > 0 ? upstreamFinishReason : "stop";
 
         const firstChunk = {
           id,
           object: "chat.completion.chunk",
           created,
           model,
-          choices: [{ index: 0, delta: { role, content }, finish_reason: null }],
+          choices: [{ index: 0, delta, finish_reason: null }],
         };
         const finalChunk = {
           id,
           object: "chat.completion.chunk",
           created,
           model,
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
         };
         reply.raw.write(`data: ${JSON.stringify(firstChunk)}\n\n`);
         reply.raw.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+
+        const streamOptions = (body as { stream_options?: { include_usage?: boolean } }).stream_options;
+        const upstreamUsage = upstreamJson.usage;
+        if (streamOptions?.include_usage === true && upstreamUsage && typeof upstreamUsage === "object") {
+          const usageChunk = {
+            id,
+            object: "chat.completion.chunk",
+            created,
+            model,
+            choices: [],
+            usage: upstreamUsage,
+          };
+          reply.raw.write(`data: ${JSON.stringify(usageChunk)}\n\n`);
+        }
+
         reply.raw.write("data: [DONE]\n\n");
         reply.raw.end();
         return;
