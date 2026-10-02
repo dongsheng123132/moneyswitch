@@ -40,6 +40,12 @@ describe("buildInstallText", () => {
   it("trims the pasted key", () => {
     assert.ok(buildInstallText({ baseUrl: BASE, key: `  ${KEY}\n`, agent: "other" }).text!.includes(KEY));
   });
+
+  it("an unusable address is reported as bad_url even before a key exists (no key can fix the address)", () => {
+    assert.equal(buildInstallText({ baseUrl: "http://moneyswitch_srv:4020", key: "", agent: "codex" }).error, "bad_url");
+    assert.equal(buildInstallText({ baseUrl: "http://moneyswitch_srv:4020", key: KEY, agent: "codex" }).error, "bad_url");
+    assert.equal(buildInstallText({ baseUrl: "", key: KEY, agent: "codex" }).error, "bad_url");
+  });
 });
 
 describe("skillBaseUrl", () => {
@@ -51,6 +57,29 @@ describe("skillBaseUrl", () => {
   });
   it("ignores an unusable public URL", () => {
     assert.equal(skillBaseUrl({ public_base: "not a url", public_base_from_env: true }, "http://127.0.0.1:4020"), "http://127.0.0.1:4020");
+  });
+
+  // The pages call it while they render and the Dashboard has no error boundary: a throw unmounts the whole app.
+  // These are real browser origins that the skill renderer (shell-safe alphabet) refuses.
+  it("never throws, whatever the browser origin is", () => {
+    const origins = ["http://moneyswitch_srv:4020", "http://example.com.:4020", "http://-bad-host:80", "http://[::1", "", "   ", "not a url"];
+    for (const origin of origins) {
+      assert.doesNotThrow(() => skillBaseUrl(null, origin), origin);
+      assert.doesNotThrow(() => skillBaseUrl(undefined, origin), origin);
+      assert.doesNotThrow(() => skillBaseUrl({ public_base: "bad_host", public_base_from_env: true }, origin), origin);
+    }
+  });
+
+  it("hands an unusable origin on as it is, so buildInstallText can report bad_url instead of the page crashing", () => {
+    const base = skillBaseUrl(null, "http://moneyswitch_srv:4020");
+    assert.equal(base, "http://moneyswitch_srv:4020");
+    assert.equal(buildInstallText({ baseUrl: base, key: KEY, agent: "codex" }).error, "bad_url");
+  });
+
+  it("MONEYSWITCH_PUBLIC_URL still rescues a page opened from an unusable origin", () => {
+    const base = skillBaseUrl({ public_base: "https://pay.example.com", public_base_from_env: true }, "http://moneyswitch_srv:4020");
+    assert.equal(base, "https://pay.example.com");
+    assert.equal(buildInstallText({ baseUrl: base, key: KEY, agent: "codex" }).error, null);
   });
 });
 

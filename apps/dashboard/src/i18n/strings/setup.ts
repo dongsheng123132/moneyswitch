@@ -93,7 +93,8 @@ export const setupStrings = defineMessages(
     s4_more: "More options (allowed hosts, models, expiry) are on the Money Keys page.",
 
     s5_title: "Connect an agent",
-    s5_desc: "Paste one command on the agent's machine",
+    s5_desc: "Paste one block into your AI so it can pay",
+    s5_otherWays: "Other ways (advanced): CLI / MCP, OpenAI-compatible clients",
     s5_intro: "Run this in a terminal on the computer where Claude Code / Codex runs (needs Node.js 20+). It detects the agents and configures MoneySwitch for them.",
     s5_cmd: "One-line connect",
     s5_cmdNote: "Drop the trailing --apply to preview without changing anything.",
@@ -102,7 +103,7 @@ export const setupStrings = defineMessages(
     s5_waiting: "Waiting for the first call with this key…",
     s5_connected: "Connected — the key was just used.",
     s5_tryPlayground: "Try it in Playground",
-    s5_noKey: "Create a key in step 4 to get ready-made commands here, or open Connect agent for all options.",
+    s5_noKey: "Create a key in step 4 to get the ready-made text for your AI here, or open Connect agent for all options.",
     s5_openConnect: "Open Connect agent",
     s5_npmWarn: "This server can't serve the CLI yet (run pnpm build); until then use the OpenAI-compatible option.",
   },
@@ -195,7 +196,8 @@ export const setupStrings = defineMessages(
     s4_more: "更多选项（允许的地址、模型、过期时间）在「Money Keys」页。",
 
     s5_title: "接入 Agent",
-    s5_desc: "在 Agent 所在的电脑上粘贴一条命令",
+    s5_desc: "把一段文字粘贴给你的 AI，它就学会付费",
+    s5_otherWays: "其他接入方式（进阶）：命令行 / MCP、OpenAI 兼容客户端",
     s5_intro: "在运行 Claude Code / Codex 的那台电脑的终端里执行（需要 Node.js 20+）。它会自动找到这些 Agent 并配置好 MoneySwitch。",
     s5_cmd: "一键接入",
     s5_cmdNote: "去掉末尾的 --apply 只预览、不改任何配置。",
@@ -204,7 +206,7 @@ export const setupStrings = defineMessages(
     s5_waiting: "正在等待这把 Key 的第一次调用…",
     s5_connected: "已接通——这把 Key 刚刚被使用了。",
     s5_tryPlayground: "在 Playground 试一下",
-    s5_noKey: "在第 4 步创建一把 Key，这里就会给出现成的命令；也可以去「接入 Agent」页查看全部方式。",
+    s5_noKey: "在第 4 步创建一把 Key，这里就会给出可直接粘贴给 AI 的文字；也可以去「接入 Agent」页查看全部方式。",
     s5_openConnect: "打开「接入 Agent」",
     s5_npmWarn: "服务器暂时还不能提供 CLI 下载（请先 pnpm build）；在此之前请用 OpenAI 兼容方式接入。",
   }

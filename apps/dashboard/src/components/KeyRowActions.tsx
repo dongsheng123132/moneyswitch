@@ -1,0 +1,58 @@
+import React from "react";
+import { useT } from "../i18n";
+import { common } from "../i18n/strings/common";
+import { keysStrings } from "../i18n/strings/keys";
+import { skillStrings } from "../i18n/strings/skill";
+
+/**
+ * Row actions of the Money Keys list: "Reset secret and copy skill" and Revoke
+ * (with its inline confirmation). Only an active key gets them; a revoked,
+ * expired or ancestor-disabled key is already dead for good (no un-revoke, no
+ * new secret, SPEC-v0.4 §A), so its cell stays empty.
+ */
+export default function KeyRowActions({
+  status,
+  childrenCount,
+  confirmingRevoke,
+  revoking,
+  onRotate,
+  onAskRevoke,
+  onRevoke,
+  onCancelRevoke,
+}: {
+  status: string;
+  childrenCount: number;
+  confirmingRevoke: boolean;
+  revoking: boolean;
+  onRotate: () => void;
+  onAskRevoke: () => void;
+  onRevoke: () => void;
+  onCancelRevoke: () => void;
+}) {
+  const t = useT(keysStrings);
+  const ts = useT(skillStrings);
+  const tc = useT(common);
+  if (status !== "active") return null;
+  return (
+    <div className="keys-row-actions">
+      <button type="button" className="btn small secondary" onClick={onRotate}>
+        {ts("rotateBtn")}
+      </button>
+      {confirmingRevoke ? (
+        <div className="keys-revoke-confirm">
+          <span>{childrenCount > 0 ? t("revokeConfirmTextWithChildren", { n: childrenCount }) : t("revokeConfirmText")}</span>
+          <button type="button" className="btn small danger" onClick={onRevoke} disabled={revoking}>
+            {revoking ? "…" : t("revokeBtn")}
+          </button>
+          <button type="button" className="btn small secondary" onClick={onCancelRevoke}>
+            {tc("cancel")}
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="btn small danger" onClick={onAskRevoke}>
+          {t("revokeBtn")}
+        </button>
+      )}
+    </div>
+  );
+}

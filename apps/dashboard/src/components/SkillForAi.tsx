@@ -75,7 +75,9 @@ export default function SkillForAi({
           </div>
         </SecretNotice>
       ) : (
-        <Callout tone={built.error === "no_key" ? "info" : "warn"}>{built.error === "no_key" ? t("needKey") : t("badKey")}</Callout>
+        <Callout tone={built.error === "no_key" ? "info" : "warn"}>
+          {built.error === "no_key" ? t("needKey") : built.error === "bad_url" ? t("badUrl", { url: baseUrl || "?" }) : t("badKey")}
+        </Callout>
       )}
 
       {built.text && (

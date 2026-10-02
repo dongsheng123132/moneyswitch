@@ -16,10 +16,16 @@ export {
 /**
  * Base URL to put in a skill: MONEYSWITCH_PUBLIC_URL when the operator set one
  * (admin meta says so), else the origin the Dashboard was opened from.
+ *
+ * Never throws: it runs while a page renders, and a throw there unmounts the
+ * whole app. An origin the skill renderer refuses (for example a host name with
+ * an underscore such as http://moneyswitch_srv:4020, or a trailing dot) is
+ * returned as it is; buildInstallText() then reports it as "bad_url" and
+ * SkillForAi shows a warning, while the rest of the page keeps working.
  */
 export function skillBaseUrl(meta: Pick<AdminMeta, "public_base" | "public_base_from_env"> | null | undefined, origin: string): string {
   if (meta?.public_base_from_env && meta.public_base && isValidBaseUrl(meta.public_base)) return normalizeBaseUrl(meta.public_base);
-  return normalizeBaseUrl(origin);
+  return isValidBaseUrl(origin) ? normalizeBaseUrl(origin) : String(origin ?? "").trim();
 }
 
 /** True for something that can be a MoneyKey as far as the skill renderer is concerned. */
@@ -42,12 +48,15 @@ export interface InstallTextResult {
   error: "no_key" | "bad_key" | "bad_url" | null;
 }
 
-/** Builds the install text for the Dashboard, turning renderer exceptions into a small error code. */
+/**
+ * Builds the install text for the Dashboard, turning renderer exceptions into a small error code.
+ * The address is checked first: it does not depend on the key, and no key can fix it.
+ */
 export function buildInstallText(p: { baseUrl: string; key: string; keyName?: string | null; agent: SkillAgent }): InstallTextResult {
+  if (!isValidBaseUrl(p.baseUrl)) return { text: null, display: null, error: "bad_url" };
   const key = p.key.trim();
   if (!key) return { text: null, display: null, error: "no_key" };
   if (!looksLikeMoneyKey(key)) return { text: null, display: null, error: "bad_key" };
-  if (!isValidBaseUrl(p.baseUrl)) return { text: null, display: null, error: "bad_url" };
   const text = renderInstallPrompt({ baseUrl: p.baseUrl, key, keyName: p.keyName, agent: p.agent });
   return { text, display: maskedForDisplay(text, key), error: null };
 }

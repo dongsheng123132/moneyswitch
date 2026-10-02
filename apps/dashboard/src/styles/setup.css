@@ -269,6 +269,14 @@
 .setup-sub {
   margin: 16px 0 12px;
 }
+.setup-other {
+  margin: 4px 0 16px;
+}
+.setup-other > summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
 .pulse {
   color: var(--accent);
   fill: var(--accent);

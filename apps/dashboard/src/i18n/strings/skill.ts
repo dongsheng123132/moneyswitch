@@ -32,6 +32,8 @@ export const skillStrings = defineMessages(
     secretHint: "The copied text contains this key. Paste it only into your own AI, never into a shared chat, and never commit it to git.",
     needKey: "Paste a MoneyKey (mk_live_...) above to build the text for your AI.",
     badKey: "That does not look like a MoneyKey. It starts with mk_live_ and has only letters and digits.",
+    badUrl:
+      "The address of this page ({url}) cannot be written into a skill. Open the Dashboard from its normal web address (for example http://localhost:4020), or set MONEYSWITCH_PUBLIC_URL on the server.",
     lostKey: "Lost this key? Keys are stored hashed and cannot be shown again. In the key list use \"Reset secret and copy skill\".",
 
     // employee portal
@@ -76,6 +78,7 @@ export const skillStrings = defineMessages(
     secretHint: "复制出去的文字里含有这把 key。只粘贴给你自己的 AI，不要发到共享群聊，不要提交到 git。",
     needKey: "在上面粘贴一把 MoneyKey（mk_live_…），才能生成给 AI 的文字。",
     badKey: "这不像 MoneyKey。MoneyKey 以 mk_live_ 开头，只含字母和数字。",
+    badUrl: "本页地址（{url}）不能写进 skill。请从正常的网址打开控制台（例如 http://localhost:4020），或在服务器上设置 MONEYSWITCH_PUBLIC_URL。",
     lostKey: "找不到这把 key 了？key 只存哈希，无法再次显示。请在 key 列表里点“重置密钥并复制 skill”。",
 
     employeeTitle: "让你的 AI 学会付费（推荐）",

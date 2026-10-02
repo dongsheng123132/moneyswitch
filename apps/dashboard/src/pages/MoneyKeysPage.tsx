@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, KeyRound, ChevronRight, ChevronDown } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listKeys, createKey, revokeKey, rotateKey, listChannels, ApiError, ChannelRow, CreateMoneyKeyResponse, MoneyKeyRow, RotateKeyResponse } from "../api";
+import { listKeys, createKey, revokeKey, rotateKey, listChannels, ApiError, ChannelRow, MoneyKeyRow } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
-import CopyButton from "../components/CopyButton";
 import Avatar from "../components/Avatar";
 import Pill from "../components/Pill";
 import ProgressBar from "../components/ProgressBar";
@@ -12,30 +11,19 @@ import Drawer from "../components/Drawer";
 import Callout from "../components/Callout";
 import EmptyState from "../components/EmptyState";
 import Term from "../components/Term";
-import Snippet from "../components/Snippet";
-import SecretNotice from "../components/SecretNotice";
-import SkillForAi from "../components/SkillForAi";
+import KeyHandoff from "../components/KeyHandoff";
+import KeyRowActions from "../components/KeyRowActions";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { SkeletonTable } from "../components/Skeleton";
-import { useT, useLang, Lang } from "../i18n";
+import { useT } from "../i18n";
 import { useRelativeTime } from "../i18n/format";
 import { common } from "../i18n/strings/common";
 import { keysStrings } from "../i18n/strings/keys";
 import { skillStrings } from "../i18n/strings/skill";
 import { skillBaseUrl } from "../skillText";
+import { handoffFromCreated, rotateToHandoff, type Handoff } from "../keyHandoff";
 import { useAdminMeta } from "../useAdminMeta";
-import {
-  useCliSource,
-  connectCommand,
-  claudeMcpCommand,
-  codexToml,
-  openaiBase,
-  openaiPython,
-  openaiNode,
-  openaiCurl,
-  newApiSnippet,
-  employeeMessage,
-} from "../snippets";
+import { useCliSource } from "../snippets";
 import "../styles/keys.css";
 
 const PLAYGROUND_KEY_STORAGE = "moneyswitch_playground_key";
@@ -150,7 +138,6 @@ export default function MoneyKeysPage() {
   const t = useT(keysStrings);
   const ts = useT(skillStrings);
   const tc = useT(common);
-  const { lang } = useLang();
   const relTime = useRelativeTime();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -172,20 +159,16 @@ export default function MoneyKeysPage() {
   const [form, setForm] = useState<FormState>(() => emptyForm(""));
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [created, setCreated] = useState<CreateMoneyKeyResponse | null>(null);
+  // The secret that was just handed out (a new key, or the new secret of "Reset secret"); null while the create form is shown.
+  const [handoff, setHandoff] = useState<Handoff | null>(null);
   const [revokeConfirmId, setRevokeConfirmId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const [revokeSuccess, setRevokeSuccess] = useState<string | null>(null);
-  const [tab, setTab] = useState<"connect" | "claude" | "codex" | "openai" | "employee">("connect");
-  // The skill (paste one block into the AI) is the first and default way to hand a key over; the rest is "other ways".
-  const [topTab, setTopTab] = useState<"skill" | "other">("skill");
-  // "Reset secret and copy skill": confirm dialog target + the freshly issued secret.
+  // "Reset secret and copy skill": the confirm dialog target (the new secret then becomes the handoff).
   const [rotateTarget, setRotateTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
-  const [rotated, setRotated] = useState<RotateKeyResponse | null>(null);
-  const [employeeLang, setEmployeeLang] = useState<Lang | null>(null);
   // SPEC-v0.4.md §A: tree rows default expanded; ids in this set are collapsed.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
 
@@ -210,11 +193,7 @@ export default function MoneyKeysPage() {
   function openCreate() {
     setForm(emptyForm(hostsDefault.hosts));
     setCreateError(null);
-    setCreated(null);
-    setRotated(null);
-    setTab("connect");
-    setTopTab("skill");
-    setEmployeeLang(null);
+    setHandoff(null);
     setShowCreate(true);
   }
 
@@ -230,8 +209,7 @@ export default function MoneyKeysPage() {
 
   function closeDrawer() {
     setShowCreate(false);
-    setCreated(null);
-    setRotated(null);
+    setHandoff(null);
   }
 
   function applyPreset(patch: Partial<FormState>) {
@@ -282,8 +260,7 @@ export default function MoneyKeysPage() {
         allowed_models: form.allowed_models.length > 0 ? form.allowed_models : null,
         can_delegate: form.can_delegate,
       });
-      setCreated(res);
-      setTopTab("skill");
+      setHandoff(handoffFromCreated(res));
       refresh();
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "create_failed");
@@ -311,20 +288,17 @@ export default function MoneyKeysPage() {
     if (!rotateTarget) return;
     setRotating(true);
     setRotateError(null);
-    try {
-      const res = await rotateKey(rotateTarget.id);
+    const outcome = await rotateToHandoff(rotateTarget.id, rotateKey);
+    if (outcome.ok) {
+      // The new secret replaces whatever was shown before; the old one is dead.
       setRotateTarget(null);
-      setCreated(null);
-      setRotated(res);
-      setTopTab("skill");
-      setTab("connect");
+      setHandoff(outcome.handoff);
       setShowCreate(true);
       refresh();
-    } catch (e) {
-      setRotateError(ts("rotateFailed", { message: e instanceof ApiError ? e.message : e instanceof Error ? e.message : "rotate_failed" }));
-    } finally {
-      setRotating(false);
+    } else {
+      setRotateError(ts("rotateFailed", { message: outcome.message }));
     }
+    setRotating(false);
   }
 
   function tryInPlayground(key: string) {
@@ -334,8 +308,6 @@ export default function MoneyKeysPage() {
 
   const apiBase = window.location.origin;
   const skillBase = skillBaseUrl(meta, apiBase);
-  // The key that was just handed out: created now, or re-issued by "Reset secret".
-  const handoff = created ? { key: created.key, name: created.name } : rotated ? { key: rotated.key, name: rotated.name } : null;
   const noChannelsYet = Boolean(channels && channels.length === 0);
 
   return (
@@ -482,35 +454,19 @@ export default function MoneyKeysPage() {
                       )}
                     </td>
                     <td>
-                      {/* v0.4: an ancestor-disabled key is already dead for good (no un-revoke) */ k.status === "active" && (
-                      <div className="keys-row-actions">
-                        <button
-                          type="button"
-                          className="btn small secondary"
-                          onClick={() => {
-                            setRotateError(null);
-                            setRotateTarget({ id: k.id, name: k.name });
-                          }}
-                        >
-                          {ts("rotateBtn")}
-                        </button>
-                        {revokeConfirmId === k.id ? (
-                          <div className="keys-revoke-confirm">
-                            <span>{hasChildren ? t("revokeConfirmTextWithChildren", { n: k.children_count }) : t("revokeConfirmText")}</span>
-                            <button type="button" className="btn small danger" onClick={() => onRevoke(k.id)} disabled={revokingId === k.id}>
-                              {revokingId === k.id ? "…" : t("revokeBtn")}
-                            </button>
-                            <button type="button" className="btn small secondary" onClick={() => setRevokeConfirmId(null)}>
-                              {tc("cancel")}
-                            </button>
-                          </div>
-                        ) : (
-                          <button type="button" className="btn small danger" onClick={() => setRevokeConfirmId(k.id)}>
-                            {t("revokeBtn")}
-                          </button>
-                        )}
-                      </div>
-                      )}
+                      <KeyRowActions
+                        status={k.status}
+                        childrenCount={k.children_count}
+                        confirmingRevoke={revokeConfirmId === k.id}
+                        revoking={revokingId === k.id}
+                        onRotate={() => {
+                          setRotateError(null);
+                          setRotateTarget({ id: k.id, name: k.name });
+                        }}
+                        onAskRevoke={() => setRevokeConfirmId(k.id)}
+                        onRevoke={() => onRevoke(k.id)}
+                        onCancelRevoke={() => setRevokeConfirmId(null)}
+                      />
                     </td>
                   </tr>
                 );
@@ -523,7 +479,7 @@ export default function MoneyKeysPage() {
       <Drawer
         open={showCreate}
         onClose={closeDrawer}
-        title={rotated && !created ? ts("rotateDrawerTitle") : created ? t("drawerTitleCreated") : t("drawerTitleCreate")}
+        title={handoff?.kind === "rotated" ? ts("rotateDrawerTitle") : handoff ? t("drawerTitleCreated") : t("drawerTitleCreate")}
         width={520}
       >
         {!handoff ? (
@@ -701,104 +657,16 @@ export default function MoneyKeysPage() {
             </div>
           </form>
         ) : (
-          <div>
-            <div className="key-once-banner">{rotated && !created ? ts("rotatedBanner", { name: handoff.name }) : t("createdBanner")}</div>
-            <SecretNotice>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>{t("keyFieldLabel")}</label>
-                <div className="key-big">{handoff.key}</div>
-                <CopyButton text={handoff.key} />
-              </div>
-            </SecretNotice>
-
-            <div className="next-heading">{t("nextHeading")}</div>
-
-            <div className="tabs skill-top-tabs" role="tablist">
-              <button type="button" role="tab" aria-selected={topTab === "skill"} className={`tab-btn ${topTab === "skill" ? "active" : ""}`} onClick={() => setTopTab("skill")}>
-                {ts("tabSkill")}
-                <span className="skill-reco">{ts("recommended")}</span>
-              </button>
-              <button type="button" role="tab" aria-selected={topTab === "other"} className={`tab-btn ${topTab === "other" ? "active" : ""}`} onClick={() => setTopTab("other")}>
-                {ts("tabOther")}
-              </button>
-            </div>
-
-            {topTab === "skill" && <SkillForAi baseUrl={skillBase} secret={handoff.key} keyName={handoff.name} />}
-
-            {topTab === "other" && (
-              <div>
-            <p className="skill-other-intro">{ts("otherIntro")}</p>
-            <div className="tabs">
-              <button type="button" className={`tab-btn ${tab === "connect" ? "active" : ""}`} onClick={() => setTab("connect")}>
-                {t("tabConnect")}
-              </button>
-              <button type="button" className={`tab-btn ${tab === "claude" ? "active" : ""}`} onClick={() => setTab("claude")}>
-                {t("tabClaude")}
-              </button>
-              <button type="button" className={`tab-btn ${tab === "codex" ? "active" : ""}`} onClick={() => setTab("codex")}>
-                {t("tabCodex")}
-              </button>
-              <button type="button" className={`tab-btn ${tab === "openai" ? "active" : ""}`} onClick={() => setTab("openai")}>
-                {t("tabOpenai")}
-              </button>
-              <button type="button" className={`tab-btn ${tab === "employee" ? "active" : ""}`} onClick={() => setTab("employee")}>
-                {t("tabEmployee")}
-              </button>
-            </div>
-
-            {tab === "connect" && (
-              <div>
-                <Snippet title={t("connectRecommended")} code={connectCommand(src, apiBase, handoff.key, true)} note={t("connectNote")} />
-                <Snippet title={t("connectDryRunLabel")} code={connectCommand(src, apiBase, handoff.key, false)} />
-                {src.kind === "tarball" && <div className="connect-source-note">{t("sourceNoteTarball")}</div>}
-                {src.kind === "local" && <div className="connect-source-note">{t("sourceNoteLocal")}</div>}
-                {src.kind === "npm" && <Callout tone="info" title={t("sourceNoteNpmTitle")}>{t("sourceNoteNpm")}</Callout>}
-              </div>
-            )}
-            {tab === "claude" && <Snippet title={t("tabClaude")} code={claudeMcpCommand(src, apiBase, handoff.key)} note={t("claudeNote")} />}
-            {tab === "codex" && <Snippet title={t("tabCodex")} code={codexToml(src, apiBase, handoff.key)} note={t("codexNote")} />}
-            {tab === "openai" && (
-              <div>
-                <Snippet title={t("baseUrlLabel")} code={openaiBase(apiBase)} />
-                <Snippet title={t("apiKeyLabel")} code={handoff.key} />
-                <Snippet title={t("pythonLabel")} code={openaiPython(apiBase, handoff.key, firstModel)} />
-                <Snippet title={t("nodeLabel")} code={openaiNode(apiBase, handoff.key, firstModel)} />
-                <Snippet title={t("curlLabel")} code={openaiCurl(apiBase, handoff.key, firstModel)} />
-                <Snippet title={t("newApiLabel")} code={newApiSnippet(apiBase, handoff.key)} />
-              </div>
-            )}
-            {tab === "employee" && (
-              <div>
-                <div className="field-hint employee-toggle">{t("employeeHint")}</div>
-                <button
-                  type="button"
-                  className="btn small secondary employee-toggle"
-                  onClick={() => setEmployeeLang((employeeLang ?? lang) === "zh" ? "en" : "zh")}
-                >
-                  {t("employeeToggleLang", { lang: (employeeLang ?? lang) === "zh" ? t("langEn") : t("langZh") })}
-                </button>
-                <Snippet
-                  code={employeeMessage(employeeLang ?? lang, {
-                    origin: apiBase,
-                    name: handoff.name || t("tabEmployee"),
-                    key: handoff.key,
-                    src,
-                  })}
-                />
-              </div>
-            )}
-              </div>
-            )}
-
-            <div className="modal-actions">
-              <button type="button" className="btn secondary" onClick={() => tryInPlayground(handoff.key)}>
-                {t("tryPlaygroundBtn")}
-              </button>
-              <button type="button" className="btn" onClick={closeDrawer}>
-                {tc("done")}
-              </button>
-            </div>
-          </div>
+          <KeyHandoff
+            key={handoff.id}
+            handoff={handoff}
+            skillBase={skillBase}
+            apiBase={apiBase}
+            src={src}
+            firstModel={firstModel}
+            onTryPlayground={() => tryInPlayground(handoff.key)}
+            onDone={closeDrawer}
+          />
         )}
       </Drawer>
 
