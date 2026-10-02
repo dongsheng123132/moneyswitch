@@ -73,15 +73,25 @@ export function openAiStatusForCode(code: string): number {
     case "MAX_PRICE_EXCEEDED":
     case "DAILY_BUDGET_EXCEEDED":
     case "TOTAL_BUDGET_EXCEEDED":
-    case "PAYMENT_REJECTED":
       return 402;
-    // We signed a payment and lost the answer (or the body). Deliberately a 4xx
-    // that OpenAI SDKs / proxies do not auto-retry (they retry 408/409/429/5xx):
-    // a retry here would pay a second time. The route also sends x-should-retry: false.
+    // We signed a payment and the call may (or did) cost money: PAYMENT_REJECTED
+    // (seller said no / could not confirm settlement), TIMEOUT_AFTER_PAYMENT and
+    // UPSTREAM_ERROR_AFTER_PAYMENT (lost the answer), UPSTREAM_BODY_INCOMPLETE
+    // (settled, body cut off). A retry would sign and pay a SECOND time, so these
+    // must never be a status that a client or relay retries by default:
+    //   - OpenAI SDKs retry 408/409/429/5xx and honour x-should-retry (the route sets it);
+    //   - new-api (the relay MoneySwitch is plugged into as an OpenAI channel) ignores
+    //     x-should-retry and, with RetryTimes > 0, retries every status in its default
+    //     ranges 100-199,300-399,401-407,409-499,500-503,505-523,525-599 — that
+    //     includes 402 — but NOT 400, 408, 504 or 524
+    //     (setting/operation_setting/status_code_ranges.go).
+    // 400 is terminal for both. The meaning travels in error.code and
+    // error.moneyswitch_charged, not in the status.
+    case "PAYMENT_REJECTED":
     case "TIMEOUT_AFTER_PAYMENT":
     case "UPSTREAM_ERROR_AFTER_PAYMENT":
     case "UPSTREAM_BODY_INCOMPLETE":
-      return 402;
+      return 400;
     case "APPROVAL_REQUIRED":
     case "APPROVAL_INVALID":
       return 409;

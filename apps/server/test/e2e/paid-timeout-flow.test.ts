@@ -11,7 +11,10 @@ import { Wallet as EthersWallet } from "ethers";
 import { buildApp } from "../../src/app.js";
 import type { AppContext } from "../../src/context.js";
 import type { ServerConfig } from "../../src/config.js";
-import { startStubSeller, type StubSeller } from "../stub-seller.js";
+import { startStubSeller, PENDING_TX_HASH, type StubSeller } from "../stub-seller.js";
+import v8 from "node:v8";
+import vm from "node:vm";
+import { Agent, getGlobalDispatcher, setGlobalDispatcher, type Dispatcher } from "undici";
 
 /**
  * "Paid but no delivery" (incident: a slow LLM seller took >30s on Monad
@@ -447,6 +450,169 @@ describe("approval body binding follows the wire bytes", () => {
   }
 });
 
+describe("probe deadline expiring around the signature: never report a never-sent payment as possibly charged", () => {
+  it("402 headers arrive but the 402 BODY outlasts the probe deadline -> error UPSTREAM_ERROR, charged no, no payment row, no paid request sent", async () => {
+    setTimeouts(500, 5000);
+    seller.setBehavior({ probeBodyDelayMs: 2000 });
+    const key = await createKey();
+    const { body, ms } = await fetchVia(key, { url: URL_ITEM() });
+
+    expect(body.status).toBe("error");
+    expect(body.code).toBe("UPSTREAM_ERROR");
+    expect(body.charged).toBe("no");
+    expect(body.payment).toBeNull();
+    expect(ms).toBeLessThan(1900); // gave up at the probe deadline, did not wait for the slow body
+    expect(await payments(key)).toHaveLength(0); // nothing reserved, nothing signed
+    expect((await status(key)).used_total).toBe("0");
+    expect(seller.requests.filter((r) => r.paid)).toHaveLength(0);
+    expect(seller.settleCalls()).toBe(0);
+  });
+
+  it("the probe deadline fires WHILE the payment is being signed -> error UPSTREAM_ERROR, charged no, the reservation is released, nothing is sent", async () => {
+    setTimeouts(300, 5000);
+    // A second app over the same DB whose signer is slow: the 402 arrives at once,
+    // the budget is reserved, and signing then outlasts the probe deadline.
+    const slowWallet = Object.create(wallet) as LocalWalletDriver;
+    slowWallet.getSigner = () => {
+      const real = wallet.getSigner()!;
+      return {
+        address: real.address,
+        signTypedData: async (m) => {
+          await new Promise((r) => setTimeout(r, 900));
+          return real.signTypedData(m);
+        },
+      };
+    };
+    const slowApp = buildApp({
+      db, sqlite, wallet: slowWallet,
+      config: { port: 0, host: "127.0.0.1", dataDir: tmpDir, dbFilePath: ":memory:", walletPassword: null },
+    });
+    await slowApp.ready();
+    try {
+      const key = await createKey();
+      const res = await slowApp.inject({
+        method: "POST", url: "/v1/fetch", headers: { authorization: `Bearer ${key}` }, payload: { url: URL_ITEM() },
+      });
+      const body = res.json();
+      expect(body.status).toBe("error");
+      expect(body.code).toBe("UPSTREAM_ERROR");
+      expect(body.charged).toBe("no");
+      expect(body.payment).toBeNull();
+      const rows = await payments(key);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].status).toBe("failed"); // released: the authorization never left the process
+      expect(rows[0].errorCode).toBe("ABORTED_BEFORE_SEND");
+      expect((await status(key)).used_total).toBe("0");
+      expect(seller.requests.filter((r) => r.paid)).toHaveLength(0);
+      expect(seller.settleCalls()).toBe(0);
+      // nothing for reconcile to chase either
+      expect(listUnknownPaymentsToReconcile(db, Math.floor(Date.now() / 1000) + 3600).map((p) => p.id)).not.toContain(rows[0].id);
+    } finally {
+      await slowApp.close();
+    }
+  });
+});
+
+describe("seller reports the settlement FAILED after we signed and sent (PAYMENT-RESPONSE success:false)", () => {
+  it("-> payment_failed / PAYMENT_REJECTED, charged maybe, row unknown (budget held) with the reported tx hash kept for reconcile", async () => {
+    seller.setBehavior({ response: "settle-failed-402" });
+    const key = await createKey();
+    const { body } = await fetchVia(key, { url: URL_ITEM() });
+
+    expect(body.status).toBe("payment_failed");
+    expect(body.code).toBe("PAYMENT_REJECTED");
+    expect(body.charged).toBe("maybe"); // the signed authorization is still valid / the transfer may still mine
+    expect(body.reserved_until_expiry).toBe(true);
+    const rows = await payments(key);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("unknown");
+    expect(rows[0].errorCode).toBe("SETTLE_NOT_CONFIRMED");
+    expect(rows[0].txHash).toBe(PENDING_TX_HASH);
+    expect(rows[0].authNonce).toBeTruthy(); // reconcilable on-chain
+    expect((await status(key)).used_total).toBe("0.01"); // budget still reserved
+  });
+});
+
+describe("undici's own idle timers (300 s by default) do not sit underneath our paid deadline", () => {
+  // Shrunk to 400 ms here so the test is quick; a MONEYSWITCH_PAID_TIMEOUT_MS above 300 s hits
+  // exactly the same wall with the real defaults (UND_ERR_HEADERS_TIMEOUT / UND_ERR_BODY_TIMEOUT).
+  let previous: Dispatcher;
+  beforeEach(() => {
+    previous = getGlobalDispatcher();
+    setGlobalDispatcher(new Agent({ headersTimeout: 400, bodyTimeout: 400 }));
+  });
+  afterEach(async () => {
+    const tiny = getGlobalDispatcher();
+    setGlobalDispatcher(previous);
+    await tiny.close().catch(() => undefined);
+  });
+
+  it("response headers arrive after undici's idle limit but within the PAID deadline -> ok, charged yes (not UPSTREAM_ERROR_AFTER_PAYMENT)", async () => {
+    setTimeouts(600, 5000);
+    seller.setBehavior({ paidDelayMs: 1500 });
+    const key = await createKey();
+    const { body } = await fetchVia(key, { url: URL_ITEM() });
+    expect(body.status).toBe("ok");
+    expect(body.charged).toBe("yes");
+    expect(JSON.parse(body.body).delivered).toBe(true);
+    expect((await payments(key))[0].status).toBe("settled");
+  });
+
+  it("body stalls longer than undici's idle limit but completes within the PAID deadline -> ok, charged yes", async () => {
+    setTimeouts(600, 5000);
+    seller.setBehavior({ bodyDelayMs: 1500 });
+    const key = await createKey();
+    const { body } = await fetchVia(key, { url: URL_ITEM() });
+    expect(body.status).toBe("ok");
+    expect(body.charged).toBe("yes");
+    expect(JSON.parse(body.body).delivered).toBe(true);
+  });
+
+  it("our own deadline still fires with undici's timers out of the way -> TIMEOUT_AFTER_PAYMENT (not a transport error code)", async () => {
+    setTimeouts(600, 900);
+    seller.setBehavior({ paidDelayMs: 4000 });
+    const key = await createKey();
+    const { body, ms } = await fetchVia(key, { url: URL_ITEM() });
+    expect(body.status).toBe("payment_unknown");
+    expect(body.code).toBe("TIMEOUT_AFTER_PAYMENT");
+    expect(ms).toBeLessThan(3500);
+  });
+});
+
+describe("deadlines survive garbage collection", () => {
+  // @x402/fetch hands our AbortSignal down through new Request(...) + two clone()s;
+  // undici links the dependent signals through WeakRefs, so once the outer request is
+  // unreachable a major GC used to sever the chain and our paid deadline never reached
+  // the in-flight fetch. Force frequent full GCs while the paid request is pending.
+  let gcTimer: NodeJS.Timeout;
+  beforeEach(() => {
+    v8.setFlagsFromString("--expose-gc");
+    const gc = vm.runInNewContext("gc") as () => void;
+    gcTimer = setInterval(() => gc(), 20);
+  });
+  afterEach(() => clearInterval(gcTimer));
+
+  it("seller exceeds the PAID timeout -> payment_unknown at the paid deadline, even while the GC runs constantly", async () => {
+    setTimeouts(600, 800);
+    seller.setBehavior({ paidDelayMs: 6000 });
+    const key = await createKey();
+    const { body, ms } = await fetchVia(key, { url: URL_ITEM() });
+    expect(body.status).toBe("payment_unknown");
+    expect(body.code).toBe("TIMEOUT_AFTER_PAYMENT");
+    expect(ms).toBeLessThan(4000);
+  }, 20000);
+
+  it("settled header, then the body stalls -> UPSTREAM_BODY_INCOMPLETE at the paid deadline, even while the GC runs constantly", async () => {
+    setTimeouts(600, 900);
+    seller.setBehavior({ response: "headers-then-stall" });
+    const key = await createKey();
+    const { body, ms } = await fetchVia(key, { url: URL_ITEM() });
+    expect(body.status).toBe("error");
+    expect(body.code).toBe("UPSTREAM_BODY_INCOMPLETE");
+    expect(ms).toBeLessThan(5000);
+  }, 20000);
+});
+
 describe("OpenAI-compatible gateway maps the new outcomes", () => {
   const MODEL = "stub-model";
 
@@ -476,7 +642,9 @@ describe("OpenAI-compatible gateway maps the new outcomes", () => {
     const key = await channelAndKey();
     const { res, body } = await chat(key);
 
-    expect(res.statusCode).toBe(402); // not 5xx/408/409/429: OpenAI clients must not auto-retry a possibly-paid call
+    // 400, not 402/5xx/408/409/429: the OpenAI SDKs skip it, and so does the new-api relay (which
+    // retries 402 and ignores x-should-retry) — a retry of a possibly-paid call would pay twice.
+    expect(res.statusCode).toBe(400);
     expect(res.headers["x-should-retry"]).toBe("false");
     expect(body.error.code).toBe("TIMEOUT_AFTER_PAYMENT");
     expect(body.error.moneyswitch_charged).toBe("maybe");
@@ -495,7 +663,7 @@ describe("OpenAI-compatible gateway maps the new outcomes", () => {
     const key = await channelAndKey();
     const { res, body } = await chat(key);
 
-    expect(res.statusCode).toBe(402);
+    expect(res.statusCode).toBe(400);
     expect(res.headers["x-should-retry"]).toBe("false");
     expect(body.error.code).toBe("UPSTREAM_BODY_INCOMPLETE");
     expect(body.error.moneyswitch_charged).toBe("yes");
@@ -512,8 +680,41 @@ describe("OpenAI-compatible gateway maps the new outcomes", () => {
 
     seller.setBehavior({ response: "reject-402" });
     const rejected = await chat(key);
-    expect(rejected.res.statusCode).toBe(402);
+    // charged "maybe" (the signed authorization stays valid) => same non-retried status as the other
+    // possibly-paid outcomes, so a relay cannot sign a second payment for the same prompt
+    expect(rejected.res.statusCode).toBe(400);
+    expect(rejected.res.headers["x-should-retry"]).toBe("false");
     expect(rejected.body.error.code).toBe("PAYMENT_REJECTED");
     expect(rejected.body.error.moneyswitch_charged).toBe("maybe");
+  });
+
+});
+
+describe("settle-failed outcome through the gateway", () => {
+  const MODEL = "stub-model-2";
+
+  it("PAYMENT-RESPONSE success:false after we signed -> PAYMENT_REJECTED, charged maybe, non-retried status", async () => {
+    const ch = await app.inject({
+      method: "POST",
+      url: "/v1/admin/channels",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { name: "stub2", base_url: `${seller.url}/v1`, models: [MODEL] },
+    });
+    expect(ch.statusCode).toBeLessThan(300);
+    const key = await createKey();
+    seller.setBehavior({ response: "settle-failed-402" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/chat/completions",
+      headers: { authorization: `Bearer ${key}` },
+      payload: { model: MODEL, messages: [{ role: "user", content: "hi" }] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["x-should-retry"]).toBe("false");
+    expect(res.json().error.code).toBe("PAYMENT_REJECTED");
+    expect(res.json().error.moneyswitch_charged).toBe("maybe");
+    const rows = await payments(key);
+    expect(rows[0].status).toBe("unknown");
+    expect(rows[0].errorCode).toBe("SETTLE_NOT_CONFIRMED");
   });
 });

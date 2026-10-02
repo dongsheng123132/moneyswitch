@@ -227,7 +227,9 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
 
       if (result.paymentRejected) {
         // We signed and sent a payment but the seller answered 402 AGAIN (its
-        // facilitator rejected our payment, e.g. insufficient_funds). The
+        // facilitator rejected our payment, e.g. insufficient_funds), or its
+        // PAYMENT-RESPONSE said success:false (it could not confirm the settlement
+        // — the transfer may still mine). The
         // reservation is kept `unknown`, not released: the signed EIP-3009
         // authorization stays valid until it expires, and the on-chain
         // reconcile loop (packages/core/src/reconcile.ts) releases the held

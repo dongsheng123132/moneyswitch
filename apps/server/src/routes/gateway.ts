@@ -178,11 +178,14 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       }
 
       if (result.paymentRejected) {
-        // We signed and sent a payment but the seller answered 402 AGAIN (its
-        // facilitator rejected it). Consistent with the other payment-failure
-        // paths above: OpenAI-shaped error, 402, reason surfaced. The
-        // reservation is kept `unknown` (not released) until the signed
-        // authorization expires — see performPaidFetch/reconcile.ts.
+        // We signed and sent a payment but the seller answered 402 AGAIN, or its
+        // facilitator reported the settlement failed / unconfirmed (PAYMENT-RESPONSE
+        // success:false). Consistent with the other payment-failure paths above:
+        // OpenAI-shaped error, reason surfaced, and NOT a retryable status (the
+        // signed authorization may still settle, so a retry could pay twice — see
+        // openAiStatusForCode). The reservation is kept `unknown` (not released)
+        // until the signed authorization expires — see performPaidFetch/reconcile.ts.
+        reply.header("x-should-retry", "false");
         return reply
           .status(openAiStatusForCode("PAYMENT_REJECTED"))
           .send(

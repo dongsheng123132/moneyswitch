@@ -4,6 +4,7 @@ import { ExactEvmScheme } from "@x402/evm";
 import type { PaymentRequirements } from "@x402/core/types";
 import type { EvmTypedDataSigner } from "@moneyswitch/wallet";
 import type { MoneySwitchDb } from "@moneyswitch/db";
+import { callerDeadlineDispatcher } from "@moneyswitch/net";
 import type Database from "better-sqlite3";
 import {
   MoneySwitchError,
@@ -66,11 +67,14 @@ export interface PaidFetchResult {
   /**
    * v0.5.2: set when we signed and sent a payment but the seller answered
    * 402 AGAIN (e.g. its facilitator's /verify rejected it — insufficient
-   * funds, bad signature, etc). The reservation is kept `unknown` (see
-   * markUnknown(..., "PAYMENT_REJECTED") below), not failed/released: the
-   * signed EIP-3009 authorization stays valid until validBefore and could
-   * still be settled by the seller later; reconcile.ts releases it after
-   * expiry if it was never used on-chain.
+   * funds, bad signature, etc), or its PAYMENT-RESPONSE said success:false
+   * (it could not confirm the settlement — see SETTLE_NOT_CONFIRMED below;
+   * any transaction hash it reported is kept on the row). The reservation is
+   * kept `unknown` (see markUnknown(..., "PAYMENT_REJECTED") below), not
+   * failed/released: the signed EIP-3009 authorization stays valid until
+   * validBefore and could still be settled by the seller later; reconcile.ts
+   * releases it after expiry if it was never used on-chain. `charged` is
+   * "maybe" in both cases.
    */
   paymentRejected: { reason: string | null } | null;
   /** Whether this call cost money; see Charged. */
@@ -223,6 +227,10 @@ export async function performPaidFetch(
   // True once the payment authorization is signed and about to be sent — the
   // point of no return after which a lost response means "maybe charged".
   let signed = false;
+  // True when the probe deadline expired before the payment could be sent (see
+  // the two hooks below). Nothing was sent, so this is an ordinary upstream
+  // timeout with charged "no" — never "payment_unknown".
+  let deadlineBeforeSend = false;
   const armTimer = (ms: number) => {
     if (timer !== undefined) clearTimeout(timer);
     timer = setTimeout(() => {
@@ -237,7 +245,8 @@ export async function performPaidFetch(
 
   // Set from the response headers, BEFORE the body is read (see below).
   let settledPayment: NonNullable<PaidFetchResult["payment"]> | null = null;
-  let settleFailed = false;
+  // The seller's PAYMENT-RESPONSE said success:false: it could not (or could not yet) confirm the settlement.
+  let settleUnconfirmed: { reason: string | null } | null = null;
 
   const client = new x402Client()
     .register(network.caip2 as `${string}:${string}`, new ExactEvmScheme(signer as any))
@@ -250,6 +259,15 @@ export async function performPaidFetch(
       )
     )
     .onBeforePaymentCreation(async (ctx) => {
+      // The probe deadline may already have expired: @x402/fetch swallows an
+      // aborted read of the 402 body and carries on with the PAYMENT-REQUIRED
+      // header, so we can get here after the controller was aborted. Reserve
+      // nothing and sign nothing — the paid request could not be sent anyway
+      // (its signal is already aborted).
+      if (timedOut || controller.signal.aborted) {
+        deadlineBeforeSend = true;
+        return { abort: true, reason: "PROBE_DEADLINE_EXPIRED" };
+      }
       const amount = BigInt(ctx.selectedRequirements.amount);
       try {
         const result = evaluateAndReserveInTransaction(sqlite, db, key, {
@@ -298,6 +316,23 @@ export async function performPaidFetch(
     // when it completes the payload is handed back to the SDK and sent, so from
     // here on a lost response means the payment MAY have settled.
     .onAfterPaymentCreation(async (context) => {
+      // The probe deadline fired while we were reserving / signing. fetch() with
+      // an already-aborted signal rejects without sending a byte, so this
+      // signature never leaves the process: release the reservation instead of
+      // reporting a possibly-paid call. (Checked and acted on synchronously —
+      // no await between this check and `signed = true` below — so the timer
+      // cannot slip in between.)
+      if (timedOut || controller.signal.aborted) {
+        deadlineBeforeSend = true;
+        if (paymentId) {
+          try {
+            failPayment(db, paymentId, "ABORTED_BEFORE_SEND");
+          } catch {
+            // Best effort: the row is at worst still `reserved` (also counted, never reconciled).
+          }
+        }
+        return;
+      }
       if (paymentId) {
         const payload = context.paymentPayload?.payload as
           | { authorization?: { from?: unknown; nonce?: unknown; validBefore?: unknown } }
@@ -352,8 +387,34 @@ export async function performPaidFetch(
   // instead, which we pass straight back to the caller un-followed; the
   // Agent must explicitly call /v1/fetch again with the new URL so it goes
   // through host-allowlist + SSRF + policy checks again.
-  const noRedirectFetch: typeof fetch = (fetchInput, init) =>
-    fetch(fetchInput, { ...init, redirect: "manual" });
+  //
+  // Two more things happen here, both about OUR deadline actually governing the
+  // request:
+  //  - `signal` is passed straight to the inner fetch. @x402/fetch only carries
+  //    it via new Request(input, init) + two request.clone()s, and undici links
+  //    such dependent signals through WeakRefs: once the outer Request is
+  //    unreachable (it is, after the probe) a major GC severs the chain and
+  //    controller.abort() silently stops reaching the in-flight paid request or
+  //    its body read. An `init.signal` replaces the Request's own signal, so
+  //    this does not depend on that chain.
+  //  - undici's own headersTimeout / bodyTimeout (300 s each by default) must not
+  //    sit underneath our deadline: with MONEYSWITCH_PAID_TIMEOUT_MS above 300 s
+  //    they would fire first, and a lost answer would be misreported. The
+  //    dispatcher forwards to the process's global dispatcher (so an outbound
+  //    proxy still applies) with both idle timers off; OUR timer is the deadline.
+  const noRedirectFetch: typeof fetch = (fetchInput, init) => {
+    if (deadlineBeforeSend) {
+      // Defense in depth: the reservation was released because the probe deadline
+      // expired; nothing may be sent on its behalf.
+      return Promise.reject(new DOMException("payment released before send", "AbortError"));
+    }
+    return fetch(fetchInput, {
+      ...init,
+      redirect: "manual",
+      signal: controller.signal,
+      dispatcher: callerDeadlineDispatcher(),
+    } as RequestInit);
+  };
   const fetchWithPay = wrapFetchWithPayment(noRedirectFetch, httpClient);
 
   const request = resolveRequestBody(input.body, input.headers);
@@ -369,11 +430,9 @@ export async function performPaidFetch(
     const detail = timedOut
       ? `no complete response within ${paidMs}ms of the payment being signed`
       : describeError(e);
-    // The facilitator already told us the settlement FAILED (row released): the
-    // call cost nothing, so this is an ordinary upstream error, not an unknown payment.
-    if (settleFailed) {
-      throw new MoneySwitchError("UPSTREAM_ERROR", detail);
-    }
+    // (A PAYMENT-RESPONSE with success:false is NOT "nothing was charged": the signed
+    // authorization stays valid and the transfer may still mine. That row was already
+    // marked `unknown` from the headers; it falls through to payment_unknown below.)
     // Settlement already confirmed from the response headers: the payment IS
     // settled (row + tx hash already stored); only the content is lost.
     if (settledPayment) {
@@ -428,7 +487,9 @@ export async function performPaidFetch(
         signal: controller.signal,
       });
     } catch (e) {
-      if (!signed && paymentId) {
+      // deadlineBeforeSend: the row (if any) was already released as failed by the
+      // after-creation hook; do not turn it back into a held `unknown` one.
+      if (!signed && paymentId && !deadlineBeforeSend) {
         markUnknown(db, paymentId, "UPSTREAM_ERROR");
       }
       if (ownAbortApprovalId) {
@@ -439,6 +500,10 @@ export async function performPaidFetch(
       }
       if (signed) {
         return afterSignFailure(e, null);
+      }
+      if (deadlineBeforeSend) {
+        // Our own probe deadline: nothing was sent, nothing is charged.
+        throw new MoneySwitchError("UPSTREAM_ERROR", `upstream did not answer within ${probeMs}ms (no payment was sent)`);
       }
       const msg = e instanceof Error ? e.message : String(e);
       // The SDK's own outer spendControls ceiling (set to key.perRequestLimit)
@@ -493,7 +558,12 @@ export async function performPaidFetch(
     // confirmed settlement would leave the row `reserved`/`unknown` and the
     // caller would see a retryable error for money that is already spent.
     // Decoded with the SDK's own decoder, never hand-parsed.
-    type SettleHeader = { success: boolean; transaction: string; extra?: Record<string, unknown> };
+    type SettleHeader = {
+      success: boolean;
+      transaction: string;
+      errorReason?: string;
+      extra?: Record<string, unknown>;
+    };
     let settleHeader: SettleHeader | null = null;
     try {
       const decoded = httpClient.getPaymentSettleResponse(getHeader) as unknown;
@@ -513,8 +583,21 @@ export async function performPaidFetch(
           mock: Boolean(settleHeader.extra?.mock),
         };
       } else {
-        failPayment(db, paymentId, "PAYMENT_FAILED");
-        settleFailed = true;
+        // success:false is NOT proof that nothing was charged. We signed and SENT
+        // an EIP-3009 authorization that stays valid until validBefore, and the
+        // seller's server turns ANY exception while settling (a facilitator
+        // timeout, a receipt wait that ran out) into this header — @x402/evm even
+        // answers errorReason "settlement_pending" with the hash of a transfer it
+        // already broadcast. So do not release the budget: keep it reserved
+        // (`unknown`), remember the reported hash as a lead, and let reconcile
+        // decide from the chain (authorizationState) once the authorization
+        // expires. Same treatment as a seller that answers 402 again.
+        const reportedTx =
+          typeof settleHeader.transaction === "string" && settleHeader.transaction.length > 0
+            ? settleHeader.transaction
+            : null;
+        markUnknown(db, paymentId, "SETTLE_NOT_CONFIRMED", { txHash: reportedTx });
+        settleUnconfirmed = { reason: extractRejectionReason({ error: settleHeader.errorReason }, "") };
       }
     }
 
@@ -548,8 +631,12 @@ export async function performPaidFetch(
     if (paymentId && reservedAmount != null) {
       if (settledPayment) {
         charged = "yes";
-      } else if (settleFailed) {
-        charged = "no"; // facilitator reported the settlement failed; the reservation was released above.
+      } else if (settleUnconfirmed) {
+        // PAYMENT-RESPONSE said success:false (row already kept `unknown` above): the
+        // signed authorization is still live, so this is "maybe", not "no". Reported
+        // exactly like a seller that answered 402 again.
+        paymentRejected = { reason: settleUnconfirmed.reason };
+        charged = "maybe";
       } else if (response.status === 402) {
         // We already signed and sent an EIP-3009 payment for this request (paymentId
         // is set), yet the seller answered 402 again — its facilitator rejected our

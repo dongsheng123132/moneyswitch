@@ -19,6 +19,12 @@ import { TESTNET } from "@moneyswitch/x402";
 export interface SellerBehavior {
   /** Delay before the 402 to the unpaid probe. `Infinity` = never answer it. */
   probeDelayMs: number;
+  /**
+   * The unpaid probe's 402 sends its headers (incl. PAYMENT-REQUIRED) at once but
+   * the BODY only finishes after this many ms (0 = send it right away). Models a
+   * v2 seller whose 402 body trickles in past the client's probe deadline.
+   */
+  probeBodyDelayMs: number;
   /** After the payment arrives: wait this long before responding. */
   paidDelayMs: number;
   /**
@@ -34,18 +40,32 @@ export interface SellerBehavior {
     | "headers-then-destroy" //   200 + PAYMENT-RESPONSE + partial body, then the connection is cut
     | "headers-then-stall" //     200 + PAYMENT-RESPONSE + partial body, then silence
     | "reject-402" //             answer the PAID request with 402 again (facilitator declined it)
+    | "settle-failed-402" //      settle through the facilitator, then answer 402 + PAYMENT-RESPONSE success:false
+    //                              (errorReason "settlement_pending" + a real tx hash — what @x402/evm's
+    //                              facilitator returns when the receipt wait timed out; the transfer may still mine)
     | "destroy-before-headers"; // cut the connection after settling, before any response byte
+  /**
+   * response "ok" only: send the status line, headers and the first half of the
+   * body at once, then hold the rest back for this many ms before ending (0 = send
+   * it all together). Models a seller that streams slowly once the money is in.
+   */
+  bodyDelayMs: number;
   /** Answer unpaid requests with 200 directly (a free resource, no payment involved). */
   free: boolean;
   /** Price in atomic USDC (6 decimals). Default 10000 = 0.01 USDC. */
   amount: string;
 }
 
+/** The tx hash the "settle-failed-402" response claims the facilitator broadcast. */
+export const PENDING_TX_HASH = "0x" + "ab".repeat(32);
+
 export const DEFAULT_BEHAVIOR: SellerBehavior = {
   probeDelayMs: 0,
+  probeBodyDelayMs: 0,
   paidDelayMs: 0,
   settle: "before",
   response: "ok",
+  bodyDelayMs: 0,
   free: false,
   amount: "10000",
 };
@@ -144,6 +164,14 @@ export async function startStubSeller(opts: { facilitatorUrl: string; payTo: str
         "content-type": "application/json",
         "PAYMENT-REQUIRED": encodePaymentRequiredHeader(paymentRequired as never),
       });
+      if (b.probeBodyDelayMs > 0) {
+        res.flushHeaders();
+        res.write("{");
+        await sleep(b.probeBodyDelayMs);
+        if (res.destroyed || res.writableEnded) return; // the client gave up
+        res.end(JSON.stringify(paymentRequired).slice(1));
+        return;
+      }
       res.end(JSON.stringify(paymentRequired));
       return;
     }
@@ -164,6 +192,23 @@ export async function startStubSeller(opts: { facilitatorUrl: string; payTo: str
     if (b.paidDelayMs > 0) await sleep(b.paidDelayMs);
     if (res.destroyed || res.writableEnded) return; // the client gave up
 
+    if (b.response === "settle-failed-402") {
+      const failed = encodePaymentResponseHeader({
+        success: false,
+        errorReason: "settlement_pending",
+        transaction: PENDING_TX_HASH,
+        network: TESTNET.caip2,
+      } as never);
+      const pr = requirements("settlement_pending");
+      res.writeHead(402, {
+        "content-type": "application/json",
+        "PAYMENT-REQUIRED": encodePaymentRequiredHeader(pr as never),
+        "PAYMENT-RESPONSE": failed,
+      });
+      res.end(JSON.stringify(pr));
+      return;
+    }
+
     const payloadJson = JSON.stringify({ delivered: true, echo: body, contentType: req.headers["content-type"] ?? null });
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (paymentResponseHeader && b.response !== "ok-no-settle-header") {
@@ -173,6 +218,16 @@ export async function startStubSeller(opts: { facilitatorUrl: string; payTo: str
     switch (b.response) {
       case "ok":
       case "ok-no-settle-header":
+        if (b.bodyDelayMs > 0) {
+          const half = Math.floor(payloadJson.length / 2);
+          res.writeHead(200, headers);
+          res.flushHeaders();
+          res.write(payloadJson.slice(0, half));
+          await sleep(b.bodyDelayMs);
+          if (res.destroyed || res.writableEnded) return; // the client gave up
+          res.end(payloadJson.slice(half));
+          return;
+        }
         res.writeHead(200, headers);
         res.end(payloadJson);
         return;
