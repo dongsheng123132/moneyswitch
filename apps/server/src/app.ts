@@ -9,6 +9,7 @@ import { registerAgentRoutes } from "./routes/agent.js";
 import { registerApprovalStatusRoutes } from "./routes/approvals-agent.js";
 import { registerChildKeyRoutes } from "./routes/children.js";
 import { registerGatewayRoutes } from "./routes/gateway.js";
+import { registerNotifyRoutes } from "./routes/notify.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerSkillRoutes } from "./routes/skill.js";
 import { registerTollboothRoutes } from "./routes/tollbooths.js";
@@ -62,6 +63,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerApprovalStatusRoutes(app, ctx);
   registerChildKeyRoutes(app, ctx);
   registerGatewayRoutes(app, ctx);
+  registerNotifyRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
   registerSkillRoutes(app, ctx);
   registerTollboothRoutes(app, ctx);

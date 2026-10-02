@@ -4,6 +4,7 @@ import { LocalWalletDriver } from "@moneyswitch/wallet";
 import { bootstrapAdminToken, SetupTokenStore, type AuthorizationReader } from "@moneyswitch/core";
 import { createEvmAuthorizationReader } from "@moneyswitch/x402";
 import type { ServerConfig } from "./config.js";
+import type { NotifyRuntimeOptions } from "./notify/types.js";
 
 export interface AppContext {
   db: MoneySwitchDb;
@@ -21,6 +22,12 @@ export interface AppContext {
    * touches a real RPC endpoint. Left undefined, reconcile is a no-op.
    */
   chainReader?: AuthorizationReader;
+  /**
+   * Approval push notifications: test seams (fake fetch / env / clock / retry
+   * policy). Leave unset in production; the notifier then uses the global
+   * (proxy-aware) fetch, process.env and its default retry policy.
+   */
+  notify?: NotifyRuntimeOptions;
 }
 
 /** Host to put in the printed setup link: a wildcard bind address is not browsable, use loopback instead. */

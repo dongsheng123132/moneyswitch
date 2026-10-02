@@ -1,0 +1,73 @@
+/* Approval push-notification settings (Approvals page) */
+
+.notify-card {
+  margin-top: 16px;
+}
+
+.notify-intro {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.notify-link {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.notify-channel {
+  padding: 12px 0;
+  border-top: 1px solid var(--panel-border-soft);
+}
+
+.notify-channel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.notify-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notify-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.notify-help {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.notify-help summary {
+  cursor: pointer;
+}
+
+.notify-help p {
+  margin: 6px 0 0;
+  line-height: 1.55;
+}
+
+.notify-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.notify-results {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.notify-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

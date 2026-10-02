@@ -198,6 +198,47 @@ CLI, the OpenAI-compatible gateway and REST stay as advanced options.
   use (for example a host name with an underscore) shows a warning instead of
   failing to render. zh + en. The Dashboard now has tests
   (`pnpm --filter @moneyswitch/dashboard test`, Node's test runner).
+## Unreleased — 2026-10-02
+
+- **Approval push notifications.** When a payment needs human approval the
+  operator now gets a short zh message right away (key name, amount in USDC,
+  destination host + path only, method, minutes left, approval id, link to
+  `{MONEYSWITCH_PUBLIC_URL}/approvals`) instead of having to open the Approvals
+  page; approvals expire after 10 minutes. Channels, in any combination:
+  Feishu custom bot (optional signing secret), WeCom group bot, Telegram bot,
+  generic JSON webhook. Details and how to get each webhook:
+  [`docs/notifications.md`](docs/notifications.md).
+  - Delivered by an outbox loop beside the HTTP server (every 2.5 s,
+    `MONEYSWITCH_NOTIFY_INTERVAL_MS`, `0` = off), never on the payment path:
+    pending, unexpired approvals are sent once per channel (also across
+    restarts and with several processes on one database), never after they
+    expired. Every channel is delivered and retried on its own (back-off, at
+    most 5 attempts, then a warn log), so a channel that failed still gets
+    its retries when another channel already took the approval, and a slow
+    or black-holed channel only delays itself.
+  - No flood: a repeat of a request that is still pending and already
+    announced (same key, URL, method, body, payee, price) is not announced
+    again, and one key gets at most 5 approval messages per minute and
+    channel, then a single "approval_digest" summary, then silence until the
+    minute is over.
+  - The offline demo delivers to channels saved in its own Dashboard and
+    ignores `MONEYSWITCH_NOTIFY_*` from the environment.
+  - Config is editable in the Dashboard (Approvals → Notifications, with a
+    "send test message" button) and persisted in SQLite; the env vars
+    `MONEYSWITCH_NOTIFY_FEISHU_WEBHOOK`, `_FEISHU_SECRET`, `_WECOM_WEBHOOK`,
+    `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_CHAT_ID`, `_WEBHOOK_URL` override it
+    field by field. Webhook URLs and tokens are secrets: returned masked,
+    never logged, never in the audit log. The masked form hides the host
+    too (`https://••••.feishu.cn/••••6789`), because for some webhook
+    services the host is the secret.
+  - New admin routes `GET` / `PUT /v1/admin/notify` and
+    `POST /v1/admin/notify/test` (per-channel ok/error).
+  - Database: additive migrations `0005_approval_notify` (columns
+    `approvals.notified_at`, `notify_attempts`, `notify_attempt_at` - the
+    last two are superseded by 0006 and no longer written - and table
+    `notify_settings`) and `0006_approval_notify_deliveries` (table
+    `approval_notify_deliveries`, one row per approval and channel); existing
+    databases upgrade in place.
 
 ## 0.5.1 — 2026-09-26
 

@@ -3,6 +3,7 @@ import type { ServerConfig } from "./config.js";
 import { buildContext, type AppContext, type BuildContextOptions } from "./context.js";
 import { buildApp } from "./app.js";
 import { startReconcileLoop } from "./reconcileJob.js";
+import { DEFAULT_NOTIFY_INTERVAL_MS, startNotifyLoop } from "./notify/outbox.js";
 import { getActiveNetwork, isMainnet } from "@moneyswitch/x402";
 
 export { loadConfig, type ServerConfig, type DemoModeInfo } from "./config.js";
@@ -12,7 +13,7 @@ export interface RunningServer {
   app: FastifyInstance;
   ctx: AppContext;
   url: string;
-  /** Stops the reconcile loop, closes the HTTP server and the SQLite handle. */
+  /** Stops the reconcile and notification loops, closes the HTTP server and the SQLite handle. */
   close: () => Promise<void>;
 }
 
@@ -45,12 +46,19 @@ export async function startServer(config: ServerConfig, opts: BuildContextOption
     throw err;
   }
   const reconcile = startReconcileLoop(ctx, config.demo ? 0 : config.reconcileIntervalMs ?? 60_000);
+  // Approval push notifications: a decoupled outbox loop, never on the payment path.
+  // The offline demo runs it too, so a channel configured in the demo Dashboard really delivers; but it ignores
+  // MONEYSWITCH_NOTIFY_* from the environment, so demo approvals never reach channels set up for a real deployment.
+  if (config.demo) ctx.notify = { ...ctx.notify, env: {} };
+  const notify = startNotifyLoop(ctx, config.notifyIntervalMs ?? DEFAULT_NOTIFY_INTERVAL_MS);
   return {
     app,
     ctx,
     url: `http://${config.host.includes(":") ? `[${config.host}]` : config.host}:${config.port}`,
     close: async () => {
       reconcile.stop();
+      // Waits for an in-flight send to be aborted before the SQLite handle goes away.
+      await notify.stop();
       await app.close();
       try {
         ctx.sqlite.close();
