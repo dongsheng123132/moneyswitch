@@ -90,6 +90,19 @@ export const approvals = sqliteTable("approvals", {
   expiresAt: text("expires_at").notNull(),
   decidedAt: text("decided_at"),
   createdAt: text("created_at").notNull(),
+  /** Push-notification outbox: set once a message reached at least one channel (NULL = not yet / not at all). */
+  notifiedAt: text("notified_at"),
+  /** Push-notification outbox: delivery attempts claimed so far (bounded retries). */
+  notifyAttempts: integer("notify_attempts").notNull().default(0),
+  /** Push-notification outbox: when the latest attempt started (retry back-off / lease). */
+  notifyAttemptAt: text("notify_attempt_at"),
+});
+
+/** Admin-editable push-notification channel settings (key/value; env vars override at read time). */
+export const notifySettings = sqliteTable("notify_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull(),
 });
 
 export const auditLog = sqliteTable("audit_log", {
