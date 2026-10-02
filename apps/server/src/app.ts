@@ -32,6 +32,9 @@ export function buildApp(ctx: AppContext): FastifyInstance {
           "req.headers.authorization",
           "req.headers.Authorization",
           'req.body.password',
+          'req.body.private_key',
+          'req.body.keystore',
+          'req.body.source_password',
           'req.body.setup_token',
           'req.body["mk_live_"]',
         ],
@@ -49,9 +52,10 @@ export function buildApp(ctx: AppContext): FastifyInstance {
     if (text.trim() === "") return done(null, {});
     try {
       done(null, JSON.parse(text));
-    } catch (err) {
-      (err as { statusCode?: number }).statusCode = 400;
-      done(err as Error, undefined);
+    } catch {
+      // JSON.parse errors may quote a snippet containing a pasted credential.
+      const err = Object.assign(new Error("Invalid JSON request body"), { statusCode: 400 });
+      done(err, undefined);
     }
   });
 

@@ -7,11 +7,9 @@ import { usePolling } from "../usePolling";
 import {
   claimSetupToken,
   createKey,
-  createWallet,
   getWallet,
   listChannels,
   listKeys,
-  unlockWallet,
   ApiError,
   type CreateMoneyKeyResponse,
 } from "../api";
@@ -32,6 +30,7 @@ import { useAdminMeta } from "../useAdminMeta";
 import { skillBaseUrl } from "../skillText";
 import { claudeMcpCommand, openaiBase, useCliSource } from "../snippets";
 import { FundingGuide } from "./WalletPage";
+import { WalletAccess, WalletBackup } from "../components/WalletAccess";
 import { addDemoChannel } from "./ChannelsPage";
 import { fetchDemoMode, PLAYGROUND_KEY_STORAGE } from "../demoMode";
 import "../styles/setup.css";
@@ -370,95 +369,17 @@ function AdminStep({ claimedToken, ack, setAck }: { claimedToken: string | null;
 
 function WalletStep({ wallet, refresh }: { wallet: Awaited<ReturnType<typeof getWallet>> | null; refresh: () => void }) {
   const t = useT(setupStrings);
-  const [pw, setPw] = useState("");
-  const [pw2, setPw2] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
   if (!wallet) return <div className="setup-note">…</div>;
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    if (pw.length < 8) return setErr(t("s2_tooShort"));
-    if (pw !== pw2) return setErr(t("s2_mismatch"));
-    setBusy(true);
-    setErr(null);
-    try {
-      await createWallet(pw);
-      setPw("");
-      setPw2("");
-      refresh();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "create_failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function unlock(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    try {
-      await unlockWallet(pw);
-      setPw("");
-      refresh();
-    } catch {
-      setErr(t("s2_unlockFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!wallet.has_keystore) {
-    return (
-      <form onSubmit={create} className="setup-form" noValidate>
-        <p className="setup-text">
-          <Term k="wallet">{t("s2_createIntro")}</Term>
-        </p>
-        <div style={{ marginBottom: 10 }}>
-          <ThreeThingsButton />
-        </div>
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="setup-pw">{t("s2_password")}</label>
-            <input id="setup-pw" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="setup-pw2">{t("s2_confirm")}</label>
-            <input id="setup-pw2" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
-          </div>
-        </div>
-        <div className="field-hint setup-hint">{t("s2_passwordHint")}</div>
-        {err && <Callout tone="error">{err}</Callout>}
-        <button className="btn" type="submit" disabled={busy || !pw || !pw2}>
-          {busy ? t("s2_creating") : t("s2_create")}
-        </button>
-      </form>
-    );
-  }
-
-  if (!wallet.unlocked) {
-    return (
-      <form onSubmit={unlock} className="setup-form" noValidate>
-        <Callout tone="warn">
-          <Term k="walletLocked">{t("s2_locked")}</Term>
-        </Callout>
-        <div className="field" style={{ maxWidth: 320 }}>
-          <label htmlFor="setup-unlock">{t("s2_password")}</label>
-          <input id="setup-unlock" type="password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} />
-        </div>
-        {err && <Callout tone="error">{err}</Callout>}
-        <button className="btn" type="submit" disabled={busy || !pw}>
-          {busy ? t("s2_unlocking") : t("s2_unlock")}
-        </button>
-      </form>
-    );
-  }
+  if (!wallet.has_keystore || !wallet.unlocked) return <>
+    <WalletAccess wallet={wallet} onChanged={refresh} />
+    {wallet.has_keystore && <WalletBackup />}
+  </>;
 
   const balance = wallet.usdc_balance;
   const funded = balance != null && toMicros(balance) > 0n;
   return (
     <div>
+      <WalletBackup />
       <div className="setup-wallet">
         <div className="setup-wallet-main">
           <div className="stat-label">{t("s2_address")}</div>

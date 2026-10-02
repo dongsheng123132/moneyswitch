@@ -357,6 +357,18 @@ export async function unlockWallet(password: string): Promise<{ address: string;
   });
 }
 
+export type WalletImport =
+  | { kind: "private_key"; private_key: string }
+  | { kind: "keystore"; keystore: string; source_password: string };
+
+export async function importWallet(source: WalletImport, password: string): Promise<{ address: string }> {
+  return request("/v1/admin/wallet/import", { method: "POST", body: JSON.stringify({ ...source, password }) });
+}
+
+export async function backupWallet(): Promise<{ address: string; keystore: string }> {
+  return request("/v1/admin/wallet/backup", { method: "POST" });
+}
+
 // ---------------------------------------------------------------------------
 // Overview (derived client-side from /v1/keys + /v1/admin/usage + /v1/admin/wallet)
 // ---------------------------------------------------------------------------

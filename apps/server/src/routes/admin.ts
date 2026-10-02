@@ -25,6 +25,7 @@ import {
 } from "@moneyswitch/core";
 import { getActiveNetwork, getEnabledNetworks } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
+import type { WalletImport } from "@moneyswitch/wallet";
 import { requireAdmin } from "../auth.js";
 import { keyView, statusFromIndex } from "../keyview.js";
 import { runReconcileOnce } from "../reconcileJob.js";
@@ -392,8 +393,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.post("/v1/admin/wallet/create", { preHandler: adminGuard }, async (req, reply) => {
-    const { password } = req.body as { password: string };
-    if (!password || password.length < 8) {
+    const { password } = (req.body ?? {}) as { password: string };
+    if (typeof password !== "string" || password.length < 8) {
       return reply.status(400).send({ error: "password must be at least 8 characters" });
     }
     try {
@@ -402,6 +403,35 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       return reply.send({ address });
     } catch (e) {
       return reply.status(400).send({ error: e instanceof Error ? e.message : "wallet_error" });
+    }
+  });
+
+  app.post("/v1/admin/wallet/import", { preHandler: adminGuard, bodyLimit: 200_000 }, async (req, reply) => {
+    reply.header("Cache-Control", "no-store");
+    const body = (req.body ?? {}) as WalletImport & { password: string };
+    if (typeof body.password !== "string" || body.password.length < 8) {
+      return reply.status(400).send({ error: "password must be at least 8 characters" });
+    }
+    if (body.kind !== "private_key" && body.kind !== "keystore") {
+      return reply.status(400).send({ error: "unsupported wallet import format" });
+    }
+    try {
+      const { address } = await ctx.wallet.importWallet(body, body.password);
+      writeAudit(ctx.db, "admin", "wallet.import", { address, kind: body.kind });
+      return reply.send({ address });
+    } catch {
+      return reply.status(400).send({ error: "Import failed: check the backup password or private key; an existing wallet cannot be replaced" });
+    }
+  });
+
+  app.post("/v1/admin/wallet/backup", { preHandler: adminGuard }, async (_req, reply) => {
+    reply.header("Cache-Control", "no-store");
+    try {
+      const keystore = ctx.wallet.exportKeystore();
+      writeAudit(ctx.db, "admin", "wallet.backup", { address: ctx.wallet.getAddress() });
+      return reply.send({ address: ctx.wallet.getAddress(), keystore });
+    } catch {
+      return reply.status(404).send({ error: "No wallet to back up" });
     }
   });
 
