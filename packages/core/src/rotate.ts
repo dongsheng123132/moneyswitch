@@ -14,6 +14,9 @@ import type { MoneyKeyRow } from "./types.js";
  * approvals, child keys (parent_id) and every setting. Only `key_prefix` and
  * `key_hash` change, in one UPDATE, so the old secret stops authenticating
  * the moment this returns (authenticateMoneyKey looks keys up by prefix+hash).
+ * A request that authenticated with the old secret just BEFORE this ran is
+ * stopped too: evaluateAndReserve compares the stored key_hash with the one
+ * the request authenticated with before it reserves or signs anything.
  *
  * Returns undefined when the id does not exist. Throws KEY_REVOKED for a
  * revoked key: rotating must never bring a revoked key back to life.

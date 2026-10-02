@@ -46,13 +46,15 @@ export interface PolicyResult {
  * db's synchronous better-sqlite3 transaction so the reservation and every
  * check happen atomically).
  *
- * `keyHint` is only used to locate the key id — the transaction re-reads the
+ * `keyHint` is only used to locate the key id and to remember which secret
+ * the request authenticated with (its key_hash) — the transaction re-reads the
  * MoneyKey row fresh (by id) right after BEGIN, and re-checks
- * enabled/expires_at plus every budget field against that fresh row. This
- * closes a TOCTOU window: the caller authenticates the key once at the top
- * of the request, but signing can happen much later (after a round trip to
- * the upstream 402 resource), during which an admin could have revoked the
- * key or changed its limits.
+ * enabled/expires_at, that the secret has not been reset, plus every budget
+ * field against that fresh row. This closes a TOCTOU window: the caller
+ * authenticates the key once at the top of the request, but signing can
+ * happen much later (after a round trip to the upstream 402 resource),
+ * during which an admin could have revoked the key, reset its secret or
+ * changed its limits.
  */
 export function evaluateAndReserve(
   db: MoneySwitchDb,
@@ -71,6 +73,17 @@ export function evaluateAndReserve(
   // this is exactly the pre-v0.4 behaviour.
   const chain = getKeyChain(db, keyHint.id);
   const key = chain[0];
+  // The request authenticated with ONE secret (keyHint.keyHash). "Reset secret"
+  // (rotate.ts) keeps the key id but replaces key_hash, so a request that
+  // authenticated with the old secret and only now reaches the signing step
+  // (the upstream 402 round trip can last up to the fetch timeout) must not be
+  // able to pay: its credential is dead, exactly as it is for a fresh request.
+  // Revoke is caught by assertChainUsable below; a replaced secret needs this.
+  // Only this key's own secret matters: resetting an ancestor's secret does not
+  // touch the child's credential.
+  if (key.keyHash !== keyHint.keyHash) {
+    throw new MoneySwitchError("KEY_INVALID", "MoneyKey secret was reset after this request authenticated");
+  }
   assertChainUsable(chain, now.getTime());
 
   chain.forEach((k, i) => {
