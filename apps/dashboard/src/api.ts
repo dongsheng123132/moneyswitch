@@ -926,12 +926,22 @@ export interface PaidFetchInput {
 
 /** POST /v1/fetch envelope (docs/money-api-v0.md). */
 export interface PaidFetchResponse {
-  status: "ok" | "denied" | "approval_required" | "payment_failed" | "error";
+  /** "payment_unknown": a payment was signed and sent, then the response was lost — it may have been charged; never resend blindly. */
+  status: "ok" | "denied" | "approval_required" | "payment_failed" | "payment_unknown" | "error";
   code: string | null;
+  /**
+   * Whether this call cost money: "yes" a settlement was confirmed, "no" definitely nothing was
+   * signed or charged, "maybe" a payment was signed and sent but the outcome is unknown.
+   * Absent on servers older than this field (treat as the pre-field behaviour).
+   */
+  charged?: "yes" | "no" | "maybe";
   http_status: number | null;
   headers: Record<string, string>;
   body: string | null;
-  payment: { amount: string; tx_hash: string | null; network: string; mock: boolean } | null;
+  payment: { amount: string; tx_hash: string | null; network: string; mock?: boolean } | null;
+  /** Human-readable explanation for payment_unknown / UPSTREAM_BODY_INCOMPLETE / PAYMENT_REJECTED. */
+  reason?: string | null;
+  reserved_until_expiry?: boolean;
   approval_id: string | null;
   remaining_today: string;
   remaining_total: string;

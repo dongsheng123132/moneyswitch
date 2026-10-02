@@ -5,6 +5,7 @@ import { paidFetch, ApiError, PaidFetchResponse, PaidFetchInput } from "../api";
 import { formatUsdc } from "../money";
 import { useT, TFunction } from "../i18n";
 import { playgroundStrings } from "../i18n/strings/playground";
+import { classifyPaidFetch } from "../paidFetchOutcome";
 import { useKeyInputGuard } from "./KeyInputGuard";
 import SecretNotice from "./SecretNotice";
 import TxLink from "./TxLink";
@@ -256,6 +257,7 @@ function PaidFetchResult({
 }) {
   const bodyPretty = useMemo(() => prettyBody(result?.body ?? null), [result?.body]);
   const truncated = (result?.body?.length ?? 0) > RESPONSE_BODY_CAP;
+  const outcome = result ? classifyPaidFetch(result) : null;
 
   if (!result && !thrownError) return null;
 
@@ -269,7 +271,7 @@ function PaidFetchResult({
 
       {result && (
         <div>
-          {result.status === "ok" && result.payment && (
+          {outcome === "paid" && result.payment && (
             <div className="callout callout-success" role="status">
               <div className="callout-body">
                 <div className="callout-text">
@@ -279,35 +281,69 @@ function PaidFetchResult({
               </div>
             </div>
           )}
-          {result.status === "ok" && !result.payment && (result.http_status ?? 0) < 400 && (
+          {outcome === "free" && (
             <div className="callout callout-info" role="status">
               <div className="callout-body">
                 <div className="callout-text">{t("fetchResultFree", { status: result.http_status ?? "" })}</div>
               </div>
             </div>
           )}
-          {result.status === "ok" && !result.payment && (result.http_status ?? 0) >= 400 && (
+          {outcome === "upstream_error" && (
             <div className="callout callout-warn" role="status">
               <div className="callout-body">
                 <div className="callout-text">{t("fetchResultUpstreamError", { status: result.http_status ?? "" })}</div>
               </div>
             </div>
           )}
-          {result.status === "denied" && (
+          {/* Money may have left the wallet: never say "free" / "didn't go through", and tell the user not to resend. */}
+          {outcome === "payment_unknown" && (
+            <div className="callout callout-warn" role="alert">
+              <div className="callout-body">
+                <div className="callout-text">
+                  {t("fetchResultPaymentUnknown", { amount: formatUsdc(result.payment?.amount ?? "0", { maxDecimals: 4 }) })}
+                </div>
+              </div>
+            </div>
+          )}
+          {outcome === "body_incomplete" && (
+            <div className="callout callout-warn" role="alert">
+              <div className="callout-body">
+                <div className="callout-text">
+                  {t("fetchResultBodyIncomplete", { amount: formatUsdc(result.payment?.amount ?? "0", { maxDecimals: 4 }) })}{" "}
+                  {result.payment?.tx_hash && <TxLink txHash={result.payment.tx_hash} mock={result.payment.mock} />}
+                </div>
+              </div>
+            </div>
+          )}
+          {outcome === "charged_maybe" && (
+            <div className="callout callout-warn" role="alert">
+              <div className="callout-body">
+                <div className="callout-text">{t("fetchResultChargedMaybe", { status: result.http_status ?? "" })}</div>
+              </div>
+            </div>
+          )}
+          {outcome === "denied" && (
             <div className="callout callout-error" role="alert">
               <div className="callout-body">
                 <div className="callout-text">{deniedText(t, result.code, url)}</div>
               </div>
             </div>
           )}
-          {result.status === "payment_failed" && (
+          {outcome === "payment_rejected_maybe" && (
+            <div className="callout callout-warn" role="alert">
+              <div className="callout-body">
+                <div className="callout-text">{t("fetchResultPaymentRejectedMaybe")}</div>
+              </div>
+            </div>
+          )}
+          {outcome === "payment_failed" && (
             <div className="callout callout-error" role="alert">
               <div className="callout-body">
                 <div className="callout-text">{t("fetchResultPaymentFailed")}</div>
               </div>
             </div>
           )}
-          {result.status === "approval_required" && result.approval_id && (
+          {outcome === "approval_required" && result.approval_id && (
             <div className="callout callout-warn" role="status">
               <div className="callout-body">
                 <div className="callout-text">{t("fetchApprovalRequired", { id: result.approval_id })}</div>
@@ -323,7 +359,7 @@ function PaidFetchResult({
               </div>
             </div>
           )}
-          {result.status === "error" && <FetchErrorCallout t={t} code={result.code} />}
+          {outcome === "error" && <FetchErrorCallout t={t} code={result.code} />}
 
           <div className="stat-sub" style={{ marginTop: 10 }}>
             {t("fetchRemainingToday", { amount: formatUsdc(result.remaining_today, { maxDecimals: 4 }) })}
