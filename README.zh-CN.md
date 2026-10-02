@@ -59,7 +59,11 @@ Hermes 或任何读取 `SKILL.md` 的 Agent。这段文字是一句安装说明�
 `moneyswitch-pay` skill，里面有本服务器的地址和**该 Agent 自己的** MoneyKey；
 Agent 把它存成 skill、汇报剩余额度，之后遇到 x402（HTTP 402）接口就会通过
 `POST /v1/fetch` 付费。key 找不到了？key 只存哈希，请在 key 列表点
-**重置密钥并复制 skill**（旧密钥立刻失效，额度和历史不变）。Dashboard 的「接入
+**重置密钥并复制 skill**（旧密钥立刻失效，额度和历史不变）。每个 Agent 把 skill
+存在只有它自己会读的目录（Codex `~/.codex/skills`、Claude Code
+`~/.claude/skills`、OpenClaw `<workspace>/skills`、Hermes
+`$HERMES_HOME/skills`），不会放进多个 Agent 共用的 `~/.agents/skills`，所以同一台
+机器上 Codex=1 号 key、OpenClaw=2 号 key 互不串用。Dashboard 的「接入
 Agent」页和员工端也有同一段文字；`GET /skill.md` 提供本服务器的通用 skill（不含 key）。
 文字由同一个渲染器（`packages/skill`）生成，
 [`skills/moneyswitch-pay/SKILL.md`](skills/moneyswitch-pay/SKILL.md) 是它的

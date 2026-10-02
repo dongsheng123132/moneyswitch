@@ -24,11 +24,22 @@ CLI, the OpenAI-compatible gateway and REST stay as advanced options.
   `payment_unknown`, `payment_failed`, `error`), the `charged` field,
   `/v1/status`, `/v1/history` and `/v1/approvals/{id}`. The renderers
   refuse keys and base URLs that could break out of the quoted shell strings.
-  Skill locations used by the install prompt: Codex `~/.agents/skills/`
-  (its documented user location; `~/.codex/skills/` is read too), Claude Code
-  `~/.claude/skills/`, OpenClaw `~/.openclaw/skills/`, Hermes
-  `~/.hermes/skills/` (each + `moneyswitch-pay/SKILL.md`); any other agent
-  gets a generic "your skills directory" phrase instead of a guessed path.
+  Skill locations used by the install prompt (each + `moneyswitch-pay/SKILL.md`),
+  checked against the installed tools and chosen so that only that agent loads
+  the file, because the file holds that agent's own key: Codex
+  `~/.codex/skills/` (`$CODEX_HOME/skills`), Claude Code `~/.claude/skills/`,
+  OpenClaw `<workspace>/skills/` (default `~/.openclaw/workspace/skills/`; where
+  a ClawHub install lands too, so the personalized copy replaces the generic
+  one), Hermes `$HERMES_HOME/skills/` (default `~/.hermes`,
+  `%LOCALAPPDATA%\hermes` on native Windows, one per profile). Never the shared
+  `~/.agents/skills/`: Codex and OpenClaw both read it and OpenClaw ranks it
+  above its own `~/.openclaw/skills/`, so one agent would pay with the other's
+  key. The prompt also tells the agent to overwrite an existing
+  `moneyswitch-pay` skill in place instead of keeping two. Any other agent gets
+  a generic "your skills directory" phrase instead of a guessed path. The
+  PowerShell example builds objects with `[ordered]@{...}`: PowerShell 7 gives a
+  plain `@{...}` another key order in every process, and an approval only
+  matches a body with the same key order.
 - **`skills/moneyswitch-pay/SKILL.md`**: the generic variant, generated from
   the renderer (`pnpm --filter @moneyswitch/skill gen`) with a test that fails
   when the file drifts. Prepared for a later ClawHub publish; nothing has
@@ -42,17 +53,23 @@ CLI, the OpenAI-compatible gateway and REST stay as advanced options.
 - **`POST /v1/keys/:id/rotate`** (admin): a new secret for the same key id.
   Only hashes are stored, so a lost secret cannot be shown again; rotating
   keeps budgets, usage history, approvals, child keys and settings, the old
-  secret stops working immediately, an audit row `key.rotate` (prefixes only)
-  is written and the new plaintext is returned once. Revoked keys answer 409
-  and stay revoked. No schema change.
+  secret stops working immediately (also for a request that authenticated with
+  it just before and is still waiting for the seller: that request is refused
+  with `KEY_INVALID` before anything is reserved or signed), an audit row
+  `key.rotate` (prefixes only) is written and the new plaintext is returned
+  once. Revoked keys answer 409 and stay revoked. No schema change.
 - **Dashboard**: after creating a key the first and default tab is "Give this
   to your AI (skill)" with an agent selector and one large copy button for the
   install text (shown masked, copied in full, in the amber secret box); the
   previous connect / MCP / OpenAI / new-api snippets sit under "Other ways
   (advanced)". The key list gets the row action "Reset secret and copy skill"
   with a confirmation dialog. The Connect agent page and the employee view
-  lead with the same block (the employee's own key is filled in). Key names
-  are nudged to be one per agent. zh + en. The Dashboard now has tests
+  lead with the same block (the employee's own key is filled in); so do the
+  last step of the first-run setup wizard and the drawer after an employee
+  creates a sub-key (with the sub-key, not their own key). Key names are
+  nudged to be one per agent. A page opened from an address the skill cannot
+  use (for example a host name with an underscore) shows a warning instead of
+  failing to render. zh + en. The Dashboard now has tests
   (`pnpm --filter @moneyswitch/dashboard test`, Node's test runner).
 
 ## 0.5.1 — 2026-09-26
