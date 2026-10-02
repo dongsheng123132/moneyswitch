@@ -6,9 +6,11 @@ import { fileURLToPath } from "node:url";
 import type { AppContext } from "./context.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAgentRoutes } from "./routes/agent.js";
+import { registerApprovalStatusRoutes } from "./routes/approvals-agent.js";
 import { registerChildKeyRoutes } from "./routes/children.js";
 import { registerGatewayRoutes } from "./routes/gateway.js";
 import { registerSetupRoutes } from "./routes/setup.js";
+import { registerSkillRoutes } from "./routes/skill.js";
 import { registerTollboothRoutes } from "./routes/tollbooths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,9 +59,11 @@ export function buildApp(ctx: AppContext): FastifyInstance {
 
   registerAdminRoutes(app, ctx);
   registerAgentRoutes(app, ctx);
+  registerApprovalStatusRoutes(app, ctx);
   registerChildKeyRoutes(app, ctx);
   registerGatewayRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
+  registerSkillRoutes(app, ctx);
   registerTollboothRoutes(app, ctx);
 
   const dashboardDist = ctx.config.dashboardDir || resolveDashboardDist();
