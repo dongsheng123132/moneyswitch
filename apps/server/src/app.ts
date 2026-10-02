@@ -8,6 +8,7 @@ import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAgentRoutes } from "./routes/agent.js";
 import { registerChildKeyRoutes } from "./routes/children.js";
 import { registerGatewayRoutes } from "./routes/gateway.js";
+import { registerNotifyRoutes } from "./routes/notify.js";
 import { registerSetupRoutes } from "./routes/setup.js";
 import { registerTollboothRoutes } from "./routes/tollbooths.js";
 
@@ -59,6 +60,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerAgentRoutes(app, ctx);
   registerChildKeyRoutes(app, ctx);
   registerGatewayRoutes(app, ctx);
+  registerNotifyRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
   registerTollboothRoutes(app, ctx);
 

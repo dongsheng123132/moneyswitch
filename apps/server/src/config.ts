@@ -33,6 +33,12 @@ export interface ServerConfig {
    */
   reconcileIntervalMs?: number;
   /**
+   * How often (ms) the approval-notification outbox looks for new pending
+   * approvals to push to Feishu / WeCom / Telegram / webhook.
+   * MONEYSWITCH_NOTIFY_INTERVAL_MS, default 2500; 0 disables the loop.
+   */
+  notifyIntervalMs?: number;
+  /**
    * Directory with the built Dashboard (index.html + assets). Defaults to
    * apps/dashboard/dist; the `moneyswitch-server` npm package ships its own
    * copy (MONEYSWITCH_DASHBOARD_DIR).
@@ -79,6 +85,9 @@ export function loadConfig(): ServerConfig {
   const rawReconcileInterval = process.env.MONEYSWITCH_RECONCILE_INTERVAL_MS;
   const parsedReconcileInterval = rawReconcileInterval != null ? Number(rawReconcileInterval) : NaN;
   const dashboardDir = process.env.MONEYSWITCH_DASHBOARD_DIR?.trim() || null;
+  const rawNotifyInterval = process.env.MONEYSWITCH_NOTIFY_INTERVAL_MS;
+  const parsedNotifyInterval = rawNotifyInterval != null && rawNotifyInterval.trim() !== "" ? Number(rawNotifyInterval) : NaN;
+  const notifyIntervalMs = Number.isFinite(parsedNotifyInterval) && parsedNotifyInterval >= 0 ? parsedNotifyInterval : 2_500;
   const reconcileIntervalMs = Number.isFinite(parsedReconcileInterval) && parsedReconcileInterval >= 0
     ? parsedReconcileInterval
     : 60_000;
@@ -92,6 +101,7 @@ export function loadConfig(): ServerConfig {
     maxKeyDepth,
     publicUrl,
     reconcileIntervalMs,
+    notifyIntervalMs,
     dashboardDir,
   };
 }
