@@ -1,6 +1,7 @@
-import { createPublicClient, http, type Address, type Hex } from "viem";
+import { createPublicClient, http, toHex, type Address, type Hex } from "viem";
 import type { AuthorizationReader } from "@moneyswitch/core";
 import { getActiveNetwork, type NetworkConfig } from "./networks.js";
+import { findAuthorizationUsedTxViaLogs, scanOptionsFromEnv, type LogRpc } from "./authorization-logs.js";
 
 /** EIP-3009 `authorizationState(address,bytes32) view returns (bool)` — standard on USDC and compatible tokens. */
 const AUTHORIZATION_STATE_ABI = [
@@ -16,22 +17,29 @@ const AUTHORIZATION_STATE_ABI = [
   },
 ] as const;
 
-/** EIP-3009 `event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)`. */
-const AUTHORIZATION_USED_EVENT = {
-  type: "event",
-  name: "AuthorizationUsed",
-  inputs: [
-    { name: "authorizer", type: "address", indexed: true },
-    { name: "nonce", type: "bytes32", indexed: true },
-  ],
-} as const;
-
-/** Only used to bound how far back eth_getLogs scans; overridable for other chains via env. */
-const DEFAULT_BLOCK_TIME_MS = Number(process.env.MONEYSWITCH_RECONCILE_BLOCK_TIME_MS || 500);
-/** Extra safety margin added on top of (now - paymentCreatedAt) when estimating fromBlock. */
-const LOOKBACK_MARGIN_MS = 10 * 60 * 1000;
-/** Hard cap on how many blocks eth_getLogs is asked to scan in one call, regardless of the estimate above. */
-const MAX_LOOKBACK_BLOCKS = 500_000n;
+/** Adapts a viem public client to the minimal RPC surface the log scanner needs. */
+export function createViemLogRpc(client: ReturnType<typeof createPublicClient>): LogRpc {
+  return {
+    async getLatestBlock() {
+      const block = await client.getBlock({ blockTag: "latest" });
+      return { number: block.number, timestampSec: Number(block.timestamp) };
+    },
+    async getBlockTimestampSec(blockNumber) {
+      const block = await client.getBlock({ blockNumber });
+      return Number(block.timestamp);
+    },
+    async getLogs({ address, fromBlock, toBlock, topics }) {
+      const logs = (await client.request({
+        method: "eth_getLogs",
+        params: [{ address, fromBlock: toHex(fromBlock), toBlock: toHex(toBlock), topics }],
+      } as never)) as Array<{ transactionHash?: string | null; blockNumber?: string | null }>;
+      return logs.map((l) => ({
+        transactionHash: l.transactionHash ?? null,
+        blockNumber: l.blockNumber ? BigInt(l.blockNumber) : null,
+      }));
+    },
+  };
+}
 
 /**
  * v0.5: real on-chain implementation of AuthorizationReader, used by
@@ -42,6 +50,7 @@ const MAX_LOOKBACK_BLOCKS = 500_000n;
 export function createEvmAuthorizationReader(network: NetworkConfig = getActiveNetwork()): AuthorizationReader {
   const client = createPublicClient({ transport: http(network.rpcUrl) });
   const usdcAddress = network.usdcAddress as Address;
+  const logRpc = createViemLogRpc(client);
 
   return {
     async authorizationState(authorizer, nonce) {
@@ -54,23 +63,14 @@ export function createEvmAuthorizationReader(network: NetworkConfig = getActiveN
       return Boolean(state);
     },
 
-    async findAuthorizationUsedTx({ authorizer, nonce, paymentCreatedAtMs }) {
-      const latestBlock = await client.getBlockNumber();
-      const elapsedMs = Math.max(0, Date.now() - paymentCreatedAtMs) + LOOKBACK_MARGIN_MS;
-      const estimatedBlocks = BigInt(Math.ceil(elapsedMs / DEFAULT_BLOCK_TIME_MS));
-      const lookbackBlocks = estimatedBlocks > MAX_LOOKBACK_BLOCKS ? MAX_LOOKBACK_BLOCKS : estimatedBlocks;
-      const fromBlock = latestBlock > lookbackBlocks ? latestBlock - lookbackBlocks : 0n;
-
-      const logs = await client.getLogs({
-        address: usdcAddress,
-        event: AUTHORIZATION_USED_EVENT,
-        args: { authorizer: authorizer as Address, nonce: nonce as Hex },
-        fromBlock,
-        toBlock: latestBlock,
-      });
-
-      const log = logs[0];
-      return log?.transactionHash ?? null;
+    async findAuthorizationUsedTx({ authorizer, nonce, paymentCreatedAtMs, validBeforeSec }) {
+      // Public RPCs cap eth_getLogs (Monad testnet: 100 blocks), so this scans a
+      // bounded, time-derived block window in chunks — see authorization-logs.ts.
+      return findAuthorizationUsedTxViaLogs(
+        logRpc,
+        { usdcAddress: network.usdcAddress, authorizer, nonce, paymentCreatedAtMs, validBeforeSec },
+        scanOptionsFromEnv()
+      );
     },
   };
 }

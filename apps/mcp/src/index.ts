@@ -2,6 +2,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { formatPaidFetchResult, formatPaidFetchTransportError } from "./paid-fetch-result.js";
+import { parseTimeoutMs, requestMoneyApi } from "./money-api.js";
 
 /**
  * MoneySwitch MCP server (SPEC §7): stdio, pure HTTP client against the
@@ -17,26 +19,20 @@ if (!MONEY_API_KEY) {
   process.exit(1);
 }
 
-async function callMoneyApi(
+// status / history answer immediately.
+const API_TIMEOUT_MS = parseTimeoutMs(process.env.MONEY_API_TIMEOUT_MS, 30_000);
+// POST /v1/fetch answers only after the whole paid exchange: up to the server's probe deadline
+// (MONEYSWITCH_PROBE_TIMEOUT_MS, 30 s) + paid deadline (MONEYSWITCH_PAID_TIMEOUT_MS, 300 s).
+// Must stay above their sum, or this client gives up before the server's verdict arrives.
+const FETCH_TIMEOUT_MS = parseTimeoutMs(process.env.MONEY_API_FETCH_TIMEOUT_MS, 600_000);
+
+function callMoneyApi(
   method: string,
   path: string,
-  body?: unknown
+  body?: unknown,
+  timeoutMs: number = API_TIMEOUT_MS
 ): Promise<{ status: number; json: any }> {
-  const res = await fetch(`${MONEY_API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${MONEY_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  let json: any = null;
-  try {
-    json = await res.json();
-  } catch {
-    json = null;
-  }
-  return { status: res.status, json };
+  return requestMoneyApi({ baseUrl: MONEY_API_BASE, path, method, apiKey: MONEY_API_KEY!, body, timeoutMs });
 }
 
 const server = new McpServer({
@@ -65,7 +61,9 @@ server.registerTool(
   {
     title: "Paid fetch via MoneySwitch",
     description:
-      "Fetch a URL through MoneySwitch, paying via x402 if required. Policy limits (per-request/daily/total budget, approval threshold, allowed hosts) are enforced by MoneySwitch, not the agent.",
+      "Fetch a URL through MoneySwitch, paying via x402 if required. Policy limits (per-request/daily/total budget, approval threshold, allowed hosts) are enforced by MoneySwitch, not the agent. " +
+      "A paid call to a slow seller can take several minutes. If this tool times out, errors, or reports charged \"maybe\" / payment_unknown, the payment may still have gone through: " +
+      "do NOT retry automatically, check money_history first.",
     inputSchema: {
       url: z.string().url(),
       method: z.string().optional(),
@@ -76,37 +74,28 @@ server.registerTool(
     },
   },
   async (args) => {
-    const { status, json } = await callMoneyApi("POST", "/v1/fetch", {
-      url: args.url,
-      method: args.method,
-      headers: args.headers,
-      body: args.body,
-      max_price: args.max_price,
-      approval_id: args.approval_id,
-    });
-
-    if (json?.status === "approval_required") {
-      return {
-        content: [
-          {
-            type: "text",
-            text:
-              `已提交人工审批 approval_id=${json.approval_id}，等用户批准后用同一参数加 approval_id 重试。\n` +
-              `(Submitted for manual approval, approval_id=${json.approval_id}. ` +
-              `Wait for the user to approve it, then retry paid_fetch with the exact same url/method/body plus approval_id="${json.approval_id}".)`,
-          },
-        ],
-      };
+    let res: { status: number; json: any };
+    try {
+      res = await callMoneyApi(
+        "POST",
+        "/v1/fetch",
+        {
+          url: args.url,
+          method: args.method,
+          headers: args.headers,
+          body: args.body,
+          max_price: args.max_price,
+          approval_id: args.approval_id,
+        },
+        FETCH_TIMEOUT_MS
+      );
+    } catch (e) {
+      // The exchange with MoneySwitch broke. Unless the request never left this machine the
+      // call may have been charged: say so (and do not throw a bare "fetch failed").
+      return formatPaidFetchTransportError(e);
     }
 
-    if (status !== 200 || json?.status === "denied" || json?.status === "error" || json?.status === "payment_failed") {
-      return {
-        content: [{ type: "text", text: `paid_fetch failed: ${JSON.stringify(json ?? { http_status: status })}` }],
-        isError: true,
-      };
-    }
-
-    return { content: [{ type: "text", text: JSON.stringify(json, null, 2) }] };
+    return formatPaidFetchResult(res.status, res.json);
   }
 );
 

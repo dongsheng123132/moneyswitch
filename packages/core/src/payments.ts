@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { dbNumberToMicros } from "./money.js";
 import type { PaymentRow, PaymentStatus } from "./types.js";
@@ -50,9 +50,26 @@ export function failPayment(db: MoneySwitchDb, id: string, errorCode: string): v
     .run();
 }
 
-export function markUnknown(db: MoneySwitchDb, id: string, errorCode?: string): void {
+/**
+ * Keeps the reservation (`unknown` still counts against the key's limits) until
+ * reconcile resolves it on-chain. `opts.txHash` records a transaction hash the
+ * seller/facilitator REPORTED for a settlement it could not confirm (e.g. the
+ * x402 facilitator's `settlement_pending`); it is a lead, not proof, and reconcile
+ * still decides settled vs failed from the chain. Omitted/empty leaves tx_hash as is.
+ */
+export function markUnknown(
+  db: MoneySwitchDb,
+  id: string,
+  errorCode?: string,
+  opts?: { txHash?: string | null }
+): void {
   db.update(schema.payments)
-    .set({ status: "unknown", errorCode: errorCode ?? null, updatedAt: new Date().toISOString() })
+    .set({
+      status: "unknown",
+      errorCode: errorCode ?? null,
+      updatedAt: new Date().toISOString(),
+      ...(opts?.txHash ? { txHash: opts.txHash } : {}),
+    })
     .where(eq(schema.payments.id, id))
     .run();
 }
@@ -153,22 +170,42 @@ export function listUnknownPaymentsToReconcile(
     .map(rowToPayment);
 }
 
-/** v0.5: authorization confirmed never used on-chain — release the reservation. */
-export function reconcilePaymentToFailed(db: MoneySwitchDb, id: string, nowIso: string): void {
-  db.update(schema.payments)
-    .set({ status: "failed", errorCode: "NOT_SETTLED_EXPIRED", reconciledAt: nowIso, updatedAt: nowIso })
-    .where(eq(schema.payments.id, id))
-    .run();
+/** Only a row that is still `unknown` and not yet reconciled may be resolved: a slower, overlapping run must never overwrite a finished one. */
+function stillUnreconciled(id: string) {
+  return and(
+    eq(schema.payments.id, id),
+    eq(schema.payments.status, "unknown"),
+    isNull(schema.payments.reconciledAt)
+  );
 }
 
-/** v0.5: authorization confirmed used on-chain — belatedly record the settlement. */
+/**
+ * v0.5: authorization confirmed never used on-chain — release the reservation.
+ * Returns false (and changes nothing) when the row is no longer `unknown`/unreconciled,
+ * i.e. another run already resolved it.
+ */
+export function reconcilePaymentToFailed(db: MoneySwitchDb, id: string, nowIso: string): boolean {
+  const r = db
+    .update(schema.payments)
+    .set({ status: "failed", errorCode: "NOT_SETTLED_EXPIRED", reconciledAt: nowIso, updatedAt: nowIso })
+    .where(stillUnreconciled(id))
+    .run();
+  return r.changes > 0;
+}
+
+/**
+ * v0.5: authorization confirmed used on-chain — belatedly record the settlement.
+ * Returns false (and changes nothing) when the row is no longer `unknown`/unreconciled,
+ * so an overlapping run can never replace a found tx hash with null.
+ */
 export function reconcilePaymentToSettled(
   db: MoneySwitchDb,
   id: string,
   txHash: string | null,
   nowIso: string
-): void {
-  db.update(schema.payments)
+): boolean {
+  const r = db
+    .update(schema.payments)
     .set({
       status: "settled",
       txHash,
@@ -176,6 +213,50 @@ export function reconcilePaymentToSettled(
       reconciledAt: nowIso,
       updatedAt: nowIso,
     })
-    .where(eq(schema.payments.id, id))
+    .where(stillUnreconciled(id))
     .run();
+  return r.changes > 0;
+}
+
+/**
+ * Rows reconcile already settled WITHOUT a tx hash (SETTLED_TX_UNKNOWN: the
+ * AuthorizationUsed lookup found nothing, hit an RPC error or its call cap, or
+ * ran before the lookup existed). Candidates for a later, best-effort backfill.
+ * Only rows created at or after `sinceIso` (a bounded look-back), newest first.
+ */
+export function listSettledWithoutTxHash(db: MoneySwitchDb, sinceIso: string, limit = 3): PaymentRow[] {
+  return db
+    .select()
+    .from(schema.payments)
+    .where(
+      and(
+        eq(schema.payments.status, "settled"),
+        eq(schema.payments.errorCode, "SETTLED_TX_UNKNOWN"),
+        isNull(schema.payments.txHash),
+        isNotNull(schema.payments.authFrom),
+        isNotNull(schema.payments.authNonce),
+        gte(schema.payments.createdAt, sinceIso)
+      )
+    )
+    .orderBy(desc(schema.payments.createdAt))
+    .limit(limit)
+    .all()
+    .map(rowToPayment);
+}
+
+/** Stores a tx hash found later for a settled row that has none; clears SETTLED_TX_UNKNOWN. False if the row was already filled/changed. */
+export function backfillPaymentTxHash(db: MoneySwitchDb, id: string, txHash: string, nowIso: string): boolean {
+  const r = db
+    .update(schema.payments)
+    .set({ txHash, errorCode: null, updatedAt: nowIso })
+    .where(
+      and(
+        eq(schema.payments.id, id),
+        eq(schema.payments.status, "settled"),
+        eq(schema.payments.errorCode, "SETTLED_TX_UNKNOWN"),
+        isNull(schema.payments.txHash)
+      )
+    )
+    .run();
+  return r.changes > 0;
 }

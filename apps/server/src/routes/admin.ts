@@ -194,13 +194,18 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   // "unknown 付款的链上对账"). Runs the exact same logic as the background
   // loop (apps/server/src/reconcileJob.ts), just on demand.
   app.post("/v1/admin/reconcile", { preHandler: adminGuard }, async (_req, reply) => {
-    const result = await runReconcileOnce(ctx);
+    // On demand = also retry the tx-hash lookup for rows already settled without
+    // one ("now" bypasses the loop's 15-minute backfill throttle). If a run is
+    // already in flight this waits for it and reports its result.
+    const result = await runReconcileOnce(ctx, { backfill: "now" });
     writeAudit(ctx.db, "admin", "payments.reconcile", {
       scanned: result.scanned,
       failed: result.failed,
       settledWithTx: result.settledWithTx,
       settledTxUnknown: result.settledTxUnknown,
       rpcErrors: result.rpcErrors,
+      backfillScanned: result.backfillScanned,
+      backfilledTx: result.backfilledTx,
     });
     return reply.send({
       scanned: result.scanned,
@@ -209,6 +214,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       settled_tx_unknown: result.settledTxUnknown,
       rpc_errors: result.rpcErrors,
       reconciled_payment_ids: result.reconciledPaymentIds,
+      tx_backfill_scanned: result.backfillScanned,
+      tx_backfilled: result.backfilledTx,
     });
   });
 

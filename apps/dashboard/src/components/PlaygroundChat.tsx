@@ -83,6 +83,14 @@ function friendlyErrorText(t: PgStrings, code: string | null, audience: "admin" 
       return { title: t("err_modelNotFound") };
     case "PAYMENT_FAILED":
       return { title: t("err_paymentFailed") };
+    // A payment was signed and sent: the call may have cost money, so do not say "nothing was charged".
+    case "TIMEOUT_AFTER_PAYMENT":
+    case "UPSTREAM_ERROR_AFTER_PAYMENT":
+      return { title: t("err_paymentUnknown") };
+    case "UPSTREAM_BODY_INCOMPLETE":
+      return { title: t("err_bodyIncomplete") };
+    case "PAYMENT_REJECTED":
+      return { title: t("err_paymentRejectedMaybe") };
     case "UPSTREAM_ERROR":
       return { title: t("err_upstreamError") };
     default:

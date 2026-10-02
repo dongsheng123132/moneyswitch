@@ -211,6 +211,63 @@ describe("v0.5: unknown-payment reconciliation over HTTP", () => {
     expect(row?.tx_hash).toBe("0xdeadbeefcafe");
   });
 
+  it("a row settled earlier WITHOUT a tx hash (SETTLED_TX_UNKNOWN) gets its hash when the lookup works later (POST /v1/admin/reconcile backfills on demand)", async () => {
+    const key = await adminCreateKey({ daily_budget: "1", per_request_limit: "0.5" });
+    const keyRow = getMoneyKeyById(db, key.id)!;
+    const { paymentId } = evaluateAndReserve(db, keyRow, {
+      url: `http://${SELLER_HOST}/premium-report`,
+      host: SELLER_HOST,
+      method: "GET",
+      body: undefined,
+      network: "eip155:10143",
+      asset: "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+      payTo: "0x000000000000000000000000000000000000bb",
+      amount: 10_000n,
+    });
+    markUnknown(db, paymentId, "TIMEOUT_AFTER_PAYMENT");
+    recordPaymentAuthorization(db, paymentId, {
+      from: "0x000000000000000000000000000000000000aa",
+      nonce: "0x" + "44".repeat(32),
+      validBefore: Math.floor(Date.now() / 1000) - 3600,
+    });
+
+    // first pass: the authorization was used, but the AuthorizationUsed lookup is rate limited
+    ctx.chainReader = fakeReader({
+      authorizationState: vi.fn(async () => true),
+      findAuthorizationUsedTx: vi.fn(async () => {
+        throw new Error("429 Too Many Requests");
+      }),
+    });
+    const first = await call("POST", "/v1/admin/reconcile", adminToken);
+    expect(first.status).toBe(200);
+    expect(first.json.settled_tx_unknown).toBe(1);
+    let usage = await call("GET", "/v1/admin/usage", adminToken);
+    let row = (usage.json.payments as Array<Record<string, unknown>>).find((p) => p.id === paymentId);
+    expect(row?.status).toBe("settled");
+    expect(row?.tx_hash).toBeNull();
+    expect(row?.error_code).toBe("SETTLED_TX_UNKNOWN");
+
+    // later the lookup works: the same endpoint now backfills the hash
+    ctx.chainReader = fakeReader({
+      authorizationState: vi.fn(async () => true),
+      findAuthorizationUsedTx: vi.fn(async () => "0x20b9a9edf1e2"),
+    });
+    const second = await call("POST", "/v1/admin/reconcile", adminToken);
+    expect(second.status).toBe(200);
+    expect(second.json.scanned).toBe(0);
+    expect(second.json.tx_backfill_scanned).toBe(1);
+    expect(second.json.tx_backfilled).toBe(1);
+    usage = await call("GET", "/v1/admin/usage", adminToken);
+    row = (usage.json.payments as Array<Record<string, unknown>>).find((p) => p.id === paymentId);
+    expect(row?.status).toBe("settled");
+    expect(row?.tx_hash).toBe("0x20b9a9edf1e2");
+    expect(row?.error_code).toBeNull();
+
+    // nothing left to do
+    const third = await call("POST", "/v1/admin/reconcile", adminToken);
+    expect(third.json.tx_backfill_scanned).toBe(0);
+  });
+
   it("POST /v1/admin/reconcile requires admin auth", async () => {
     const r = await fetch(`${BASE}/v1/admin/reconcile`, { method: "POST" });
     expect(r.status).toBe(403);

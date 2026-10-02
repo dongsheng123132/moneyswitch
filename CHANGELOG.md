@@ -4,6 +4,134 @@ All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per the repository's own `SPEC*.md`
 files.
 
+## Unreleased
+
+"Paid but no delivery" fix. Incident: on Monad testnet a slow LLM seller took
+more than 30 s, MoneySwitch aborted after it had already signed the payment,
+the seller still settled (tx `0x20b9a9edf1...`, block 66811924), and the agent
+was told `UPSTREAM_ERROR` — which looks retryable, so a retry would have paid
+twice — while reconcile could only say the authorization had been used, without
+a tx hash.
+
+- **Two-phase deadline** (`performPaidFetch`). Before a payment authorization
+  is signed the unpaid probe has `MONEYSWITCH_PROBE_TIMEOUT_MS` (default
+  30000). The moment a payment is signed the deadline is replaced by
+  `MONEYSWITCH_PAID_TIMEOUT_MS` (default 300000), which also bounds reading
+  the response body. Invalid values (`0`, negative, non-numeric, above the
+  timer limit) fall back to the defaults; the timeout can never be disabled.
+  The deadline is really ours: the abort signal is passed straight to the
+  outbound fetch (it used to travel through `@x402/fetch`'s `Request` clones,
+  which undici links with WeakRefs, so after a major GC `abort()` could stop
+  reaching the in-flight paid request and its body read), and the outbound
+  request uses `callerDeadlineDispatcher()` from `@moneyswitch/net`, which
+  keeps the process-wide dispatcher (so an outbound proxy still applies) but
+  switches off undici's own 300 s headers/body idle timers — otherwise a
+  `MONEYSWITCH_PAID_TIMEOUT_MS` above 300000 would be cut at 300 s with the
+  wrong code. `@moneyswitch/x402` now depends on `@moneyswitch/net`.
+  If the probe deadline expires before the payment is sent (a 402 body that
+  trickles in past it, or slow signing) nothing is reported as possibly paid:
+  no reservation is made, or an already-made one is released
+  (`ABORTED_BEFORE_SEND`), and the call is an ordinary `UPSTREAM_ERROR` with
+  `charged: "no"`.
+  Note: the worst case for one `/v1/fetch` call is now probe + paid
+  (about 330 s by default); an HTTP client of MoneySwitch needs a read
+  timeout above that (the in-repo MCP and qwen-agent clients now have one).
+- **Settlement is recorded from the response headers before the body is
+  read.** If the body then fails or stalls, the payment row is still
+  `settled` with its tx hash, and `/v1/fetch` returns `status: "error"`,
+  `code: "UPSTREAM_BODY_INCOMPLETE"`, `charged: "yes"` with `payment`
+  populated and a reason that says not to retry.
+- **A seller's `PAYMENT-RESPONSE` with `success:false` is no longer "nothing
+  was charged".** We signed and sent an authorization that stays valid until
+  `validBefore`, and a resource server turns any exception while settling into
+  this header (`@x402/evm` even answers `settlement_pending` with the hash of a
+  transfer it already broadcast). Previously the row was released as `failed`
+  and `/v1/fetch` returned `status: "ok"` with `charged: "no"` — a retry could
+  pay twice and the ledger undercounted. Now the row stays `unknown`
+  (`SETTLE_NOT_CONFIRMED`, budget held, any reported tx hash kept as a lead),
+  the envelope is `payment_failed` / `PAYMENT_REJECTED` with `charged:
+  "maybe"`, and reconcile settles or releases it from the chain.
+- **New `/v1/fetch` status `payment_unknown`** (codes `TIMEOUT_AFTER_PAYMENT`
+  for a deadline abort, `UPSTREAM_ERROR_AFTER_PAYMENT` for any other failure)
+  when a payment was signed and the response was lost. `charged: "maybe"`,
+  `payment: { amount, network, tx_hash: null }`, a human-readable `reason`
+  telling the agent NOT to retry automatically. The payments row is marked
+  `unknown` with that error code and its budget stays reserved until reconcile
+  resolves it. Before any signature the codes are unchanged
+  (`UPSTREAM_ERROR`, ...) with `charged: "no"`.
+- **`charged` on every `/v1/fetch` envelope**: `"yes"` (a settlement was
+  confirmed), `"no"` (definitely nothing signed or charged), `"maybe"` (a
+  payment was signed and its outcome is unknown: `payment_unknown`,
+  `PAYMENT_REJECTED`, and a 200 without a settlement header; the 401 from the
+  key guard is `"no"`). All existing fields are unchanged. New `PaidFetchResult` fields in `@moneyswitch/x402`:
+  `charged`, `paymentUnknown`, `bodyIncomplete`; once a payment is signed
+  `performPaidFetch` returns these instead of throwing.
+- **Request body encoding** for `/v1/fetch` is now explicit: a JSON
+  object/array is sent as JSON with `content-type: application/json` unless
+  the caller set a content-type (any casing); a string is sent verbatim
+  (previously it was JSON-quoted, i.e. double-encoded). An approval's
+  `body_sha256` is computed over exactly those wire bytes, so an approved retry
+  still matches. Object and `undefined` bodies hash exactly as before; a
+  *string*-body approval created before this release and still pending will not
+  match the new hash (10-minute TTL; request again).
+- **OpenAI-compatible gateway** (`/v1/chat/completions`): `payment_unknown` /
+  `UPSTREAM_BODY_INCOMPLETE` become an OpenAI-style error with HTTP **400**,
+  plus `x-should-retry: false`, a message saying the call may have been charged
+  and must not be retried blindly, and `moneyswitch_charged` (+ `payment`) in
+  the error object. 400 on purpose: the OpenAI SDKs skip it, and so does the
+  new-api relay, which ignores `x-should-retry` and (with `RetryTimes > 0`)
+  retries every status in its default ranges — 402 included — but not 400/408/
+  504/524, so a 402 would have made it sign a second payment for the same
+  prompt. `PAYMENT_REJECTED` (charged "maybe") moves from 402 to 400 for the
+  same reason and now also sends `x-should-retry: false`; budget denials stay
+  402 (nothing was signed). The non-JSON-upstream error carries
+  `moneyswitch_charged` too; successful responses carry `moneyswitch.charged`.
+- **Reconcile finds the tx hash of an authorization that was used on-chain.**
+  The old lookup asked `eth_getLogs` for one huge range, which public RPCs
+  reject (Monad testnet: "eth_getLogs is limited to a 100 range"), so rows were
+  settled as `SETTLED_TX_UNKNOWN`. It now derives a block window from the
+  payment's creation time and the authorization's `validBefore` (interpolating
+  on real block timestamps), then scans it chronologically in chunks for
+  `AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)` and
+  stores the tx hash. Best effort: bounded by `MONEYSWITCH_RECONCILE_LOG_CHUNK_BLOCKS`
+  (default 100) and `MONEYSWITCH_RECONCILE_LOG_MAX_CALLS` (default 60 RPC
+  calls per payment); `MONEYSWITCH_RECONCILE_BLOCK_TIME_MS` is only the initial
+  block-time guess. A failing lookup never blocks reconcile (the row is
+  settled without a hash, as before). `AuthorizationReader.findAuthorizationUsedTx`
+  receives the new optional `validBeforeSec`. Opt-in check against the real
+  incident (read-only, not in the default run): `pnpm test:incident`.
+  - **Backfill for rows that were already settled without a hash**
+    (`SETTLED_TX_UNKNOWN`: an earlier build, or a lookup that hit an RPC error
+    or the call cap — the incident's own row is one). The server's reconcile
+    loop retries them — 3 rows per pass, newest first, only rows from the last
+    14 days, at most every 15 minutes and on the first run after boot;
+    `POST /v1/admin/reconcile` does it on demand and reports `tx_backfilled`.
+  - **Reconcile runs can no longer overlap or undo each other.** A run can now
+    take minutes on a slow RPC, longer than the 60 s tick. One run at a time per
+    server (a second call joins the one in flight), and the reconcile
+    transitions only apply to a row that is still `unknown` and unreconciled, so
+    a slower run can no longer overwrite a found tx hash with `null` or write a
+    duplicate audit entry. A tx hash the seller reported (`SETTLE_NOT_CONFIRMED`)
+    is kept instead of being looked up again.
+- **MCP `paid_fetch`** reports `payment_unknown`, `UPSTREAM_BODY_INCOMPLETE`
+  and `charged: "maybe"` with a bilingual (zh + en) message that says not to
+  retry; `@moneyswitch/mcp` now has unit tests (`pnpm --filter @moneyswitch/mcp test`).
+  Its HTTP client no longer uses the global `fetch` (undici gives up on response
+  headers after ~300 s, before a slow paid call's verdict can arrive): it uses
+  `node:http` with explicit deadlines (`MONEY_API_FETCH_TIMEOUT_MS`, default
+  600000 for `/v1/fetch`; `MONEY_API_TIMEOUT_MS`, default 30000 for status and
+  history), and a transport failure after the request was sent is reported as
+  "outcome unknown, you may have been charged, do NOT retry, check
+  `money_history`" (zh + en) instead of a bare "fetch failed". The qwen-agent
+  demo client got the same transport and message, and passes `charged` on.
+  Note that an MCP host's own tool timeout (often 60 s) can still end the call
+  earlier; the server keeps going, so check `money_history` before retrying.
+- **Dashboard Playground** (paid-fetch panel and chat) understands
+  `payment_unknown`, `charged` and `UPSTREAM_BODY_INCOMPLETE`: it warns that the
+  call may have been charged and not to send it again, instead of showing no
+  outcome, "Free — nothing was charged" or "didn't go through".
+- No database schema change.
+
 ## 0.5.1 — 2026-09-26
 
 Zero-setup trial and one-command self-hosting.

@@ -31,13 +31,14 @@ export function requireMoneyKey(ctx: AppContext) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const token = extractBearer(req);
     if (!token || token.startsWith("ms_admin_")) {
-      return reply.status(401).send({ status: "error", code: "KEY_INVALID" });
+      return reply.status(401).send({ status: "error", code: "KEY_INVALID", charged: "no" });
     }
     // v0.5 (SPEC-v0.5 §1): a public 0x address pasted where a MoneyKey belongs.
     if (/^0x[0-9a-fA-F]{40}$/.test(token)) {
       return reply.status(401).send({
         status: "error",
         code: "KEY_INVALID",
+        charged: "no",
         hint: "LOOKS_LIKE_ADDRESS",
         message: "That is a public 0x receiving address, not a MoneyKey. A MoneyKey starts with mk_live_.",
       });
@@ -50,7 +51,9 @@ export function requireMoneyKey(ctx: AppContext) {
       const code = e instanceof MoneySwitchError ? e.code : "KEY_INVALID";
       // v0.4: a key whose ancestor is revoked/expired fails here with
       // limit_scope "ancestor" (SPEC-v0.4 §A cascade).
-      return reply.status(401).send({ status: "error", code, ...limitFields(e) });
+      // Auth runs before anything is signed, so every /v1/fetch envelope that
+      // comes from this guard is `charged: "no"` (CONTRACT: charged on every envelope).
+      return reply.status(401).send({ status: "error", code, charged: "no", ...limitFields(e) });
     }
   };
 }
@@ -70,8 +73,25 @@ export function openAiStatusForCode(code: string): number {
     case "MAX_PRICE_EXCEEDED":
     case "DAILY_BUDGET_EXCEEDED":
     case "TOTAL_BUDGET_EXCEEDED":
-    case "PAYMENT_REJECTED":
       return 402;
+    // We signed a payment and the call may (or did) cost money: PAYMENT_REJECTED
+    // (seller said no / could not confirm settlement), TIMEOUT_AFTER_PAYMENT and
+    // UPSTREAM_ERROR_AFTER_PAYMENT (lost the answer), UPSTREAM_BODY_INCOMPLETE
+    // (settled, body cut off). A retry would sign and pay a SECOND time, so these
+    // must never be a status that a client or relay retries by default:
+    //   - OpenAI SDKs retry 408/409/429/5xx and honour x-should-retry (the route sets it);
+    //   - new-api (the relay MoneySwitch is plugged into as an OpenAI channel) ignores
+    //     x-should-retry and, with RetryTimes > 0, retries every status in its default
+    //     ranges 100-199,300-399,401-407,409-499,500-503,505-523,525-599 — that
+    //     includes 402 — but NOT 400, 408, 504 or 524
+    //     (setting/operation_setting/status_code_ranges.go).
+    // 400 is terminal for both. The meaning travels in error.code and
+    // error.moneyswitch_charged, not in the status.
+    case "PAYMENT_REJECTED":
+    case "TIMEOUT_AFTER_PAYMENT":
+    case "UPSTREAM_ERROR_AFTER_PAYMENT":
+    case "UPSTREAM_BODY_INCOMPLETE":
+      return 400;
     case "APPROVAL_REQUIRED":
     case "APPROVAL_INVALID":
       return 409;
@@ -105,6 +125,12 @@ export function humanMessageForCode(code: string): string {
       return "This MoneyKey's total budget is exhausted";
     case "PAYMENT_REJECTED":
       return "Seller rejected our signed payment (its facilitator declined it); the held budget is released automatically once the authorization expires";
+    case "TIMEOUT_AFTER_PAYMENT":
+      return "A payment was signed but the seller did not answer in time; you may have been charged. Do not retry blindly";
+    case "UPSTREAM_ERROR_AFTER_PAYMENT":
+      return "A payment was signed but the request then failed; you may have been charged. Do not retry blindly";
+    case "UPSTREAM_BODY_INCOMPLETE":
+      return "The payment was settled but the seller's response was cut off; you have been charged. Do not retry blindly";
     case "APPROVAL_REQUIRED":
       return "Payment requires manual approval";
     case "APPROVAL_INVALID":
@@ -126,7 +152,14 @@ export function openAiError(
   code: string,
   approvalId?: string | null,
   limit?: { limit_scope?: string; limit_key_prefix?: string },
-  extra?: { reason?: string | null; reserved_until_expiry?: boolean }
+  extra?: {
+    reason?: string | null;
+    reserved_until_expiry?: boolean;
+    /** "yes" | "no" | "maybe": whether this call cost money (same meaning as /v1/fetch's `charged`). */
+    moneyswitch_charged?: "yes" | "no" | "maybe";
+    /** Payment facts when a payment was signed (tx_hash is null while unknown). */
+    payment?: { amount: string; tx_hash: string | null; network: string | null };
+  }
 ) {
   return {
     error: {
@@ -139,6 +172,8 @@ export function openAiError(
       ...(extra?.reserved_until_expiry !== undefined
         ? { reserved_until_expiry: extra.reserved_until_expiry }
         : {}),
+      ...(extra?.moneyswitch_charged !== undefined ? { moneyswitch_charged: extra.moneyswitch_charged } : {}),
+      ...(extra?.payment !== undefined ? { payment: extra.payment } : {}),
     },
   };
 }

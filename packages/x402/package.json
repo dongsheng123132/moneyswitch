@@ -8,11 +8,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "test:testnet": "tsx test/testnet.readonly.ts"
+    "test:testnet": "tsx test/testnet.readonly.ts",
+    "test:incident": "tsx test/incident-lookup.readonly.ts"
   },
   "dependencies": {
     "@moneyswitch/core": "workspace:*",
     "@moneyswitch/db": "workspace:*",
+    "@moneyswitch/net": "workspace:*",
     "@moneyswitch/wallet": "workspace:*",
     "@x402/core": "2.27.0",
     "@x402/evm": "2.27.0",
