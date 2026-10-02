@@ -2,6 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { dbNumberToMicros, microsToDbNumber } from "./money.js";
+import { encodeRequestBody } from "./request-body.js";
 import type { ApprovalRow } from "./types.js";
 
 export const APPROVAL_TTL_MS = 10 * 60 * 1000;
@@ -24,9 +25,14 @@ function rowToApproval(row: typeof schema.approvals.$inferSelect): ApprovalRow {
   };
 }
 
+/**
+ * sha256 over the exact bytes sent to the seller (encodeRequestBody): a string
+ * body hashes verbatim, any other body hashes as its JSON. The approval binding
+ * and the wire encoding share one function so they cannot drift apart.
+ */
 export function sha256OfBody(body: unknown): string {
-  const json = body === undefined ? "" : JSON.stringify(body);
-  return createHash("sha256").update(json, "utf8").digest("hex");
+  const wire = encodeRequestBody(body) ?? "";
+  return createHash("sha256").update(wire, "utf8").digest("hex");
 }
 
 export interface CreateApprovalInput {
