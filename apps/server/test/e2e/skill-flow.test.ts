@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -21,10 +22,13 @@ import type { AppContext } from "../../src/context.js";
  * written (only the placeholder seller URL is swapped for the local one).
  * Interpreters that are not installed are skipped. It also walks the
  * approval flow the skill describes: approval_required -> poll
- * GET /v1/approvals/{id} -> approved -> resend with approval_id.
+ * GET /v1/approvals/{id} -> approved -> resend with approval_id, including the
+ * PowerShell 7 case (a body rebuilt in a NEW process must match the approved
+ * one) and the "reset secret while a request is waiting for the seller" race.
  */
 
 const SELLER_PORT = 19021;
+const GATE_PORT = 19022;
 const MOCK_FACILITATOR_PORT = 19099;
 const SERVER_PORT = 19020;
 const BASE = `http://127.0.0.1:${SERVER_PORT}`;
@@ -49,6 +53,8 @@ const BASH = has("bash", ["-c", "command -v curl"]);
 const PYTHON = process.platform === "win32" ? has("python", ["--version"]) : has("python3", ["--version"]);
 const PYTHON_CMD = process.platform === "win32" ? "python" : "python3";
 const POWERSHELL = has("powershell", ["-NoProfile", "-Command", "exit 0"]) ? "powershell" : has("pwsh", ["-NoProfile", "-Command", "exit 0"]) ? "pwsh" : null;
+// PowerShell 7 (.NET Core) randomizes hashtable key order per process; Windows PowerShell 5.1 does not.
+const PWSH7 = has("pwsh", ["-NoProfile", "-Command", "exit 0"]) ? "pwsh" : null;
 
 async function waitForHttp(url: string, timeoutMs = 15000): Promise<void> {
   const start = Date.now();
@@ -145,6 +151,59 @@ function run(cmd: string, args: string[]): Promise<{ code: number | null; out: s
   });
 }
 
+/**
+ * A forwarding proxy in front of the demo seller that holds every request until `release()` is called. It stands in
+ * for "a slow seller": MoneySwitch has authenticated the agent and is waiting for the seller's 402 when the admin acts.
+ */
+function startGate(upstreamPort: number, listenPort: number) {
+  let release!: () => void;
+  const released = new Promise<void>((r) => (release = r));
+  let arrived!: () => void;
+  const firstRequest = new Promise<void>((r) => (arrived = r));
+  const server = http.createServer(async (req, res) => {
+    arrived();
+    await released;
+    try {
+      const chunks: Buffer[] = [];
+      for await (const c of req) chunks.push(c as Buffer);
+      const hasBody = req.method !== "GET" && req.method !== "HEAD";
+      const headers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (typeof v === "string" && !["host", "connection", "content-length", "transfer-encoding"].includes(k)) headers[k] = v;
+      }
+      const up = await fetch(`http://127.0.0.1:${upstreamPort}${req.url}`, {
+        method: req.method,
+        headers,
+        body: hasBody ? Buffer.concat(chunks) : undefined,
+        redirect: "manual",
+      });
+      res.statusCode = up.status;
+      up.headers.forEach((v, k) => {
+        if (!["connection", "content-length", "transfer-encoding", "content-encoding"].includes(k)) res.setHeader(k, v);
+      });
+      res.end(Buffer.from(await up.arrayBuffer()));
+    } catch {
+      res.statusCode = 502;
+      res.end();
+    }
+  });
+  const listening = new Promise<void>((r) => server.listen(listenPort, "127.0.0.1", () => r()));
+  return {
+    listening,
+    firstRequest,
+    release,
+    close: () => new Promise<void>((r) => server.close(() => r())),
+  };
+}
+
+/** The skill's PowerShell block with its `$req = ...` line replaced by `reqBlock`, printing the reply as JSON. */
+function powershellWithRequest(skill: string, reqBlock: string): string {
+  const block = codeBlock(skill, "powershell");
+  const swapped = block.replace(/^\$req = .*$/m, () => reqBlock);
+  expect(swapped, "the skill's PowerShell block has a $req line to swap").not.toBe(block);
+  return swapped.replace(/^Invoke-RestMethod/m, "$r = Invoke-RestMethod") + "\n$r | ConvertTo-Json -Depth 10\n";
+}
+
 describe("the examples in the personalized skill work as written", () => {
   it.skipIf(!BASH)("bash + curl", async () => {
     const k = await newKey("bash-agent");
@@ -211,6 +270,81 @@ describe("the flows the skill describes", () => {
     expect(again.json.payment.amount).toBe("0.01");
     expect((await api("GET", `/v1/approvals/${id}`, k.key)).json.status).toBe("used");
   }, 30000);
+
+  // The approval is tied to sha256(JSON.stringify(body)) in the key order that was sent. PowerShell 7 gives a plain
+  // @{...} a different key order in every process, so the skill tells the agent to build objects with [ordered]@{...}.
+  // Two separate pwsh processes (as when an agent resumes after the human approved) must therefore send the same body.
+  it.skipIf(!PWSH7)("PowerShell 7: a nested [ordered] body approved by the human is accepted when a NEW process resends it", async () => {
+    const k = await newKey("pwsh-approval", { approval_threshold: "0.005" });
+    const skill = renderSkill({ baseUrl: BASE, key: k.key, keyName: "pwsh-approval" });
+    const chatUrl = `http://127.0.0.1:${SELLER_PORT}/v1/chat/completions`;
+    const reqBlock = (approvalId?: string) =>
+      [
+        "$req = [ordered]@{",
+        `  url = "${chatUrl}"; method = "POST"`,
+        '  headers = [ordered]@{ "content-type" = "application/json" }',
+        '  body = [ordered]@{ model = "moneyswitch-demo-chat"; messages = @([ordered]@{ role = "user"; content = "hello" }); temperature = 0.2; max_tokens = 16; user = "e2e"; n = 1 }',
+        "}",
+        ...(approvalId ? [`$req.approval_id = "${approvalId}"`] : []),
+      ].join("\n");
+    const runOnce = async (name: string, approvalId?: string) => {
+      const script = path.join(tmpDir, name);
+      fs.writeFileSync(script, powershellWithRequest(skill, reqBlock(approvalId)), "utf8");
+      const r = await run(PWSH7!, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script]);
+      expect(r.code, r.out).toBe(0);
+      return JSON.parse(r.out);
+    };
+
+    const first = await runOnce("pwsh-approval-1.ps1");
+    expect(first.status).toBe("approval_required");
+    const id = first.approval_id as string;
+    expect(id).toBeTruthy();
+    expect((await api("POST", `/v1/approvals/${id}/approve`, adminToken)).status).toBe(200);
+
+    const second = await runOnce("pwsh-approval-2.ps1", id); // a brand-new pwsh process
+    expect(second.status, JSON.stringify(second)).toBe("ok");
+    expect(second.code).toBeNull();
+    expect(second.payment.amount).toBe("0.01");
+    expect((await api("GET", `/v1/approvals/${id}`, k.key)).json.status).toBe("used");
+  }, 120000);
+
+  // The old secret must stop working immediately - also for a request that authenticated with it just before the
+  // reset and is still waiting for the seller's 402 (the seller can take up to 30 s). Revoke has always stopped that
+  // request inside the policy transaction; a replaced secret needed the same.
+  it("reset secret while a request is waiting for the seller: the old secret cannot pay, the new one can", async () => {
+    const gate = startGate(SELLER_PORT, GATE_PORT);
+    await gate.listening;
+    try {
+      const k = await newKey("rotate-inflight", { allowed_hosts: [`127.0.0.1:${GATE_PORT}`] });
+      const viaGate = `http://127.0.0.1:${GATE_PORT}/premium-report`;
+
+      // request authenticated with the OLD secret, now parked at the "slow seller"
+      const inflight = api("POST", "/v1/fetch", k.key, { url: viaGate });
+      await gate.firstRequest;
+
+      const rotated = await api("POST", `/v1/keys/${k.id}/rotate`, adminToken);
+      expect(rotated.status).toBe(200);
+      gate.release(); // the seller finally answers 402 -> MoneySwitch is about to reserve + sign
+
+      const res = (await inflight).json;
+      expect(res.status, JSON.stringify(res)).toBe("error");
+      expect(res.code).toBe("KEY_INVALID");
+      expect(res.payment).toBeNull();
+
+      // nothing was reserved, signed or settled for this key
+      const history = await api("GET", "/v1/history", rotated.json.key as string);
+      expect(history.json.history).toHaveLength(0);
+      expect(Number((await api("GET", "/v1/status", rotated.json.key as string)).json.used_total)).toBe(0);
+
+      // the new secret pays through the same seller
+      const paid = await api("POST", "/v1/fetch", rotated.json.key as string, { url: viaGate });
+      expect(paid.json.status, JSON.stringify(paid.json)).toBe("ok");
+      expect(paid.json.payment.amount).toBe("0.01");
+    } finally {
+      gate.release();
+      await gate.close();
+    }
+  }, 60000);
 
   it("a denied approval is visible to the polling agent as denied", async () => {
     const k = await newKey("deny-agent", { approval_threshold: "0.005" });
