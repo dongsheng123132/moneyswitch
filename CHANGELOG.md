@@ -4,6 +4,34 @@ All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per the repository's own `SPEC*.md`
 files.
 
+## Unreleased — 2026-10-02
+
+- **Approval push notifications.** When a payment needs human approval the
+  operator now gets a short zh message right away (key name, amount in USDC,
+  destination host + path only, method, minutes left, approval id, link to
+  `{MONEYSWITCH_PUBLIC_URL}/approvals`) instead of having to open the Approvals
+  page; approvals expire after 10 minutes. Channels, in any combination:
+  Feishu custom bot (optional signing secret), WeCom group bot, Telegram bot,
+  generic JSON webhook. Details and how to get each webhook:
+  [`docs/notifications.md`](docs/notifications.md).
+  - Delivered by an outbox loop beside the HTTP server (every 2.5 s,
+    `MONEYSWITCH_NOTIFY_INTERVAL_MS`, `0` = off), never on the payment path:
+    pending, unexpired approvals with `notified_at IS NULL` are sent once
+    (also across restarts and with several processes on one database); if
+    every channel fails the send is retried with back-off, at most 5 times,
+    then given up with a warn log.
+  - Config is editable in the Dashboard (Approvals → Notifications, with a
+    "send test message" button) and persisted in SQLite; the env vars
+    `MONEYSWITCH_NOTIFY_FEISHU_WEBHOOK`, `_FEISHU_SECRET`, `_WECOM_WEBHOOK`,
+    `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_CHAT_ID`, `_WEBHOOK_URL` override it
+    field by field. Webhook URLs and tokens are secrets: returned masked,
+    never logged, never in the audit log.
+  - New admin routes `GET` / `PUT /v1/admin/notify` and
+    `POST /v1/admin/notify/test` (per-channel ok/error).
+  - Database: additive migration `0005_approval_notify` (columns
+    `approvals.notified_at`, `notify_attempts`, `notify_attempt_at`, table
+    `notify_settings`); existing databases upgrade in place.
+
 ## 0.5.1 — 2026-09-26
 
 Zero-setup trial and one-command self-hosting.
