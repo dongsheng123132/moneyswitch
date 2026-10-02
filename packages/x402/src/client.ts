@@ -14,6 +14,7 @@ import {
   markUnknown,
   recordPaymentAuthorization,
   formatMicrosToUsdc,
+  resolveRequestBody,
   type MoneyKeyRow,
 } from "@moneyswitch/core";
 import { getActiveNetwork, SCHEME } from "./networks.js";
@@ -23,6 +24,12 @@ export interface PaidFetchInput {
   host: string;
   method: string;
   headers?: Record<string, string>;
+  /**
+   * Request body. A string is sent verbatim; anything else is sent as JSON
+   * (with content-type application/json unless `headers` sets one) — see
+   * encodeRequestBody in @moneyswitch/core. An approval's body hash binds to
+   * exactly these wire bytes.
+   */
   body?: unknown;
   maxPrice?: bigint;
   approvalId?: string | null;
@@ -30,6 +37,18 @@ export interface PaidFetchInput {
   kind?: "fetch" | "chat";
   model?: string | null;
 }
+
+/**
+ * Whether money left the wallet because of this call.
+ *   yes   — a settlement was confirmed (seller/facilitator reported success);
+ *   no    — definitely nothing was signed or charged;
+ *   maybe — a payment authorization was signed and sent but the outcome is
+ *           unknown (it may still settle). Retrying risks paying twice.
+ */
+export type Charged = "yes" | "no" | "maybe";
+
+/** We signed a payment, then lost the response. The caller must NOT retry automatically. */
+export type PaymentUnknownCode = "TIMEOUT_AFTER_PAYMENT" | "UPSTREAM_ERROR_AFTER_PAYMENT";
 
 export interface PaidFetchResult {
   httpStatus: number;
@@ -54,6 +73,23 @@ export interface PaidFetchResult {
    * expiry if it was never used on-chain.
    */
   paymentRejected: { reason: string | null } | null;
+  /** Whether this call cost money; see Charged. */
+  charged: Charged;
+  /**
+   * Set when a payment was signed and the paid request then timed out or
+   * failed, so we have NO response from the seller (httpStatus/headers/body are
+   * empty and `payment.txHash` is null). The payments row is `unknown` with
+   * error_code = code and its budget stays reserved until reconcile resolves it
+   * on-chain.
+   */
+  paymentUnknown: { code: PaymentUnknownCode; detail: string } | null;
+  /**
+   * Set when settlement was confirmed from the response headers (the payments
+   * row is `settled` with its tx hash, `payment` is populated) but reading the
+   * response body then failed or timed out. The money is spent; the content
+   * is lost. Callers report UPSTREAM_BODY_INCOMPLETE.
+   */
+  bodyIncomplete: { detail: string } | null;
 }
 
 const REJECTION_REASON_MAX_LEN = 300;
@@ -84,6 +120,14 @@ function extractRejectionReason(parsedBody: unknown, rawBody: string): string | 
   return stripped.length > REJECTION_REASON_MAX_LEN ? stripped.slice(0, REJECTION_REASON_MAX_LEN) : stripped;
 }
 
+/** Short, control-char-free description of a transport error, for the human-readable reason only (never parsed). */
+function describeError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  // eslint-disable-next-line no-control-regex
+  const stripped = msg.replace(/[\x00-\x1F\x7F]/g, " ").trim();
+  return stripped.length > 200 ? stripped.slice(0, 200) : stripped;
+}
+
 /** Error codes our own onBeforePaymentCreation hook can abort with (closure-trusted, never parsed from response/error text). */
 type OwnAbortCode =
   | "PER_REQUEST_LIMIT_EXCEEDED"
@@ -97,7 +141,37 @@ type OwnAbortCode =
   | "PAYMENT_FAILED";
 
 const RESPONSE_BODY_LIMIT_BYTES = 1024 * 1024; // 1MB
-const REQUEST_TIMEOUT_MS = 30_000;
+
+/** Probe phase: from the call start until a payment authorization is signed. */
+export const DEFAULT_PROBE_TIMEOUT_MS = 30_000;
+/**
+ * Paid phase: from the moment a payment is signed until the response BODY has
+ * been fully read. Much longer than the probe phase on purpose: once we have
+ * signed, the seller may legitimately take minutes (a slow LLM), and giving up
+ * early does not stop it from settling — it only makes us lose the answer we
+ * paid for (and, worse, look retryable).
+ */
+export const DEFAULT_PAID_TIMEOUT_MS = 300_000;
+/** setTimeout's ceiling; larger values fire immediately, which would silently abort every request. */
+const MAX_TIMER_MS = 2_147_483_647;
+
+/** A positive finite number of ms within the timer range, else the fallback. Never returns 0/NaN/Infinity — a timeout must not be disable-able. */
+export function parseTimeoutMs(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) return fallback;
+  const trimmed = raw.trim();
+  if (trimmed === "") return fallback;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n < 1 || n > MAX_TIMER_MS) return fallback;
+  return Math.floor(n);
+}
+
+/** Reads MONEYSWITCH_PROBE_TIMEOUT_MS / MONEYSWITCH_PAID_TIMEOUT_MS (per call, so tests and operators can change them). */
+export function resolvePaidFetchTimeouts(env: NodeJS.ProcessEnv = process.env): { probeMs: number; paidMs: number } {
+  return {
+    probeMs: parseTimeoutMs(env.MONEYSWITCH_PROBE_TIMEOUT_MS, DEFAULT_PROBE_TIMEOUT_MS),
+    paidMs: parseTimeoutMs(env.MONEYSWITCH_PAID_TIMEOUT_MS, DEFAULT_PAID_TIMEOUT_MS),
+  };
+}
 
 /**
  * Implements SPEC §6 steps 3-6: builds a fresh x402Client per request,
@@ -105,8 +179,18 @@ const REQUEST_TIMEOUT_MS = 30_000;
  * gates the payment through the policy engine (single SQLite transaction,
  * signed before payment) via onBeforePaymentCreation, sends the request,
  * and reconciles the reservation to settled/failed/unknown afterwards using
- * the SDK's own header decoder (x402HTTPClient.processResponse) — no
- * hand-rolled 402/EIP-712 parsing.
+ * the SDK's own header decoder (x402HTTPClient) — no hand-rolled 402/EIP-712
+ * parsing.
+ *
+ * Deadlines are two-phase (see DEFAULT_PROBE_TIMEOUT_MS / DEFAULT_PAID_TIMEOUT_MS):
+ * one AbortController covers the unpaid probe and the paid retry, but its timer
+ * is re-armed with the paid deadline the moment a payment is signed, and stays
+ * armed until the response body is fully read.
+ *
+ * Once a payment is signed this function never throws for transport problems:
+ * it returns a result (`paymentUnknown`, `bodyIncomplete`) that carries the
+ * payment facts, so callers cannot accidentally report a retryable error for a
+ * call that may already have cost money.
  */
 export async function performPaidFetch(
   db: MoneySwitchDb,
@@ -116,6 +200,7 @@ export async function performPaidFetch(
   input: PaidFetchInput
 ): Promise<PaidFetchResult> {
   const network = getActiveNetwork();
+  const { probeMs, paidMs } = resolvePaidFetchTimeouts();
   let paymentId: string | null = null;
   let approvalIdUsed: string | null = null;
   let reservedAmount: bigint | null = null;
@@ -128,6 +213,31 @@ export async function performPaidFetch(
   // alongside the code so the route can report limit_scope/limit_key_prefix.
   let ownAbortLimit: MoneySwitchError["limit"] = undefined;
   let ownAbortApprovalId: string | null = null;
+
+  // --- two-phase deadline -------------------------------------------------
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Set only by OUR timer firing (trusted, like ownAbortCode): distinguishes a
+  // deadline abort (TIMEOUT_AFTER_PAYMENT) from any other transport error.
+  let timedOut = false;
+  // True once the payment authorization is signed and about to be sent — the
+  // point of no return after which a lost response means "maybe charged".
+  let signed = false;
+  const armTimer = (ms: number) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, ms);
+  };
+  const disarmTimer = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+  };
+
+  // Set from the response headers, BEFORE the body is read (see below).
+  let settledPayment: NonNullable<PaidFetchResult["payment"]> | null = null;
+  let settleFailed = false;
 
   const client = new x402Client()
     .register(network.caip2 as `${string}:${string}`, new ExactEvmScheme(signer as any))
@@ -183,27 +293,34 @@ export async function performPaidFetch(
     // Non-EIP-3009 payloads (e.g. a future permit2 fallback) have no
     // `authorization` field and are silently left uncaptured — nothing to
     // reconcile them against on-chain via authorizationState() anyway.
+    //
+    // This hook is also the "payment signed" point of the two-phase deadline:
+    // when it completes the payload is handed back to the SDK and sent, so from
+    // here on a lost response means the payment MAY have settled.
     .onAfterPaymentCreation(async (context) => {
-      if (!paymentId) return;
-      const payload = context.paymentPayload?.payload as
-        | { authorization?: { from?: unknown; nonce?: unknown; validBefore?: unknown } }
-        | undefined;
-      const authorization = payload?.authorization;
-      if (
-        authorization &&
-        typeof authorization.from === "string" &&
-        typeof authorization.nonce === "string" &&
-        (typeof authorization.validBefore === "string" || typeof authorization.validBefore === "number")
-      ) {
-        const validBefore = Number(authorization.validBefore);
-        if (Number.isFinite(validBefore)) {
-          recordPaymentAuthorization(db, paymentId, {
-            from: authorization.from,
-            nonce: authorization.nonce,
-            validBefore,
-          });
+      if (paymentId) {
+        const payload = context.paymentPayload?.payload as
+          | { authorization?: { from?: unknown; nonce?: unknown; validBefore?: unknown } }
+          | undefined;
+        const authorization = payload?.authorization;
+        if (
+          authorization &&
+          typeof authorization.from === "string" &&
+          typeof authorization.nonce === "string" &&
+          (typeof authorization.validBefore === "string" || typeof authorization.validBefore === "number")
+        ) {
+          const validBefore = Number(authorization.validBefore);
+          if (Number.isFinite(validBefore)) {
+            recordPaymentAuthorization(db, paymentId, {
+              from: authorization.from,
+              nonce: authorization.nonce,
+              validBefore,
+            });
+          }
         }
       }
+      signed = true;
+      armTimer(paidMs);
     });
 
   // SDK spend-control ceiling must be >= our own per_request_limit; our
@@ -239,136 +356,263 @@ export async function performPaidFetch(
     fetch(fetchInput, { ...init, redirect: "manual" });
   const fetchWithPay = wrapFetchWithPayment(noRedirectFetch, httpClient);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const request = resolveRequestBody(input.body, input.headers);
 
-  let response: Response;
-  try {
-    response = await fetchWithPay(input.url, {
-      method: input.method,
-      headers: input.headers,
-      body: input.body === undefined ? undefined : JSON.stringify(input.body),
-      signal: controller.signal,
-    });
-  } catch (e) {
-    clearTimeout(timeout);
+  const amountString = () => (reservedAmount != null ? formatMicrosToUsdc(reservedAmount) : "0");
+
+  /**
+   * A transport failure (fetch rejected, deadline abort, body read failed)
+   * AFTER the payment was signed. Never throws for the transport problem; the
+   * facts go into the result so no caller can mistake it for a retryable error.
+   */
+  const afterSignFailure = (e: unknown, response: Response | null): PaidFetchResult => {
+    const detail = timedOut
+      ? `no complete response within ${paidMs}ms of the payment being signed`
+      : describeError(e);
+    // The facilitator already told us the settlement FAILED (row released): the
+    // call cost nothing, so this is an ordinary upstream error, not an unknown payment.
+    if (settleFailed) {
+      throw new MoneySwitchError("UPSTREAM_ERROR", detail);
+    }
+    // Settlement already confirmed from the response headers: the payment IS
+    // settled (row + tx hash already stored); only the content is lost.
+    if (settledPayment) {
+      return {
+        httpStatus: response?.status ?? 0,
+        headers: response ? allowlistedHeaders(response) : {},
+        body: "",
+        payment: settledPayment,
+        approvalId: approvalIdUsed,
+        paymentId,
+        paymentRejected: null,
+        charged: "yes",
+        paymentUnknown: null,
+        bodyIncomplete: { detail },
+      };
+    }
+    const code: PaymentUnknownCode = timedOut ? "TIMEOUT_AFTER_PAYMENT" : "UPSTREAM_ERROR_AFTER_PAYMENT";
     if (paymentId) {
-      markUnknown(db, paymentId, "UPSTREAM_ERROR");
+      try {
+        // Keep the budget reserved: `unknown` still counts against the key's
+        // limits, and reconcile (core/reconcile.ts) resolves it on-chain once
+        // the authorization has expired.
+        markUnknown(db, paymentId, code);
+      } catch {
+        // Best effort: the row is at worst still `reserved` (also counted); the
+        // caller must still be told the payment is unknown.
+      }
     }
-    if (ownAbortApprovalId) {
-      throw new ApprovalRequiredError(ownAbortApprovalId);
-    }
-    if (ownAbortCode) {
-      throw new MoneySwitchError(ownAbortCode, undefined, ownAbortLimit);
-    }
-    const msg = e instanceof Error ? e.message : String(e);
-    // The SDK's own outer spendControls ceiling (set to key.perRequestLimit)
-    // can reject a requirement before our onBeforePaymentCreation hook even
-    // runs when the price is far above the limit — same outcome as our own
-    // PER_REQUEST_LIMIT_EXCEEDED check, just thrown one layer higher by the
-    // SDK itself (not attacker-controlled text, so still fine to pattern-match).
-    if (/spendControls/i.test(msg) || /maxAmountPerPayment/i.test(msg)) {
-      throw new MoneySwitchError("PER_REQUEST_LIMIT_EXCEEDED");
-    }
-    if (/no.*payment.*requirement/i.test(msg) || /no schemes/i.test(msg)) {
-      throw new MoneySwitchError("UNSUPPORTED_PAYMENT");
-    }
-    throw new MoneySwitchError("UPSTREAM_ERROR", msg);
-  }
-  clearTimeout(timeout);
+    return {
+      httpStatus: 0,
+      headers: {},
+      body: "",
+      payment: { amount: amountString(), txHash: null, network: network.caip2 },
+      approvalId: approvalIdUsed,
+      paymentId,
+      paymentRejected: null,
+      charged: "maybe",
+      paymentUnknown: { code, detail },
+      bodyIncomplete: null,
+    };
+  };
 
-  // Defense in depth: with redirect:"manual" this must always hold (fetch
-  // never navigates away from the requested URL). Fail loudly rather than
-  // silently returning a response for a different host than the one that
-  // was authorized/paid-for, in case of a future regression.
   try {
-    const requestedHost = new URL(input.url).host;
-    const respHost = response.url ? new URL(response.url).host : requestedHost;
-    if (respHost !== requestedHost) {
-      throw new MoneySwitchError(
-        "UPSTREAM_ERROR",
-        `response host ${respHost} does not match requested host ${requestedHost}`
-      );
+    armTimer(probeMs);
+
+    let response: Response;
+    try {
+      response = await fetchWithPay(input.url, {
+        method: input.method,
+        headers: request.headers,
+        body: request.body,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (!signed && paymentId) {
+        markUnknown(db, paymentId, "UPSTREAM_ERROR");
+      }
+      if (ownAbortApprovalId) {
+        throw new ApprovalRequiredError(ownAbortApprovalId);
+      }
+      if (ownAbortCode) {
+        throw new MoneySwitchError(ownAbortCode, undefined, ownAbortLimit);
+      }
+      if (signed) {
+        return afterSignFailure(e, null);
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      // The SDK's own outer spendControls ceiling (set to key.perRequestLimit)
+      // can reject a requirement before our onBeforePaymentCreation hook even
+      // runs when the price is far above the limit — same outcome as our own
+      // PER_REQUEST_LIMIT_EXCEEDED check, just thrown one layer higher by the
+      // SDK itself (not attacker-controlled text, so still fine to pattern-match).
+      if (/spendControls/i.test(msg) || /maxAmountPerPayment/i.test(msg)) {
+        throw new MoneySwitchError("PER_REQUEST_LIMIT_EXCEEDED");
+      }
+      if (/no.*payment.*requirement/i.test(msg) || /no schemes/i.test(msg)) {
+        throw new MoneySwitchError("UNSUPPORTED_PAYMENT");
+      }
+      if (timedOut) {
+        throw new MoneySwitchError(
+          "UPSTREAM_ERROR",
+          `upstream did not answer within ${probeMs}ms (no payment had been signed)`
+        );
+      }
+      throw new MoneySwitchError("UPSTREAM_ERROR", msg);
     }
-  } catch (e) {
-    if (e instanceof MoneySwitchError) throw e;
-    // response.url parsing failures are not security-relevant; ignore.
-  }
 
-  // Use the SDK's own decoder for status + settlement header, never hand-parsed.
-  const parsed = await httpClient.processResponse(response.clone());
-  let rawBody: string;
-  if (typeof parsed.body === "string") {
-    rawBody = parsed.body;
-  } else if (parsed.body === undefined) {
-    rawBody = await response.text().catch(() => "");
-  } else {
-    rawBody = JSON.stringify(parsed.body);
-  }
-  const body =
-    rawBody.length > RESPONSE_BODY_LIMIT_BYTES ? rawBody.slice(0, RESPONSE_BODY_LIMIT_BYTES) : rawBody;
+    // Defense in depth: with redirect:"manual" this must always hold (fetch
+    // never navigates away from the requested URL). Fail loudly rather than
+    // silently returning a response for a different host than the one that
+    // was authorized/paid-for, in case of a future regression. After a
+    // payment this is treated like any other lost response (payment_unknown):
+    // a response from another host's settle header must not be trusted.
+    let hostMismatch: MoneySwitchError | null = null;
+    try {
+      const requestedHost = new URL(input.url).host;
+      const respHost = response.url ? new URL(response.url).host : requestedHost;
+      if (respHost !== requestedHost) {
+        hostMismatch = new MoneySwitchError(
+          "UPSTREAM_ERROR",
+          `response host ${respHost} does not match requested host ${requestedHost}`
+        );
+      }
+    } catch {
+      // response.url parsing failures are not security-relevant; ignore.
+    }
+    if (hostMismatch) {
+      if (signed) return afterSignFailure(hostMismatch, null);
+      throw hostMismatch;
+    }
 
-  const headers: Record<string, string> = {};
-  // "location" is included (not followed) so a 3xx response's target is
-  // visible to the caller, who must re-invoke /v1/fetch with it explicitly.
-  const headerAllowlist = ["content-type", "content-length", "location"];
-  for (const [k, v] of response.headers.entries()) {
-    if (headerAllowlist.includes(k.toLowerCase())) headers[k] = v;
-  }
+    const getHeader = (name: string) => response.headers.get(name);
 
-  let payment: PaidFetchResult["payment"] = null;
-  let paymentRejected: PaidFetchResult["paymentRejected"] = null;
-  if (paymentId && reservedAmount != null) {
-    if (parsed.paymentStatus === "settled" && parsed.header && "success" in parsed.header) {
-      const settle = parsed.header as { success: boolean; transaction: string; extra?: Record<string, unknown> };
-      if (settle.success) {
-        settlePayment(db, paymentId, settle.transaction);
-        payment = {
+    // v0.5.3: record settlement from the response HEADERS, before the body is
+    // read. The body can be slow, huge or cut off; the payment must be settled
+    // (with its tx hash) regardless — otherwise a body-read failure after a
+    // confirmed settlement would leave the row `reserved`/`unknown` and the
+    // caller would see a retryable error for money that is already spent.
+    // Decoded with the SDK's own decoder, never hand-parsed.
+    type SettleHeader = { success: boolean; transaction: string; extra?: Record<string, unknown> };
+    let settleHeader: SettleHeader | null = null;
+    try {
+      const decoded = httpClient.getPaymentSettleResponse(getHeader) as unknown;
+      if (decoded && typeof decoded === "object" && "success" in decoded) {
+        settleHeader = decoded as SettleHeader;
+      }
+    } catch {
+      // no (or undecodable) PAYMENT-RESPONSE header
+    }
+    if (paymentId && reservedAmount != null && settleHeader) {
+      if (settleHeader.success) {
+        settlePayment(db, paymentId, settleHeader.transaction);
+        settledPayment = {
           amount: formatMicrosToUsdc(reservedAmount),
-          txHash: settle.transaction,
+          txHash: settleHeader.transaction,
           network: network.caip2,
-          mock: Boolean(settle.extra?.mock),
+          mock: Boolean(settleHeader.extra?.mock),
         };
       } else {
         failPayment(db, paymentId, "PAYMENT_FAILED");
+        settleFailed = true;
       }
-    } else if (parsed.paymentStatus === "settle_failed") {
-      failPayment(db, paymentId, "PAYMENT_FAILED");
-    } else if (parsed.status === 402) {
-      // We already signed and sent an EIP-3009 payment for this request (paymentId
-      // is set), yet the seller answered 402 again — its facilitator rejected our
-      // payment (e.g. insufficient_funds), or it otherwise declined to honor it.
-      // Do NOT release/fail the reservation: the signed authorization stays valid
-      // until validBefore and the seller could still settle it later; the on-chain
-      // reconcile loop (packages/core/src/reconcile.ts) releases it after expiry
-      // if it was never used.
-      let rejectionReason: string | null = null;
-      if (
-        parsed.header &&
-        !("success" in parsed.header) &&
-        typeof (parsed.header as { error?: unknown }).error === "string"
-      ) {
-        rejectionReason = extractRejectionReason(parsed.header, "");
-      }
-      if (rejectionReason == null) {
-        rejectionReason = extractRejectionReason(parsed.body, rawBody);
-      }
-      markUnknown(db, paymentId, "PAYMENT_REJECTED");
-      paymentRejected = { reason: rejectionReason };
-    } else {
-      // No settlement info at all (transport-level oddity after payment was
-      // reserved): keep the reservation, mark unknown per SPEC §6 step 6.
-      markUnknown(db, paymentId, "NO_SETTLE_HEADER");
     }
-  }
 
-  return {
-    httpStatus: parsed.status,
-    headers,
-    body,
-    payment,
-    approvalId: approvalIdUsed,
-    paymentId,
-    paymentRejected,
-  };
+    // Body read: still under the (paid-phase, if signed) deadline timer.
+    let parsedBody: unknown;
+    let rawBody: string;
+    try {
+      const text = await response.text();
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        try {
+          parsedBody = JSON.parse(text);
+        } catch {
+          parsedBody = text; // invalid JSON despite the content-type: hand it back as text rather than failing.
+        }
+      } else {
+        parsedBody = text;
+      }
+      rawBody = typeof parsedBody === "string" ? parsedBody : JSON.stringify(parsedBody);
+    } catch (e) {
+      if (signed) return afterSignFailure(e, response);
+      throw new MoneySwitchError("UPSTREAM_ERROR", describeError(e));
+    }
+    const body =
+      rawBody.length > RESPONSE_BODY_LIMIT_BYTES ? rawBody.slice(0, RESPONSE_BODY_LIMIT_BYTES) : rawBody;
+
+    const headers = allowlistedHeaders(response);
+
+    let paymentRejected: PaidFetchResult["paymentRejected"] = null;
+    let charged: Charged = "no";
+    if (paymentId && reservedAmount != null) {
+      if (settledPayment) {
+        charged = "yes";
+      } else if (settleFailed) {
+        charged = "no"; // facilitator reported the settlement failed; the reservation was released above.
+      } else if (response.status === 402) {
+        // We already signed and sent an EIP-3009 payment for this request (paymentId
+        // is set), yet the seller answered 402 again — its facilitator rejected our
+        // payment (e.g. insufficient_funds), or it otherwise declined to honor it.
+        // Do NOT release/fail the reservation: the signed authorization stays valid
+        // until validBefore and the seller could still settle it later; the on-chain
+        // reconcile loop (packages/core/src/reconcile.ts) releases it after expiry
+        // if it was never used.
+        const parsed = httpClient.parsePaymentResult({ status: response.status, getHeader, body: parsedBody });
+        let rejectionReason: string | null = null;
+        if (
+          parsed.header &&
+          !("success" in parsed.header) &&
+          typeof (parsed.header as { error?: unknown }).error === "string"
+        ) {
+          rejectionReason = extractRejectionReason(parsed.header, "");
+        }
+        if (rejectionReason == null) {
+          rejectionReason = extractRejectionReason(parsedBody, rawBody);
+        }
+        markUnknown(db, paymentId, "PAYMENT_REJECTED");
+        paymentRejected = { reason: rejectionReason };
+        charged = "maybe";
+      } else {
+        // No settlement info at all (transport-level oddity after payment was
+        // reserved): keep the reservation, mark unknown per SPEC §6 step 6.
+        markUnknown(db, paymentId, "NO_SETTLE_HEADER");
+        charged = "maybe";
+      }
+    }
+
+    return {
+      httpStatus: response.status,
+      headers,
+      body,
+      payment: settledPayment,
+      approvalId: approvalIdUsed,
+      paymentId,
+      paymentRejected,
+      charged,
+      paymentUnknown: null,
+      bodyIncomplete: null,
+    };
+  } catch (e) {
+    // Anything unexpected AFTER the signature (e.g. a DB write failing while
+    // recording the outcome) must still be reported as an unknown payment, never
+    // as a plain, retryable error. Our own typed errors pass through untouched.
+    if (signed && !(e instanceof MoneySwitchError) && !(e instanceof ApprovalRequiredError)) {
+      return afterSignFailure(e, null);
+    }
+    throw e;
+  } finally {
+    disarmTimer();
+  }
+}
+
+/** "location" is included (not followed) so a 3xx response's target is visible to the caller, who must re-invoke /v1/fetch with it explicitly. */
+const HEADER_ALLOWLIST = ["content-type", "content-length", "location"];
+
+function allowlistedHeaders(response: Response): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [k, v] of response.headers.entries()) {
+    if (HEADER_ALLOWLIST.includes(k.toLowerCase())) headers[k] = v;
+  }
+  return headers;
 }

@@ -18,9 +18,10 @@ import {
   parseUsdcToMicros,
   listHistoryForKey,
 } from "@moneyswitch/core";
-import { performPaidFetch } from "@moneyswitch/x402";
+import { performPaidFetch, type Charged } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireMoneyKey } from "../auth.js";
+import { paymentUnknownReason, bodyIncompleteReason } from "../paid-outcomes.js";
 
 const DENIED_CODES = new Set([
   "RATE_LIMITED",
@@ -108,9 +109,13 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       approval_id?: string;
     };
 
+    // `charged` is mandatory on every envelope (CONTRACT): "yes" a settlement
+    // was confirmed, "no" definitely nothing was signed/charged, "maybe" a
+    // payment was signed but the outcome is unknown.
     function envelope(
-      status: "ok" | "denied" | "approval_required" | "payment_failed" | "error",
+      status: "ok" | "denied" | "approval_required" | "payment_failed" | "payment_unknown" | "error",
       code: string | null,
+      charged: Charged,
       extra: Record<string, unknown> & {
         limit?: Record<string, string>;
         reason?: string | null;
@@ -120,6 +125,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       return {
         status,
         code,
+        charged,
         http_status: extra.http_status ?? null,
         headers: extra.headers ?? {},
         body: extra.body ?? null,
@@ -148,9 +154,12 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
     try {
       url = new URL(body.url);
     } catch {
-      return reply.status(400).send(envelope("error", "FORBIDDEN", {}));
+      return reply.status(400).send(envelope("error", "FORBIDDEN", "no"));
     }
 
+    // Updated as soon as performPaidFetch returns: if anything after that
+    // throws, the catch-all must not claim "no" for a call that cost money.
+    let chargedSoFar: Charged = "no";
     try {
       checkRateLimit(ctx.db, key);
       checkHostAllowedForChain(ctx.db, url, key);
@@ -158,7 +167,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       assertNotSsrf(url, { selfPort: ctx.config.port, allowedHosts: key.allowedHosts, allowSelfTollbooth: true });
 
       if (!ctx.wallet.isUnlocked()) {
-        return reply.send(envelope("error", "WALLET_LOCKED"));
+        return reply.send(envelope("error", "WALLET_LOCKED", "no"));
       }
       const signer = ctx.wallet.getSigner()!;
 
@@ -173,6 +182,48 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         maxPrice,
         approvalId: body.approval_id ?? null,
       });
+      chargedSoFar = result.charged;
+
+      if (result.paymentUnknown) {
+        // We signed a payment and then lost the response (deadline or transport
+        // error). The payments row is `unknown` and its budget stays reserved
+        // until the on-chain reconcile resolves it. The agent must NOT retry
+        // automatically — a retry would pay a second time.
+        const pu = result.paymentUnknown;
+        const amount = result.payment?.amount ?? "0";
+        return reply.send(
+          envelope("payment_unknown", pu.code, "maybe", {
+            payment: { amount, tx_hash: null, network: result.payment?.network ?? null },
+            reason: paymentUnknownReason(pu.code, amount, pu.detail),
+            reserved_until_expiry: true,
+          })
+        );
+      }
+
+      if (result.bodyIncomplete) {
+        // Settlement was confirmed from the response headers (row settled, tx
+        // hash stored) but the body was cut off or timed out: paid, no content.
+        return reply.send(
+          envelope("error", "UPSTREAM_BODY_INCOMPLETE", "yes", {
+            http_status: result.httpStatus,
+            headers: result.headers,
+            payment: result.payment
+              ? {
+                  amount: result.payment.amount,
+                  tx_hash: result.payment.txHash,
+                  network: result.payment.network,
+                  mock: result.payment.mock ?? false,
+                }
+              : null,
+            approval_id: result.approvalId,
+            reason: bodyIncompleteReason(
+              result.payment?.amount ?? "0",
+              result.payment?.txHash ?? null,
+              result.bodyIncomplete.detail
+            ),
+          })
+        );
+      }
 
       if (result.paymentRejected) {
         // We signed and sent a payment but the seller answered 402 AGAIN (its
@@ -182,7 +233,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         // reconcile loop (packages/core/src/reconcile.ts) releases the held
         // budget then if the seller never actually settles it.
         return reply.send(
-          envelope("payment_failed", "PAYMENT_REJECTED", {
+          envelope("payment_failed", "PAYMENT_REJECTED", "maybe", {
             http_status: result.httpStatus,
             headers: result.headers,
             body: result.body,
@@ -193,7 +244,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       }
 
       return reply.send(
-        envelope("ok", null, {
+        envelope("ok", null, result.charged, {
           http_status: result.httpStatus,
           headers: result.headers,
           body: result.body,
@@ -210,20 +261,23 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       );
     } catch (e) {
       if (e instanceof ApprovalRequiredError) {
-        return reply.send(envelope("approval_required", "APPROVAL_REQUIRED", { approval_id: e.approvalId }));
+        return reply.send(envelope("approval_required", "APPROVAL_REQUIRED", "no", { approval_id: e.approvalId }));
       }
       if (e instanceof MoneySwitchError) {
+        // performPaidFetch never throws once a payment is signed (it returns
+        // paymentUnknown/bodyIncomplete instead), so every typed error here
+        // happened before anything was signed.
         if (e.code === "PAYMENT_FAILED") {
-          return reply.send(envelope("payment_failed", e.code));
+          return reply.send(envelope("payment_failed", e.code, "no"));
         }
         const limit = limitFields(e);
         if (DENIED_CODES.has(e.code)) {
-          return reply.send(envelope("denied", e.code, { limit }));
+          return reply.send(envelope("denied", e.code, "no", { limit }));
         }
-        return reply.send(envelope("error", e.code, { limit }));
+        return reply.send(envelope("error", e.code, "no", { limit }));
       }
       req.log.error({ err: (e as Error)?.message }, "unexpected /v1/fetch error");
-      return reply.send(envelope("error", "UPSTREAM_ERROR"));
+      return reply.send(envelope("error", "UPSTREAM_ERROR", chargedSoFar));
     }
   });
 }

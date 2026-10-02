@@ -15,9 +15,10 @@ import {
   normalizeBaseUrl,
   recordPaymentUsage,
 } from "@moneyswitch/core";
-import { performPaidFetch } from "@moneyswitch/x402";
+import { performPaidFetch, type Charged } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireMoneyKeyOpenAI, openAiError, openAiStatusForCode, humanMessageForCode } from "../auth.js";
+import { paymentUnknownReason, bodyIncompleteReason } from "../paid-outcomes.js";
 
 interface ChatMessage {
   role: string;
@@ -110,6 +111,9 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       return sendPolicyError("model_not_allowed", `MoneyKey is not allowed to use model '${body.model}'`);
     }
 
+    // Updated as soon as performPaidFetch returns, so the catch-all below never
+    // claims a call was free when it may not have been.
+    let chargedSoFar: Charged = "no";
     try {
       checkRateLimit(ctx.db, key);
 
@@ -148,6 +152,30 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
         kind: "chat",
         model: body.model,
       });
+      chargedSoFar = result.charged;
+
+      if (result.paymentUnknown || result.bodyIncomplete) {
+        // We signed a payment and then lost the answer (deadline / transport
+        // error / body cut off after a confirmed settlement). This must NOT look
+        // like an ordinary retryable upstream error: an OpenAI client retrying
+        // would sign and pay a second time. So: a non-retryable 4xx status, an
+        // explicit x-should-retry: false, and moneyswitch_charged in the error.
+        const pay = result.payment;
+        const amount = pay?.amount ?? "0";
+        const code = result.paymentUnknown ? result.paymentUnknown.code : "UPSTREAM_BODY_INCOMPLETE";
+        const reason = result.paymentUnknown
+          ? paymentUnknownReason(result.paymentUnknown.code, amount, result.paymentUnknown.detail)
+          : bodyIncompleteReason(amount, pay?.txHash ?? null, result.bodyIncomplete!.detail);
+        reply.header("x-should-retry", "false");
+        return reply.status(openAiStatusForCode(code)).send(
+          openAiError(`${humanMessageForCode(code)}. ${reason}`, code, null, undefined, {
+            reason,
+            reserved_until_expiry: result.paymentUnknown ? true : undefined,
+            moneyswitch_charged: result.charged,
+            payment: pay ? { amount, tx_hash: pay.txHash, network: pay.network } : undefined,
+          })
+        );
+      }
 
       if (result.paymentRejected) {
         // We signed and sent a payment but the seller answered 402 AGAIN (its
@@ -161,6 +189,7 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
             openAiError(humanMessageForCode("PAYMENT_REJECTED"), "PAYMENT_REJECTED", null, undefined, {
               reason: result.paymentRejected.reason,
               reserved_until_expiry: true,
+              moneyswitch_charged: "maybe",
             })
           );
       }
@@ -169,7 +198,15 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       try {
         upstreamJson = JSON.parse(result.body);
       } catch {
-        return reply.status(502).send(openAiError("Upstream returned a non-JSON response", "UPSTREAM_ERROR"));
+        // The payment (if any) already happened: say so, and keep clients from retrying a charged call.
+        if (result.charged !== "no") reply.header("x-should-retry", "false");
+        return reply
+          .status(502)
+          .send(
+            openAiError("Upstream returned a non-JSON response", "UPSTREAM_ERROR", null, undefined, {
+              moneyswitch_charged: result.charged,
+            })
+          );
       }
 
       const usage = upstreamJson.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
@@ -276,6 +313,7 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
           tx_hash: txHash,
           network,
           remaining_today: remainingToday,
+          charged: result.charged,
         },
       };
       return reply.send(responseBody);
@@ -292,7 +330,12 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
         return sendPolicyError(e.code, message, null, limit);
       }
       req.log.error({ err: (e as Error)?.message }, "unexpected /v1/chat/completions error");
-      return sendPolicyError("UPSTREAM_ERROR", "Unexpected upstream error");
+      if (chargedSoFar !== "no") reply.header("x-should-retry", "false");
+      return reply
+        .status(openAiStatusForCode("UPSTREAM_ERROR"))
+        .send(
+          openAiError("Unexpected upstream error", "UPSTREAM_ERROR", null, undefined, { moneyswitch_charged: chargedSoFar })
+        );
     }
   });
 }
