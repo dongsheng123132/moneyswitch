@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePolling } from "../usePolling";
-import { getWallet } from "../api";
+import { getWallet, type AdminMeta, type WalletInfo } from "../api";
 import { formatUsdc, shortAddr } from "../money";
 import CopyButton from "../components/CopyButton";
 import Callout from "../components/Callout";
@@ -14,7 +14,10 @@ import { walletStrings } from "../i18n/strings/wallet";
 import { common } from "../i18n/strings/common";
 import { useAdminMeta } from "../useAdminMeta";
 import "../styles/wallet.css";
-import { WalletAccess, WalletBackup } from "../components/WalletAccess";
+import { WalletAccess } from "../components/WalletAccess";
+import { WalletSetup, BackupRequired } from "../components/WalletSetup";
+import { WalletHealthCard } from "../components/WalletHealth";
+import { WalletDangerZone } from "../components/WalletDangerZone";
 
 // Informational-only defaults for the testnet — used only when GET /v1/admin/meta
 // hasn't returned yet or doesn't carry a field (SPEC.md §1 verified facts).
@@ -68,7 +71,6 @@ export default function WalletPage() {
   const { data: wallet, error, loading, refresh } = usePolling(() => getWallet(selectedNetwork));
   useEffect(() => { refresh(); }, [selectedNetwork, refresh]);
   const meta = useAdminMeta();
-  const t = useT(walletStrings);
   const tc = useT(common);
   if (loading && !wallet) {
     return (
@@ -82,6 +84,29 @@ export default function WalletPage() {
     return error ? <Callout tone="error">{tc("requestFailed", { message: error })}</Callout> : null;
   }
 
+  return <WalletView wallet={wallet} meta={meta} error={error} onChanged={refresh} onSelectNetwork={setSelectedNetwork} />;
+}
+
+/**
+ * The Wallet page for a loaded wallet (split from the polling shell so it can be rendered with a given
+ * state). Until the recovery phrase is written down and checked, the deposit address and the "how to
+ * fund" steps are replaced by the backup prompt: nobody should fund a wallet that has no backup.
+ */
+export function WalletView({
+  wallet,
+  meta,
+  error,
+  onChanged,
+  onSelectNetwork,
+}: {
+  wallet: WalletInfo;
+  meta: AdminMeta | null;
+  error?: string | null;
+  onChanged: () => void;
+  onSelectNetwork?: (network: string) => void;
+}) {
+  const t = useT(walletStrings);
+  const tc = useT(common);
   const selected = meta?.networks?.find((n) => n.network === wallet.network);
   const explorerBase = selected?.explorer_base || meta?.explorer_base || DEFAULT_EXPLORER_BASE;
   const chainId = selected?.chain_id ?? meta?.chain_id ?? DEFAULT_CHAIN_ID;
@@ -89,27 +114,25 @@ export default function WalletPage() {
   const network = wallet.network;
 
   if (!wallet.has_keystore) {
-    return <div className="card"><WalletAccess wallet={wallet} onChanged={refresh} /></div>;
+    return <div className="card"><WalletSetup onDone={onChanged} /></div>;
   }
 
   const balance = wallet.usdc_balance;
   const balanceIsZero = balance != null && Number(balance) === 0;
   const balanceIsPositive = balance != null && Number(balance) > 0;
+  const backupMissing = wallet.health?.backup === "missing";
 
   return (
     <div>
       {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
 
-      {!wallet.unlocked && <div className="card" style={{ marginBottom: 16 }}><WalletAccess wallet={wallet} onChanged={refresh} /></div>}
-      <Callout tone="info" title={t(wallet.auto_unlock_configured ? "autoUnlockTitle" : "manualUnlockTitle")}>
-        {t(wallet.auto_unlock_configured ? "autoUnlockBody" : "manualUnlockBody")}
-      </Callout>
-      <WalletBackup />
+      {!wallet.unlocked && <div className="card" style={{ marginBottom: 16 }}><WalletAccess wallet={wallet} onChanged={onChanged} /></div>}
+      <WalletHealthCard wallet={wallet} />
 
       <div className="wallet-columns-heading">
         <h2>{t("oneWalletHeading")}</h2>
-        {meta?.networks && meta.networks.length > 1 && (
-          <select aria-label="USDC network" value={wallet.network} onChange={(e) => setSelectedNetwork(e.target.value)}>
+        {meta?.networks && meta.networks.length > 1 && onSelectNetwork && (
+          <select aria-label="USDC network" value={wallet.network} onChange={(e) => onSelectNetwork(e.target.value)}>
             {meta.networks.map((n) => <option key={n.network} value={n.network}>{n.network_label}</option>)}
           </select>
         )}
@@ -119,16 +142,22 @@ export default function WalletPage() {
       <div className="wallet-columns">
         <div className="card wallet-receive-card">
           <div className="stat-label">{t("receiveTitle")}</div>
-          {wallet.address ? (
-            <PublicAddress address={wallet.address} qr="always" size="lg" />
+          {backupMissing ? (
+            <BackupRequired onConfirmed={onChanged} />
           ) : (
-            <div className="empty-state">{t("qrEmpty")}</div>
-          )}
-          <p className="wallet-column-sentence">{t("receiveSentence")}</p>
-          {wallet.address && (
-            <a className="wallet-column-explorer" href={`${explorerBase}/address/${wallet.address}`} target="_blank" rel="noreferrer">
-              {t("viewOnExplorer")}
-            </a>
+            <>
+              {wallet.address ? (
+                <PublicAddress address={wallet.address} qr="always" size="lg" />
+              ) : (
+                <div className="empty-state">{t("qrEmpty")}</div>
+              )}
+              <p className="wallet-column-sentence">{t("receiveSentence")}</p>
+              {wallet.address && (
+                <a className="wallet-column-explorer" href={`${explorerBase}/address/${wallet.address}`} target="_blank" rel="noreferrer">
+                  {t("viewOnExplorer")}
+                </a>
+              )}
+            </>
           )}
         </div>
 
@@ -189,9 +218,11 @@ export default function WalletPage() {
             </table>
           </div>
 
-          <FundingGuide address={wallet.address ?? ""} network={wallet.network} />
+          {!backupMissing && <FundingGuide address={wallet.address ?? ""} network={wallet.network} />}
         </div>
       </div>
+
+      <WalletDangerZone wallet={wallet} onChanged={onChanged} />
 
       <ThreeThingsCard />
     </div>

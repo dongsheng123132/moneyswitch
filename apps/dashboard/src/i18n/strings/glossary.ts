@@ -29,7 +29,7 @@ export const glossary = defineMessages(
     wallet:
       "The server-side wallet that actually signs payments. Agents never see its private key. Keep only a small balance in it.",
     walletLocked:
-      "After a restart the wallet key stays encrypted until you unlock it with its password (or set MONEYSWITCH_WALLET_PASSWORD). While locked every payment fails with WALLET_LOCKED.",
+      "A locked wallet cannot sign, so every payment fails with WALLET_LOCKED. By default the server unlocks itself after a restart; a wallet set up with a password stays locked until you unlock it on the Wallet page.",
     status_settled: "Paid and confirmed by the facilitator.",
     status_reserved: "Budget reserved, payment in flight.",
     status_failed: "Payment did not go through; nothing was charged against the budget.",
@@ -68,7 +68,7 @@ export const glossary = defineMessages(
     channel: "按次收费（x402）的 OpenAI 兼容上游。Agent 通过 MoneySwitch 对话时，按模型名选渠道，由 MoneySwitch 付钱。",
     usdc: "与美元 1:1 锚定的稳定币。MoneySwitch 在 Monad 测试网上用测试 USDC 付款；1 USDC ≈ 1 美元。",
     wallet: "服务器上真正签名付款的钱包，Agent 永远拿不到它的私钥。里面只放少量余额。",
-    walletLocked: "服务重启后，钱包私钥保持加密状态，直到你用密码解锁（或设置 MONEYSWITCH_WALLET_PASSWORD）。锁定期间所有付款都会报 WALLET_LOCKED。",
+    walletLocked: "锁定的钱包无法签名，所以所有付款都会报 WALLET_LOCKED。默认情况下服务器重启后会自行解锁；如果钱包设置了密码，则需要你在“钱包”页手动解锁。",
     status_settled: "已付款，facilitator 已确认。",
     status_reserved: "额度已预占，付款进行中。",
     status_failed: "付款没有成功，不占用额度。",

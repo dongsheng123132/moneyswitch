@@ -329,6 +329,20 @@ export function isMockPayment(p: PaymentRow): boolean {
 // Wallet
 // ---------------------------------------------------------------------------
 
+/** GET /v1/admin/wallet → health: what would happen after a restart, whether the backup is done, how much is at risk. */
+export interface WalletHealth {
+  /** auto = wallet-unlock.secret; env_or_file = MONEYSWITCH_WALLET_PASSWORD(_FILE); manual = a human unlocks it; none = no wallet. */
+  unlock_mode: "auto" | "env_or_file" | "manual" | "none";
+  /** Result of the last real decrypt attempt; null = no attempt (manual / none / not tried yet). */
+  auto_unlock_ok: boolean | null;
+  backup: "confirmed" | "missing" | "not_applicable";
+  /** USDC, e.g. "50". */
+  float_limit: string;
+  /** Per enabled chain where the balance is known (CAIP-2 → over the limit?). */
+  over_float_limit: Record<string, boolean>;
+  retired_wallets: Array<{ address: string; retired_at: string; reason: string }>;
+}
+
 export interface WalletInfo {
   address: string | null;
   unlocked: boolean;
@@ -338,16 +352,30 @@ export interface WalletInfo {
   network: string;
   /** Offline demo: usdc_balance is simulated, not read from the chain. */
   simulated?: boolean;
+  /** Whether the keystore holds a 12-word recovery phrase (false for a wallet imported from a bare private key). */
+  has_recovery_phrase?: boolean;
+  backup_confirmed_at?: string | null;
+  /** Absent on servers older than the wallet-lifecycle release. */
+  health?: WalletHealth;
 }
 
 export async function getWallet(network?: string): Promise<WalletInfo> {
   return request(`/v1/admin/wallet${network ? `?network=${encodeURIComponent(network)}` : ""}`);
 }
 
-export async function createWallet(password: string): Promise<{ address: string }> {
+export interface CreatedWallet {
+  address: string;
+  /** The 12 words, returned exactly once. */
+  recovery_phrase: string;
+  unlock_mode: "auto" | "manual";
+  backup_confirmed: boolean;
+}
+
+/** No password = auto-unlock (the default); a password = ask for it after every restart. */
+export async function createWallet(opts: { password?: string } = {}): Promise<CreatedWallet> {
   return request("/v1/admin/wallet/create", {
     method: "POST",
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(opts.password === undefined ? {} : { password: opts.password }),
   });
 }
 
@@ -360,14 +388,84 @@ export async function unlockWallet(password: string): Promise<{ address: string;
 
 export type WalletImport =
   | { kind: "private_key"; private_key: string }
-  | { kind: "keystore"; keystore: string; source_password: string };
+  | { kind: "keystore"; keystore: string; source_password: string }
+  | { kind: "mnemonic"; mnemonic: string };
 
-export async function importWallet(source: WalletImport, password: string): Promise<{ address: string }> {
-  return request("/v1/admin/wallet/import", { method: "POST", body: JSON.stringify({ ...source, password }) });
+export async function importWallet(source: WalletImport, opts: { password?: string } = {}): Promise<{ address: string }> {
+  return request("/v1/admin/wallet/import", {
+    method: "POST",
+    body: JSON.stringify(opts.password === undefined ? source : { ...source, password: opts.password }),
+  });
 }
 
-export async function backupWallet(): Promise<{ address: string; keystore: string }> {
-  return request("/v1/admin/wallet/backup", { method: "POST" });
+/** Without a password: the wallet.json of a password wallet. With one: a portable keystore protected by it (the only useful download for an auto-unlock wallet). */
+export async function backupWallet(password?: string): Promise<{ address: string; keystore: string }> {
+  return request("/v1/admin/wallet/backup", {
+    method: "POST",
+    ...(password === undefined ? {} : { body: JSON.stringify({ password }) }),
+  });
+}
+
+/** Checks two words (1-based positions) of the recovery phrase and records the backup as confirmed. */
+export async function confirmBackup(positions: [number, number], words: [string, string]): Promise<{ confirmed: boolean; backup_confirmed_at: string }> {
+  return request("/v1/admin/wallet/backup/confirm", { method: "POST", body: JSON.stringify({ positions, words }) });
+}
+
+export type RevealedWalletSecret =
+  | { address: string; kind: "mnemonic"; recovery_phrase: string }
+  | { address: string; kind: "private_key"; private_key: string };
+
+/** The server only answers when `confirmAddress` is the current wallet address, exactly. */
+export async function revealWallet(confirmAddress: string): Promise<RevealedWalletSecret> {
+  return request("/v1/admin/wallet/reveal", { method: "POST", body: JSON.stringify({ confirm_address: confirmAddress }) });
+}
+
+/** Turning it on needs the wallet unlocked; turning it off needs a new password (8+ characters). */
+export async function setAutoUnlock(enabled: true): Promise<{ address: string; unlock_mode: "auto" }>;
+export async function setAutoUnlock(enabled: false, password: string): Promise<{ address: string; unlock_mode: "manual" }>;
+export async function setAutoUnlock(enabled: boolean, password?: string): Promise<{ address: string; unlock_mode: "auto" | "manual" }> {
+  return request("/v1/admin/wallet/auto-unlock", {
+    method: "POST",
+    body: JSON.stringify(enabled ? { enabled } : { enabled, password }),
+  });
+}
+
+export type ReplaceReason = "lost_password" | "suspected_leak" | "other";
+
+export interface ReplacedWallet {
+  address: string;
+  unlock_mode: "auto" | "manual";
+  /** Only when a new wallet was created. */
+  recovery_phrase?: string;
+  retired: { address: string; retired_at: string; reason: string; keystore_file: string };
+}
+
+/** The old wallet files are moved to <data dir>/retired/ (never deleted). 409 WALLET_BUSY while a payment is in flight. */
+export async function replaceWallet(
+  confirmAddress: string,
+  reason: ReplaceReason,
+  next: { kind: "create" } | WalletImport,
+  opts: { password?: string } = {}
+): Promise<ReplacedWallet> {
+  return request("/v1/admin/wallet/replace", {
+    method: "POST",
+    body: JSON.stringify({ confirm_address: confirmAddress, reason, ...next, ...(opts.password === undefined ? {} : { password: opts.password }) }),
+  });
+}
+
+export interface RetiredWalletRow {
+  address: string;
+  retired_at: string;
+  reason: string;
+  keystore_file: string;
+  has_secret_file: boolean;
+  replaced_by: string | null;
+  /** Live USDC balance on `network`; null = could not be read. */
+  usdc_balance: string | null;
+}
+
+export async function listRetiredWallets(network?: string): Promise<{ network: string; folder: string; retired_wallets: RetiredWalletRow[] }> {
+  return request(`/v1/admin/wallet/retired${network ? `?network=${encodeURIComponent(network)}` : ""}`);
 }
 
 // ---------------------------------------------------------------------------

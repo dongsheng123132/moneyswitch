@@ -30,7 +30,8 @@ import { useAdminMeta } from "../useAdminMeta";
 import { skillBaseUrl } from "../skillText";
 import { claudeMcpCommand, openaiBase, useCliSource } from "../snippets";
 import { FundingGuide } from "./WalletPage";
-import { WalletAccess, WalletBackup } from "../components/WalletAccess";
+import { WalletAccess } from "../components/WalletAccess";
+import { WalletSetup, BackupRequired } from "../components/WalletSetup";
 import { addDemoChannel } from "./ChannelsPage";
 import { fetchDemoMode, PLAYGROUND_KEY_STORAGE } from "../demoMode";
 import "../styles/setup.css";
@@ -188,7 +189,8 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
 
   const done: Record<StepId, boolean> = {
     admin: claimedToken ? ack : true,
-    wallet: Boolean(wallet?.has_keystore && wallet.unlocked),
+    // done = it exists, is open, and its recovery phrase is written down (nobody should fund it before that)
+    wallet: Boolean(wallet?.has_keystore && wallet.unlocked && wallet.health?.backup !== "missing"),
     channel: (channels?.length ?? 0) > 0,
     key: (keys?.length ?? 0) > 0,
     connect: Boolean(keys?.some((k) => k.last_used_at)),
@@ -367,19 +369,21 @@ function AdminStep({ claimedToken, ack, setAck }: { claimedToken: string | null;
 
 // --- Step 2 ------------------------------------------------------------------
 
-function WalletStep({ wallet, refresh }: { wallet: Awaited<ReturnType<typeof getWallet>> | null; refresh: () => void }) {
+/** Wizard step 2. Exported so a render test can pin what a person sees at each stage. */
+export function WalletStep({ wallet, refresh }: { wallet: Awaited<ReturnType<typeof getWallet>> | null; refresh: () => void }) {
   const t = useT(setupStrings);
   if (!wallet) return <div className="setup-note">…</div>;
-  if (!wallet.has_keystore || !wallet.unlocked) return <>
-    <WalletAccess wallet={wallet} onChanged={refresh} />
-    {wallet.has_keystore && <WalletBackup />}
-  </>;
+  // 1. no wallet yet: one click creates it (no password), the phrase is shown and checked
+  if (!wallet.has_keystore) return <WalletSetup onDone={refresh} />;
+  // 2. a wallet that is closed (manual mode after a restart, or a broken unlock secret)
+  if (!wallet.unlocked) return <WalletAccess wallet={wallet} onChanged={refresh} />;
+  // 3. open, but the recovery phrase is not written down: the deposit address stays hidden
+  if (wallet.health?.backup === "missing") return <BackupRequired onConfirmed={refresh} />;
 
   const balance = wallet.usdc_balance;
   const funded = balance != null && toMicros(balance) > 0n;
   return (
     <div>
-      <WalletBackup />
       <div className="setup-wallet">
         <div className="setup-wallet-main">
           <div className="stat-label">{t("s2_address")}</div>

@@ -16,7 +16,7 @@ export const threeThings = defineMessages(
     pkMetaphor: "The key to the safe",
     pkWho: "Give it to: nobody",
     pkBody:
-      "It controls the wallet. With the local wallet option, MoneySwitch encrypts it on disk and uses it in server memory to sign. Agents receive a limited MoneyKey. Keep the encrypted backup and password separately; protect any startup unlock credential as well.",
+      "It controls the wallet. MoneySwitch keeps it encrypted on disk and uses it in server memory to sign. Agents receive a limited MoneyKey. Write the 12-word recovery phrase down and keep it offline; with auto-unlock, anyone who can read the server's data folder can spend the wallet, so protect that folder.",
 
     mkName: "MoneyKey (mk_live_…)",
     mkMetaphor: "A capped company card for an employee",
@@ -84,7 +84,7 @@ export const threeThings = defineMessages(
     pkName: "私钥",
     pkMetaphor: "保险柜钥匙",
     pkWho: "给谁：谁都不给",
-    pkBody: "它控制钱包本身。内置钱包在磁盘上加密保存，解锁后在服务器内存里签名；Agent 使用受限的 MoneyKey。请分别保存加密备份与密码；如配置自动解锁，也要保护服务器上的解锁凭据。",
+    pkBody: "它控制钱包本身。MoneySwitch 把它加密保存在磁盘上，在服务器内存里签名；Agent 使用受限的 MoneyKey。请把 12 个单词的恢复短语抄下来离线保存；开启自动解锁后，任何能读取服务器数据目录的人都能动用这个钱包，所以要保护好该目录。",
 
     mkName: "MoneyKey（mk_live_…）",
     mkMetaphor: "给员工的限额副卡",

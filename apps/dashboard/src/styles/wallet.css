@@ -78,3 +78,182 @@
 .wallet-columns > .card + .card {
   margin-top: 0;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Wallet lifecycle: set-up without a password, recovery phrase, health,   */
+/* danger zone, retired wallets                                            */
+/* ---------------------------------------------------------------------- */
+
+.wallet-setup {
+  max-width: 640px;
+}
+
+.wallet-setup-primary {
+  border: 1px solid var(--accent-border);
+  background: var(--accent-dim);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin: 12px 0 10px;
+}
+
+.wallet-setup-primary h3 {
+  margin: 0 0 6px;
+}
+
+.wallet-setup-primary p {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.wallet-setup-password {
+  max-width: 360px;
+}
+
+.wallet-setup-other {
+  margin-top: 18px;
+}
+
+.wallet-phrase h3,
+.wallet-confirm h3 {
+  margin: 0 0 8px;
+}
+
+.wallet-phrase-grid {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 560px;
+}
+
+@media (max-width: 560px) {
+  .wallet-phrase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.wallet-phrase-grid li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.wallet-phrase-index {
+  color: var(--text-faint);
+  font-size: 11px;
+  min-width: 18px;
+  text-align: right;
+}
+
+.wallet-phrase-word {
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.wallet-confirm,
+.wallet-reveal {
+  max-width: 420px;
+}
+
+.wallet-backup-required {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wallet-health {
+  margin-bottom: 16px;
+}
+
+.wallet-health h3 {
+  margin: 0 0 12px;
+}
+
+.wallet-health-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .wallet-health-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wallet-health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.wallet-health-label {
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.wallet-health-text {
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.wallet-danger {
+  margin-top: 16px;
+  border-color: color-mix(in srgb, var(--red) 40%, var(--panel-border));
+}
+
+.wallet-danger summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.wallet-danger-item {
+  border-top: 1px solid var(--panel-border-soft);
+  padding: 14px 0;
+  max-width: 720px;
+}
+
+.wallet-danger-item h4 {
+  margin: 0 0 6px;
+}
+
+.wallet-danger-item p {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0 0 10px;
+}
+
+.wallet-retired-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin-bottom: 8px;
+}
+
+.wallet-retired-table th,
+.wallet-retired-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-border-soft);
+  vertical-align: top;
+}
+
+.wallet-retired-address {
+  overflow-wrap: anywhere;
+}

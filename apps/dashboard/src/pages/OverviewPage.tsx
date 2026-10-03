@@ -30,6 +30,7 @@ import { common } from "../i18n/strings/common";
 import { overviewStrings } from "../i18n/strings/overview";
 import { useRelativeTime } from "../i18n/format";
 import DemoGuideCard from "../components/DemoGuideCard";
+import { WalletBanners, walletBannerKinds } from "../components/WalletHealth";
 import { useDemoMode } from "../demoMode";
 import "../styles/overview.css";
 
@@ -185,7 +186,9 @@ export default function OverviewPage() {
   const walletNotCreated = wallet != null && !wallet.has_keystore;
   const walletLocked = Boolean(wallet?.has_keystore) && wallet?.unlocked === false;
   const balanceZero = Boolean(wallet?.has_keystore) && wallet?.usdc_balance === "0";
-  const hasAttention = pendingCount > 0 || walletNotCreated || walletLocked || balanceZero;
+  // Backup not confirmed / auto-unlock broken: the two states in which a restart or a lost disk can strand funds.
+  const walletWarnings = walletBannerKinds(wallet, demo);
+  const hasAttention = pendingCount > 0 || walletNotCreated || walletLocked || balanceZero || walletWarnings.length > 0;
 
   return (
     <div>
@@ -225,6 +228,7 @@ export default function OverviewPage() {
 
       {hasAttention && (
         <div className="attention-row">
+          <WalletBanners wallet={wallet} demo={demo} />
           {pendingCount > 0 && (
             <Callout
               tone="warn"
