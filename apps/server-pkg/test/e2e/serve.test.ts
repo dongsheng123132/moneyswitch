@@ -102,7 +102,8 @@ describe("moneyswitch-server (built bundle)", () => {
     const skill = await j("/skill.md", {}, "");
     expect(skill.status).toBe(200);
     expect(skill.headers.get("content-type")).toMatch(/text\/markdown/);
-    expect(skill.text).not.toContain("mk_live_");
+    expect(skill.text).not.toContain(created.body.key);
+    expect(skill.text).not.toMatch(/mk_live_[A-Za-z0-9]{8,}/); // the format may be mentioned, a key never
   });
 
   it("the removed features are gone: no OpenAI gateway, no model channels, no CLI download", async () => {
