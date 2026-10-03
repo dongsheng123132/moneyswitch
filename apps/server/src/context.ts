@@ -55,6 +55,40 @@ export interface BuildContextOptions {
   onFirstRun?: (secrets: FirstRunSecrets) => void;
 }
 
+/**
+ * Unlocks the wallet at startup, in this order: MONEYSWITCH_WALLET_PASSWORD(_FILE)
+ * when it is non-empty, else wallet-unlock.secret, else stay locked. Only outcomes
+ * are logged, never a credential. The result is also kept on the driver
+ * (unlockStatus) so GET /v1/admin/wallet can report a broken auto-unlock.
+ */
+export async function unlockWalletOnStartup(wallet: LocalWalletDriver, password: string | null | undefined): Promise<void> {
+  if (!wallet.hasKeystore()) return;
+  const report = await wallet.unlockOnStartup({ password });
+  for (const attempt of report.attempts) {
+    if (attempt.ok) {
+      console.log(
+        attempt.source === "env_or_file"
+          ? "[moneyswitch] Wallet unlocked from MONEYSWITCH_WALLET_PASSWORD(_FILE)"
+          : "[moneyswitch] Wallet unlocked automatically (wallet-unlock.secret)"
+      );
+    } else if (attempt.source === "env_or_file") {
+      console.error(
+        "[moneyswitch] ERROR: MONEYSWITCH_WALLET_PASSWORD(_FILE) is set but does not unlock wallet.json. " +
+          "Fix or remove it" + (wallet.hasUnlockSecret() ? "; wallet-unlock.secret is tried next." : ".")
+      );
+    } else {
+      const why = attempt.reason === "secret_empty" ? "is empty" : attempt.reason === "secret_unreadable" ? "cannot be read" : "does not unlock wallet.json";
+      console.error(
+        `[moneyswitch] ERROR: wallet-unlock.secret ${why}, so auto-unlock is broken and the wallet stays LOCKED. ` +
+          "Unlock it in the Dashboard with its password, or replace the wallet there."
+      );
+    }
+  }
+  if (!report.unlocked && report.attempts.length === 0) {
+    console.log("[moneyswitch] Wallet is locked: no unlock credential configured. Unlock it in the Dashboard (Wallet page).");
+  }
+}
+
 /** Builds the app context, running DB migrations and printing a fresh admin token exactly once. */
 export async function buildContext(config: ServerConfig, opts: BuildContextOptions = {}): Promise<AppContext> {
   const { db, sqlite } = openDb({ filePath: config.dbFilePath, migrationsDir: config.migrationsDir ?? undefined });
@@ -85,14 +119,7 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
     );
   }
 
-  if (config.walletPassword && wallet.hasKeystore()) {
-    try {
-      await wallet.unlock(config.walletPassword);
-      console.log("[moneyswitch] Wallet unlocked from MONEYSWITCH_WALLET_PASSWORD(_FILE)");
-    } catch {
-      console.log("[moneyswitch] Failed to unlock wallet with provided password; remains locked");
-    }
-  }
+  await unlockWalletOnStartup(wallet, config.walletPassword);
 
   // Demo mode settles through the mock facilitator only (0xmock… hashes that
   // never exist on chain): leave the reader unset so reconcile is a no-op and

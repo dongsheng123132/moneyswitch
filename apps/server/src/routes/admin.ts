@@ -23,12 +23,11 @@ import {
   assertNotSsrf,
   MoneySwitchError,
 } from "@moneyswitch/core";
-import { getActiveNetwork, getEnabledNetworks } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
-import type { WalletImport } from "@moneyswitch/wallet";
 import { requireAdmin } from "../auth.js";
 import { keyView, statusFromIndex } from "../keyview.js";
 import { runReconcileOnce } from "../reconcileJob.js";
+import { registerWalletRoutes } from "./wallet.js";
 
 export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
@@ -363,93 +362,6 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.send({ id, deleted: true });
   });
 
-  app.get("/v1/admin/wallet", { preHandler: adminGuard }, async (req, reply) => {
-    const requested = (req.query as { network?: string }).network;
-    const network = requested ? getEnabledNetworks().find((n) => n.caip2 === requested) : getActiveNetwork();
-    if (!network) return reply.status(400).send({ error: "UNSUPPORTED_NETWORK" });
-    const address = ctx.wallet.getAddress();
-    let balance: string | null = null;
-    if (address && ctx.config.demo) {
-      // Offline demo: no chain to ask. Simulated balance = starting amount
-      // − settled spend + settled toll booth income (demo booths pay this
-      // wallet). Clearly a simulation: the Dashboard shows the DEMO banner.
-      balance = formatMicrosToUsdc(BigInt(demoBalanceMicros(ctx)));
-    } else if (address) {
-      try {
-        const raw = await ctx.wallet.getUsdcBalance(network.rpcUrl, network.usdcAddress);
-        balance = formatMicrosToUsdc(raw);
-      } catch {
-        balance = null;
-      }
-    }
-    return reply.send({
-      address,
-      unlocked: ctx.wallet.isUnlocked(),
-      has_keystore: ctx.wallet.hasKeystore(),
-      auto_unlock_configured: Boolean(ctx.config.walletPassword),
-      usdc_balance: balance,
-      network: network.caip2,
-      simulated: Boolean(ctx.config.demo),
-    });
-  });
-
-  app.post("/v1/admin/wallet/create", { preHandler: adminGuard }, async (req, reply) => {
-    const { password } = (req.body ?? {}) as { password: string };
-    if (typeof password !== "string" || password.length < 8) {
-      return reply.status(400).send({ error: "password must be at least 8 characters" });
-    }
-    try {
-      const { address } = await ctx.wallet.createWallet(password);
-      writeAudit(ctx.db, "admin", "wallet.create", { address });
-      return reply.send({ address });
-    } catch (e) {
-      return reply.status(400).send({ error: e instanceof Error ? e.message : "wallet_error" });
-    }
-  });
-
-  app.post("/v1/admin/wallet/import", { preHandler: adminGuard, bodyLimit: 200_000 }, async (req, reply) => {
-    reply.header("Cache-Control", "no-store");
-    const body = (req.body ?? {}) as WalletImport & { password: string };
-    if (typeof body.password !== "string" || body.password.length < 8) {
-      return reply.status(400).send({ error: "password must be at least 8 characters" });
-    }
-    if (body.kind !== "private_key" && body.kind !== "keystore") {
-      return reply.status(400).send({ error: "unsupported wallet import format" });
-    }
-    try {
-      const { address } = await ctx.wallet.importWallet(body, body.password);
-      writeAudit(ctx.db, "admin", "wallet.import", { address, kind: body.kind });
-      return reply.send({ address });
-    } catch {
-      return reply.status(400).send({ error: "Import failed: check the backup password or private key; an existing wallet cannot be replaced" });
-    }
-  });
-
-  app.post("/v1/admin/wallet/backup", { preHandler: adminGuard }, async (_req, reply) => {
-    reply.header("Cache-Control", "no-store");
-    try {
-      const keystore = ctx.wallet.exportKeystore();
-      writeAudit(ctx.db, "admin", "wallet.backup", { address: ctx.wallet.getAddress() });
-      return reply.send({ address: ctx.wallet.getAddress(), keystore });
-    } catch {
-      return reply.status(404).send({ error: "No wallet to back up" });
-    }
-  });
-
-  app.post("/v1/admin/wallet/unlock", { preHandler: adminGuard }, async (req, reply) => {
-    const { password } = req.body as { password: string };
-    try {
-      const { address } = await ctx.wallet.unlock(password);
-      writeAudit(ctx.db, "admin", "wallet.unlock", { address });
-      return reply.send({ address, unlocked: true });
-    } catch {
-      return reply.status(400).send({ error: "unlock_failed" });
-    }
-  });
-}
-
-function demoBalanceMicros(ctx: AppContext): number {
-  const start = ctx.config.demo?.startingBalanceMicros ?? 0;
-  const spent = ctx.sqlite.prepare(`SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE status = 'settled'`).get() as { s: number };
-  return Math.max(0, start - Number(spent.s));
+  // Wallet lifecycle (create / import / backup / unlock / recovery phrase / auto-unlock / replace / health).
+  registerWalletRoutes(app, ctx);
 }

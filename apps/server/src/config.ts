@@ -66,19 +66,33 @@ function defaultDataDir(): string {
   return path.join(os.homedir(), ".moneyswitch");
 }
 
+/**
+ * The optional startup password (MONEYSWITCH_WALLET_PASSWORD, else the contents of
+ * MONEYSWITCH_WALLET_PASSWORD_FILE). An EMPTY value (or a file that is empty / only
+ * whitespace, such as the placeholder older deployments mounted) means "not configured":
+ * it is never used to try to unlock, and the wallet's own auto-unlock secret applies.
+ */
+export function readWalletPassword(env: NodeJS.ProcessEnv = process.env): string | null {
+  const direct = env.MONEYSWITCH_WALLET_PASSWORD;
+  if (direct !== undefined && direct.trim() !== "") return direct;
+  const file = env.MONEYSWITCH_WALLET_PASSWORD_FILE;
+  if (!file) return null;
+  try {
+    const content = fs.readFileSync(file, "utf-8").trim();
+    if (content !== "") return content;
+    console.warn("[moneyswitch] MONEYSWITCH_WALLET_PASSWORD_FILE is empty; ignoring it (the wallet's own auto-unlock secret is used if there is one)");
+  } catch {
+    console.warn("[moneyswitch] MONEYSWITCH_WALLET_PASSWORD_FILE could not be read; ignoring it (the wallet's own auto-unlock secret is used if there is one)");
+  }
+  return null;
+}
+
 export function loadConfig(): ServerConfig {
   const port = Number(process.env.MONEYSWITCH_PORT || 4020);
   const host = process.env.MONEYSWITCH_HOST || "127.0.0.1";
   const dataDir = process.env.MONEYSWITCH_DATA_DIR || defaultDataDir();
   const dbFilePath = process.env.MONEYSWITCH_DB_PATH || path.join(dataDir, "moneyswitch.sqlite");
-  let walletPassword: string | null = process.env.MONEYSWITCH_WALLET_PASSWORD ?? null;
-  if (!walletPassword && process.env.MONEYSWITCH_WALLET_PASSWORD_FILE) {
-    try {
-      walletPassword = fs.readFileSync(process.env.MONEYSWITCH_WALLET_PASSWORD_FILE, "utf-8").trim();
-    } catch {
-      walletPassword = null;
-    }
-  }
+  const walletPassword = readWalletPassword();
   const demoSellerUrl = process.env.MONEYSWITCH_DEMO_SELLER_URL?.trim() || null;
   const maxKeyDepth = parseMaxKeyDepth(process.env.MONEYSWITCH_MAX_KEY_DEPTH);
   const publicUrl = process.env.MONEYSWITCH_PUBLIC_URL?.trim().replace(/\/+$/, "") || null;

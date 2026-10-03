@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
-import { LocalWalletDriver } from "@moneyswitch/wallet";
+import { LocalWalletDriver, type LocalWalletDriverOptions } from "@moneyswitch/wallet";
 import { bootstrapAdminToken } from "@moneyswitch/core";
 import { buildApp } from "../src/app.js";
 import type { AppContext } from "../src/context.js";
@@ -16,10 +16,12 @@ export interface TestCtx {
   tmpDir: string;
 }
 
-export async function buildTestApp(opts: { unlockWallet?: boolean; port?: number } = {}): Promise<TestCtx> {
+export async function buildTestApp(
+  opts: { unlockWallet?: boolean; port?: number; walletOptions?: LocalWalletDriverOptions } = {}
+): Promise<TestCtx> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-server-test-"));
   const { db, sqlite } = openDb({ filePath: ":memory:" });
-  const wallet = new LocalWalletDriver(tmpDir);
+  const wallet = new LocalWalletDriver(tmpDir, opts.walletOptions);
   if (opts.unlockWallet) {
     await wallet.createWallet("test-password-123");
   }
