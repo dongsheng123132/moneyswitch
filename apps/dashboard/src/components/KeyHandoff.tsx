@@ -4,6 +4,7 @@ import { common } from "../i18n/strings/common";
 import { keysStrings } from "../i18n/strings/keys";
 import { skillStrings } from "../i18n/strings/skill";
 import type { Handoff } from "../keyHandoff";
+import type { TestPaymentOffer } from "@moneyswitch/skill";
 import { restFetchCurl } from "../snippets";
 import CopyButton from "./CopyButton";
 import SecretNotice from "./SecretNotice";
@@ -22,7 +23,7 @@ export default function KeyHandoff({
   handoff,
   skillBase,
   apiBase,
-  onTryPlayground,
+  testnet = false,
   onDone,
   initialTopTab = "skill",
 }: {
@@ -30,7 +31,8 @@ export default function KeyHandoff({
   /** Address written into the skill (MONEYSWITCH_PUBLIC_URL, else the page origin). */
   skillBase: string;
   apiBase: string;
-  onTryPlayground: () => void;
+  /** The instance runs on a testnet where the test payment is on offer (see testPaymentAvailable). */
+  testnet?: boolean;
   onDone: () => void;
   /** Which way is shown first. Always "skill" in the app; a render test sets "other" to check the raw HTTP example is still there. */
   initialTopTab?: "skill" | "other";
@@ -39,6 +41,7 @@ export default function KeyHandoff({
   const ts = useT(skillStrings);
   const tc = useT(common);
   const [topTab, setTopTab] = useState<"skill" | "other">(initialTopTab);
+  const testPayment: TestPaymentOffer = { allowedHosts: handoff.allowedHosts, testnet };
 
   return (
     <div>
@@ -63,7 +66,7 @@ export default function KeyHandoff({
         </button>
       </div>
 
-      {topTab === "skill" && <SkillForAi baseUrl={skillBase} secret={handoff.key} keyName={handoff.name} />}
+      {topTab === "skill" && <SkillForAi baseUrl={skillBase} secret={handoff.key} keyName={handoff.name} testPayment={testPayment} />}
 
       {topTab === "other" && (
         <div>
@@ -73,9 +76,6 @@ export default function KeyHandoff({
       )}
 
       <div className="modal-actions">
-        <button type="button" className="btn secondary" onClick={onTryPlayground}>
-          {t("tryPlaygroundBtn")}
-        </button>
         <button type="button" className="btn" onClick={onDone}>
           {tc("done")}
         </button>

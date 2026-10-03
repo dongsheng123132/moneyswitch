@@ -6,7 +6,7 @@ import { generateSetupToken, sha256Hex, verifySecretAgainstHash } from "./moneyk
  * On the very first boot of a data directory the server already prints the
  * freshly generated admin token to stdout exactly once. This store adds a
  * one-time *setup token* printed next to it as a clickable
- * `/setup#ms_setup_…` link, so a human can open the Dashboard already logged
+ * `/login#ms_setup_…` link, so a human can open the Dashboard already logged
  * in instead of copy-pasting the admin token out of a log file.
  *
  * Security properties (all enforced here, unit-tested in test/setup.test.ts):

@@ -61,27 +61,7 @@
 }
 
 /* Sidebar secondary link + topbar chips */
-.sidebar-secondary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  margin: 0 10px 4px;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  font-size: 13px;
-  text-decoration: none;
-}
-.sidebar-secondary:hover,
-.sidebar-secondary.active {
-  background: var(--panel-2);
-  color: var(--text);
-}
-.wallet-chip.warn {
-  color: var(--yellow);
-  border-color: rgba(227, 179, 65, 0.4);
-  text-decoration: none;
-}
+
 .skip-link {
   position: absolute;
   left: -9999px;
@@ -103,9 +83,4 @@ a.btn:hover {
 }
 
 /* Setup-guide link + sign-out sit together at the bottom of the sidebar. */
-.sidebar .sidebar-secondary {
-  margin-top: auto;
-}
-.sidebar .sidebar-secondary + .logout {
-  margin-top: 0;
-}
+

@@ -110,7 +110,7 @@ describe("First-run setup link", () => {
 });
 
 describe("buildContext setup link printing", () => {
-  it("prints a one-time /setup# link only on the first boot of a data dir; restart has none", async () => {
+  it("prints a one-time /login# link only on the first boot of a data dir; restart has none", async () => {
     const os = await import("node:os");
     const { vi } = await import("vitest");
     const { buildContext } = await import("../../src/context.js");
@@ -121,7 +121,7 @@ describe("buildContext setup link printing", () => {
     try {
       const first = await buildContext(config);
       const out = lines.join("\n");
-      const link = /http:\/\/127\.0\.0\.1:18555\/setup#(ms_setup_[A-Za-z0-9]{32})/.exec(out);
+      const link = /http:\/\/127\.0\.0\.1:18555\/login#(ms_setup_[A-Za-z0-9]{32})/.exec(out);
       expect(link).not.toBeNull();
       expect(first.setup?.isActive()).toBe(true);
       expect(first.setup?.claim(link![1]).ok).toBe(true);
@@ -129,7 +129,7 @@ describe("buildContext setup link printing", () => {
 
       lines.length = 0;
       const second = await buildContext(config);
-      expect(lines.join("\n")).not.toContain("/setup#");
+      expect(lines.join("\n")).not.toContain("/login#");
       expect(second.setup?.isActive()).toBe(false);
       second.sqlite.close();
     } finally {

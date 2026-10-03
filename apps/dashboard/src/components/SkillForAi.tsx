@@ -2,6 +2,7 @@ import React, { useId, useMemo, useState } from "react";
 import { useT } from "../i18n";
 import { skillStrings } from "../i18n/strings/skill";
 import { AGENT_INFO, SKILL_AGENTS, buildInstallText, guessAgentFromName, type SkillAgent } from "../skillText";
+import type { TestPaymentOffer } from "@moneyswitch/skill";
 import CopyButton from "./CopyButton";
 import SecretNotice from "./SecretNotice";
 import Callout from "./Callout";
@@ -21,6 +22,7 @@ export default function SkillForAi({
   keyName,
   showNudge = true,
   showLostKeyHint = false,
+  testPayment = null,
 }: {
   baseUrl: string;
   /** The plaintext MoneyKey. Empty/invalid shows a hint instead of a copy button. */
@@ -30,12 +32,14 @@ export default function SkillForAi({
   showNudge?: boolean;
   /** Pages where the key may be a pasted/lost one: point at "Reset secret and copy skill". */
   showLostKeyHint?: boolean;
+  /** The ten-minute path: lets the install text ask for one test payment (only on a testnet, only for a key that may pay the test host). */
+  testPayment?: TestPaymentOffer | null;
 }) {
   const t = useT(skillStrings);
   const pickLabelId = useId();
   const [agent, setAgent] = useState<SkillAgent>(() => guessAgentFromName(keyName) ?? "codex");
 
-  const built = useMemo(() => buildInstallText({ baseUrl, key: secret, keyName, agent }), [baseUrl, secret, keyName, agent]);
+  const built = useMemo(() => buildInstallText({ baseUrl, key: secret, keyName, agent, testPayment }), [baseUrl, secret, keyName, agent, testPayment]);
   const info = AGENT_INFO[agent];
   const agentLabel = agent === "other" ? t("agent_other") : info.label;
 

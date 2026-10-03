@@ -1,124 +1,42 @@
-/* Wallet page (docs/ux-audit.md A-3, A-4; SPEC-v0.5.md §3 "one wallet, receives and pays") */
+/* Wallet page (SPEC.md §2): create, the 12 words, status, replace */
 
-.wallet-columns-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.wallet-columns-heading h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.wallet-columns {
+.wallet-page {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 16px;
-  align-items: stretch;
-  margin-bottom: 20px;
 }
 
-@media (max-width: 720px) {
-  .wallet-columns {
-    grid-template-columns: 1fr;
-  }
-}
-
-.wallet-columns .card {
-  display: flex;
-  flex-direction: column;
-}
-
-.wallet-column-sentence {
-  margin: 14px 0 6px;
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.wallet-column-link {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.wallet-column-explorer {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 12.5px;
-  color: var(--text-faint);
-}
-
-.wallet-network-table td:first-child {
-  color: var(--text-dim);
-  padding-right: 12px;
-}
-
-.wallet-funding-steps {
+.wallet-page > .card,
+.wallet-page > .callout {
   margin: 0;
-  padding-left: 20px;
 }
 
-.wallet-funding-steps li {
-  margin-bottom: 6px;
+.wallet-page h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
 }
-
-.wallet-funding-notes {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--text-dim);
-  font-size: 12.5px;
-}
-
-/* side-by-side cards: no stacked-card top margin (keeps both tops aligned) */
-.wallet-columns > .card + .card {
-  margin-top: 0;
-}
-
-/* ---------------------------------------------------------------------- */
-/* Wallet lifecycle: set-up without a password, recovery phrase, health,   */
-/* danger zone, retired wallets                                            */
-/* ---------------------------------------------------------------------- */
 
 .wallet-setup {
   max-width: 640px;
 }
 
-.wallet-setup-primary {
-  border: 1px solid var(--accent-border);
-  background: var(--accent-dim);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  margin: 12px 0 10px;
-}
-
-.wallet-setup-primary h3 {
-  margin: 0 0 6px;
-}
-
-.wallet-setup-primary p {
-  margin: 0 0 12px;
+.wallet-create-explain,
+.wallet-lead {
   color: var(--text-dim);
+  font-size: 13px;
   line-height: 1.55;
+  margin: 10px 0;
 }
 
-.wallet-setup-password {
-  max-width: 360px;
+.wallet-ack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
-.wallet-setup-other {
-  margin-top: 18px;
-}
-
-.wallet-phrase h3,
-.wallet-confirm h3 {
-  margin: 0 0 8px;
-}
-
+/* the 12 words */
 .wallet-phrase-grid {
   list-style: none;
   padding: 0;
@@ -157,62 +75,43 @@
   font-size: 14px;
 }
 
-.wallet-confirm,
-.wallet-reveal {
-  max-width: 420px;
+/* balances per chain */
+.wallet-networks {
+  width: 100%;
 }
 
-.wallet-backup-required {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.wallet-over-limit {
+  color: var(--red);
+  font-size: 12px;
 }
 
-.wallet-health {
-  margin-bottom: 16px;
-}
-
-.wallet-health h3 {
-  margin: 0 0 12px;
-}
-
-.wallet-health-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+/* state */
+.wallet-checks {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-
-@media (max-width: 900px) {
-  .wallet-health-list {
-    grid-template-columns: 1fr;
-  }
-}
-
-.wallet-health-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  margin-bottom: 4px;
+  margin: 0;
 }
 
-.wallet-health-label {
-  font-weight: 650;
-  font-size: 13px;
+.wallet-checks > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--panel-border-soft);
+  padding: 6px 0;
 }
 
-.wallet-health-text {
+.wallet-checks dt {
   color: var(--text-dim);
-  font-size: 12.5px;
-  line-height: 1.5;
-  margin-bottom: 6px;
 }
 
+.wallet-checks dd {
+  margin: 0;
+  font-weight: 650;
+  text-align: right;
+}
+
+/* replace */
 .wallet-danger {
-  margin-top: 16px;
   border-color: color-mix(in srgb, var(--red) 40%, var(--panel-border));
 }
 
@@ -222,80 +121,6 @@
   color: var(--red);
 }
 
-.wallet-danger-item {
-  border-top: 1px solid var(--panel-border-soft);
-  padding: 14px 0;
-  max-width: 720px;
-}
-
-.wallet-danger-item h4 {
-  margin: 0 0 6px;
-}
-
-.wallet-danger-item p {
-  color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.55;
-  margin: 0 0 10px;
-}
-
-.wallet-retired-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
-  margin-bottom: 8px;
-}
-
-.wallet-retired-table th,
-.wallet-retired-table td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--panel-border-soft);
-  vertical-align: top;
-}
-
-.wallet-retired-address {
-  overflow-wrap: anywhere;
-}
-
-/* The Replace dialog names the wallet that is about to be retired, in the colour of a warning. */
-.wallet-replace-current {
-  margin: 10px 0 14px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--red) 40%, var(--panel-border));
-  border-radius: 8px;
-}
-
-.wallet-replace-current code {
-  display: block;
-  margin: 4px 0;
-  user-select: all;
-}
-
-.wallet-replace-warn {
-  font-weight: 650;
-  color: var(--red);
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-/* The honest choices on the backup screen of a locked wallet. */
-.wallet-locked-choices ul {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0 0;
-  display: grid;
-  gap: 10px;
-}
-
-.wallet-locked-choices li {
-  border: 1px solid var(--panel-border-soft);
-  border-radius: 8px;
-  padding: 10px 12px;
-}
-
-.wallet-locked-choices li p {
-  color: var(--text-dim);
-  font-size: 13px;
-  margin: 4px 0 8px;
+.wallet-danger form {
+  max-width: 560px;
 }

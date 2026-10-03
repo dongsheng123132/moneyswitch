@@ -44,7 +44,7 @@ beforeAll(async () => {
     if (Date.now() - start > 45_000 || proc.exitCode !== null) throw new Error(`server did not start:\n${out}`);
     await new Promise((r) => setTimeout(r, 200));
   }
-  const link = /(http:\/\/127\.0\.0\.1:\d+)\/setup#(ms_setup_[A-Za-z0-9]+)/.exec(out);
+  const link = /(http:\/\/127\.0\.0\.1:\d+)\/login#(ms_setup_[A-Za-z0-9]+)/.exec(out);
   expect(link, out).toBeTruthy();
   base = link![1];
   setupToken = link![2];

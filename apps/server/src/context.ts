@@ -146,12 +146,13 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
     // claim below, which requires the setup token printed right next to it.
     // eslint-disable-next-line no-console
     console.log(`\n[moneyswitch] Admin token (save this now, it will not be shown again):\n  ${freshAdminToken}\n`);
-    // One-time setup link (docs/ux-audit.md, threat analysis §1): same
-    // channel as the admin token above, single use, memory only, 30 min.
+    // One-time sign-in link: same channel as the admin token above, single use,
+    // memory only, 30 min. The token sits in the URL fragment, so it never
+    // reaches a server log; the login page exchanges it for the admin token.
     const setupToken = setup.issue(freshAdminToken);
     console.log(
-      `[moneyswitch] First-run setup: open this one-time link in your browser (valid 30 min, single use):\n` +
-        `  ${setupBase}/setup#${setupToken}\n`
+      `[moneyswitch] First-run sign-in: open this one-time link in your browser (valid 30 min, single use):\n` +
+        `  ${setupBase}/login#${setupToken}\n`
     );
   }
 

@@ -5,9 +5,9 @@
  *
  * This script does NOT auto-fund anything and does NOT send any payment by
  * itself — it only starts demo-seller + server so a human/agent can drive a
- * real testnet payment manually (see docs/demo.md). Requires the operator
- * to have already funded the MoneySwitch wallet with testnet USDC (see
- * docs/quickstart.md) before any real payment will succeed.
+ * real testnet payment manually (see docs/quickstart.md). The operator has to
+ * create the wallet in the Dashboard and fund it with testnet USDC before any
+ * real payment will succeed.
  *
  * Usage: `pnpm demo:testnet` (or `node scripts/demo-testnet.mjs`)
  * Requires: DEMO_SELLER_PAY_TO env var (no default — must not accidentally
@@ -32,15 +32,6 @@ if (!payTo) {
   );
   process.exit(1);
 }
-
-const walletPassword = process.env.MONEYSWITCH_WALLET_PASSWORD;
-if (!walletPassword) {
-  console.warn(
-    "[demo:testnet] MONEYSWITCH_WALLET_PASSWORD not set — using default 'demo-password'. " +
-      "仅限本地演示，不要在生产或任何有真实资金的环境里用这个默认密码。"
-  );
-}
-const effectiveWalletPassword = walletPassword || "demo-password";
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -75,7 +66,6 @@ async function main() {
         ...process.env,
         MONEYSWITCH_PORT: String(SERVER_PORT),
         MONEYSWITCH_DATA_DIR: DATA_DIR,
-        MONEYSWITCH_WALLET_PASSWORD: effectiveWalletPassword,
       },
       cwd: REPO_ROOT,
     },
@@ -91,16 +81,16 @@ async function main() {
     `\n[demo:testnet] admin token was printed exactly once — see ${path.relative(
       REPO_ROOT,
       serverLogPath
-    )} (only on first boot of a fresh data dir). Fund the wallet (see docs/quickstart.md) before attempting a real payment.`
+    )} (only on first boot of a fresh data dir). Fund the wallet (see docs/quickstart.md) before attempting a real payment: sign in, create the wallet on the Wallet page, then send testnet USDC to its address.`
   );
   console.log("[demo:testnet] press Ctrl+C to stop both services.\n");
 
-  // First boot of a fresh data dir: surface the one-time setup link (NOT the
+  // First boot of a fresh data dir: surface the one-time sign-in link (NOT the
   // admin token) in this terminal. It is single-use and expires in 30 min, so
   // echoing it here is far less sensitive than the admin token itself.
   const setupLink = findSetupLink(serverLogPath);
   if (setupLink) {
-    console.log(`[demo:testnet] 首次启动 / first run — open this one-time setup link:
+    console.log(`[demo:testnet] 首次启动 / first run — open this one-time sign-in link:
 
     ${setupLink}
 `);
@@ -109,12 +99,12 @@ async function main() {
   installShutdownHandlers([demoSeller, server]);
 }
 
-/** Returns the setup link printed by the most recent server start in this log, if any. */
+/** Returns the sign-in link printed by the most recent server start in this log, if any. */
 function findSetupLink(logPath) {
   try {
     const text = fs.readFileSync(logPath, "utf8");
     const lastRun = text.slice(text.lastIndexOf("===== "));
-    const m = /(http:\/\/\S+\/setup#ms_setup_[A-Za-z0-9]+)/.exec(lastRun);
+    const m = /(http:\/\/\S+\/login#ms_setup_[A-Za-z0-9]+)/.exec(lastRun);
     return m ? m[1] : null;
   } catch {
     return null;

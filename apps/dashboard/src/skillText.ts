@@ -1,6 +1,6 @@
 // The skill / install-prompt text is produced by @moneyswitch/skill (browser-safe, shared with the
 // server's GET /skill.md). This file adds the few Dashboard-side helpers around it.
-import { isValidBaseUrl, normalizeBaseUrl, renderInstallPrompt, type SkillAgent } from "@moneyswitch/skill";
+import { TEST_PAYMENT_HOST, TEST_PAYMENT_NETWORK, isValidBaseUrl, normalizeBaseUrl, renderInstallPrompt, type SkillAgent, type TestPaymentOffer } from "@moneyswitch/skill";
 import type { AdminMeta } from "./api";
 
 export {
@@ -9,9 +9,27 @@ export {
   AGENT_INFO,
   SKILL_AGENTS,
   SKILL_NAME,
+  TEST_PAYMENT_HOST,
+  TEST_PAYMENT_URL,
   guessAgentFromName,
   type SkillAgent,
 } from "@moneyswitch/skill";
+
+/**
+ * The ten-minute path (SPEC.md §0): is the test payment on offer on this instance? Only when its default network is a testnet, and
+ * Monad testnet (the one chain the test receiver accepts) is enabled. Unknown (meta not loaded) counts as no.
+ */
+export function testPaymentAvailable(meta: Pick<AdminMeta, "is_mainnet" | "networks"> | null | undefined): boolean {
+  if (!meta || meta.is_mainnet !== false) return false;
+  return (meta.networks ?? []).some((n) => n.network === TEST_PAYMENT_NETWORK);
+}
+
+/** The hosts a new key gets: what was typed plus, when it is on offer and ticked, the test receiver's host. No duplicates (any letter case). */
+export function withTestHost(typed: string[], include: boolean): string[] {
+  const hosts = typed.map((h) => h.trim()).filter(Boolean);
+  if (include && !hosts.some((h) => h.toLowerCase() === TEST_PAYMENT_HOST)) hosts.push(TEST_PAYMENT_HOST);
+  return hosts;
+}
 
 /**
  * Base URL to put in a skill: MONEYSWITCH_PUBLIC_URL when the operator set one
@@ -52,11 +70,11 @@ export interface InstallTextResult {
  * Builds the install text for the Dashboard, turning renderer exceptions into a small error code.
  * The address is checked first: it does not depend on the key, and no key can fix it.
  */
-export function buildInstallText(p: { baseUrl: string; key: string; keyName?: string | null; agent: SkillAgent }): InstallTextResult {
+export function buildInstallText(p: { baseUrl: string; key: string; keyName?: string | null; agent: SkillAgent; testPayment?: TestPaymentOffer | null }): InstallTextResult {
   if (!isValidBaseUrl(p.baseUrl)) return { text: null, display: null, error: "bad_url" };
   const key = p.key.trim();
   if (!key) return { text: null, display: null, error: "no_key" };
   if (!looksLikeMoneyKey(key)) return { text: null, display: null, error: "bad_key" };
-  const text = renderInstallPrompt({ baseUrl: p.baseUrl, key, keyName: p.keyName, agent: p.agent });
+  const text = renderInstallPrompt({ baseUrl: p.baseUrl, key, keyName: p.keyName, agent: p.agent, testPayment: p.testPayment });
   return { text, display: maskedForDisplay(text, key), error: null };
 }

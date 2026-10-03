@@ -38,10 +38,6 @@ export const skillStrings = defineMessages(
       "The address of this page ({url}) cannot be written into a skill. Open the Dashboard from its normal web address (for example http://localhost:4020), or set MONEYSWITCH_PUBLIC_URL on the server.",
     lostKey: "Lost this key? Keys are stored hashed and cannot be shown again. In the key list use \"Reset secret and copy skill\".",
 
-    // employee portal
-    employeeTitle: "Give your AI the ability to pay (recommended)",
-    employeeBody: "This is your own key. Copy the text below and paste it into your AI. It then pays within your budget.",
-
     // rotation
     rotateBtn: "Reset secret and copy skill",
     rotateTitle: "Reset the secret of \"{name}\"?",
@@ -84,9 +80,6 @@ export const skillStrings = defineMessages(
     badKey: "这不像 MoneyKey。MoneyKey 以 mk_live_ 开头，只含字母和数字。",
     badUrl: "本页地址（{url}）不能写进 skill。请从正常的网址打开控制台（例如 http://localhost:4020），或在服务器上设置 MONEYSWITCH_PUBLIC_URL。",
     lostKey: "找不到这把 key 了？key 只存哈希，无法再次显示。请在 key 列表里点“重置密钥并复制 skill”。",
-
-    employeeTitle: "让你的 AI 学会付费（推荐）",
-    employeeBody: "这是你自己的 key。复制下面的文字，粘贴给你的 AI，它就会在你的额度内付费。",
 
     rotateBtn: "重置密钥并复制 skill",
     rotateTitle: "重置“{name}”的密钥？",

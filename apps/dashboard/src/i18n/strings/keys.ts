@@ -32,7 +32,6 @@ export const keysStrings = defineMessages(
 
     // Child keys / tree (SPEC-v0.4.md §A)
     canDelegatePill: "Can delegate",
-    createdByAdmin: "",
     createdByParent: "sub-key",
     expandRow: "Expand",
     collapseRow: "Collapse",
@@ -78,8 +77,12 @@ export const keysStrings = defineMessages(
 
     advancedTitle: "Advanced",
     allowedHostsLabel: "Allowed hosts",
-    allowedHostsPlaceholder: "host:port, host2:port2",
+    allowedHostsPlaceholder: "api.example.com:443, other.example.com:443",
+    allowedHostsHint: "host:port, comma separated. A payment to any other website is refused.",
     allowedHostsHintEmpty: "No hosts listed — list the hosts (host:port) this key may pay, or every payment will be refused.",
+    testEndpointLabel: "Allow the test payment endpoint ({url})",
+    testEndpointHint:
+      "Adds app.moneyswitch.dev:443 to the allowed hosts. After installing the skill your AI makes one 0.01 test USDC payment to it (no real value) and reports the transaction. Untick it if you don't want that.",
     rateLimitLabel: "Max payments / minute",
     expiresLabel: "Expires at",
     expiresNever: "never",
@@ -95,11 +98,6 @@ export const keysStrings = defineMessages(
     keyFieldLabel: "Your Money Key",
     nextHeading: "Next: hand this key to the agent",
 
-
-
-
-
-    tryPlaygroundBtn: "Try it in Playground",
   },
   {
     pageIntroPre: "",
@@ -128,7 +126,6 @@ export const keysStrings = defineMessages(
     revokeSuccessText: "已撤销 —— Agent 下一次请求就会被拒绝。",
 
     canDelegatePill: "可再分配",
-    createdByAdmin: "",
     createdByParent: "子 Key",
     expandRow: "展开",
     collapseRow: "收起",
@@ -170,8 +167,11 @@ export const keysStrings = defineMessages(
 
     advancedTitle: "高级选项",
     allowedHostsLabel: "允许访问的地址",
-    allowedHostsPlaceholder: "host:port, host2:port2",
+    allowedHostsPlaceholder: "api.example.com:443, other.example.com:443",
+    allowedHostsHint: "host:port，用逗号分隔。付给其他网站的款项会被拒绝。",
     allowedHostsHintEmpty: "还没有填写域名 —— 请列出这把 Key 可以付款的域名（host:port），否则所有付款都会被拒绝。",
+    testEndpointLabel: "允许测试付款接口（{url}）",
+    testEndpointHint: "把 app.moneyswitch.dev:443 加进允许的域名。装好技能后，你的 AI 会向它付一笔 0.01 测试 USDC（没有真实价值）并汇报交易号。不想要就取消勾选。",
     rateLimitLabel: "每分钟最多付款次数",
     expiresLabel: "过期时间",
     expiresNever: "永不",
@@ -186,10 +186,5 @@ export const keysStrings = defineMessages(
     keyFieldLabel: "你的 Money Key",
     nextHeading: "接下来：把这把 Key 交给 Agent",
 
-
-
-
-
-    tryPlaygroundBtn: "在 Playground 里试试",
   }
 );

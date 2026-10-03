@@ -1,34 +1,24 @@
 import React from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Gauge, MessageSquare, KeyRound, Activity, ShieldAlert, Wallet, LogOut, Compass } from "lucide-react";
+import { KeyRound, Receipt, ShieldAlert, Wallet, LogOut } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
-import { getWallet, listApprovals } from "./api";
-import { formatUsdc } from "./money";
+import { listApprovals } from "./api";
 import LangSwitch from "./components/LangSwitch";
-import { WalletChip } from "./components/WalletChip";
 import { useT } from "./i18n";
 import { shellStrings } from "./i18n/strings/shell";
 import { common } from "./i18n/strings/common";
 import { useAdminMeta } from "./useAdminMeta";
 
-type NavKey =
-  | "nav_overview"
-  | "nav_playground"
-  | "nav_keys"
-  | "nav_usage"
-  | "nav_approvals"
-  | "nav_wallet";
+type NavKey = "nav_wallet" | "nav_keys" | "nav_approvals" | "nav_bills";
 
-export const NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof Gauge }> = [
-  { to: "/", label: "nav_overview", end: true, icon: Gauge },
-  { to: "/playground", label: "nav_playground", end: false, icon: MessageSquare },
-  { to: "/keys", label: "nav_keys", end: false, icon: KeyRound },
-  { to: "/usage", label: "nav_usage", end: false, icon: Activity },
-  { to: "/approvals", label: "nav_approvals", end: false, icon: ShieldAlert },
-  { to: "/wallet", label: "nav_wallet", end: false, icon: Wallet },
+/** SPEC.md §2: the dashboard is exactly these four pages (and the login). */
+export const NAV: Array<{ to: string; label: NavKey; icon: typeof Wallet }> = [
+  { to: "/wallet", label: "nav_wallet", icon: Wallet },
+  { to: "/keys", label: "nav_keys", icon: KeyRound },
+  { to: "/approvals", label: "nav_approvals", icon: ShieldAlert },
+  { to: "/bills", label: "nav_bills", icon: Receipt },
 ];
-
 
 export default function Layout() {
   const t = useT(shellStrings);
@@ -36,11 +26,10 @@ export default function Layout() {
   const meta = useAdminMeta();
   const { logout } = useAuth();
   const location = useLocation();
-  const { data: wallet, loading: walletLoading } = usePolling(getWallet);
   const { data: pending } = usePolling(() => listApprovals("pending"), 3000);
   const pendingCount = pending?.length ?? 0;
 
-  const current = NAV.find((n) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)));
+  const current = NAV.find((n) => location.pathname.startsWith(n.to));
   const title = current ? t(current.label) : "MoneySwitch";
 
   return (
@@ -60,7 +49,7 @@ export default function Layout() {
           {NAV.map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? "active" : "")}>
+              <NavLink key={item.to} to={item.to} className={({ isActive }) => (isActive ? "active" : "")}>
                 <Icon size={16} strokeWidth={2} aria-hidden />
                 <span>{t(item.label)}</span>
                 {item.to === "/approvals" && pendingCount > 0 && (
@@ -72,10 +61,6 @@ export default function Layout() {
             );
           })}
         </nav>
-        <NavLink to="/setup" className={({ isActive }) => `sidebar-secondary ${isActive ? "active" : ""}`}>
-          <Compass size={16} strokeWidth={2} aria-hidden />
-          <span>{t("nav_setup")}</span>
-        </NavLink>
         <button className="logout" onClick={logout}>
           <LogOut size={16} strokeWidth={2} aria-hidden />
           <span>{tc("signOut")}</span>
@@ -89,12 +74,6 @@ export default function Layout() {
               <span className="network-dot" />
               {meta?.network_label ?? (meta?.is_mainnet ? tc("networkMainnet") : tc("networkTestnet"))}
             </span>
-            <WalletChip wallet={wallet} loading={walletLoading} />
-            {wallet?.has_keystore && (
-              <span className="wallet-balance" title={wallet.usdc_balance == null ? t("walletBalanceUnknown") : undefined}>
-                {wallet.usdc_balance != null ? `${formatUsdc(wallet.usdc_balance, { maxDecimals: 2 })} USDC` : "—"}
-              </span>
-            )}
             <LangSwitch />
           </div>
         </header>

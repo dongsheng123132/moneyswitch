@@ -1,75 +1,433 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
 import { usePolling } from "../usePolling";
-import { getWallet, type AdminMeta, type WalletInfo } from "../api";
-import { formatUsdc, shortAddr } from "../money";
-import CopyButton from "../components/CopyButton";
+import { ApiError, confirmBackup, createWallet, getWallet, replaceWallet, type AdminMeta, type ReplaceReason, type WalletInfo } from "../api";
+import { freshPhrase, useFreshPhrase } from "../freshPhrase";
+import { formatUsdc } from "../money";
 import Callout from "../components/Callout";
-import Term from "../components/Term";
-import { SkeletonBlock } from "../components/Skeleton";
+import CopyButton from "../components/CopyButton";
 import PublicAddress from "../components/PublicAddress";
-import { ThreeThingsCard, ThreeThingsButton } from "../components/ThreeThings";
+import { SkeletonBlock } from "../components/Skeleton";
 import { useT } from "../i18n";
-import { walletStrings } from "../i18n/strings/wallet";
 import { common } from "../i18n/strings/common";
+import { walletStrings } from "../i18n/strings/wallet";
 import { useAdminMeta } from "../useAdminMeta";
 import "../styles/wallet.css";
-import { WalletAccess } from "../components/WalletAccess";
-import { WalletSetup, BackupRequired } from "../components/WalletSetup";
-import { lockedKind } from "../walletMode";
-import { WalletHealthCard } from "../components/WalletHealth";
-import { WalletDangerZone } from "../components/WalletDangerZone";
 
-// Informational-only defaults for the testnet — used only when GET /v1/admin/meta
-// hasn't returned yet or doesn't carry a field (SPEC.md §1 verified facts).
-const DEFAULT_CHAIN_ID = 10143;
-const DEFAULT_USDC_CONTRACT = "0x534b2f3A21130d7a60830c2Df862319e593943A3";
-const DEFAULT_EXPLORER_BASE = "https://testnet.monadvision.com";
-const DEFAULT_FAUCET_URL = "https://faucet.circle.com/";
+const FAUCET_FALLBACK = "https://faucet.circle.com/";
+
+/** Why a wallet that exists is locked right now, as the key of the sentence that says it (null = it is not locked). */
+export function lockedReason(wallet: Pick<WalletInfo, "has_keystore" | "unlocked" | "health">): keyof typeof walletStrings.en | null {
+  if (!wallet.has_keystore || wallet.unlocked) return null;
+  const sources = wallet.health.unlock_sources;
+  if (wallet.health.protection === "password") {
+    // a wallet made by an older version: either nobody gave the server its password, or the one it was given is wrong
+    return sources.some((s) => s.source === "env_or_file" && !s.ok) ? "locked_env_wrong" : "locked_password";
+  }
+  const auto = sources.find((s) => s.source === "auto" && !s.ok);
+  switch (auto?.reason) {
+    case "secret_missing":
+      return "locked_secret_missing";
+    case "secret_empty":
+      return "locked_secret_empty";
+    case "secret_unreadable":
+      return "locked_secret_unreadable";
+    default:
+      return "locked_secret_wrong";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// the 12 words
+// ---------------------------------------------------------------------------
+
+/** The 12 words, numbered, with the warning that goes with them and the "I wrote it down" step. They exist only in memory, only here. */
+export function PhraseCard({ phrase, onAcknowledge }: { phrase: string; onAcknowledge: () => Promise<void> }) {
+  const t = useT(walletStrings);
+  const [written, setWritten] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function done() {
+    setBusy(true);
+    setError(null);
+    try {
+      await onAcknowledge();
+    } catch (e) {
+      setError(t("phraseAckFailed", { message: e instanceof Error ? e.message : "request_failed" }));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card wallet-phrase" data-testid="phrase-card">
+      <h2>{t("phraseTitle")}</h2>
+      <Callout tone="warn" title={t("phraseWarnTitle")}>
+        {t("phraseWarnBody")}
+      </Callout>
+      <ol className="wallet-phrase-grid" aria-label={t("wordsLabel")}>
+        {phrase.split(" ").map((word, i) => (
+          <li key={i}>
+            <span className="wallet-phrase-index">{i + 1}</span>
+            <span className="wallet-phrase-word mono">{word}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="btn-group">
+        <CopyButton text={phrase} label={t("phraseCopy")} />
+      </div>
+      <label className="wallet-ack">
+        <input type="checkbox" checked={written} disabled={busy} onChange={(e) => setWritten(e.target.checked)} />
+        {t("phraseAck")}
+      </label>
+      {error && <Callout tone="error">{error}</Callout>}
+      <button type="button" className="btn" disabled={!written || busy} onClick={done}>
+        {busy ? t("phraseSaving") : t("phraseDone")}
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// create (no wallet yet)
+// ---------------------------------------------------------------------------
+
+function CreateCard({ wallet, onCreated }: { wallet: WalletInfo; onCreated: () => Promise<void> | void }) {
+  const t = useT(walletStrings);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ackOrphans, setAckOrphans] = useState(false);
+  // wallet.json is missing but credentials of an earlier wallet are still in the data folder: the likely cause is a data folder mounted
+  // from the wrong place, not a wish for a brand-new empty wallet. Creating then needs an explicit yes.
+  const orphans = wallet.health.orphan_files;
+  const orphaned = orphans.wallet_file_missing;
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await createWallet();
+      freshPhrase.set(created.address, created.recovery_phrase);
+      await onCreated();
+    } catch (e) {
+      setError(t("createFailed", { message: e instanceof ApiError || e instanceof Error ? e.message : "request_failed" }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card wallet-setup" aria-labelledby="wallet-setup-title">
+      <h2 id="wallet-setup-title">{t("setupTitle")}</h2>
+      <p>{t("setupLead")}</p>
+      {orphaned && (
+        <div data-testid="orphan-warning">
+          <Callout tone="error" title={t("orphanTitle")}>
+            {t("orphanBody", { secrets: orphans.secrets.length, retired: orphans.retired })}
+          </Callout>
+          <label className="wallet-ack">
+            <input type="checkbox" checked={ackOrphans} disabled={busy} onChange={(e) => setAckOrphans(e.target.checked)} />
+            {t("orphanAck")}
+          </label>
+        </div>
+      )}
+      <p className="wallet-create-explain">{t("createExplain")}</p>
+      {error && <Callout tone="error">{error}</Callout>}
+      <button type="button" className="btn" data-action-id="wallet.create" disabled={busy || (orphaned && !ackOrphans)} onClick={create}>
+        {busy ? t("creating") : t("createButton")}
+      </button>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// status
+// ---------------------------------------------------------------------------
+
+function Problems({ wallet }: { wallet: WalletInfo }) {
+  const t = useT(walletStrings);
+  const h = wallet.health;
+  const locked = lockedReason(wallet);
+  return (
+    <>
+      {locked && (
+        <Callout tone="error" title={t("lockedTitle")}>
+          {t(locked)} {locked.startsWith("locked_secret") ? t("locked_fix") : ""}
+        </Callout>
+      )}
+      {!locked && h.protection === "auto" && h.secret_file_present === false && (
+        <Callout tone="warn" title={t("secretGoneTitle")}>
+          {t("secretGoneBody")}
+        </Callout>
+      )}
+      {h.secret_protected === false && (
+        <Callout tone="warn" title={t("unprotectedTitle")}>
+          {t("unprotectedBody", { detail: h.secret_protection_detail ?? "" })}
+        </Callout>
+      )}
+      {h.backup === "missing" && (
+        <div data-testid="backup-missing">
+          <Callout tone="warn" title={t("backupMissingTitle")}>
+            {t("backupMissingBody")}
+          </Callout>
+        </div>
+      )}
+      {h.retired_secrets_open_live_key.length > 0 && (
+        <Callout tone="warn" title={t("retiredOpenerTitle")}>
+          {t("retiredOpenerBody", { files: h.retired_secrets_open_live_key.join(", ") })}
+        </Callout>
+      )}
+      {wallet.has_keystore && (h.orphan_files.secrets.length > 0 || h.orphan_files.retired > 0) && !h.orphan_files.wallet_file_missing && (
+        <Callout tone="info" title={t("orphanWalletTitle")}>
+          {t("orphanWalletBody", { secrets: h.orphan_files.secrets.length, retired: h.orphan_files.retired })}
+        </Callout>
+      )}
+    </>
+  );
+}
+
+function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | null }) {
+  const t = useT(walletStrings);
+  const tc = useT(common);
+  const limit = wallet.health.float_limit;
+  const anyMainnet = wallet.networks.some((n) => n.is_mainnet);
+  const anyTestnet = wallet.networks.some((n) => !n.is_mainnet);
+  return (
+    <div className="card">
+      <h2>{t("addressTitle")}</h2>
+      {wallet.address && <PublicAddress address={wallet.address} qr="toggle" size="lg" />}
+      <p className="wallet-lead">{t("addressLead")}</p>
+      <table className="wallet-networks">
+        <thead>
+          <tr>
+            <th>{t("chainCol")}</th>
+            <th className="num">{t("balanceCol")}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {wallet.networks.map((n) => (
+            <tr key={n.network} data-network={n.network}>
+              <td>{n.label}</td>
+              <td className="num">
+                {n.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(n.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
+                {n.over_float_limit && <div className="wallet-over-limit">{t("overLimit", { limit })}</div>}
+              </td>
+              <td>
+                {wallet.address && (
+                  <a href={`${n.explorer_base}/address/${wallet.address}`} target="_blank" rel="noreferrer">
+                    {t("viewExplorer")}
+                  </a>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="wallet-lead">{t("floatNote", { limit })}</p>
+      {anyTestnet && (
+        <p className="wallet-lead">
+          {t("fundTestnet")}{" "}
+          <a href={meta?.faucet_url || FAUCET_FALLBACK} target="_blank" rel="noreferrer">
+            {t("fundFaucet")}
+          </a>
+        </p>
+      )}
+      {anyMainnet && <p className="wallet-lead">{t("fundMainnet")}</p>}
+    </div>
+  );
+}
+
+function Checks({ wallet }: { wallet: WalletInfo }) {
+  const t = useT(walletStrings);
+  const h = wallet.health;
+  const unlockOk = wallet.unlocked && (h.auto_unlock_ok === true || h.unlock_mode === "env_or_file");
+  const protect = h.secret_protected === null ? t("notApplicable") : h.secret_protected ? t("yes") : t("notVerified", { detail: h.secret_protection_detail ?? "" });
+  const backup = h.backup === "confirmed" ? t("yes") : h.backup === "missing" ? t("notConfirmed") : t("notApplicable");
+  return (
+    <div className="card">
+      <h2>{t("checksTitle")}</h2>
+      <dl className="wallet-checks">
+        <div>
+          <dt>{t("checkUnlock")}</dt>
+          <dd data-check="unlock">{unlockOk ? t("yes") : t("no")}</dd>
+        </div>
+        <div>
+          <dt>{t("checkProtect")}</dt>
+          <dd data-check="protect">{protect}</dd>
+        </div>
+        <div>
+          <dt>{t("checkBackup")}</dt>
+          <dd data-check="backup">{backup}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function RetiredCard({ wallet }: { wallet: WalletInfo }) {
+  const t = useT(walletStrings);
+  const tc = useT(common);
+  if (wallet.retired_wallets.length === 0) return null;
+  return (
+    <div className="card" data-testid="retired-wallets">
+      <h2>{t("retiredTitle")}</h2>
+      <p className="wallet-lead">{t("retiredLead")}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>{t("retiredAddress")}</th>
+            <th>{t("retiredOn")}</th>
+            <th>{t("retiredReason")}</th>
+            <th className="num">{t("retiredBalance")}</th>
+            <th>{t("retiredFiles")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {wallet.retired_wallets.map((r) => (
+            <tr key={`${r.address}-${r.retired_at}`}>
+              <td className="mono">{r.address}</td>
+              <td>{r.retired_at.slice(0, 10)}</td>
+              <td className="mono">{r.reason}</td>
+              <td className="num">
+                {wallet.networks.map((n) => (
+                  <div key={n.network}>
+                    {n.label}: {r.balances[n.network] == null ? t("balanceUnknown") : `${formatUsdc(r.balances[n.network], { maxDecimals: 4 })} ${tc("usdc")}`}
+                  </div>
+                ))}
+              </td>
+              <td>{r.has_secret_file ? t("retiredFilesKeystoreAndSecret") : t("retiredFilesKeystore")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// replace
+// ---------------------------------------------------------------------------
+
+const REASONS: ReplaceReason[] = ["replaced", "lost_password", "suspected_leak"];
+
+function ReplaceCard({ wallet, onReplaced }: { wallet: WalletInfo; onReplaced: () => Promise<void> | void }) {
+  const t = useT(walletStrings);
+  const [reason, setReason] = useState<ReplaceReason>("replaced");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const address = wallet.address ?? "";
+
+  async function replace(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const replaced = await replaceWallet(confirm.trim(), reason);
+      // The page learns about the new wallet BEFORE the words are put on screen: showing them for an address that is not the current
+      // one yet would make the page drop them as belonging to another wallet.
+      await onReplaced();
+      freshPhrase.set(replaced.address, replaced.recovery_phrase);
+      setConfirm("");
+    } catch (err) {
+      const code = err instanceof ApiError ? err.error : null;
+      setError(
+        code === "WALLET_BUSY" ? t("replaceBusy") : code === "ADDRESS_MISMATCH" ? t("replaceMismatch") : t("replaceFailed", { message: err instanceof Error ? err.message : "request_failed" })
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details className="card wallet-danger" data-testid="replace-wallet">
+      <summary>{t("replaceTitle")}</summary>
+      <p>{t("replaceLead")}</p>
+      <p>{t("replaceMoveMoney")}</p>
+      <form onSubmit={replace}>
+        <div className="field">
+          <label htmlFor="replace-reason">{t("replaceReasonLabel")}</label>
+          <select id="replace-reason" value={reason} disabled={busy} onChange={(e) => setReason(e.target.value as ReplaceReason)}>
+            {REASONS.map((r) => (
+              <option key={r} value={r}>
+                {t(`reason_${r}` as const)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="replace-confirm">{t("replaceConfirmLabel")}</label>
+          <input
+            id="replace-confirm"
+            className="mono"
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={address}
+            value={confirm}
+            disabled={busy}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </div>
+        {error && <Callout tone="error">{error}</Callout>}
+        <button type="submit" className="btn danger" disabled={busy || confirm.trim() !== address}>
+          {busy ? t("replacing") : t("replaceButton")}
+        </button>
+      </form>
+    </details>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// the page
+// ---------------------------------------------------------------------------
 
 /**
- * The "how to fund" steps block (docs/ux-audit.md A-3). Exported so the setup
- * wizard can reuse it verbatim; fetches admin meta itself so callers only
- * need to pass the address.
+ * The Wallet page for a loaded wallet (split from the polling shell so it can be rendered with a given state):
+ *  - the 12 words, while they are on screen and not yet acknowledged;
+ *  - no wallet yet: "Create wallet";
+ *  - a wallet: its address and balance on every chain, what is wrong (if anything), the replaced wallets, and the replace form.
  */
-export function FundingGuide({ address, network }: { address: string; network?: string }) {
-  const t = useT(walletStrings);
-  const meta = useAdminMeta();
-  const faucetUrl = meta?.faucet_url || DEFAULT_FAUCET_URL;
-  const chain = meta?.networks?.find((n) => n.network === network);
-  const label = chain?.network_label || meta?.network_label || "Monad Testnet";
-  if (chain?.is_mainnet || (!chain && meta?.is_mainnet)) {
-    return <div className="form-section"><div className="form-section-title">{t("fundingTitle")}</div><p>{t("fundingMainnet", { network: label })}</p></div>;
+export function WalletView({
+  wallet,
+  meta,
+  error,
+  onChanged,
+}: {
+  wallet: WalletInfo;
+  meta: AdminMeta | null;
+  error?: string | null;
+  onChanged: () => Promise<void> | void;
+}) {
+  const tc = useT(common);
+  // Without a wallet the creation response is the authority; with one, the words are only shown for that very wallet.
+  const phrase = useFreshPhrase(wallet.has_keystore ? wallet.address : null);
+
+  async function acknowledged() {
+    await confirmBackup();
+    freshPhrase.clear();
+    await onChanged();
   }
+
   return (
-    <div className="form-section">
-      <div className="form-section-title">{t("fundingTitle")}</div>
-      <ol className="wallet-funding-steps steps">
-        <li>
-          {t("fundingStep1")} <CopyButton text={address} className="icon-only" />
-        </li>
-        <li>
-          {t("fundingStep2Prefix")}
-          <a href={faucetUrl} target="_blank" rel="noreferrer">
-            {t("fundingStep2Link")}
-          </a>
-          {t("fundingStep2Suffix", { network: label })}
-        </li>
-        <li>{t("fundingStep3")}</li>
-      </ol>
-      <div className="wallet-funding-notes">
-        <div>
-          <strong>{t("fundingNoGasTitle")}</strong> — {t("fundingNoGasBody")} <Term k="facilitator">facilitator</Term>.
-        </div>
-      </div>
+    <div className="wallet-page">
+      {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
+      {phrase && <PhraseCard phrase={phrase} onAcknowledge={acknowledged} />}
+      {!phrase && !wallet.has_keystore && <CreateCard wallet={wallet} onCreated={onChanged} />}
+      {wallet.has_keystore && (
+        <>
+          <Problems wallet={wallet} />
+          <AddressCard wallet={wallet} meta={meta} />
+          <Checks wallet={wallet} />
+          <RetiredCard wallet={wallet} />
+          <ReplaceCard wallet={wallet} onReplaced={onChanged} />
+        </>
+      )}
     </div>
   );
 }
 
 export default function WalletPage() {
-  const [selectedNetwork, setSelectedNetwork] = useState<string>();
-  const { data: wallet, error, loading, refresh } = usePolling(() => getWallet(selectedNetwork));
-  useEffect(() => { refresh(); }, [selectedNetwork, refresh]);
+  const { data: wallet, error, loading, refresh } = usePolling(getWallet);
   const meta = useAdminMeta();
   const tc = useT(common);
   if (loading && !wallet) {
@@ -79,152 +437,6 @@ export default function WalletPage() {
       </div>
     );
   }
-
-  if (!wallet) {
-    return error ? <Callout tone="error">{tc("requestFailed", { message: error })}</Callout> : null;
-  }
-
-  return <WalletView wallet={wallet} meta={meta} error={error} onChanged={refresh} onSelectNetwork={setSelectedNetwork} />;
-}
-
-/**
- * The Wallet page for a loaded wallet (split from the polling shell so it can be rendered with a given
- * state). Until the recovery phrase is written down and checked, the deposit address and the "how to
- * fund" steps are replaced by the backup prompt: nobody should fund a wallet that has no backup.
- */
-export function WalletView({
-  wallet,
-  meta,
-  error,
-  onChanged,
-  onSelectNetwork,
-}: {
-  wallet: WalletInfo;
-  meta: AdminMeta | null;
-  error?: string | null;
-  onChanged: () => void;
-  onSelectNetwork?: (network: string) => void;
-}) {
-  const t = useT(walletStrings);
-  const tc = useT(common);
-  const selected = meta?.networks?.find((n) => n.network === wallet.network);
-  const explorerBase = selected?.explorer_base || meta?.explorer_base || DEFAULT_EXPLORER_BASE;
-  const chainId = selected?.chain_id ?? meta?.chain_id ?? DEFAULT_CHAIN_ID;
-  const usdcContract = selected?.usdc_address || meta?.usdc_address || DEFAULT_USDC_CONTRACT;
-  const network = wallet.network;
-
-  if (!wallet.has_keystore) {
-    return <div className="card"><WalletSetup onDone={onChanged} orphans={wallet.health?.orphan_files} /></div>;
-  }
-
-  const balance = wallet.usdc_balance;
-  const balanceIsZero = balance != null && Number(balance) === 0;
-  const balanceIsPositive = balance != null && Number(balance) > 0;
-  const backupMissing = wallet.health?.backup === "missing";
-
-  return (
-    <div>
-      {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
-
-      {!wallet.unlocked && <div className="card" style={{ marginBottom: 16 }}><WalletAccess wallet={wallet} onChanged={onChanged} /></div>}
-      <WalletHealthCard wallet={wallet} />
-
-      <div className="wallet-columns-heading">
-        <h2>{t("oneWalletHeading")}</h2>
-        {meta?.networks && meta.networks.length > 1 && onSelectNetwork && (
-          <select aria-label="USDC network" value={wallet.network} onChange={(e) => onSelectNetwork(e.target.value)}>
-            {meta.networks.map((n) => <option key={n.network} value={n.network}>{n.network_label}</option>)}
-          </select>
-        )}
-        <ThreeThingsButton />
-      </div>
-
-      <div className="wallet-columns">
-        <div className="card wallet-receive-card">
-          <div className="stat-label">{t("receiveTitle")}</div>
-          {backupMissing ? (
-            <BackupRequired onConfirmed={onChanged} address={wallet.address} locked={lockedKind(wallet)} />
-          ) : (
-            <>
-              {wallet.address ? (
-                <PublicAddress address={wallet.address} qr="always" size="lg" />
-              ) : (
-                <div className="empty-state">{t("qrEmpty")}</div>
-              )}
-              <p className="wallet-column-sentence">{t("receiveSentence")}</p>
-              {wallet.address && (
-                <a className="wallet-column-explorer" href={`${explorerBase}/address/${wallet.address}`} target="_blank" rel="noreferrer">
-                  {t("viewOnExplorer")}
-                </a>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="card wallet-pays-card">
-          <div className="stat-label">{t("paysFromTitle")}</div>
-          <div style={{ marginTop: 8, display: "flex", gap: 24, flexWrap: "wrap" }}>
-            <div>
-              <div className="stat-label">{t("balanceLabel")}</div>
-              <div className="stat-value num">{balance != null ? formatUsdc(balance, { maxDecimals: 4 }) : "-"}</div>
-              <div className="stat-sub">{t("balanceAutoRefresh")}</div>
-            </div>
-            <div>
-              <div className="stat-label">{t("statusLabel")}</div>
-              <div className="stat-value" style={{ fontSize: 16 }}>
-                {wallet.unlocked ? t("statusUnlocked") : t("statusLocked")}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            {balance == null ? (
-              <Callout tone="warn" title={t("balanceUnreadableTitle")}>
-                {t("balanceUnreadableBody")}
-              </Callout>
-            ) : balanceIsPositive ? (
-              <Callout tone="success">{t("balanceFunded", { amount: formatUsdc(balance, { maxDecimals: 4 }) })}</Callout>
-            ) : balanceIsZero ? (
-              <div className="stat-sub">{t("balanceWaiting")}</div>
-            ) : null}
-          </div>
-
-          <p className="wallet-column-sentence">{t("paysFromSentence")}</p>
-          <Link className="wallet-column-link" to="/keys">
-            {t("paysFromKeysLink")}
-          </Link>
-
-          <div className="form-section" style={{ marginTop: 22 }}>
-            <div className="form-section-title">{t("networkTitle")}</div>
-            <table className="wallet-network-table">
-              <tbody>
-                <tr>
-                  <td>{t("networkLabel")}</td>
-                  <td>{network}</td>
-                </tr>
-                <tr>
-                  <td>{t("chainIdLabel")}</td>
-                  <td className="num">{chainId}</td>
-                </tr>
-                <tr>
-                  <td>{t("usdcContractLabel")}</td>
-                  <td>
-                    <a className="mono" href={`${explorerBase}/address/${usdcContract}`} target="_blank" rel="noreferrer">
-                      {shortAddr(usdcContract)}
-                    </a>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {!backupMissing && <FundingGuide address={wallet.address ?? ""} network={wallet.network} />}
-        </div>
-      </div>
-
-      <WalletDangerZone wallet={wallet} onChanged={onChanged} />
-
-      <ThreeThingsCard />
-    </div>
-  );
+  if (!wallet) return error ? <Callout tone="error">{tc("requestFailed", { message: error })}</Callout> : null;
+  return <WalletView wallet={wallet} meta={meta} error={error} onChanged={refresh} />;
 }

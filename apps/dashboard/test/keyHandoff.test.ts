@@ -12,6 +12,7 @@ const rotatedResponse = (over: Partial<RotateKeyResponse> = {}): RotateKeyRespon
   key: NEW_KEY,
   name: "Codex",
   key_prefix: NEW_KEY.slice(0, 12),
+  allowed_hosts: ["api.example.com:443"],
   parent_id: null,
   depth: 0,
   ...over,
@@ -30,11 +31,12 @@ describe("rotateToHandoff", () => {
     assert.equal(outcome.handoff.kind, "rotated");
     assert.equal(outcome.handoff.key, NEW_KEY);
     assert.equal(outcome.handoff.name, "Codex");
+    assert.deepEqual(outcome.handoff.allowedHosts, ["api.example.com:443"], "the hosts of the key come with the new secret");
     assert.notEqual(outcome.handoff.key, OLD_KEY);
   });
 
   it("replaces a previously created key: the page holds ONE handoff, so the old (dead) secret cannot be shown next to it", async () => {
-    let handoff = handoffFromCreated({ key: OLD_KEY, name: "Codex" });
+    let handoff = handoffFromCreated({ key: OLD_KEY, name: "Codex", allowed_hosts: [] });
     assert.equal(handoff.kind, "created");
     assert.equal(handoff.key, OLD_KEY);
     const outcome = await rotateToHandoff("key-1", async () => rotatedResponse());
@@ -55,9 +57,9 @@ describe("rotateToHandoff", () => {
   });
 
   it("every handoff has its own id (the React key that restarts the view on the skill tab)", () => {
-    const a = handoffFromCreated({ key: OLD_KEY, name: "a" });
-    const b = handoffFromRotated({ key: NEW_KEY, name: "a" });
-    const c = handoffFromRotated({ key: NEW_KEY, name: "a" });
+    const a = handoffFromCreated({ key: OLD_KEY, name: "a", allowed_hosts: [] });
+    const b = handoffFromRotated({ key: NEW_KEY, name: "a", allowed_hosts: [] });
+    const c = handoffFromRotated({ key: NEW_KEY, name: "a", allowed_hosts: [] });
     assert.equal(new Set([a.id, b.id, c.id]).size, 3);
   });
 });

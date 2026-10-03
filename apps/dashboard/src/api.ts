@@ -1,15 +1,7 @@
-// Central API client + type definitions for the MoneySwitch admin API.
-//
-// Aligned against apps/server/src/routes/{admin,agent}.ts as they existed at
-// the time this file was written. Where the backend route did not exist yet
-// (or its shape was ambiguous), the assumption is called out in a comment
-// prefixed with "ASSUMPTION:" — see the final report for the full list.
+// Central API client + type definitions for the MoneySwitch admin API (apps/server/src/routes/*). Every call here is made with the
+// administrator's token (SPEC.md §2): the dashboard has no other login.
 
 const TOKEN_KEY = "moneyswitch_admin_token";
-// SPEC-v0.3-employee.md §A.1: admin token (ms_admin_) and employee MoneyKey
-// (mk_live_) are stored under separate sessionStorage keys so switching
-// between the two login flows in the same tab never collides.
-const EMPLOYEE_KEY_STORAGE = "moneyswitch_employee_key";
 
 export function getToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -23,45 +15,24 @@ export function clearToken(): void {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-export function getEmployeeKey(): string | null {
-  return sessionStorage.getItem(EMPLOYEE_KEY_STORAGE);
-}
-
-export function setEmployeeKey(key: string): void {
-  sessionStorage.setItem(EMPLOYEE_KEY_STORAGE, key);
-}
-
-export function clearEmployeeKey(): void {
-  sessionStorage.removeItem(EMPLOYEE_KEY_STORAGE);
-}
-
 export class ApiError extends Error {
   status: number;
   code?: string | null;
-  /** v0.5: the server's `error` field (e.g. "INVALID_PAY_TO", "SLUG_TAKEN"). */
+  /** The server's `error` field (e.g. "ADDRESS_MISMATCH", "WALLET_BUSY"). */
   error?: string | null;
-  /** v0.5: finer reason, e.g. "LOOKS_LIKE_MONEYKEY" for INVALID_PAY_TO. */
-  reason?: string | null;
-  /** The offending request field, when the server names one (e.g. "feishu.webhook"). */
-  field?: string | null;
-  constructor(status: number, message: string, code?: string | null, error?: string | null, reason?: string | null, field?: string | null) {
+  constructor(status: number, message: string, code?: string | null, error?: string | null) {
     super(message);
     this.status = status;
     this.code = code;
     this.error = error ?? null;
-    this.reason = reason ?? null;
-    this.field = field ?? null;
   }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
-    // Only set Content-Type when there actually is a JSON body. Fastify's
-    // JSON body parser rejects a request that declares
-    // "Content-Type: application/json" but sends an empty body
-    // (FST_ERR_CTP_EMPTY_JSON_BODY) — this used to break every no-body POST
-    // (approve/deny/revoke/...) with a 400.
+    // Only set Content-Type when there actually is a JSON body. Fastify's JSON body parser rejects a request that declares
+    // "Content-Type: application/json" but sends an empty body (this used to break every no-body POST with a 400).
     ...(init?.body ? { "Content-Type": "application/json" } : {}),
     ...(init?.headers as Record<string, string> | undefined),
   };
@@ -77,21 +48,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
   if (!res.ok) {
-    const errObj = json as { error?: string; message?: string; code?: string; reason?: string; field?: string } | null;
+    const errObj = json as { error?: string; message?: string; code?: string } | null;
     const message = errObj?.message || errObj?.error || errObj?.code || res.statusText || "request_failed";
-    throw new ApiError(res.status, message, errObj?.code ?? null, errObj?.error ?? null, errObj?.reason ?? null, errObj?.field ?? null);
+    throw new ApiError(res.status, message, errObj?.code ?? null, errObj?.error ?? null);
   }
   return json as T;
 }
 
 // ---------------------------------------------------------------------------
-// MoneyKeys
+// Keys
 // ---------------------------------------------------------------------------
 
-// SPEC-v0.4.md §A — child keys / multi-level delegation. A key's status now
-// accounts for cascading revoke/expiry down an ancestor chain: a key can be
-// individually enabled+unexpired yet still unusable because a parent was
-// revoked or expired ("ancestor_revoked" / "ancestor_expired").
+// A key's status accounts for cascading revoke / expiry down an ancestor chain: a key can be enabled and unexpired yet unusable
+// because a parent was revoked or expired (child keys exist only through the agent API; the page just shows them).
 export type MoneyKeyStatus = "active" | "revoked" | "expired" | "ancestor_revoked" | "ancestor_expired";
 
 export interface MoneyKeyRow {
@@ -108,14 +77,10 @@ export interface MoneyKeyRow {
   expires_at: string | null;
   created_at: string;
   last_used_at: string | null;
-  // SPEC-v0.4.md §A: used_today/used_total are now SUBTREE totals (this
-  // key's own spend + every descendant's spend — what actually counts
-  // against this key's own budget). Never sum these across parent+child
-  // rows client-side (double counting) — to get a root's total just read
-  // the root row.
+  // used_today / used_total are SUBTREE totals (this key's own spend + every descendant's). Never sum them across parent and child
+  // rows (double counting): a root's total is its own row.
   used_today: string;
   used_total: string;
-  // --- SPEC-v0.4.md §A: child keys / multi-level delegation ---
   parent_id: string | null;
   depth: number;
   can_delegate: boolean;
@@ -127,11 +92,6 @@ export interface MoneyKeyRow {
   own_used_total: string;
 }
 
-/** GET /v1/admin/keys/tree node — same fields as a /v1/keys row, plus nested children (oldest first). */
-export interface MoneyKeyTreeNode extends MoneyKeyRow {
-  children: MoneyKeyTreeNode[];
-}
-
 export interface CreateMoneyKeyInput {
   name: string;
   total_budget: string;
@@ -141,8 +101,7 @@ export interface CreateMoneyKeyInput {
   allowed_hosts: string[];
   max_payments_per_minute?: number;
   expires_at?: string | null;
-  // SPEC-v0.4.md §A: lets the employee holding this key create sub-keys of
-  // their own (POST /v1/keys/children). Defaults to false server-side.
+  // Lets the key's holder create sub-keys of its own through the agent API (POST /v1/keys/children). Defaults to false server-side.
   can_delegate?: boolean;
 }
 
@@ -172,18 +131,13 @@ export interface RotateKeyResponse {
   key: string;
   name: string;
   key_prefix: string;
+  allowed_hosts: string[];
   parent_id: string | null;
   depth: number;
 }
 
 export async function rotateKey(id: string): Promise<RotateKeyResponse> {
   return request<RotateKeyResponse>(`/v1/keys/${encodeURIComponent(id)}/rotate`, { method: "POST" });
-}
-
-/** GET /v1/admin/keys/tree — same rows as GET /v1/keys, nested under their parent (roots = parent_id null). */
-export async function getKeyTree(): Promise<MoneyKeyTreeNode[]> {
-  const res = await request<{ tree: MoneyKeyTreeNode[] }>("/v1/admin/keys/tree");
-  return res.tree;
 }
 
 // ---------------------------------------------------------------------------
@@ -212,15 +166,15 @@ export async function listApprovals(status?: string): Promise<ApprovalRow[]> {
 }
 
 export async function approveApproval(id: string): Promise<{ id: string; status: string }> {
-  return request(`/v1/approvals/${id}/approve`, { method: "POST" });
+  return request(`/v1/approvals/${encodeURIComponent(id)}/approve`, { method: "POST" });
 }
 
 export async function denyApproval(id: string): Promise<{ id: string; status: string }> {
-  return request(`/v1/approvals/${id}/deny`, { method: "POST" });
+  return request(`/v1/approvals/${encodeURIComponent(id)}/deny`, { method: "POST" });
 }
 
 // ---------------------------------------------------------------------------
-// Usage / payments
+// Bills (the payment ledger)
 // ---------------------------------------------------------------------------
 
 export interface PaymentRow {
@@ -239,18 +193,13 @@ export interface PaymentRow {
   approval_id: string | null;
   created_at: string;
   updated_at: string;
-  // ASSUMPTION: the server payment payload does not currently include a
-  // `mock` flag (SPEC §9 T2 says mock-facilitator settlements must be
-  // visibly marked MOCK on the dashboard). We treat a payment as "mock" if
-  // either a `mock` boolean field is present and true, OR tx_hash starts
-  // with the `0xmock` convention from SPEC §9. This keeps the UI correct
-  // once the server adds a `mock` field, and degrades gracefully today.
+  // A payment is "mock" when the server says so or its tx hash starts with the `0xmock` convention of the offline mock facilitator.
   mock?: boolean;
   // "fetch" for every payment made now; "chat" only on old rows written by the removed OpenAI-compatible gateway.
   kind: "fetch" | "chat";
 }
 
-export async function listUsage(): Promise<PaymentRow[]> {
+export async function listBills(): Promise<PaymentRow[]> {
   const res = await request<{ payments: PaymentRow[] }>("/v1/admin/usage");
   return res.payments;
 }
@@ -260,162 +209,47 @@ export function isMockPayment(p: PaymentRow): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Wallet
+// Wallet (SPEC.md §1: status, create, "I wrote it down", replace)
 // ---------------------------------------------------------------------------
 
 /** Why one unlock source did not open the wallet (never contains a credential). */
 export type UnlockFailureReason = "env_wrong" | "secret_missing" | "secret_empty" | "secret_unreadable" | "secret_wrong";
 
-/** GET /v1/admin/wallet → health: what would happen after a restart, whether the backup is done, how much is at risk. */
+/** GET /v1/admin/wallet → health: what would happen after a restart, whether the words were acknowledged, how much is at risk. */
 export interface WalletHealth {
-  /** How wallet.json is protected, as RECORDED in it: auto = a random secret kept on the server, password = a human password, none = no wallet. Absent on older servers. */
-  protection?: "auto" | "password" | "none";
-  /** auto = the wallet's own unlock secret; env_or_file = MONEYSWITCH_WALLET_PASSWORD(_FILE); manual = a human unlocks it; none = no wallet. */
+  /** How wallet.json is protected, as RECORDED in it: auto = a random secret kept on the server, password = a wallet made by an older version, none = no wallet. */
+  protection: "auto" | "password" | "none";
+  /** auto = the wallet's own unlock secret; env_or_file = MONEYSWITCH_WALLET_PASSWORD(_FILE); manual = a password wallet nobody gave the password to; none = no wallet. */
   unlock_mode: "auto" | "env_or_file" | "manual" | "none";
-  /** Result of the last real decrypt attempt; null = no attempt (manual / none / not tried yet). */
+  /** Result of the last real decrypt attempt; null = no attempt (manual / none). */
   auto_unlock_ok: boolean | null;
-  /** The last startup attempt per source, each with its own reason when it failed. Absent on older servers. */
-  unlock_sources?: Array<{ source: "env_or_file" | "auto"; ok: boolean; reason?: UnlockFailureReason }>;
+  /** The last startup attempt per source, each with its own reason when it failed. */
+  unlock_sources: Array<{ source: "env_or_file" | "auto"; ok: boolean; reason?: UnlockFailureReason }>;
   /** Auto wallets only: does the unlock secret file exist right now? false = the next restart leaves the wallet locked. */
-  secret_file_present?: boolean | null;
+  secret_file_present: boolean | null;
+  /** Names of files inside retired/ that hold an unlock secret which still opens a legacy password wallet without its password. */
+  retired_secrets_open_live_key: string[];
   /** false = the data folder / unlock secret could NOT be restricted to the server's account (red warning); null = nothing to protect. */
-  secret_protected?: boolean | null;
-  secret_protection_detail?: string | null;
+  secret_protected: boolean | null;
+  secret_protection_detail: string | null;
   /** Credential files that belong to no live wallet.json. wallet_file_missing = wallet.json is gone but they remain. */
-  orphan_files?: { secrets: string[]; retired: number; wallet_file_missing: boolean };
-  /**
-   * Password wallets only: names of files inside retired/ that hold an unlock secret which still opens this wallet without its
-   * password (they are removed whenever the password is entered; this lists what is still there). Absent on older servers.
-   */
-  retired_secrets_open_live_key?: string[];
+  orphan_files: { secrets: string[]; retired: number; wallet_file_missing: boolean };
   backup: "confirmed" | "missing" | "not_applicable";
   /** USDC, e.g. "50". */
   float_limit: string;
   /** Per enabled chain where the balance is known (CAIP-2 → over the limit?). */
   over_float_limit: Record<string, boolean>;
-  retired_wallets: Array<{ address: string; retired_at: string; reason: string }>;
 }
 
-export interface WalletInfo {
-  address: string | null;
-  unlocked: boolean;
-  has_keystore: boolean;
-  auto_unlock_configured?: boolean;
-  usdc_balance: string | null;
+/** The same address on one chain. */
+export interface WalletNetwork {
   network: string;
-  /** Whether the keystore holds a 12-word recovery phrase (false for a wallet imported from a bare private key). */
-  has_recovery_phrase?: boolean;
-  backup_confirmed_at?: string | null;
-  /** Absent on servers older than the wallet-lifecycle release. */
-  health?: WalletHealth;
-}
-
-export async function getWallet(network?: string): Promise<WalletInfo> {
-  return request(`/v1/admin/wallet${network ? `?network=${encodeURIComponent(network)}` : ""}`);
-}
-
-export interface CreatedWallet {
-  address: string;
-  /** The 12 words, returned exactly once. */
-  recovery_phrase: string;
-  unlock_mode: "auto" | "manual";
-  backup_confirmed: boolean;
-}
-
-/** No password = auto-unlock (the default); a password = ask for it after every restart. */
-export async function createWallet(opts: { password?: string } = {}): Promise<CreatedWallet> {
-  return request("/v1/admin/wallet/create", {
-    method: "POST",
-    body: JSON.stringify(opts.password === undefined ? {} : { password: opts.password }),
-  });
-}
-
-export async function unlockWallet(password: string): Promise<{ address: string; unlocked: boolean }> {
-  return request("/v1/admin/wallet/unlock", {
-    method: "POST",
-    body: JSON.stringify({ password }),
-  });
-}
-
-export type WalletImport =
-  | { kind: "private_key"; private_key: string }
-  | { kind: "keystore"; keystore: string; source_password: string }
-  | { kind: "mnemonic"; mnemonic: string };
-
-/**
- * Only the account-0 private key is kept, never the phrase. `expectedAddress` makes the server refuse
- * (400 EXPECTED_ADDRESS_MISMATCH) unless the key belongs to that address.
- */
-export async function importWallet(source: WalletImport, opts: { password?: string; expectedAddress?: string } = {}): Promise<{ address: string }> {
-  return request("/v1/admin/wallet/import", {
-    method: "POST",
-    body: JSON.stringify({
-      ...source,
-      ...(opts.password === undefined ? {} : { password: opts.password }),
-      ...(opts.expectedAddress === undefined ? {} : { expected_address: opts.expectedAddress }),
-    }),
-  });
-}
-
-/** Without a password: the wallet.json of a password wallet. With one: a portable keystore protected by it (the only useful download for an auto-unlock wallet). */
-export async function backupWallet(password?: string): Promise<{ address: string; keystore: string }> {
-  return request("/v1/admin/wallet/backup", {
-    method: "POST",
-    ...(password === undefined ? {} : { body: JSON.stringify({ password }) }),
-  });
-}
-
-/** Checks two words (1-based positions) of the recovery phrase and records the backup as confirmed. */
-export async function confirmBackup(positions: [number, number], words: [string, string]): Promise<{ confirmed: boolean; backup_confirmed_at: string }> {
-  return request("/v1/admin/wallet/backup/confirm", { method: "POST", body: JSON.stringify({ positions, words }) });
-}
-
-export type RevealedWalletSecret =
-  | { address: string; kind: "mnemonic"; recovery_phrase: string }
-  | { address: string; kind: "private_key"; private_key: string };
-
-/** The server only answers when `confirmAddress` is the current wallet address, exactly. */
-export async function revealWallet(confirmAddress: string): Promise<RevealedWalletSecret> {
-  return request("/v1/admin/wallet/reveal", { method: "POST", body: JSON.stringify({ confirm_address: confirmAddress }) });
-}
-
-/** Turning it on needs the wallet unlocked; turning it off needs a new password (8+ characters). */
-export async function setAutoUnlock(enabled: true): Promise<{ address: string; unlock_mode: "auto" }>;
-export async function setAutoUnlock(enabled: false, password: string): Promise<{ address: string; unlock_mode: "manual" }>;
-export async function setAutoUnlock(enabled: boolean, password?: string): Promise<{ address: string; unlock_mode: "auto" | "manual" }> {
-  return request("/v1/admin/wallet/auto-unlock", {
-    method: "POST",
-    body: JSON.stringify(enabled ? { enabled } : { enabled, password }),
-  });
-}
-
-export type ReplaceReason = "lost_password" | "suspected_leak" | "other";
-
-export interface ReplacedWallet {
-  address: string;
-  unlock_mode: "auto" | "manual";
-  /** Only when a new wallet was created. */
-  recovery_phrase?: string;
-  retired: { address: string; retired_at: string; reason: string; keystore_file: string };
-}
-
-/** The old wallet files are moved to <data dir>/retired/ (never deleted). 409 WALLET_BUSY while a payment is in flight. */
-export async function replaceWallet(
-  confirmAddress: string,
-  reason: ReplaceReason,
-  next: { kind: "create" } | WalletImport,
-  opts: { password?: string; expectedAddress?: string } = {}
-): Promise<ReplacedWallet> {
-  return request("/v1/admin/wallet/replace", {
-    method: "POST",
-    body: JSON.stringify({
-      confirm_address: confirmAddress,
-      reason,
-      ...next,
-      ...(opts.password === undefined ? {} : { password: opts.password }),
-      ...(opts.expectedAddress === undefined || next.kind === "create" ? {} : { expected_address: opts.expectedAddress }),
-    }),
-  });
+  label: string;
+  explorer_base: string;
+  is_mainnet: boolean;
+  /** USDC; null = the RPC did not answer. */
+  usdc_balance: string | null;
+  over_float_limit: boolean | null;
 }
 
 export interface RetiredWalletRow {
@@ -425,242 +259,72 @@ export interface RetiredWalletRow {
   keystore_file: string;
   has_secret_file: boolean;
   replaced_by: string | null;
-  /** Live USDC balance on `network`; null = could not be read. */
+  /** USDC per enabled chain (CAIP-2); null = could not be read. */
+  balances: Record<string, string | null>;
+}
+
+export interface WalletInfo {
+  address: string | null;
+  unlocked: boolean;
+  has_keystore: boolean;
+  /** Whether the keystore holds a 12-word recovery phrase (false for a wallet made from a bare private key by an older version). */
+  has_recovery_phrase: boolean;
+  backup_confirmed_at: string | null;
+  /** The default chain, for the one-line balance. */
+  network: string;
   usdc_balance: string | null;
+  networks: WalletNetwork[];
+  retired_wallets: RetiredWalletRow[];
+  health: WalletHealth;
 }
 
-export async function listRetiredWallets(network?: string): Promise<{ network: string; folder: string; retired_wallets: RetiredWalletRow[] }> {
-  return request(`/v1/admin/wallet/retired${network ? `?network=${encodeURIComponent(network)}` : ""}`);
+export async function getWallet(): Promise<WalletInfo> {
+  return request("/v1/admin/wallet");
+}
+
+export interface CreatedWallet {
+  address: string;
+  /** The 12 words, returned exactly once. */
+  recovery_phrase: string;
+  backup_confirmed: boolean;
+}
+
+/** The wallet unlocks itself after a restart; there is no password to choose. */
+export async function createWallet(): Promise<CreatedWallet> {
+  return request("/v1/admin/wallet/create", { method: "POST" });
+}
+
+/** "I wrote the 12 words down": records the acknowledgement. */
+export async function confirmBackup(): Promise<{ confirmed: boolean; backup_confirmed_at: string }> {
+  return request("/v1/admin/wallet/backup/confirm", { method: "POST" });
+}
+
+export type ReplaceReason = "replaced" | "lost_password" | "suspected_leak";
+
+export interface ReplacedWallet extends CreatedWallet {
+  retired: { address: string; retired_at: string; reason: string; keystore_file: string };
+}
+
+/** The old wallet files are moved to <data dir>/retired/ (never deleted). 409 WALLET_BUSY while a payment is in flight. */
+export async function replaceWallet(confirmAddress: string, reason: ReplaceReason): Promise<ReplacedWallet> {
+  return request("/v1/admin/wallet/replace", {
+    method: "POST",
+    body: JSON.stringify({ confirm_address: confirmAddress, reason }),
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Overview (derived client-side from /v1/keys + /v1/admin/usage + /v1/admin/wallet)
+// Login
 // ---------------------------------------------------------------------------
-// ASSUMPTION: SPEC §6 does not list a dedicated "today used/limit" endpoint
-// for the whole account (only per-key used_today/used_total via GET /v1/keys,
-// and a global payments list via GET /v1/admin/usage). The Overview page
-// therefore derives "today used" by summing settled+reserved+unknown
-// payments created today (UTC) across all keys from listUsage(), and derives
-// "today limit" as the sum of each key's daily_budget from listKeys(). This
-// is a client-side approximation pending a dedicated summary endpoint.
 
-export function isCountedStatus(status: PaymentRow["status"]): boolean {
-  return status === "settled" || status === "reserved" || status === "unknown";
-}
-
-export function isTodayUtc(iso: string): boolean {
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getUTCFullYear() === now.getUTCFullYear() &&
-    d.getUTCMonth() === now.getUTCMonth() &&
-    d.getUTCDate() === now.getUTCDate()
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Login probe: verify the token actually works before storing it as "logged in".
-// ASSUMPTION: there is no dedicated /v1/admin/whoami endpoint; we use
-// GET /v1/keys as the auth probe since it is a cheap, side-effect-free admin
-// route that returns 403 for bad/missing tokens (see apps/server/src/auth.ts).
+// There is no dedicated whoami endpoint; GET /v1/keys is a cheap, side-effect-free admin route that answers 403 for a bad or missing
+// token (see apps/server/src/auth.ts).
 export async function verifyAdminToken(token: string): Promise<boolean> {
   const res = await fetch("/v1/keys", {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.ok;
 }
-
-// Error bodies of the MoneyKey-authed calls (SPEC-v0.4.md §A) are flat:
-//   400 { error, code: "CHILD_EXCEEDS_PARENT" | "INVALID_REQUEST", message, field?, parent_value? }
-//   403 { code: "DELEGATION_NOT_ALLOWED" | "MAX_DEPTH_EXCEEDED" | "CHILDREN_LIMIT_REACHED", message, field? }
-//   401 { status: "error", code, limit_scope?, limit_key_prefix? }
-interface FlatKeyErrorBody {
-  error?: string;
-  code?: string;
-  message?: string;
-  field?: string;
-  parent_value?: string | string[];
-  status?: string;
-  limit_scope?: "self" | "ancestor";
-  limit_key_prefix?: string;
-}
-
-/** Thrown by the MoneyKey-authed calls (status, history, sub-keys); carries the error fields (only the relevant ones are ever set). */
-export class KeyApiError extends Error {
-  status: number;
-  code: string | null;
-  /** SPEC-v0.4.md §A: the request field (snake_case) that violated a parent's limit, e.g. "daily_budget". */
-  field: string | null;
-  /** SPEC-v0.4.md §A: the parent's own value for `field`, to show "cannot exceed the parent: {parent_value}". */
-  parentValue: string | string[] | null;
-  /** SPEC-v0.4.md §A: whose limit actually tripped — this key's own, or an ancestor's. */
-  limitScope: "self" | "ancestor" | null;
-  limitKeyPrefix: string | null;
-  constructor(
-    status: number,
-    message: string,
-    code?: string | null,
-    extra?: { field?: string | null; parentValue?: string | string[] | null; limitScope?: "self" | "ancestor" | null; limitKeyPrefix?: string | null }
-  ) {
-    super(message);
-    this.status = status;
-    this.code = code ?? null;
-    this.field = extra?.field ?? null;
-    this.parentValue = extra?.parentValue ?? null;
-    this.limitScope = extra?.limitScope ?? null;
-    this.limitKeyPrefix = extra?.limitKeyPrefix ?? null;
-  }
-}
-
-async function keyAuthedRequest<T>(path: string, key: string, init?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {
-    // Same fix as request() above: only send Content-Type when there is a body.
-    ...(init?.body ? { "Content-Type": "application/json" } : {}),
-    ...(init?.headers as Record<string, string> | undefined),
-    Authorization: `Bearer ${key}`,
-  };
-  const res = await fetch(path, { ...init, headers });
-  const text = await res.text();
-  let json: unknown = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
-    }
-  }
-  if (!res.ok) {
-    const flat = json as FlatKeyErrorBody | null;
-    const message = flat?.message ?? (typeof flat?.error === "string" ? flat.error : undefined) ?? res.statusText;
-    throw new KeyApiError(res.status, message, flat?.code ?? null, {
-      field: flat?.field ?? null,
-      parentValue: flat?.parent_value ?? null,
-      limitScope: flat?.limit_scope ?? null,
-      limitKeyPrefix: flat?.limit_key_prefix ?? null,
-    });
-  }
-  return json as T;
-}
-
-// ---------------------------------------------------------------------------
-// SPEC-v0.3-employee.md §A — employee view (MoneyKey auth, Bearer).
-//
-// Existing /v1/status shape (confirmed by coordinator): { remaining_today,
-// remaining_total, per_request_limit, currency, network }. §B.0 has a
-// backend coder concurrently adding optional key_name/key_prefix/
-// daily_budget/total_budget to the same endpoint. All four are typed
-// optional here; §A.8 says the frontend must fall back gracefully (masked
-// key prefix instead of name, no daily/total ring) when they're absent.
-// ---------------------------------------------------------------------------
-
-export interface StatusResponse {
-  remaining_today: string;
-  remaining_total: string;
-  per_request_limit: string;
-  currency: string;
-  network: string;
-  /** ASSUMPTION (SPEC-v0.3-employee.md §B.0, being added concurrently): may be absent on old servers. */
-  key_name?: string;
-  /** ASSUMPTION (SPEC-v0.3-employee.md §B.0): may be absent on old servers. */
-  key_prefix?: string;
-  /** ASSUMPTION (SPEC-v0.3-employee.md §B.0): may be absent on old servers. */
-  daily_budget?: string;
-  /** ASSUMPTION (SPEC-v0.3-employee.md §B.0): may be absent on old servers. */
-  total_budget?: string;
-
-  // --- SPEC-v0.4.md §A: child keys / multi-level delegation. All optional —
-  // absent on servers older than v0.4. ---
-  /** Subtree total (this key's own spend + all descendants'). */
-  used_today?: string;
-  /** Subtree total (this key's own spend + all descendants'). */
-  used_total?: string;
-  /** remaining_today/remaining_total above are now EFFECTIVE (min over this key and its ancestors); these say whose limit is currently binding. */
-  remaining_today_scope?: "self" | "ancestor";
-  remaining_total_scope?: "self" | "ancestor";
-  /** Effective approval threshold (this key's own, or a tighter ancestor's). */
-  approval_threshold?: string | null;
-  /** Effective expiry (this key's own, or an earlier ancestor's). */
-  expires_at?: string | null;
-  depth?: number;
-  max_depth?: number;
-  can_delegate?: boolean;
-  can_create_children?: boolean;
-  is_child?: boolean;
-}
-
-/** GET /v1/status — the logged-in MoneyKey's own remaining budget. Also used as the employee-login probe. */
-export async function getStatus(key: string): Promise<StatusResponse> {
-  return keyAuthedRequest<StatusResponse>("/v1/status", key);
-}
-
-// Existing /v1/history shape (confirmed by coordinator):
-// { history: [{ id, url, method, network, amount, status, tx_hash, error_code, created_at, kind }] }
-export interface HistoryRow {
-  id: string;
-  url: string;
-  method: string;
-  network: string;
-  amount: string;
-  status: PaymentRow["status"];
-  tx_hash: string | null;
-  error_code: string | null;
-  created_at: string;
-  /** "chat" only on old rows written by the removed OpenAI-compatible gateway. */
-  kind: "fetch" | "chat";
-}
-
-/** GET /v1/history — the logged-in MoneyKey's own payment history (no key_id/host columns — it's implicitly "mine"). */
-export async function getHistory(key: string): Promise<HistoryRow[]> {
-  const res = await keyAuthedRequest<{ history: HistoryRow[] }>("/v1/history", key);
-  return res.history ?? [];
-}
-
-// ---------------------------------------------------------------------------
-// SPEC-v0.4.md §A — child keys, employee-side ("我的子 Key" page). MoneyKey
-// auth throughout — the caller's own key is always the implicit parent.
-// ---------------------------------------------------------------------------
-
-/** A direct child's row — same shape as an admin /v1/keys row (no key, no hash). */
-export type ChildKeyRow = MoneyKeyRow;
-
-export interface CreateChildKeyInput {
-  name: string;
-  daily_budget: string;
-  total_budget: string;
-  per_request_limit: string;
-  approval_threshold?: string | null;
-  allowed_hosts?: string[];
-  expires_at?: string | null;
-  can_delegate?: boolean;
-  max_payments_per_minute?: number;
-}
-
-export interface CreateChildKeyResponse extends ChildKeyRow {
-  key: string; // plaintext mk_live_ key, shown once
-}
-
-/** GET /v1/keys/children — the caller's direct children only. */
-export async function listMyChildKeys(key: string): Promise<ChildKeyRow[]> {
-  const res = await keyAuthedRequest<{ children: ChildKeyRow[] }>("/v1/keys/children", key);
-  return res.children ?? [];
-}
-
-/** POST /v1/keys/children — create a sub-key of the caller's own key. */
-export async function createMyChildKey(key: string, input: CreateChildKeyInput): Promise<CreateChildKeyResponse> {
-  return keyAuthedRequest<CreateChildKeyResponse>("/v1/keys/children", key, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-/** POST /v1/keys/children/:id/revoke — only works for a key in the caller's own subtree. */
-export async function revokeMyChildKey(key: string, id: string): Promise<{ id: string; revoked: boolean }> {
-  return keyAuthedRequest<{ id: string; revoked: boolean }>(`/v1/keys/children/${id}/revoke`, key, { method: "POST" });
-}
-
-// ---------------------------------------------------------------------------
-// First-run setup + metadata (docs/ux-audit.md A-1/A-7/A-11)
-// ---------------------------------------------------------------------------
 
 /** GET /v1/setup/status — unauthenticated; only says whether a one-time setup link is still claimable. */
 export async function getSetupStatus(): Promise<{ setup_link_active: boolean }> {
@@ -685,13 +349,14 @@ export async function claimSetupToken(setupToken: string): Promise<string> {
 
 export interface AdminMeta {
   networks?: Array<{ network: string; chain_id: number; usdc_address: string; network_label: string; explorer_base: string; is_mainnet: boolean }>;
+  /** CAIP-2 id of the default network. */
   network: string;
   chain_id: number | null;
   usdc_address: string;
   explorer_base: string;
   /** Human-readable network name, e.g. "Monad testnet" / "Monad mainnet". */
   network_label?: string;
-  /** True when the active network is Monad mainnet (real USDC). */
+  /** True when the default network is a mainnet (real USDC). */
   is_mainnet?: boolean;
   faucet_url: string | null;
   wallet_password_from_env: boolean;
@@ -706,54 +371,4 @@ export interface AdminMeta {
 /** GET /v1/admin/meta — admin only. */
 export async function getAdminMeta(): Promise<AdminMeta> {
   return request<AdminMeta>("/v1/admin/meta");
-}
-
-// ---------------------------------------------------------------------------
-export interface PaidFetchInput {
-  url: string;
-  method?: string;
-  headers?: Record<string, string>;
-  body?: unknown;
-  max_price?: string;
-  approval_id?: string;
-}
-
-/** POST /v1/fetch envelope (docs/money-api-v0.md). */
-export interface PaidFetchResponse {
-  /** "payment_unknown": a payment was signed and sent, then the response was lost — it may have been charged; never resend blindly. */
-  status: "ok" | "denied" | "approval_required" | "payment_failed" | "payment_unknown" | "error";
-  code: string | null;
-  /**
-   * Whether this call cost money: "yes" a settlement was confirmed, "no" definitely nothing was
-   * signed or charged, "maybe" a payment was signed and sent but the outcome is unknown.
-   * Absent on servers older than this field (treat as the pre-field behaviour).
-   */
-  charged?: "yes" | "no" | "maybe";
-  http_status: number | null;
-  headers: Record<string, string>;
-  body: string | null;
-  payment: { amount: string; tx_hash: string | null; network: string; mock?: boolean } | null;
-  /** Human-readable explanation for payment_unknown / UPSTREAM_BODY_INCOMPLETE / PAYMENT_REJECTED. */
-  reason?: string | null;
-  reserved_until_expiry?: boolean;
-  approval_id: string | null;
-  remaining_today: string;
-  remaining_total: string;
-  limit_scope?: string;
-  limit_key_prefix?: string;
-}
-
-/** Pays for an x402 URL with a MoneyKey (the agent path, used by the Playground's "paid fetch" mode). */
-export async function paidFetch(key: string, input: PaidFetchInput): Promise<PaidFetchResponse> {
-  const res = await fetch("/v1/fetch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify(input),
-  });
-  const json = (await res.json().catch(() => null)) as PaidFetchResponse | { code?: string; message?: string; hint?: string } | null;
-  if (!res.ok && (!json || !("status" in json))) {
-    const j = json as { code?: string; message?: string; hint?: string } | null;
-    throw new ApiError(res.status, j?.message ?? j?.code ?? res.statusText, j?.code ?? null, null, j?.hint ?? null);
-  }
-  return json as PaidFetchResponse;
 }

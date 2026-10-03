@@ -9,7 +9,7 @@ import { publicBase } from "../public-base.js";
 const FAUCET_URL = "https://faucet.circle.com/";
 
 /**
- * First-run setup + Dashboard metadata routes (docs/ux-audit.md).
+ * First-run sign-in + Dashboard metadata routes.
  *
  * - GET  /v1/setup/status   unauthenticated, returns ONLY whether a one-time setup link is still claimable
 

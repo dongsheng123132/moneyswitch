@@ -11,16 +11,18 @@ export interface Handoff {
   /** The plaintext MoneyKey. Shown once; only ever held in React state. */
   key: string;
   name: string;
+  /** The hosts the key may pay: whether the install prompt may ask for the test payment depends on them. */
+  allowedHosts: string[];
 }
 
 let nextId = 1;
 
-export function handoffFromCreated(res: Pick<CreateMoneyKeyResponse, "key" | "name">): Handoff {
-  return { id: nextId++, kind: "created", key: res.key, name: res.name };
+export function handoffFromCreated(res: Pick<CreateMoneyKeyResponse, "key" | "name" | "allowed_hosts">): Handoff {
+  return { id: nextId++, kind: "created", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [] };
 }
 
-export function handoffFromRotated(res: Pick<RotateKeyResponse, "key" | "name">): Handoff {
-  return { id: nextId++, kind: "rotated", key: res.key, name: res.name };
+export function handoffFromRotated(res: Pick<RotateKeyResponse, "key" | "name" | "allowed_hosts">): Handoff {
+  return { id: nextId++, kind: "rotated", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [] };
 }
 
 export type RotateOutcome = { ok: true; handoff: Handoff } | { ok: false; message: string };

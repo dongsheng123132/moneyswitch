@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, KeyRound, ChevronRight, ChevronDown } from "lucide-react";
 import { usePolling } from "../usePolling";
 import { listKeys, createKey, revokeKey, rotateKey, ApiError, MoneyKeyRow } from "../api";
@@ -11,6 +10,7 @@ import Drawer from "../components/Drawer";
 import Callout from "../components/Callout";
 import EmptyState from "../components/EmptyState";
 import Term from "../components/Term";
+import AllowedHostsField from "../components/AllowedHostsField";
 import KeyHandoff from "../components/KeyHandoff";
 import KeyRowActions from "../components/KeyRowActions";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -20,12 +20,11 @@ import { useRelativeTime } from "../i18n/format";
 import { common } from "../i18n/strings/common";
 import { keysStrings } from "../i18n/strings/keys";
 import { skillStrings } from "../i18n/strings/skill";
-import { skillBaseUrl } from "../skillText";
+import { skillBaseUrl, testPaymentAvailable, withTestHost } from "../skillText";
 import { handoffFromCreated, rotateToHandoff, type Handoff } from "../keyHandoff";
 import { useAdminMeta } from "../useAdminMeta";
 import "../styles/keys.css";
 
-const PLAYGROUND_KEY_STORAGE = "moneyswitch_playground_key";
 const CALL_PRICE_MICROS = toMicros("0.01");
 const DECIMAL_RE = /^\d+(\.\d{1,6})?$/;
 
@@ -39,6 +38,8 @@ interface FormState {
   max_payments_per_minute: string;
   expires_at: string; // yyyy-mm-dd from <input type="date">
   can_delegate: boolean;
+  /** Ticked by default where the test payment is on offer (a testnet): adds the test receiver's host to the allowed hosts. */
+  allow_test_endpoint: boolean;
 }
 
 function emptyForm(hosts: string): FormState {
@@ -52,6 +53,7 @@ function emptyForm(hosts: string): FormState {
     max_payments_per_minute: "10",
     expires_at: "",
     can_delegate: false,
+    allow_test_endpoint: true,
   };
 }
 
@@ -110,9 +112,9 @@ export default function MoneyKeysPage() {
   const ts = useT(skillStrings);
   const tc = useT(common);
   const relTime = useRelativeTime();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const meta = useAdminMeta();
+  // The ten-minute path: on a testnet the form offers the test payment endpoint (SPEC.md §0).
+  const testAvailable = testPaymentAvailable(meta);
 
   const { data: keys, error, loading, refresh } = usePolling(listKeys);
 
@@ -158,16 +160,6 @@ export default function MoneyKeysPage() {
     setShowCreate(true);
   }
 
-  useEffect(() => {
-    if (searchParams.get("new") === "1") {
-      openCreate();
-      const next = new URLSearchParams(searchParams);
-      next.delete("new");
-      setSearchParams(next, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   function closeDrawer() {
     setShowCreate(false);
     setHandoff(null);
@@ -212,10 +204,7 @@ export default function MoneyKeysPage() {
         daily_budget: form.daily_budget,
         per_request_limit: form.per_request_limit,
         approval_threshold: form.approval_threshold.trim() ? form.approval_threshold.trim() : null,
-        allowed_hosts: form.allowed_hosts
-          .split(",")
-          .map((h) => h.trim())
-          .filter(Boolean),
+        allowed_hosts: withTestHost(form.allowed_hosts.split(","), testAvailable && form.allow_test_endpoint),
         max_payments_per_minute: form.max_payments_per_minute ? Number(form.max_payments_per_minute) : undefined,
         expires_at: expiresIso,
         can_delegate: form.can_delegate,
@@ -259,11 +248,6 @@ export default function MoneyKeysPage() {
       setRotateError(ts("rotateFailed", { message: outcome.message }));
     }
     setRotating(false);
-  }
-
-  function tryInPlayground(key: string) {
-    sessionStorage.setItem(PLAYGROUND_KEY_STORAGE, key);
-    navigate("/playground");
   }
 
   const apiBase = window.location.origin;
@@ -439,6 +423,14 @@ export default function MoneyKeysPage() {
               {errors.name && <div className="field-error">{errors.name}</div>}
             </div>
 
+            <AllowedHostsField
+              value={form.allowed_hosts}
+              onChange={(allowed_hosts) => setForm({ ...form, allowed_hosts })}
+              testAvailable={testAvailable}
+              allowTest={form.allow_test_endpoint}
+              onAllowTestChange={(allow_test_endpoint) => setForm({ ...form, allow_test_endpoint })}
+            />
+
             <label className="keys-can-delegate-toggle">
               <input
                 type="checkbox"
@@ -530,18 +522,6 @@ export default function MoneyKeysPage() {
               <summary>{t("advancedTitle")}</summary>
               <div className="field">
                 <label>
-                  <Term k="allowedHosts">{t("allowedHostsLabel")}</Term>
-                </label>
-                <textarea
-                  rows={2}
-                  value={form.allowed_hosts}
-                  onChange={(e) => setForm({ ...form, allowed_hosts: e.target.value })}
-                  placeholder={t("allowedHostsPlaceholder")}
-                />
-                {form.allowed_hosts.trim() === "" && <Callout tone="warn">{t("allowedHostsHintEmpty")}</Callout>}
-              </div>
-              <div className="field">
-                <label>
                   <Term k="rateLimit">{t("rateLimitLabel")}</Term>
                 </label>
                 <input value={form.max_payments_per_minute} onChange={(e) => setForm({ ...form, max_payments_per_minute: e.target.value })} />
@@ -571,7 +551,7 @@ export default function MoneyKeysPage() {
             handoff={handoff}
             skillBase={skillBase}
             apiBase={apiBase}
-            onTryPlayground={() => tryInPlayground(handoff.key)}
+            testnet={testAvailable}
             onDone={closeDrawer}
           />
         )}

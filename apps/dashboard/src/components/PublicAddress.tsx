@@ -3,13 +3,12 @@ import { QRCodeSVG } from "qrcode.react";
 import { Share2, QrCode } from "lucide-react";
 import CopyButton from "./CopyButton";
 import { useT } from "../i18n";
-import { threeThings } from "../i18n/strings/threeThings";
-import "../styles/threeThings.css";
+import { secretStrings } from "../i18n/strings/secrets";
+import "../styles/secrets.css";
 
 /**
- * SPEC-v0.5 §1 — a receiving address, always rendered the same way: green,
- * share icon, "Public: safe to share". Use it everywhere a 0x pay-to/wallet
- * address is shown so users learn "green = shareable".
+ * The wallet address, always rendered the same way: green, share icon,
+ * "Public: safe to share" - so users learn "green = shareable".
  */
 export default function PublicAddress({
   address,
@@ -25,7 +24,7 @@ export default function PublicAddress({
   qr?: "toggle" | "always" | "never";
   size?: "sm" | "md" | "lg";
 }) {
-  const t = useT(threeThings);
+  const t = useT(secretStrings);
   const [qrOpen, setQrOpen] = useState(qr === "always");
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   return (

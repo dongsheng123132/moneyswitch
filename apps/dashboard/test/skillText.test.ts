@@ -1,7 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { SKILL_BEGIN_MARKER, SKILL_END_MARKER } from "@moneyswitch/skill";
-import { buildInstallText, skillBaseUrl, maskedForDisplay, looksLikeMoneyKey, guessAgentFromName, SKILL_AGENTS } from "../src/skillText.ts";
+import {
+  buildInstallText,
+  skillBaseUrl,
+  maskedForDisplay,
+  looksLikeMoneyKey,
+  guessAgentFromName,
+  SKILL_AGENTS,
+  testPaymentAvailable,
+  withTestHost,
+  TEST_PAYMENT_HOST,
+  TEST_PAYMENT_URL,
+} from "../src/skillText.ts";
 import { skillStrings } from "../src/i18n/strings/skill.ts";
 
 const KEY = "mk_live_Ab3dEf6hIj9lMn2pQr5tUv8xYz1B4cDe";
@@ -118,5 +129,45 @@ describe("i18n", () => {
   });
   it("has a label for every agent in the selector", () => {
     for (const a of SKILL_AGENTS) assert.ok(`agent_${a}` in skillStrings.en, a);
+  });
+});
+
+describe("the ten-minute path: when the test payment is on offer", () => {
+  const monadTestnet = { network: "eip155:10143", chain_id: 10143, usdc_address: "0x1", network_label: "Monad Testnet", explorer_base: "https://x", is_mainnet: false };
+  const baseSepolia = { ...monadTestnet, network: "eip155:84532", chain_id: 84532, network_label: "Base Sepolia" };
+  const monadMainnet = { ...monadTestnet, network: "eip155:143", chain_id: 143, network_label: "Monad Mainnet", is_mainnet: true };
+
+  it("a testnet default with Monad testnet enabled: yes", () => {
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet] }), true);
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [baseSepolia, monadTestnet] }), true, "Base Sepolia default, Monad testnet enabled too");
+  });
+
+  it("a mainnet default, an unknown instance, or no Monad testnet (the only chain the test receiver accepts): no", () => {
+    assert.equal(testPaymentAvailable({ is_mainnet: true, networks: [monadMainnet, monadTestnet] }), false);
+    assert.equal(testPaymentAvailable(null), false);
+    assert.equal(testPaymentAvailable(undefined), false);
+    assert.equal(testPaymentAvailable({ is_mainnet: undefined, networks: [monadTestnet] }), false);
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [baseSepolia] }), false);
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: undefined }), false);
+  });
+
+  it("withTestHost: typed hosts stay, the test host is added once when ticked, and never when not", () => {
+    assert.deepEqual(withTestHost(["api.example.com:443", " ", ""], true), ["api.example.com:443", TEST_PAYMENT_HOST]);
+    assert.deepEqual(withTestHost([""], true), [TEST_PAYMENT_HOST]);
+    assert.deepEqual(withTestHost(["APP.MONEYSWITCH.DEV:443"], true), ["APP.MONEYSWITCH.DEV:443"], "no duplicate in another letter case");
+    assert.deepEqual(withTestHost(["api.example.com:443"], false), ["api.example.com:443"]);
+    assert.deepEqual(withTestHost([], false), []);
+  });
+
+  it("buildInstallText passes the offer on: the text asks for the test payment only for a testnet and a key that may pay the host", () => {
+    const hosts = ["api.example.com:443", TEST_PAYMENT_HOST];
+    const on = buildInstallText({ baseUrl: BASE, key: KEY, agent: "codex", testPayment: { allowedHosts: hosts, testnet: true } });
+    assert.ok(on.text!.includes(TEST_PAYMENT_URL));
+    assert.ok(on.display!.includes(TEST_PAYMENT_URL));
+    for (const offer of [{ allowedHosts: hosts, testnet: false }, { allowedHosts: ["api.example.com:443"], testnet: true }, null, undefined]) {
+      const off = buildInstallText({ baseUrl: BASE, key: KEY, agent: "codex", testPayment: offer });
+      assert.ok(!off.text!.includes(TEST_PAYMENT_URL), JSON.stringify(offer));
+      assert.ok(off.text!.includes("do not make a payment during installation"));
+    }
   });
 });

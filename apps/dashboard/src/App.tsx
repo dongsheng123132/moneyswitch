@@ -1,46 +1,36 @@
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { LangProvider } from "./i18n";
-import SetupPage from "./pages/SetupPage";
+import { LANDING_PATH, loginUrlFor, safeNextPath } from "./authRedirect";
 import "./styles/shell.css";
 import Layout from "./Layout";
-import EmployeeLayout from "./EmployeeLayout";
 import LoginPage from "./pages/LoginPage";
-import OverviewPage from "./pages/OverviewPage";
 import MoneyKeysPage from "./pages/MoneyKeysPage";
-import UsagePage from "./pages/UsagePage";
+import BillsPage from "./pages/BillsPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
 import WalletPage from "./pages/WalletPage";
-import PlaygroundPage from "./pages/PlaygroundPage";
-import MyBudgetPage from "./pages/employee/MyBudgetPage";
-import EmployeePlaygroundPage from "./pages/employee/EmployeePlaygroundPage";
-import EmployeeHistoryPage from "./pages/employee/EmployeeHistoryPage";
-import MySubKeysPage from "./pages/employee/MySubKeysPage";
 
+/** Without the administrator's session every page asks for the login first and comes back to where it was (an approval link carries no token). */
 function RequireAdmin({ children }: { children: React.ReactElement }) {
   const { token } = useAuth();
-  if (!token) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!token) return <Navigate to={loginUrlFor(location.pathname, location.search)} replace />;
   return children;
 }
 
-function RequireEmployee({ children }: { children: React.ReactElement }) {
-  const { employeeKey } = useAuth();
-  if (!employeeKey) return <Navigate to="/login" replace />;
-  return children;
+/** Already signed in: /login goes straight on to where the visit was heading. */
+function LoginRoute() {
+  const { token } = useAuth();
+  const [search] = useSearchParams();
+  if (token) return <Navigate to={safeNextPath(search.get("next")) ?? LANDING_PATH} replace />;
+  return <LoginPage />;
 }
 
 function Routed() {
-  const { token, employeeKey } = useAuth();
-  const loggedInPath = token ? "/" : employeeKey ? "/me" : null;
-
   return (
     <Routes>
-      {/* First-run wizard (docs/ux-audit.md A-1/A-2). Not behind RequireAdmin: it
-          handles the one-time /setup#ms_setup_… claim itself, and redirects
-          to /login when there is neither a setup token nor an admin session. */}
-      <Route path="/setup" element={<SetupPage />} />
-      <Route path="/login" element={loggedInPath ? <Navigate to={loggedInPath} replace /> : <LoginPage />} />
+      <Route path="/login" element={<LoginRoute />} />
       <Route
         path="/"
         element={
@@ -49,33 +39,13 @@ function Routed() {
           </RequireAdmin>
         }
       >
-        <Route index element={<OverviewPage />} />
-        <Route path="playground" element={<PlaygroundPage />} />
-        <Route path="keys" element={<MoneyKeysPage />} />
-        <Route path="usage" element={<UsagePage />} />
-        <Route path="approvals" element={<ApprovalsPage />} />
+        <Route index element={<Navigate to={LANDING_PATH} replace />} />
         <Route path="wallet" element={<WalletPage />} />
+        <Route path="keys" element={<MoneyKeysPage />} />
+        <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="bills" element={<BillsPage />} />
       </Route>
-
-      {/* SPEC-v0.3-employee.md §A — employee view, separate route tree, own
-          layout, gated by the mk_live_ key instead of the admin token. */}
-      <Route
-        path="/me"
-        element={
-          <RequireEmployee>
-            <EmployeeLayout />
-          </RequireEmployee>
-        }
-      >
-        <Route index element={<Navigate to="budget" replace />} />
-        <Route path="budget" element={<MyBudgetPage />} />
-        <Route path="playground" element={<EmployeePlaygroundPage />} />
-        <Route path="history" element={<EmployeeHistoryPage />} />
-        {/* SPEC-v0.4.md §A: employee's own sub-keys, shown when their key can_delegate. */}
-        <Route path="children" element={<MySubKeysPage />} />
-      </Route>
-
-      <Route path="*" element={<Navigate to={loggedInPath ?? "/login"} replace />} />
+      <Route path="*" element={<Navigate to={LANDING_PATH} replace />} />
     </Routes>
   );
 }
