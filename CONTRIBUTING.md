@@ -12,9 +12,9 @@ document before opening a PR.
   dual-license terms in the [README](README.md#license).
 - For anything non-trivial, open an issue first describing what you want to
   change and why, so it can be discussed before you spend time on an
-  implementation that might not fit the spec (`SPEC.md`, `SPEC-v0.2.md`,
-  `SPEC-v0.3-employee.md` are the authoritative specs; when in doubt, they
-  win over this file).
+  implementation that might not fit the spec (`SPEC.md` is the only
+  authoritative spec; older versions are kept in `docs/archive/` for history
+  only. When in doubt, `SPEC.md` wins over this file).
 - Security issues: see [SECURITY.md](SECURITY.md) — do **not** open a
   public issue for a vulnerability.
 
@@ -48,8 +48,7 @@ Per-package commands: `pnpm --filter <package-name> <script>`, e.g.
 ## Test layers (T1/T2/T3)
 
 MoneySwitch's test suite is deliberately split into three layers with
-different network/fund requirements — see `SPEC.md` §9 for the exact
-contract each layer must satisfy:
+different network/fund requirements:
 
 - **T1 — offline unit/integration** (`pnpm test`): no network access, no
   funds, must be fully green before every PR. Covers policy DENY/ALLOW/
@@ -75,9 +74,12 @@ funds-requiring half is never run in CI.
 
 - Commit messages: short imperative summary line (`fix: ...`, `feat: ...`,
   `docs: ...`), a body only if the "why" isn't obvious from the diff.
-- One logical change per PR. Don't mix a refactor with a new feature.
-- Update the relevant `SPEC*.md` file in the same PR if you're changing
-  documented behavior — the spec is the source of truth, not the code.
+- One logical change per PR. Don't mix a refactor with a new feature
+  (`SPEC.md` §9: one branch does one thing).
+- Change `SPEC.md` **first** if you're changing documented behavior or adding
+  an external route — the spec is the source of truth, not the code. Every
+  external route is listed in `apps/server/test/unit/route-inventory.test.ts`;
+  a route that is not in that list fails the test.
 - New behavior needs new T1 (and T2 where relevant) tests in the same PR;
   a PR that changes payment/policy logic without a matching test will be
   asked to add one before review.
@@ -88,7 +90,8 @@ funds-requiring half is never run in CI.
 
 - TypeScript, `strict: true` (see `tsconfig.base.json`). No implicit `any`.
 - No floating-point arithmetic on money — amounts are integer micro-USDC
-  internally, decimal strings at API boundaries (see `SPEC.md` §2.3).
+  internally, decimal strings at API boundaries (see
+  `packages/core/src/money.ts`).
 - Prefer small, pure, unit-testable functions in `packages/core` over logic
   embedded in route handlers.
 

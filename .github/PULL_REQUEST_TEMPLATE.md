@@ -8,9 +8,9 @@
 
 ## Spec impact
 
-<!-- Does this change documented behavior in SPEC.md / SPEC-v0.2.md /
-SPEC-v0.3-employee.md? If yes, this PR updates the relevant spec file too.
-If no, say "none". -->
+<!-- Does this change documented behavior in SPEC.md, or add an external
+route (which must also be added to the route inventory test)? If yes, SPEC.md
+is changed first and this PR contains that change. If no, say "none". -->
 
 ## Testing
 
@@ -21,7 +21,7 @@ test in the same PR — see CONTRIBUTING.md's T1/T2/T3 section. -->
 - [ ] `pnpm test` passes locally
 - [ ] `pnpm test:e2e` passes locally (if this touches payment/x402 logic)
 - [ ] Added/updated tests for the new behavior
-- [ ] Updated the relevant `SPEC*.md` (or N/A)
+- [ ] Updated `SPEC.md` first, and the route inventory test for a new route (or N/A)
 - [ ] No secrets, `.env` files, or real private keys included in the diff
 
 ## CLA

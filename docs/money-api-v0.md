@@ -11,7 +11,8 @@ code is the source of truth if this ever drifts.
 This is the public HTTP API a **MoneyKey** (`mk_live_…`, `Authorization:
 Bearer mk_live_...`) can call against a running MoneySwitch server. It does
 not cover the admin API (`ms_admin_…`-authenticated routes for creating
-keys, managing the wallet and approvals) — see `SPEC.md` §6 for those.
+keys, managing the wallet and approvals); every route, including those, is
+listed in `apps/server/test/unit/route-inventory.test.ts` (SPEC.md §9).
 
 Base URL is wherever you run `apps/server` (default `http://127.0.0.1:4020`).
 
@@ -80,8 +81,7 @@ removed OpenAI-compatible gateway (they still list, as ordinary payments).
 ## `POST /v1/fetch`
 
 Fetches an x402-priced (or free) URL through MoneySwitch's policy engine
-and wallet. This is the one call an agent makes to pay; the Dashboard's
-"Test payment" page calls the same route.
+and wallet. This is the one call an agent makes to pay.
 
 **Request body:**
 
@@ -103,8 +103,8 @@ Only `url` is required; `method` defaults to `GET`.
   within the key's normal per-request limit.
 - `approval_id` (optional): an id previously returned as `approval_id` when
   a prior identical call (same `url`/`method`/request body) came back with
-  `status: "approval_required"` and has since been approved via the admin
-  API or Dashboard.
+  `status: "approval_required"` and has since been approved by the
+  administrator in the Dashboard (or through the admin API).
 
 **Response 200** (always 200 at the HTTP layer; policy outcomes are
 communicated in the `status`/`code` fields, not the HTTP status code):
@@ -134,7 +134,7 @@ communicated in the `status`/`code` fields, not the HTTP status code):
 |---|---|
 | `ok` | Request succeeded (payment made if the resource was priced; `payment` is `null` for free resources). |
 | `denied` | Policy rejected the request before any payment attempt; see `code`. |
-| `approval_required` | Price is between the approval threshold and the per-request limit; `approval_id` is set. Retry the same request with that `approval_id` once approved. |
+| `approval_required` | Price is between the approval threshold and the per-request limit; `approval_id` and `approve_url` (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, or the request's own origin when that is not set) are set. Give the link to a person: it carries no token, and approving needs the administrator login. Poll `GET /v1/approvals/:id` about every 15 s, then retry the same request with that `approval_id` once approved. |
 | `payment_failed` | Payment was attempted and definitively failed (signature/facilitator rejection); any reservation was released. |
 | `error` | An unexpected error (e.g. upstream unreachable, wallet locked). |
 
@@ -165,7 +165,7 @@ against the live Monad testnet facilitator never sets it.
 | `UPSTREAM_ERROR` | Unexpected error reaching the priced resource |
 | `FORBIDDEN` | Malformed request (e.g. invalid `url`) |
 
-## Child keys (v0.4, SPEC-v0.4 §A)
+## Child keys (back end kept, no UI)
 
 A MoneyKey created by the admin with `can_delegate: true` can cut **child
 keys** for its own agents; a child created with `can_delegate: true` can cut

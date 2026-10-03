@@ -1,13 +1,6 @@
 # Quickstart
 
-This walks through running MoneySwitch + the test seller (`apps/demo-seller`)
-locally (no Docker required — Docker daemon is not assumed to be running).
-
-For a real Monad testnet run (real facilitator, needs a funded wallet — see
-step 5) there is a helper that starts the test seller and the server for you:
-`DEMO_SELLER_PAY_TO=0xYourAddress pnpm demo:testnet`. It does not auto-fund or
-auto-pay anything. The rest of this document does the same by hand, useful if
-you want to run each piece with your own ports/config.
+The goal (SPEC.md §0): a new user gets their own AI to make a first **testnet** payment within ten minutes. Everything below runs locally; nothing here uses real money.
 
 ## 1. Install and build
 
@@ -16,119 +9,70 @@ pnpm install
 pnpm build
 ```
 
-## 2. Start the mock facilitator (for a local run without a real facilitator)
-
-```bash
-MOCK_FACILITATOR_PORT=4099 node packages/mock-facilitator/dist/server.js
-```
-
-Or point `demo-seller` at the real Monad testnet facilitator
-(`https://x402-facilitator.molandak.org`, the default) instead — no flag
-needed in that case.
-
-## 3. Start demo-seller
-
-```bash
-DEMO_SELLER_PORT=4021 \
-DEMO_SELLER_PAY_TO=0xYourDemoSellerAddress \
-DEMO_SELLER_FACILITATOR_URL=http://127.0.0.1:4099 \
-node apps/demo-seller/dist/index.js
-```
-
-`DEMO_SELLER_PAY_TO` must NOT equal the MoneySwitch wallet address you
-create in step 4.
-
-## 4. Start the MoneySwitch server
+## 2. Start the server
 
 ```bash
 MONEYSWITCH_DATA_DIR=~/.moneyswitch MONEYSWITCH_PORT=4020 node apps/server/dist/index.js
 ```
 
-On first run this prints an admin token to stdout **exactly once**, followed
-by a one-time setup link:
+(or `node apps/server-pkg/dist/cli.js --data-dir ~/.moneyswitch --port 4020`.) Without further settings only Monad testnet is enabled (`MONEYSWITCH_NETWORKS` adds Base Sepolia or a mainnet; a mainnet means real USDC). On the first start this prints an administrator token **exactly once**, followed by a one-time sign-in link:
 
 ```
 [moneyswitch] Admin token (save this now, it will not be shown again):
   ms_admin_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-[moneyswitch] First-run setup: open this one-time link in your browser (valid 30 min, single use):
-  http://127.0.0.1:4020/setup#ms_setup_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+[moneyswitch] First-run sign-in: open this one-time link in your browser (valid 30 min, single use):
+  http://127.0.0.1:4020/login#ms_setup_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Open the link: it signs you in and walks you through steps 5–8 below in the
-Dashboard (wallet + test-USDC faucet, first key, giving the skill to your AI). Save the admin token — it is stored only as a hash and cannot be
-recovered (see the end of this file if you lose it). The setup link works
-once, expires after 30 minutes and does not survive a restart; its security
-reasoning is in [`docs/ux-audit.md`](ux-audit.md#安全相关改动与威胁分析).
+Save the administrator token: only its hash is stored (lost? see the end of this file). The sign-in link works once, expires after 30 minutes and does not survive a restart. If the AI will reach this server by another address, also set `MONEYSWITCH_PUBLIC_URL` (approval links and the skill text use it).
 
-## 5. Create a wallet
+## 3. Wallet
 
-```bash
-curl -X POST http://127.0.0.1:4020/v1/admin/wallet/create \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{}'
-```
+Open the link: it signs you in and lands on the **Wallet** page. Click *Create wallet*. There is no password to choose: the server keeps an unlock file in its data folder and opens the wallet by itself after every restart. **Anyone who can read that folder can spend the wallet**, so keep only small amounts in it and do not run your AI as the same system user ([wallet-setup.md](wallet-setup.md), [security.md](security.md)).
 
-There is no password to choose: the server keeps a random unlock secret next to
-the wallet file and opens the wallet by itself after every restart, and it
-restricts that data folder to its own account (the Dashboard's wallet page shows
-whether that worked). **Anyone who can read the data folder can spend the
-wallet** — see [`wallet-setup.md`](wallet-setup.md) for what that means and
-[`security.md`](security.md). The response carries the address and a 12-word
-`recovery_phrase`, **shown exactly once**: write it down on paper (it is your
-backup — importing it into MetaMask or OKX Wallet shows the same address), then
-prove you did by sending two of the words:
+The 12 recovery words are shown **once**. Write them down, tick "I wrote all 12 words down", and the page shows the wallet address and its balance on every enabled chain. Fund the address with testnet USDC (the page links to the faucet; Monad testnet needs no gas token).
 
-```bash
-curl -X POST http://127.0.0.1:4020/v1/admin/wallet/backup/confirm \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"positions":[3,9],"words":["<word 3>","<word 9>"]}'
-```
+## 4. A key for your AI
 
-(The Dashboard does all of this for you and hides the wallet's address until the
-check passes.) Prefer a password instead? Send `{"password":"a strong password"}`
-to `create`; the wallet then stays locked after every restart until you unlock
-it with `POST /v1/admin/wallet/unlock` (or set `MONEYSWITCH_WALLET_PASSWORD`, or
-`_FILE`, before starting the server — the older way). To bring an existing
-wallet instead, `POST /v1/admin/wallet/import` — but only ever a **dedicated
-small-float wallet**, never a phrase or key that also controls other funds; the
-server stores just that one account's private key.
+On the **Keys** page issue a key: a name, a total, a daily and a per-request limit, an optional approval line, allowed hosts and an expiry. On a testnet instance leave "allow the test payment endpoint" ticked (it adds `app.moneyswitch.dev:443` to the allowed hosts). The key and its **skill paragraph** are shown once. Paste the paragraph into your AI (Claude Code, Codex, OpenClaw, Hermes, ...). Lost the key? *Reset secret and copy skill* revokes the old secret, keeps the limits and history, and gives a new paragraph.
 
-The wallet is brand new and has 0 USDC until you fund it (see
-`docs/security.md` — never fund it with more than you're prepared to lose
-to a bug in v0.1).
-
-## 6. Create a MoneyKey
-
-```bash
-curl -X POST http://127.0.0.1:4020/v1/keys \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{
-    "name": "my-agent",
-    "total_budget": "10",
-    "daily_budget": "5",
-    "per_request_limit": "1",
-    "approval_threshold": "0.10",
-    "allowed_hosts": ["127.0.0.1:4021"]
-  }'
-```
-
-The response includes the full `mk_live_xxx` key **only this once** — save it.
-
-## 7. Call a priced endpoint through MoneySwitch
+The skill tells the AI to read `GET /v1/status` and then make one test payment to `https://app.moneyswitch.dev/x402-testnet/check` and report the transaction hash. The same thing by hand:
 
 ```bash
 curl -X POST http://127.0.0.1:4020/v1/fetch \
   -H "Authorization: Bearer $MONEY_KEY" -H "Content-Type: application/json" \
-  -d '{"url":"http://127.0.0.1:4021/premium-report"}'
+  -d '{"url":"https://app.moneyswitch.dev/x402-testnet/check","method":"GET","max_price":"0.01"}'
 ```
 
-## 8. Give the key to your AI
+The **Bills** page then shows the payment: time, key, amount, URL, chain, transaction hash and `charged` (yes / no / maybe).
 
-In the Dashboard, the new key's drawer (and "Reset secret and copy skill" on
-the key list) offers the key's **skill**: one block of text to paste into
-Claude Code, Codex, OpenClaw or Hermes. The only other way is the plain
-`POST /v1/fetch` call from step 7.
+## 5. An approval
+
+Give a key an approval line below the price (for example `0.005` with the 0.01 test endpoint). `/v1/fetch` then answers `approval_required` with an `approval_id` and an `approve_url` such as `http://127.0.0.1:4020/approvals?id=…`. The skill makes the AI hand that link to you and poll `GET /v1/approvals/:id` every 15 seconds. Open the link, sign in if asked (the link itself carries no token, so you are sent back to the same approval afterwards) and approve or deny. The AI then repeats the request with the `approval_id`. An approval expires after 10 minutes.
+
+## The same through the API
+
+```bash
+# a key (administrator token)
+curl -X POST http://127.0.0.1:4020/v1/keys \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"my-agent","total_budget":"10","daily_budget":"5","per_request_limit":"1","approval_threshold":"0.10","allowed_hosts":["app.moneyswitch.dev:443"]}'
+```
+
+The response includes the full `mk_live_…` key **only this once**. The administrator routes are listed in `apps/server/test/unit/route-inventory.test.ts`; the wallet ones in [wallet-setup.md](wallet-setup.md).
+
+## Offline: your own test seller
+
+To try a priced endpoint without the public test receiver, run the mock facilitator and `apps/demo-seller` locally (nothing is spent):
+
+```bash
+MOCK_FACILITATOR_PORT=4099 node packages/mock-facilitator/dist/server.js
+DEMO_SELLER_PORT=4021 DEMO_SELLER_PAY_TO=0xYourDemoSellerAddress \
+DEMO_SELLER_FACILITATOR_URL=http://127.0.0.1:4099 node apps/demo-seller/dist/index.js
+```
+
+`DEMO_SELLER_PAY_TO` must not be the MoneySwitch wallet's address. Put `127.0.0.1:4021` into the key's allowed hosts and call `http://127.0.0.1:4021/premium-report` through `/v1/fetch`. For a real Monad testnet run with the real facilitator (needs a funded wallet): `DEMO_SELLER_PAY_TO=0xYourAddress pnpm demo:testnet`. It starts the test seller and the server; it does not fund or pay anything by itself.
 
 ## 丢了 admin token 怎么办
 

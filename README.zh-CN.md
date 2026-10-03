@@ -1,14 +1,14 @@
 # MoneySwitch
 
-**给 AI 一把有预算的花钱 API Key。** 个人、团队和企业都可以在自己的服务器运行。
+**AI 拿一把有额度的 key 去付 x402，超过审批线找人批，私钥永远不交给 AI。**
 
-官网：[moneyswitch.dev](https://moneyswitch.dev) · [English](README.md) · [自建部署](deploy/README.zh-CN.md)
+官网：[moneyswitch.dev](https://moneyswitch.dev) · [English](README.md) · [规格](SPEC.md) · [自建部署](deploy/README.zh-CN.md)
 
-MoneySwitch 持有加密的低余额钱包，通过 x402 支付 USDC。AI 只拿到 `mk_live_…` MoneyKey。付款前检查总预算、每日预算、单笔上限、域名白名单、父 Key 限制与审批；钱包私钥不交给 AI。
+[SPEC.md](SPEC.md) 是唯一有效的规格。本文只说怎么跑起来。
 
 ## 从代码运行
 
-需要 Node.js 22+ 和 pnpm。当前 v0.6 改动以本仓代码为准，npm 上旧版本不代表这个工作树。
+需要 Node.js 22+ 和 pnpm。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -16,17 +16,30 @@ pnpm build
 node apps/server-pkg/dist/cli.js --data-dir ./data
 ```
 
-打开首次启动的设置链接，创建钱包（会显示 12 个词的恢复短语），再为每个 AI 建一把 MoneyKey。在后台点「交给你的 AI」，复制这把 Key 的个性化 skill 给 Claude Code、Codex、OpenClaw 或 Hermes。每个 AI 保存独立 Key。Key 仅存哈希，丢失时点「重置密钥并复制 skill」；旧密钥立即失效，预算与历史保留。超过审批阈值的付款会停在「审批」页（可推送到飞书、企业微信、Telegram 或 webhook）；「用量流水」是账本；「付款测试」可以在浏览器里真实付一笔 x402。
+首次启动会打印管理员令牌和一条一次性登录链接（30 分钟内有效，只能用一次）。打开链接：自动登录并停在「钱包」页。请把 `MONEYSWITCH_PUBLIC_URL` 设成大家访问这台服务的地址，审批链接和技能说明都用它。
 
-公开 `GET /skill.md` 是不含 Key 的通用说明。`skills/moneyswitch-pay/SKILL.md` 也是通用版本。接入方式只有 skill + Key，另外就是直接调用 HTTP 接口 `POST /v1/fetch`。
+后台只有 4 个页面加登录：
+
+| 页面 | 做什么 |
+|---|---|
+| **钱包** | 创建钱包，12 个词只显示一次，抄下后勾选「我已抄下」，再转入少量 USDC。重启后自动解锁。 |
+| **Key** | 一个 AI 一把：日额度、总额度、单笔上限、允许的域名、审批线、过期时间。创建后 key 和技能段落只显示一次，把技能段落粘贴给 AI。 |
+| **审批** | 批准或拒绝超过审批线的付款。 |
+| **账单** | 每一笔：时间、key、金额、网址、链、交易号、扣款状态（yes / no / maybe）。 |
+
+AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，带 `approval_id` 和 `approve_url`（`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`）。技能让 AI 把链接发给你，并每 15 秒查一次 `GET /v1/approvals/:id`。链接本身不含令牌，批准必须先以管理员身份登录；批准后 AI 带 `approval_id` 原样重发。审批 10 分钟过期。不做推送渠道。
+
+公开的 `GET /skill.md` 是不含 key 的通用说明。接入方式只有「技能 + key」，另外就是直接调用 HTTP 接口。
+
+### 测试网上的第一笔
+
+默认网络是测试网时，建 key 的表单有「允许测试付款接口」（默认勾选，会把 `app.moneyswitch.dev:443` 加进允许域名）。技能随后会让 AI 向 `https://app.moneyswitch.dev/x402-testnet/check` 付一笔测试款，并报告交易号。这个接口是 Monad 测试网上的测试收款端，钱没有价值。
 
 ## 自己的服务器
 
-[部署说明](deploy/README.zh-CN.md) 提供 Docker Compose、HTTPS/Caddy、持久数据卷、健康检查、备份和回滚。官网和服务后台可以分开部署，例如官网 `moneyswitch.dev`，自用后台 `app.moneyswitch.dev`。服务无需依赖该域名，也能部署到你的企业域名。
+[部署说明](deploy/README.zh-CN.md)：Docker Compose、HTTPS/Caddy、持久数据卷、健康检查、备份和回滚。**不要把服务和 AI 放在同一台机器、同一个系统用户下**：AI 能直接改数据库、绕过额度。同一个 SQLite 数据卷只运行一个写入实例。出站请求按 `MONEYSWITCH_PROXY`（`off`、`auto` 或代理地址）、`HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY`、Windows 系统代理的顺序选代理。
 
-管理员控制钱包、Key、审批和通知；团队成员用自己的 Key 查看预算与付款历史。可设子 Key，父级限制始终生效。SQLite 数据卷只运行一个写入实例。
-
-## 支持的链
+## 支持的链与付款结果
 
 | 网络 | CAIP-2 |
 |---|---|
@@ -35,26 +48,22 @@ node apps/server-pkg/dist/cli.js --data-dir ./data
 | Monad 主网 | eip155:143 |
 | Base 主网 | eip155:8453 |
 
-默认保持 Monad 测试网；部署模板同时允许两个测试网。`MONEYSWITCH_NETWORKS` 指定允许列表，`MONEYSWITCH_DEFAULT_NETWORK` 必须在其中。明确启用主网才会支付真实 USDC。每条链只允许它的指定 USDC，不换币、不跨链；余额、付款和对账按实际链记录。
+默认只开测试网：`MONEYSWITCH_NETWORKS` 给出允许列表，`MONEYSWITCH_DEFAULT_NETWORK` 必须在其中；启用主网就是真实 USDC。每条链只认自己的 USDC，同一地址在各链的余额独立。不换币、不跨链。只签 EIP-3009，不签 Permit2。
 
-## 接口与付款结果
+每次 `/v1/fetch` 的返回都带 `charged: yes | no | maybe`。已签名但结果不明的付款是 `payment_unknown`，**AI 不得自动重试**；服务稍后到链上对账并补上交易号。
 
-- `POST /v1/fetch`：受预算保护的 HTTP 请求。
-- `GET /v1/status`、`GET /v1/history`：当前 Key 的余额和历史。
-- `POST /v1/keys/:id/rotate`：管理员重置密钥。
-- `GET /healthz`：服务健康。
+## 不做什么
 
-付款结果带 `charged: yes/no/maybe`。发送签名后超时、缺结算凭证或响应中断时，不盲目重试；保留预算预留并对账，避免重复付款。审批通知使用独立 outbox，可配置飞书、企业微信、Telegram 或 webhook。
-
-v0.6 聚焦买方基础设施，已移除卖方收费亭、`sell`、本机 UI 和自动修改 AI 配置的命令。随后的“原子化”精简又移除了 OpenAI 兼容网关与模型渠道、离线 demo、MCP 服务和 `moneyswitch` 命令行包。历史数据库表和列保留（不再读写），旧实现归档于 `archive/tollbooth-v0.5`。demo-seller 仅用于测试。
+永远不做：法币出入金、换币、跨链桥、发币、收款 / 卖方功能、替别人保管钱。现在不做：员工门户界面、推送渠道、模型网关、MCP、命令行客户端、本机启动器、桌面壳、导入钱包、外部钱包。子 key 的后端逻辑保留，没有界面。数据库里的旧表保留。详见 [SPEC.md](SPEC.md) §8。
 
 ## 验证与许可
 
 ```sh
 pnpm test
 pnpm test:e2e
+node scripts/deploy-smoke.mjs   # 在一次性目录里验收已构建的包
 ```
 
-离线测试使用真实签名和模拟结算，不代表真实链上付款。部署验收另核对 HTTPS、持久化、重启和备份。
+离线测试使用真实签名和模拟结算，不代表真实链上付款；部署验收另核对 HTTPS、持久化、重启和备份。每个对外接口都登记在 `apps/server/test/unit/route-inventory.test.ts`。
 
-服务端、核心和 Dashboard：AGPL-3.0-only；`apps/demo-seller` 和 `apps/qwen-agent`：Apache-2.0。详见各包 LICENSE。
+服务端、核心和 Dashboard：AGPL-3.0-only；`apps/demo-seller` 和 `apps/qwen-agent`：Apache-2.0（`apps/qwen-agent` 原样保留、不维护）。详见各包 LICENSE。

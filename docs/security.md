@@ -1,154 +1,47 @@
-# Security notes (v0.1)
+# Security notes
+
+The product and its safety floor are in [SPEC.md](../SPEC.md) (§0, §3, §4, §5). This page lists what that means in practice, and what is not protected.
 
 ## Threat model / known limitations
 
-- **Same-OS-user co-location risk.** If the Agent process and MoneySwitch
-  run under the same OS user, the Agent already has shell access and can
-  read the SQLite database or the encrypted keystore file directly, or ptrace
-  the MoneySwitch process. v0.1's isolation guarantee ("Agent never gets the
-  private key") only holds if MoneySwitch runs in a **separate OS user,
-  a separate container, or a separate machine** from the Agent. This is a
-  deployment recommendation, not something v0.1's code enforces.
-- **Per-request limit does not stop many small payments.** An agent that is
-  allowed to call `/v1/fetch` repeatedly can still drain the daily/total
-  budget one small payment at a time. The real defenses are
-  `allowed_hosts` (an explicit, small allowlist of hosts the agent can ever
-  reach), the daily budget, and `max_payments_per_minute` — not the
-  per-request cap alone.
-- **`unknown` payment status is counted as spent, conservatively.** If the
-  upstream request's outcome can't be determined (timeout, dropped
-  connection, unparseable settlement header) after a payment payload may
-  have been sent, MoneySwitch keeps the reservation and marks it `unknown`
-  rather than `failed`. This can overcount usage; it deliberately never
-  undercounts (which would risk quietly exceeding a budget). Audit
-  `unknown` payments manually via `GET /v1/admin/usage`.
-- **SSRF guard is best-effort hostname/IP-literal matching**, not a DNS
-  rebinding defense. It blocks obvious loopback/private-network address
-  literals and MoneySwitch's own listening address in any of the common
-  literal forms (`127.0.0.1`, `localhost`, `0.0.0.0`, `::1`), and only
-  allows a private/loopback target when the MoneyKey's `allowed_hosts`
-  explicitly lists that exact `host:port` (this is how the test seller,
-  itself running on localhost, is permitted). It does not resolve DNS names
-  and re-check the resolved IP before every request.
-- **v0.1 has no rate limiting on admin token guesses** beyond what Fastify /
-  your reverse proxy provides. Put MoneySwitch behind a firewall; do not
-  expose port 4020 to the public internet.
+- **Same-OS-user co-location.** If the AI process and MoneySwitch run under the same OS user, the AI already has shell access and can read the SQLite database or the unlock file, or ptrace the MoneySwitch process. "The AI never gets the private key" only holds if MoneySwitch runs as a **separate OS user, in a separate container, or on a separate machine** from the AI. This is a deployment rule (SPEC §7), not something the code can enforce.
+- **A per-request limit does not stop many small payments.** An AI that may call `/v1/fetch` repeatedly can still use up the daily or total budget one small payment at a time. The real defenses are `allowed_hosts` (a small explicit list of hosts the AI can ever reach), the daily and total budgets and `max_payments_per_minute`, not the per-request cap alone.
+- **`unknown` is counted as spent.** If the outcome of an upstream request cannot be determined (timeout, dropped connection, unparseable settlement header) after a payment may have been sent, MoneySwitch keeps the reservation and marks it `unknown`, not `failed`; the answer is `payment_unknown` / `charged: "maybe"` and **the AI must not retry it automatically**. This can overcount usage; it deliberately never undercounts. The server looks the payment up on the chain later and fills in the transaction hash. Review unknown payments on the Bills page.
+- **The SSRF guard is best-effort hostname/IP-literal matching**, not a DNS-rebinding defense. It blocks loopback and private-network address literals and MoneySwitch's own listening address in the common literal forms (`127.0.0.1`, `localhost`, `0.0.0.0`, `::1`), and allows a private or loopback target only when the key's `allowed_hosts` lists that exact `host:port`. It does not resolve DNS names and re-check the resolved address before every request.
+- **No rate limiting on administrator-token guesses** beyond what Fastify or your reverse proxy provides. Put MoneySwitch behind HTTPS and a firewall. The administrator API and the Dashboard are for people; what an AI needs is `/v1/fetch`, `/v1/status`, `/v1/history`, `GET /v1/approvals/:id` and `/skill.md` (plus the child-key routes under `/v1/keys/children`); the route inventory in `apps/server/test/unit/route-inventory.test.ts` checks that every administrator route refuses a MoneyKey and every MoneyKey route refuses the administrator token.
+- **Child keys cannot widen authority.** Every limit of a child is bounded by its parent at creation, and every payment re-checks the whole ancestor chain (state, per-request limit, subtree daily and total) inside the single `BEGIN IMMEDIATE` reservation transaction, so a child can never spend past an ancestor. Revoking a key disables its whole subtree immediately. A parent's `max_payments_per_minute` caps its whole subtree. Child keys are still bearer secrets: whoever holds a delegable key can mint up to 100 children, and those can be used by anyone they are handed to; revoke the parent to cut all of them off. (The child-key back end is kept; there is no UI for it.)
 
-- **Child keys (v0.4) cannot widen authority.** Every limit of a child is
-  bounded by its parent at creation, and — independently — every payment
-  re-checks the whole ancestor chain (state + per-request + subtree
-  daily/total) inside the single `BEGIN IMMEDIATE` reservation transaction,
-  so a child can never spend past any ancestor, even with a stale or forged
-  in-memory key row. Revoking a key disables its whole subtree immediately
-  (evaluated at query time). A parent's `max_payments_per_minute` caps its
-  whole subtree, so splitting a key into children does not multiply its
-  rate. Child keys are still bearer secrets: whoever holds a delegable key
-  can mint up to 100 children per key, and those children can be used by
-  anyone they are handed to — revoke the parent to cut all of them off.
+## Approvals
+
+- The approval link (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`) **carries no token and no secret**. Opening it without a session goes to the login and comes back to the same approval afterwards. Approving or denying is an administrator-only API call (`POST /v1/approvals/:id/approve|deny`); a MoneyKey, including the one that asked, gets 403, so an AI that holds the link cannot approve it.
+- An approval expires after 10 minutes. Approving makes the next request with that `approval_id` payable once; the AI repeats the request unchanged.
+- There is no push channel: the AI hands the link to a person and polls `GET /v1/approvals/:id` every 15 seconds.
 
 ## Secrets handling
 
-- The full plaintext MoneyKey and the full admin token are each shown to
-  the operator **exactly once** (at creation / first boot) and are never
-  logged, never stored in plaintext (only a SHA-256 hash is persisted), and
-  never echoed back by any other API response.
-- The wallet private key only ever exists decrypted in-process memory
-  (inside `LocalWalletDriver`), for as long as the wallet is unlocked. It is
-  never written to disk unencrypted and never logged. The only response that
-  carries it (or a generated wallet's recovery phrase) is the administrator's
-  explicit, address-confirmed `POST /v1/admin/wallet/reveal` (and the one-time
-  create/replace response for a new phrase): `Cache-Control: no-store`, and the
-  audit log records that it happened, never what.
-- The keystore encryption password (`MONEYSWITCH_WALLET_PASSWORD[_FILE]`
-  or the `POST /v1/admin/wallet/unlock` body) is never logged.
-- Fastify's request logger redacts the `Authorization` header and known
-  password fields (see `apps/server/src/app.ts`); `packages/core`'s
-  `redact()` helper additionally truncates any string that looks like a
-  full `mk_live_`/`ms_admin_` secret before it reaches the audit log.
+- The full plaintext MoneyKey and the full administrator token are each shown to the operator **exactly once** (at creation / first start) and are never logged, never stored in plaintext (only a SHA-256 hash is persisted) and never echoed back by any other API response. The one-time sign-in link sits in the URL fragment (`/login#ms_setup_…`), so it never reaches a server log or a proxy; it is single use, held in memory and expires after 30 minutes.
+- The wallet private key only ever exists decrypted in the memory of the server process (inside `LocalWalletDriver`), while the wallet is unlocked. It is never written to disk unencrypted and never logged. The 12 recovery words are returned **once** by the create / replace response (`Cache-Control: no-store`) and by nothing else; the audit log records that it happened, never what.
+- The startup password for an older password wallet (`MONEYSWITCH_WALLET_PASSWORD[_FILE]`) is never logged.
+- Fastify's request logger redacts the `Authorization` header and known secret body fields (see `apps/server/src/app.ts`); `packages/core`'s `redact()` additionally truncates any string that looks like a full `mk_live_` / `ms_admin_` secret before it reaches the audit log.
 
 ## The wallet and its unlock secret
 
 The full model is in [wallet-setup.md](wallet-setup.md). What matters for security:
 
-- **Auto-unlock (the default) trades secrecy for availability.** `wallet.json` is
-  encrypted with a random 256-bit secret kept next to it in the data folder
-  (`wallet-unlock-<address>.secret`) so the server can restart without a human.
-  Whoever can read that folder, including a backup or snapshot of it, can spend the
-  wallet. Password mode stores nothing, and the wallet stays locked after a restart
-  until someone types the password.
-- **The folder is locked down to the server's own account, and that is verified.**
-  A file mode alone proves nothing on Windows (a file just inherits the folder's
-  ACL, which normally lets other local accounts read it), so on Windows the data
-  folder and the secret get a *protected* ACL (inheritance removed) with exactly
-  two allow entries, the current user's SID and SYSTEM, set with PowerShell using
-  SIDs (never localized account names) and read back. On Linux/macOS the folder is
-  `0700` and the secret `0600`. Both are re-applied and re-checked at every start.
-  It does not protect against the same OS user (see the threat model above).
-- **If it cannot be applied or verified, the server still runs, loudly.**
-  `health.secret_protected` is `false` (with the reason), the Wallet page shows a red
-  row and the Overview a red banner, and a warning is logged at startup. Keep only a
-  tiny float in such a wallet.
-- **The mode is recorded, not guessed.** `wallet.json` carries a non-secret
-  `x-moneyswitch` marker saying whether it is protected by the auto secret or a
-  password. Health, the unlock order and `/backup` follow the marker, never which
-  files happen to be lying around. A secret is named after its wallet, so one key's
-  secret can never be mistaken for, or overwrite, another's.
-- **Nothing that could open a key is ever deleted by accident or left behind by
-  accident.** Replacing a wallet copies its files into `retired/` first (verified
-  byte for byte), then renames the new files over the live names, so `wallet.json`
-  is never absent; a crash at any step leaves a pair that opens. A secret that
-  belongs to no live wallet is moved to `retired/`, never unlinked. Turning
-  auto-unlock off leaves **no** copy of the old keystore (no `.bak`). One exception to
-  "never deleted", on purpose: an unlock secret in `retired/` that still opens a retired copy
-  of the key that is live right now (the key was replaced out and back in) is removed once the
-  password has proved the live keystore reachable, so that afterwards nothing on disk opens the
-  key without the new password. It is the only place a credential is deleted, only inside
-  `retired/`, and every removal is written to the audit log
-  (`wallet.retired_secrets_removed`). Whatever could not be removed, or was found while the
-  wallet is locked (a retired pair may be the only way in, so a locked wallet is never cleaned
-  up), is listed in `health.retired_secrets_open_live_key` and shown as a red row.
-  `retired/` holds the credentials of old wallets and is as sensitive as the live ones.
-- **Imports keep only the key.** Importing a recovery phrase, a private key or a
-  keystore stores the private key of that one account, never the phrase, a seed
-  or a non-default derivation path. Even so, never import anything that also controls
-  other funds: the key sits on this server's disk. Use the optional
-  `expected_address` to refuse a key that is not the one you meant.
-- **A payment in flight pins the wallet, but cannot starve a replace.** A request takes a
-  lease on the signer only when a payment is about to be created (a free resource or an
-  unpaid 402 holds nothing) and releases it when the call ends. Locking the wallet is refused
-  at once while a lease is open. A replace waits up to 60 s for the open leases while
-  **refusing new ones** (`WALLET_BUSY`, `charged: "no"`, nothing reserved or signed), so
-  steady traffic cannot keep it waiting for ever; if payments are still in flight after
-  that it answers `409 WALLET_BUSY` and changes nothing. A signer whose wallet was replaced
-  or locked after the request started refuses to sign (nothing is signed, nothing is
-  charged).
-- **A crash cannot strand budget.** Payments left `reserved` by a process that died
-  are resolved before the next start serves anything: `unknown` if an authorization
-  had been signed (the chain decides), `failed` if not (the budget is released).
-- **Only EIP-3009 payments are signed.** That sweep reads "no `auth_*` recorded" as "never
-  signed". `@x402/evm` signs a Permit2 authorization, which carries no `authorization`
-  (from / nonce / validBefore), for a requirement with `extra.assetTransferMethod:
-  "permit2"`, so such a requirement (and any method other than absent or `"eip3009"`) is
-  refused before anything is reserved or signed: `UNSUPPORTED_PAYMENT`, `charged: "no"`.
-- **Back up `/data` as its owner and check the archive.** The folder is `0700`, owned by the
-  server's `node` account, and the container drops all capabilities, so root cannot read it:
-  a `tar` run as root writes an archive without `wallet.json` and the unlock secret. Use
-  `--user node` (see `deploy/README.zh-CN.md`) and `sh deploy/check-backup.sh <archive>`,
-  which lists the archive and fails unless the wallet (and, for auto-unlock, the secret of
-  the same address) is inside. A backup of `/data` is as sensitive as the key itself.
+- **Auto-unlock trades secrecy for availability.** `wallet.json` is encrypted with a random 256-bit secret kept next to it in the data folder (`wallet-unlock-<address>.secret`) so the server can restart without a human. Whoever can read that folder, including a backup or snapshot, can spend the wallet.
+- **The folder is locked down to the server's own account, and that is verified.** A file mode alone proves nothing on Windows, so there the data folder and the secret get a *protected* ACL (inheritance removed) with exactly two allow entries, the current user's SID and SYSTEM, set with PowerShell using SIDs (never localized account names) and read back. On Linux the folder is `0700` and the secret `0600`. Both are re-applied and re-checked at every start. It does not protect against the same OS user.
+- **If it cannot be applied or verified, the server still runs, loudly:** `health.secret_protected` is `false` (with the reason), the Wallet page shows a red row and a warning is logged. Keep only a tiny float in such a wallet.
+- **The mode is recorded, not guessed.** `wallet.json` carries a non-secret `x-moneyswitch` marker saying whether the auto secret or a password protects it; the unlock order and the health follow the marker, never which files are lying around. A secret is named after its wallet, so one key's secret can never be mistaken for, or overwrite, another's.
+- **Nothing that could open a key is deleted by accident or left behind by accident.** Replacing a wallet copies its files into `retired/` first (verified byte for byte), then renames the new files over the live names, so `wallet.json` is never absent and a crash at any step leaves a pair that opens. A secret that belongs to no live wallet is moved to `retired/`, never unlinked. One exception, on purpose: for a wallet made by an older version with a password, an unlock secret in `retired/` that still opens a retired copy of the key that is live right now (the key was replaced out and back in) is removed once the startup password has proved the live keystore reachable. It is the only place a credential is deleted, only inside `retired/`, and every removal is written to the audit log (`wallet.retired_secrets_removed`). `retired/` holds the credentials of old wallets and is as sensitive as the live ones.
+- **No import.** A recovery phrase or private key brought from elsewhere would put the key of another wallet on this server's disk. The wallet is generated by the server; to bring money in, send USDC to its address.
+- **A payment in flight pins the wallet, but cannot starve a replace.** A request takes a lease on the signer only when a payment is about to be created and releases it when the call ends. A replace waits up to 60 s for open leases while **refusing new ones** (`WALLET_BUSY`, `charged: "no"`, nothing reserved or signed); if payments are still in flight after that it answers `409 WALLET_BUSY` and changes nothing. A signer whose wallet was replaced after the request started refuses to sign.
+- **A crash cannot strand budget.** Payments left `reserved` by a process that died are resolved before the next start serves anything: `unknown` if an authorization had been signed (the chain decides), `failed` if not (the budget is released).
+- **Only EIP-3009 payments are signed.** That sweep reads "no authorization recorded" as "never signed". `@x402/evm` would sign a Permit2 authorization, which carries no `from` / nonce / `validBefore`, for a requirement with `extra.assetTransferMethod: "permit2"`, so such a requirement (and any method other than absent or `"eip3009"`) is refused before anything is reserved or signed: `UNSUPPORTED_PAYMENT`, `charged: "no"`.
+- **Back up `/data` as its owner and check the archive.** The folder is `0700`, owned by the server's `node` account, and the container drops all capabilities, so root cannot read it: a `tar` run as root writes an archive without `wallet.json` and the unlock secret. Use `--user node` (see `deploy/README.zh-CN.md`) and `sh deploy/check-backup.sh <archive>`, which lists the archive and fails unless the wallet (and, for auto-unlock, the secret of the same address) is inside. A backup of `/data` is as sensitive as the key itself.
 
 ## Do NOT
 
-- Do not run MoneySwitch's wallet with more USDC than you are prepared to
-  lose to a v0.1 bug. Fund the low-balance wallet minimally, top up as
-  needed.
-- Do not expose the admin API (`Authorization: Bearer ms_admin_xxx` routes)
-  to any network the Agent or the public internet can reach.
-- Do not give a seller your MoneyKey, and never put a MoneyKey, admin token
-  or private key into a receiving-address (pay-to) field. To get paid you
-  only ever share your public `0x…` receiving address.
-- Do not import a recovery phrase or private key that also controls other
-  funds, or a high-value one. MoneySwitch keeps the key on its own disk; the
-  wallet it uses must be a dedicated small-float wallet made for AI payments
-  (`POST /v1/admin/wallet/create` generates one for you). Importing is meant for
-  restoring that same dedicated wallet on a new server.
+- Do not put more USDC in the wallet than you are prepared to lose to a bug or to a leaked data folder. Top it up in small amounts.
+- Do not expose the administrator API or the Dashboard to a network the AI or the public internet can reach without HTTPS and a firewall, and do not give an AI the administrator token, the one-time sign-in link or the 12 words.
+- Do not run the AI on the same machine, as the same system user, as the server.
+- Do not put a MoneyKey, administrator token or private key into a receiving-address field of any other service. To be paid you only ever share a public `0x…` address.

@@ -29,14 +29,14 @@ MONEYSWITCH_DATA_DIR=.data/mainnet MONEYSWITCH_MAINNET_ENABLED=true MONEYSWITCH_
 ```
 
 （如果 Nansen/RPC/facilitator 这些出站请求因为在代理后面而超时，server 会自动
-跟随 Clash/v2rayN 之类的代理——见 README「在代理后面使用」一节，无需额外配置。）
+跟随 Clash/v2rayN 之类的代理——选择顺序见 README「自己的服务器」一节，无需额外配置。）
 
 启动时会打印一条醒目的一次性警告（`WARNING: ... REAL USDC on Monad mainnet ...`）。如果
 `MONEYSWITCH_MAINNET_ENABLED=true` 但 mainnet 的 `rpcUrl` 被显式清空，server 会拒绝启动并报错，
 不会带着一个没有 RPC 的主网配置静默跑起来。
 
-首次启动会打印一次性的 setup 链接（`http://127.0.0.1:4020/setup#ms_setup_...`），用它登录 Dashboard 创建/解锁钱包，
-参考 `docs/quickstart.md` 步骤 5。**这一步创建的钱包是全新的，余额为 0**，需要人工转入真实 USDC（见第 4 步）。
+首次启动会打印一次性的登录链接（`http://127.0.0.1:4020/login#ms_setup_...`），用它登录 Dashboard，在「钱包」页创建钱包，
+参考 `docs/quickstart.md` 第 3 节。**这一步创建的钱包是全新的，余额为 0**，需要人工转入真实 USDC（见第 4 步）。
 
 ## 3. 创建限额 MoneyKey / create a rate-limited MoneyKey
 

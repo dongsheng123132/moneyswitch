@@ -1,6 +1,6 @@
 # x402 测试网收款验证服务
 
-给员工和新部署用来确认「付款端设置对了」的一个小服务：一个收费接口，每次 **0.01 测试 USDC**，只在 **Monad 测试网**，没有真实价值。
+给新用户和新部署用来确认「付款端设置对了」的一个小服务：一个收费接口，每次 **0.01 测试 USDC**，只在 **Monad 测试网**，没有真实价值。
 
 - 说明页：<https://app.moneyswitch.dev/x402-testnet/>
 - 收费接口：`GET https://app.moneyswitch.dev/x402-testnet/check`
@@ -11,7 +11,7 @@
 
 ## 使用
 
-在付款端创建 MoneyKey，允许域名 `app.moneyswitch.dev:443`，每笔和总额可先设为 `0.01`。向付款端的 `POST /v1/fetch` 发送下面的 JSON，并用该 Key 认证：
+在付款端创建 MoneyKey（测试网实例的建 Key 表单里勾选「允许测试付款接口」即可，它会加上允许域名 `app.moneyswitch.dev:443`），每笔和总额可先设为 `0.01`。向付款端的 `POST /v1/fetch` 发送下面的 JSON，并用该 Key 认证：
 
 ```json
 {"url":"https://app.moneyswitch.dev/x402-testnet/check","method":"GET","max_price":"0.01"}
@@ -39,4 +39,4 @@ PAY_TO=<收款地址（公开地址）> sh ./run-receiver.sh
 
 `node --test apps/demo-seller/receiver.test.mjs` 覆盖准确报价（0.01、测试网 USDC 合约、收款地址）、无效签名拒绝、结算失败不提供内容、成功结算返回收据，以及「没有主网路径、拒绝 `RECEIVER_MODE=mainnet`」。结算成功/失败的单元测试使用模拟 facilitator，不代表真实链上付款。
 
-验证结果必须包含结算收据/交易哈希与 MoneySwitch 流水；单独收到 HTTP 402 只说明报价成功。若付款人与收款人为同一个钱包，链上余额可能不变，但受限 Key 的付款额度仍会消耗。
+验证结果必须包含结算收据/交易哈希与 MoneySwitch「账单」页里的这一笔；单独收到 HTTP 402 只说明报价成功。若付款人与收款人为同一个钱包，链上余额可能不变，但受限 Key 的付款额度仍会消耗。

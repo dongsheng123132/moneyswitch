@@ -1,8 +1,56 @@
 # Changelog
 
 All notable changes to MoneySwitch are documented here. Dates are the day
-each spec increment was implemented, per the repository's own `SPEC*.md`
-files.
+each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
+
+## Unreleased — v0.7: the small product (2026-10-04)
+
+`SPEC.md` is the only specification now (v0.1 to v0.6 are in `docs/archive/`): an AI spends from a capped key, anything over the approval
+line waits for a human, the private key is never given to the AI; a new user makes the first testnet payment within ten minutes. The
+database is still **additive only**: no migration was added or removed, no table or column was dropped.
+
+- **Dashboard: four pages and a login.** Wallet, Keys, Approvals and Bills (the old Usage page; `/usage` is now `/bills`, without a
+  redirect). Removed: the employee portal (layout, four pages, MoneyKey login), the Playground / test-payment page, the Overview page, the
+  setup wizard, the local-launcher entry page, and the wallet import / password / reveal / download / auto-unlock-switch forms with
+  everything that only they used. Pages 13 to 5; `apps/dashboard/src` from 13,935 to 6,667 lines. The agent API (`/v1/fetch`,
+  `/v1/status`, `/v1/history`, `GET /v1/approvals/:id`) and the child-key back end and routes are unchanged (no UI for child keys).
+- **Approval link (SPEC §3).** The `approval_required` envelope of `POST /v1/fetch` now carries `approve_url`
+  (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, else the origin of the request). The link has no token; approving needs the administrator
+  login (a visit without a session goes to `/login` and comes back to the same approval). The Approvals page marks and scrolls to the
+  linked request. The skill (`/skill.md`, every per-key skill, `skills/moneyswitch-pay/SKILL.md`) tells the AI to give the link to a
+  person, poll `GET /v1/approvals/:id` every 15 seconds and resend with the `approval_id`.
+- **The ten-minute path (SPEC §0).** On an instance whose default network is a testnet the key form offers "allow the test payment
+  endpoint" (ticked by default; adds `app.moneyswitch.dev:443` to the allowed hosts), and the install prompt then asks the AI to call
+  `GET /v1/status` and make one test payment to `https://app.moneyswitch.dev/x402-testnet/check` and report the transaction hash.
+  Never offered on a mainnet default, and only when the key may pay that host and Monad testnet is enabled (the only chain the receiver
+  accepts).
+- **Wallet surface (SPEC §1, §5).** Routes: `GET /v1/admin/wallet` (status, balance per chain, replaced wallets), `POST …/create`
+  (no password, no import: it refuses both), `POST …/backup/confirm` (now a plain acknowledgement; the two-word quiz is gone) and
+  `POST …/replace`. Removed: `import`, `backup` (download), `unlock`, `reveal`, `auto-unlock`, `GET …/retired`. A wallet made by an
+  older version with a password is unlocked only at startup by `MONEYSWITCH_WALLET_PASSWORD` or `_FILE`; a lost password means replacing
+  the wallet. Every safety internal stays and keeps its tests: the address-named unlock file, ACL / 0700 / 0600 and the check that it
+  worked, temp -> verify -> rename writes, the startup sweep and orphan handling, `retired/` that is never deleted (apart from the one
+  audited cleanup for password wallets), waiting up to 60 s for payments in flight, the old signer refusing to sign after a replace.
+  Recovering a replaced auto-unlock wallet in MetaMask with the retired keystore and the content of its `.secret` file as password is
+  documented in `docs/wallet-setup.md` and checked against an independent Web3 Secret Storage v3 reader
+  (`packages/wallet/test/v3-compat.test.ts`); MetaMask itself was not run.
+- **Removed: push notifications** (Feishu, WeCom, Telegram, webhook): the notify module, `/v1/admin/notify*`, the outbox, the Dashboard
+  settings card, `docs/notifications.md`. Migrations 0005 and 0006 and their tables stay; `migrations-legacy.test.ts` upgrades a 0005 / 0006
+  database in place and checks that the bundled migrations are byte-identical to the source ones.
+- **Removed: the Windows launchers** (`scripts/start-local.ps1`, `install-local-shortcut.ps1`, `local-server.mjs`,
+  `docs/local-desktop.md`) and the routes only they used (`POST /v1/admin/local-link`, `POST /v1/local/claim`).
+- **First start.** The one-time link is `/login#ms_setup_…` (it was `/setup#…`): it signs the administrator in and lands on the Wallet
+  page.
+- **Dead seller leftovers** removed: the `facilitatorUrl` config field, the `/t/` exclusion in the static-file fallback, stale toll-booth
+  comments, `earnings.css`. The seller tables stay in the database, marked LEGACY.
+- **Route inventory test (SPEC §9).** `apps/server/test/unit/route-inventory.test.ts` records every route Fastify registers and compares
+  it with an explicit list: 26 routes (37 before this round), plus the Dashboard's file wildcard when a Dashboard is built. Administrator
+  routes must refuse no credentials and a MoneyKey, MoneyKey routes no credentials and the administrator token; the routes removed in
+  this round answer a JSON 404.
+- **`scripts/deploy-smoke.mjs`** follows the new surface (22 checks): wallet created without a password, unlocked by itself after a
+  restart, unlock file named after the address and protected, an approval link opens the Dashboard, the removed routes are absent.
+- **Docs** cut back to this product and pointed at `SPEC.md`: both READMEs, `deploy/README.zh-CN.md`, `docs/wallet-setup.md`,
+  `docs/security.md`, `docs/quickstart.md`, `CONTRIBUTING.md`, the pull-request template.
 
 ## Unreleased — atomic features only (2026-10-03)
 
