@@ -4,6 +4,91 @@ All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per the repository's own `SPEC*.md`
 files.
 
+## Unreleased — a wallet you cannot lose by forgetting a password
+
+Incident: two funded wallets became unreachable in one week (a local mainnet
+wallet holding 0.52 USDC, and the US server's testnet wallet whose auto-unlock
+file was empty). The server needed the wallet password on every restart, creating
+a wallet never made anyone save it, there was no backup that works without that
+same password, nothing showed that a restart would lock the wallet, and a lost
+password left only a brand-new instance (losing every key, budget and history
+row). The server wallet is a small float hot wallet: a person should not have to
+remember a password for it, and recovery now comes from a standard recovery
+phrase. Full model: [`docs/wallet-setup.md`](docs/wallet-setup.md) and
+`SPEC-v0.6.md` §6.
+
+- **Auto-unlock is the default.** Creating or importing a wallet without a
+  password encrypts the keystore with a random 256-bit secret stored in
+  `<data dir>/wallet-unlock.secret` (mode 0600 where the OS supports it, written
+  atomically, never returned by an API, never logged). Startup unlock order:
+  `MONEYSWITCH_WALLET_PASSWORD` / `_FILE` if non-empty (an empty variable, an
+  empty or blank file or an unreadable file is "not configured" and logged: the
+  placeholder file older Docker deployments mount is harmless), else
+  `wallet-unlock.secret`, else locked. A source that exists but fails is logged
+  without any credential, shown in the new health block and as an Overview
+  banner, and the next source is still tried. Passing a `password` to create /
+  import keeps the old password mode (no secret file).
+  **Honest trade-off:** whoever can read the data folder (backups and disk
+  snapshots included) can spend the wallet. Keep the float small, run team
+  servers on a separate machine, treat `/data` backups as private keys.
+- **Recovery phrase.** New wallets are made from a BIP-39 12-word phrase on
+  `m/44'/60'/0'/0/0`, so MetaMask / OKX show the same address (tested against an
+  independent BIP-32/44 derivation and published vectors). The phrase is returned
+  once by `POST /v1/admin/wallet/create` (admin only, `Cache-Control: no-store`)
+  and lives only inside the encrypted keystore. `POST
+  /v1/admin/wallet/backup/confirm` checks two words at 1-based positions and
+  records `backup_confirmed_at`; `POST /v1/admin/wallet/reveal` returns the
+  phrase (or the private key of a wallet imported from a key) only when
+  `confirm_address` echoes the current address exactly, with an audit row that
+  never contains the secret. `POST /v1/admin/wallet/import` accepts a new
+  `kind: "mnemonic"` (12 or 24 words, account 0). The Dashboard hides the
+  deposit address, QR code and funding steps until the backup is confirmed.
+- **Turn auto-unlock on / off** (`POST /v1/admin/wallet/auto-unlock`). On needs
+  an unlocked wallet and re-encrypts it with a fresh secret; off needs a new
+  password (8+ characters) and removes the secret file. Crash-safe: the new
+  keystore is built and test-decrypted before anything on disk changes, the old
+  one is kept as `wallet.json.bak-<timestamp>`, the secret is installed before
+  the swap (or removed after it), and a failure part-way restores every file.
+- **Replace wallet** (`POST /v1/admin/wallet/replace`, for a lost password or a
+  suspected leak). Needs `confirm_address`; refused with `409 WALLET_BUSY` while
+  any payment is `reserved`. The old `wallet.json` (and secret) are moved, never
+  deleted, to `<data dir>/retired/wallet-<address>-<timestamp>.json`; the
+  retirement is recorded in the new `wallet_retirements` table and in the audit
+  log. MoneyKeys, budgets, approvals, payment history and notification settings
+  are untouched, and reconciliation of old `unknown` payments keeps working (it
+  reads each payment's stored `auth_from`). `GET /v1/admin/wallet/retired` lists
+  retired wallets with their live USDC balance.
+- **Health.** `GET /v1/admin/wallet` keeps every existing field (`auto_unlock_configured`
+  now also covers the secret file) and adds `health`: `unlock_mode` (`auto` /
+  `env_or_file` / `manual` / `none`), `auto_unlock_ok` (result of the last real
+  decrypt), `backup` (`confirmed` / `missing` / `not_applicable`), `float_limit`
+  (`MONEYSWITCH_WALLET_FLOAT_LIMIT`, default 50 USDC), `over_float_limit` per
+  enabled chain whose balance is known, and `retired_wallets`. Balance reads are
+  shared between polls for a few seconds. `POST /v1/admin/wallet/backup` with a
+  `password` returns a portable keystore protected by it; an auto-unlock wallet's
+  own `wallet.json` is no longer offered (its secret is never exported).
+- **Dashboard** (zh + en). The setup step defaults to "Create wallet
+  (recommended)" with no password field: one click, the 12 words, two random words
+  to confirm; importing a phrase / private key / keystore and an "ask for a password
+  on every restart" toggle are secondary. The Wallet page gets a health card
+  (auto-unlock, backup, balance against the float limit) and a danger zone
+  (reveal, auto-unlock on / off / repair, encrypted backup, replace wallet with the
+  address typed in, retired wallets with live balances). The Overview warns when the
+  backup is missing or auto-unlock is broken.
+- **Removed: the Monad mainnet 0.1 USDC receiver** (out of scope; its server
+  deployment was already removed): its mode in `apps/demo-seller/receiver.mjs`, its
+  tests, the `/x402-receive/*` Caddy handle and the mainnet parts of the receiver
+  deploy files and docs. The testnet 0.01 test-USDC endpoint
+  (`/x402-testnet/check`), which employees use to verify their setup, stays;
+  `RECEIVER_MODE=mainnet` is refused.
+- **Schema:** additive migration `0007_wallet_lifecycle` (`wallet_meta.backup_confirmed_at`
+  and `origin`, new table `wallet_retirements`); an old image can still open the
+  upgraded database.
+- Tests: driver unit tests for every path above (including injected I/O failures
+  at each step of the toggles and the replacement), route tests, an end-to-end test
+  that kills the server process and starts it again on the same data directory with
+  no password, and Dashboard render tests.
+
 ## Unreleased
 
 "Paid but no delivery" fix. Incident: on Monad testnet a slow LLM seller took
