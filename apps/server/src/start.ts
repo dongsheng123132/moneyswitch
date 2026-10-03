@@ -7,7 +7,7 @@ import { DEFAULT_NOTIFY_INTERVAL_MS, startNotifyLoop } from "./notify/outbox.js"
 import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork } from "@moneyswitch/x402";
 
 export { loadConfig, type ServerConfig } from "./config.js";
-export type { AppContext, FirstRunSecrets, BuildContextOptions } from "./context.js";
+export type { AppContext, BuildContextOptions } from "./context.js";
 
 export interface RunningServer {
   app: FastifyInstance;

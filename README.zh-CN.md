@@ -58,7 +58,3 @@ pnpm test:e2e
 离线测试使用真实签名和模拟结算，不代表真实链上付款。部署验收另核对 HTTPS、持久化、重启和备份。
 
 服务端、核心和 Dashboard：AGPL-3.0-only；`apps/demo-seller` 和 `apps/qwen-agent`：Apache-2.0。详见各包 LICENSE。
-
-## Windows 本地桌面入口
-
-人工操作可以安装桌面快捷方式，双击启动本地服务并打开钱包页，无需让 AI 代操作。参见[本地桌面入口与一键启动](docs/local-desktop.md)。主网和测试网使用独立入口。

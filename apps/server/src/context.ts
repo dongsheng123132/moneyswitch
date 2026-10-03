@@ -37,23 +37,7 @@ function browsableHost(host: string): string {
   return host.includes(":") ? `[${host}]` : host;
 }
 
-/** What the first boot of a data directory produces (see buildContext's onFirstRun). */
-export interface FirstRunSecrets {
-  adminToken: string;
-  setupToken: string;
-  /** `http://<host>:<port>/setup#<setupToken>` — the one-time setup link. */
-  setupUrl: string;
-}
-
 export interface BuildContextOptions {
-  /**
-   * Replaces the default "print the admin token + one-time setup link to
-   * stdout" on the first boot of a data dir. Used by the Windows desktop
-   * launcher (scripts/local-server.mjs), which owns that stdout anyway and
-   * opens the very same one-time link in the browser. Same secrets, same
-   * channel — no extra way to obtain them.
-   */
-  onFirstRun?: (secrets: FirstRunSecrets) => void;
   /** Test seam: options for the wallet driver (cheap scrypt, no OS-level ACL work, a short drain). Leave unset in production. */
   walletOptions?: LocalWalletDriverOptions;
 }
@@ -161,14 +145,7 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
   const setup = new SetupTokenStore();
   const setupBase = config.publicUrl?.replace(/\/+$/, "") || `http://${browsableHost(config.host)}:${config.port}`;
   const freshAdminToken = bootstrapAdminToken(db);
-  if (freshAdminToken && opts.onFirstRun) {
-    const setupToken = setup.issue(freshAdminToken);
-    opts.onFirstRun({
-      adminToken: freshAdminToken,
-      setupToken,
-      setupUrl: `${setupBase}/setup#${setupToken}`,
-    });
-  } else if (freshAdminToken) {
+  if (freshAdminToken) {
     // Only place this ever gets printed. Never logged again, never stored
     // in plaintext. The only API that can hand it out is the one-time setup
     // claim below, which requires the setup token printed right next to it.

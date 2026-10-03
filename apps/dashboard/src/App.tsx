@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { LangProvider } from "./i18n";
 import SetupPage from "./pages/SetupPage";
-import LocalEntryPage from "./pages/LocalEntryPage";
 import "./styles/shell.css";
 import Layout from "./Layout";
 import EmployeeLayout from "./EmployeeLayout";
@@ -41,7 +40,6 @@ function Routed() {
           handles the one-time /setup#ms_setup_… claim itself, and redirects
           to /login when there is neither a setup token nor an admin session. */}
       <Route path="/setup" element={<SetupPage />} />
-      <Route path="/local" element={<LocalEntryPage />} />
       <Route path="/login" element={loggedInPath ? <Navigate to={loggedInPath} replace /> : <LoginPage />} />
       <Route
         path="/"
