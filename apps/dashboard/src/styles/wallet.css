@@ -111,6 +111,10 @@
 }
 
 /* replace */
+.wallet-current code {
+  overflow-wrap: anywhere;
+}
+
 .wallet-danger {
   border-color: color-mix(in srgb, var(--red) 40%, var(--panel-border));
 }

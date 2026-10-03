@@ -104,6 +104,7 @@ export const walletStrings = defineMessages(
     replaceMismatch: "That is not the current address. Type it exactly as shown above.",
     replaceFailed: "Could not replace the wallet: {message}",
     replaceMoveMoney: "Move any money you want to keep out of the old wallet first: after the swap this server no longer signs for it.",
+    replaceCurrentLabel: "The wallet that will be retired (do not send money to it):",
   },
   {
     // --- create --------------------------------------------------------------
@@ -201,5 +202,6 @@ export const walletStrings = defineMessages(
     replaceMismatch: "这不是当前地址。请照上面显示的原样输入。",
     replaceFailed: "更换钱包失败：{message}",
     replaceMoveMoney: "想保留的钱请先从旧钱包转出：换完之后，这台服务器不再替旧钱包签名。",
+    replaceCurrentLabel: "将被停用的钱包（不要再向它转钱）：",
   }
 );

@@ -30,7 +30,7 @@ The server wallet is a small **float**: the money your AI can spend right now, n
 
 Dashboard, Wallet page:
 
-1. **Create wallet.** One click. The 12 words appear with a warning; the address is not shown yet. Tick "I wrote all 12 words down" and the page shows the address and the balance on every enabled chain. If you reload before ticking, the words cannot be shown again: replace the wallet.
+1. **Create wallet.** One click. The 12 words appear with a warning; the address is not shown yet. Tick "I wrote all 12 words down" and the page shows the address and the balance on every enabled chain. If you reload before ticking, the words cannot be shown again: replace the wallet. The address, the QR code, the balances and the faucet steps are shown only for a wallet that is **unlocked** and whose words are **confirmed** (a wallet with no words to confirm, made from a bare key by an older version, only needs to be unlocked); a locked wallet shows the reason it is locked instead. The replace form always names the current wallet, read-only and marked "do not send money to it".
 2. Fund the address. On a testnet the page links to the USDC faucet. No gas token is needed on Monad (the facilitator pays the gas).
 
 If `wallet.json` is missing but credential files of an earlier wallet are still in the data folder (an unlock secret, or files in `retired/`), the page says so and asks for an explicit acknowledgement before creating a new wallet. The usual cause is a data folder mounted from the wrong place. Creating a wallet never touches those files and never overwrites an existing wallet, including concurrent attempts.

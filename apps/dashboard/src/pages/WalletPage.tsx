@@ -52,6 +52,16 @@ export function lockedReason(wallet: Pick<WalletInfo, "has_keystore" | "unlocked
   }
 }
 
+/**
+ * May the wallet be shown as something to send money to? Only an unlocked wallet whose words have been written down (or that has no
+ * words to write down, an older wallet made from a bare key). Nobody should fund a wallet that is locked, so every payment fails, or
+ * one whose words were never confirmed, which is lost if the data folder is: the address, QR code, balances and the faucet steps
+ * stay hidden until then. (The replace form still names the current address, as the wallet that will be retired.)
+ */
+export function fundingAllowed(wallet: Pick<WalletInfo, "has_keystore" | "unlocked" | "health">): boolean {
+  return wallet.has_keystore && wallet.unlocked && wallet.health.backup !== "missing";
+}
+
 // ---------------------------------------------------------------------------
 // the 12 words
 // ---------------------------------------------------------------------------
@@ -361,6 +371,12 @@ function ReplaceCard({ wallet, onReplaced }: { wallet: WalletInfo; onReplaced: (
       <summary>{t("replaceTitle")}</summary>
       <p>{t("replaceLead")}</p>
       <p>{t("replaceMoveMoney")}</p>
+      <p className="wallet-current">
+        {t("replaceCurrentLabel")}{" "}
+        <code className="mono" data-testid="replace-current-address">
+          {address}
+        </code>
+      </p>
       <form onSubmit={replace}>
         <div className="field">
           <label htmlFor="replace-reason">{t("replaceReasonLabel")}</label>
@@ -402,7 +418,8 @@ function ReplaceCard({ wallet, onReplaced }: { wallet: WalletInfo; onReplaced: (
  * The Wallet page for a loaded wallet (split from the polling shell so it can be rendered with a given state):
  *  - the 12 words, while they are on screen and not yet acknowledged;
  *  - no wallet yet: "Create wallet";
- *  - a wallet: its address and balance on every chain, what is wrong (if anything), the replaced wallets, and the replace form.
+ *  - a wallet: what is wrong (if anything); its address and balance on every chain once it is unlocked and its words are confirmed
+ *    (fundingAllowed); the replaced wallets, and the replace form.
  */
 export function WalletView({
   wallet,
@@ -428,7 +445,7 @@ export function WalletView({
       {wallet.has_keystore && (
         <>
           <Problems wallet={wallet} />
-          <AddressCard wallet={wallet} meta={meta} />
+          {fundingAllowed(wallet) && <AddressCard wallet={wallet} meta={meta} />}
           <Checks wallet={wallet} />
           <RetiredCard wallet={wallet} />
           <ReplaceCard wallet={wallet} onReplaced={onChanged} />

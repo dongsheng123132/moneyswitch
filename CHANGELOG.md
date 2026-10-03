@@ -39,6 +39,10 @@ database is still **additive only**: no migration was added or removed, no table
   database in place and checks that the bundled migrations are byte-identical to the source ones.
 - **Removed: the Windows launchers** (`scripts/start-local.ps1`, `install-local-shortcut.ps1`, `local-server.mjs`,
   `docs/local-desktop.md`) and the routes only they used (`POST /v1/admin/local-link`, `POST /v1/local/claim`).
+- **No funding block for a wallet that cannot safely be funded.** The Wallet page shows the address, QR code, balances and faucet steps only
+  when the wallet is unlocked and its words are confirmed (`health.backup` is not `missing`); a locked wallet, including an older password
+  wallet, and a wallet whose words are still on screen show none of it. The replace form names the current wallet, read-only, marked "do not
+  send money to it".
 - **The 12 words cannot be lost to a late poll.** The Dashboard polled the wallet every 3 seconds without caring in which order the answers
   came back, and cleared a phrase whose address differed from the wallet on screen: a poll made before "Replace wallet" and answering after
   the new words were shown wiped them, and nothing can show them again. Now `usePolling` applies answers in the order the requests were made

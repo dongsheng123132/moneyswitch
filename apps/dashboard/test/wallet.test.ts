@@ -220,6 +220,67 @@ describe("a wallet: address and balance on every chain", () => {
   });
 });
 
+describe("the funding block (address, QR, balances, faucet steps) only for a wallet that can safely be funded", () => {
+  /** Everything on the page before the replace form: the form is the one place that shows the current address while funding is hidden. */
+  const outsideReplaceForm = (html: string) => html.split('data-testid="replace-wallet"')[0]!;
+  const fundingBlockShown = (html: string) => {
+    const outside = outsideReplaceForm(html);
+    return {
+      address: outside.includes(ADDRESS), // the address card, its QR toggle and the explorer links all carry it
+      addressCard: outside.includes("public-address"),
+      balances: outside.includes("wallet-networks"),
+      faucet: outside.includes(esc(en.fundTestnet)),
+      float: outside.includes(fill(en.floatNote, { limit: "50" })),
+    };
+  };
+  const ALL = { address: true, addressCard: true, balances: true, faucet: true, float: true };
+  const NONE = { address: false, addressCard: false, balances: false, faucet: false, float: false };
+
+  it("unlocked and confirmed (or with no words to confirm): the whole block is there", () => {
+    for (const backup of ["confirmed", "not_applicable"] as const) assert.deepEqual(fundingBlockShown(view(wallet({ health: { backup } }))), ALL, backup);
+  });
+
+  it("the words not written down yet: no address, no QR, no balances table, no faucet steps - not even while the words are on screen", () => {
+    const missing = wallet({ health: { backup: "missing" }, backup_confirmed_at: null });
+    assert.deepEqual(fundingBlockShown(view(missing)), NONE);
+    assert.ok(!outsideReplaceForm(view(missing)).includes(`${NETWORK.explorer_base}/address/`), "not even inside an explorer link");
+    freshPhrase.set(ADDRESS, PHRASE);
+    const withWords = view(missing);
+    assert.ok(withWords.includes('data-testid="phrase-card"'), "the words are on screen");
+    assert.deepEqual(fundingBlockShown(withWords), NONE);
+  });
+
+  it("a locked wallet: no address, QR or faucet steps whatever its backup state; the reason it is locked is shown instead", () => {
+    for (const backup of ["confirmed", "missing", "not_applicable"] as const) {
+      const html = view(wallet({ unlocked: false, health: { backup, unlock_sources: [{ source: "auto", ok: false, reason: "secret_missing" }], auto_unlock_ok: false } }));
+      assert.deepEqual(fundingBlockShown(html), NONE, backup);
+      assert.ok(outsideReplaceForm(html).includes(esc(en.lockedTitle)), "the lock is explained");
+    }
+  });
+
+  it("a locked wallet made by an older version with a password: same", () => {
+    const html = view(wallet({ unlocked: false, health: { protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [], backup: "missing" } }));
+    assert.deepEqual(fundingBlockShown(html), NONE);
+    assert.ok(outsideReplaceForm(html).includes(esc(en.locked_password)));
+  });
+
+  it("in every one of those states the replace form still shows the current address, read-only (no copy button, no QR), as the wallet that will be retired", () => {
+    const states = [
+      wallet({ health: { backup: "missing" }, backup_confirmed_at: null }),
+      wallet({ unlocked: false }),
+      wallet({ unlocked: false, health: { backup: "missing", protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [] } }),
+      wallet(), // and the healthy one
+    ];
+    for (const w of states) {
+      const form = view(w).split('data-testid="replace-wallet"')[1]!;
+      assert.match(form, new RegExp(`data-testid="replace-current-address"[^>]*>${ADDRESS}<`));
+      assert.ok(form.includes(esc(en.replaceCurrentLabel)));
+      assert.ok(!form.includes("copy-btn") && !form.includes("public-address") && !form.includes("<svg"), "no copy button, address card or QR in the form");
+      assert.ok(form.includes(`placeholder="${ADDRESS}"`));
+    }
+  });
+});
+
 describe("state and problems", () => {
   it("a healthy wallet: unlocks itself, the folder is protected, the words are confirmed - and no warning at all", () => {
     const html = view(wallet());
