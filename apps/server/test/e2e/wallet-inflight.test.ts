@@ -177,3 +177,49 @@ describe("a signer that outlived its wallet refuses to sign", () => {
     expect(seller.requests.filter((r) => r.paid)).toHaveLength(1);
   });
 });
+
+describe("the OpenAI-compatible gateway holds the lease too", () => {
+  const chat = (key: string) =>
+    app.inject({
+      method: "POST",
+      url: "/v1/chat/completions",
+      headers: { authorization: `Bearer ${key}` },
+      payload: { model: "stub-model", messages: [{ role: "user", content: "hi" }] },
+    });
+
+  it("replace is refused while a chat completion is in flight; a signer that outlived its wallet answers 503 WALLET_LOCKED with nothing paid", async () => {
+    const channel = await app.inject({
+      method: "POST",
+      url: "/v1/admin/channels",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { name: "stub (x402)", base_url: `${seller.url}/v1`, models: ["stub-model"] },
+    });
+    expect(channel.statusCode).toBeLessThan(300);
+    const key = await createKey();
+
+    // 1. in flight: the lease is held until the paid answer is back
+    seller.setBehavior({ paidDelayMs: 1500 });
+    const inFlight = chat(key);
+    await waitFor(() => seller.requests.some((r) => r.paid), "the paid chat request to reach the seller");
+    expect(wallet.inFlight).toBe(1);
+    const busy = await adminPost("/v1/admin/wallet/replace", { confirm_address: wallet.getAddress() });
+    expect(busy.statusCode).toBe(409);
+    expect(busy.json().error).toBe("WALLET_BUSY");
+    expect((await inFlight).statusCode).toBe(200);
+    expect(wallet.inFlight).toBe(0);
+
+    // 2. a stale signer (replaced after it was taken) refuses to sign: 503, nothing paid, reservation released
+    seller.reset();
+    const stale = wallet.getSigner()!;
+    expect((await adminPost("/v1/admin/wallet/replace", { confirm_address: wallet.getAddress() })).statusCode).toBe(200);
+    vi.spyOn(wallet, "leaseSigner").mockReturnValue({ signer: stale, release: () => undefined });
+    const refused = await chat(key);
+    expect(refused.statusCode).toBe(503);
+    expect(refused.json().error.code).toBe("WALLET_LOCKED");
+    expect(seller.requests.filter((r) => r.paid)).toHaveLength(0);
+    const rows = (await payments(key)).filter((p) => p.errorCode === "WALLET_CHANGED");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "failed", kind: "chat" });
+    expect(wallet.inFlight).toBe(0);
+  });
+});
