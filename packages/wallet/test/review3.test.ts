@@ -405,7 +405,8 @@ describe("#1: when a retired secret cannot be removed, it is flagged, and remove
   function undeletable(retiredSecret: string) {
     const realUnlink = fs.unlinkSync;
     vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
-      if (String(file).endsWith(retiredSecret)) throw Object.assign(new Error("access denied"), { code: "EPERM" });
+      // (exactly that file: the displaced original is kept as "orphan-" + the same name, and on a fast file system both carry the same stamp)
+      if (path.basename(String(file)) === retiredSecret) throw Object.assign(new Error("access denied"), { code: "EPERM" });
       return realUnlink(file);
     }) as never);
   }

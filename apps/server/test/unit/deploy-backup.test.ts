@@ -47,7 +47,8 @@ describe("the documented backup command (deploy/README.zh-CN.md)", () => {
   });
 });
 
-describe.skipIf(!hasShell)("deploy/check-backup.sh", () => {
+// (every case starts a handful of Git-for-Windows processes; the default 5 s is too tight when the whole unit suite runs in parallel)
+describe.skipIf(!hasShell)("deploy/check-backup.sh", { timeout: 60_000 }, () => {
   let work: string;
   let autoDir: string;
   let otherAutoDir: string;
