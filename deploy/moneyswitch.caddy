@@ -5,7 +5,12 @@ app.moneyswitch.dev {
         Referrer-Policy same-origin
         -Server
     }
-    reverse_proxy 127.0.0.1:4020 {
-        flush_interval -1
+    handle /x402-receive/* {
+        reverse_proxy 127.0.0.1:4021
+    }
+    handle {
+        reverse_proxy 127.0.0.1:4020 {
+            flush_interval -1
+        }
     }
 }
