@@ -41,7 +41,8 @@ export function renderInstallPrompt(input: InstallPromptInput): string {
   }
 
   return [
-    `[MoneySwitch${info.label === "Other" ? "" : " / " + info.label}] 给你付费能力 / Give yourself a payment ability`,
+    `[MoneySwitch${info.label === "Other" ? "" : " / " + info.label}] 给你付费能力 / Give yourself a payment ability` +
+      (testPay ? " · 测试网，测试 USDC 无真实价值 / testnet: test USDC with no real value" : ""),
     "",
     "请原样保存为你自己的 skill / Save everything between the BEGIN and END markers, verbatim, at:",
     "",
@@ -55,11 +56,11 @@ export function renderInstallPrompt(input: InstallPromptInput): string {
     ...(testPay
       ? [
           `保存后先查询额度，再做一笔测试付款（${TEST_PAYMENT_PRICE} 测试 USDC，无真实价值）/ Then call GET ${base}/v1/status with the key, then make ONE test payment (${TEST_PAYMENT_PRICE} test USDC, no real value): POST ${base}/v1/fetch with {"url":"${TEST_PAYMENT_URL}","method":"GET","max_price":"${TEST_PAYMENT_PRICE}"}. Do it once; if it fails, say why and stop: never retry it or pay another way.`,
-          "正常只回复两句话：已接入；测试付款的 tx_hash；今日剩余额度。Reply in at most two sentences: setup result, the test payment's tx_hash, and today's remaining budget. Omit file counts, directory audits and diagnostics unless blocked or asked.",
+          "正常只回复三行：是否已接入；测试付款的 tx_hash；今日剩余额度（remaining_today）。Reply in at most three short lines: setup result; the test payment's tx_hash; today's remaining budget (remaining_today). Omit file counts, directory audits and diagnostics unless blocked or asked.",
         ]
       : [
           "保存后只查询额度 / Then call GET " + base + "/v1/status with the key; do not make a payment during installation.",
-          "正常只回复两句话：已接入；今日可用、单笔上限及审批线，尚未付款。Reply in at most two sentences: setup result, today's remaining budget, per-request limit, approval threshold, and no payment made. Omit file counts, directory audits and diagnostics unless blocked or asked.",
+          "正常只回复两行：是否已接入（尚未付款）；今日可用、单笔上限、审批线。Reply in at most two short lines: setup result (no payment made); today's remaining budget, per-request limit and approval threshold. Omit file counts, directory audits and diagnostics unless blocked or asked.",
         ]),
     "",
     "密钥保密 / The key is a secret: never repeat it in chat, never commit it to git, never send it anywhere but that server.",

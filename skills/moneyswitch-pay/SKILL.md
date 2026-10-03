@@ -16,7 +16,7 @@ Read two environment variables:
 
 If either is missing, do not guess: ask the user to paste their MoneySwitch skill (the text they copy from the MoneySwitch dashboard: Money Keys > "Give this to your AI"). That text holds both values and says where to save it. It replaces this generic skill: follow it and do not keep two copies.
 
-**The key is a secret.** Never print it or repeat it in chat, logs, code or git. Never put it in a URL or query string. Send it only to the MoneySwitch server (`MONEY_API_BASE`), in the `Authorization` header, never to a seller or any other host.
+**The key is a secret.** Never print it or repeat it in chat, logs, code or git. Never put it in a URL or query string. Send it only to the MoneySwitch server (`MONEY_API_BASE`), in the `Authorization` header, never to a seller or any other host. If the server address uses plain HTTP (no TLS, e.g. `127.0.0.1`), call it directly, not through an HTTP proxy (`HTTP_PROXY`/`HTTPS_PROXY`), so no proxy ever sees the key; an HTTPS server may be reached through a proxy.
 
 Use one available HTTP client; the examples below are alternatives. On Windows, prefer Python if available. `curl.exe` and PowerShell may fail with `SEC_E_NO_CREDENTIALS` in a restricted sandbox even when they work outside it. After that TLS-handshake failure, try Python or Node with normal certificate verification; do not diagnose a broken Windows installation or change system security settings. A timeout after sending a paid request is different: do not resend it with another client.
 

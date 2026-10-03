@@ -68,7 +68,9 @@ export function renderSkill(input: RenderSkillInput = {}): string {
   push(
     "**The key is a secret.** Never print it or repeat it in chat, logs, code or git. Never put it in a URL or query string. " +
       (personal ? "Send it only to the MoneySwitch server above" : "Send it only to the MoneySwitch server (`MONEY_API_BASE`)") +
-      ", in the `Authorization` header, never to a seller or any other host.",
+      ", in the `Authorization` header, never to a seller or any other host. " +
+      "If the server address uses plain HTTP (no TLS, e.g. `127.0.0.1`), call it directly, not through an HTTP proxy " +
+      "(`HTTP_PROXY`/`HTTPS_PROXY`), so no proxy ever sees the key; an HTTPS server may be reached through a proxy.",
     ""
   );
 

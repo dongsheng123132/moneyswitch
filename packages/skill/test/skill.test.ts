@@ -75,6 +75,15 @@ describe("renderSkill: personalized", () => {
   });
 });
 
+describe("renderSkill: key and proxies", () => {
+  it("tells the agent not to send the key through an HTTP proxy to a plain-HTTP server, while an HTTPS server may use one", () => {
+    for (const s of [renderSkill({ baseUrl: BASE, key: KEY }), renderSkill({ baseUrl: BASE }), renderSkill({})]) {
+      expect(s).toMatch(/uses plain HTTP \(no TLS, e\.g\. `127\.0\.0\.1`\), call it directly, not through an HTTP proxy/);
+      expect(s).toMatch(/an HTTPS server may be reached through a proxy/);
+    }
+  });
+});
+
 describe("renderSkill: generic", () => {
   const generic = renderSkill({ baseUrl: BASE });
   const agnostic = renderSkill({});
@@ -263,7 +272,7 @@ describe("renderInstallPrompt", () => {
     expect(head).toMatch(/If you cannot write there, report the path and blocker, without the key/);
     expect(head).toContain(`GET ${BASE}/v1/status`);
     expect(head).toContain("do not make a payment during installation");
-    expect(head).toContain("Reply in at most two sentences");
+    expect(head).toContain("Reply in at most two short lines");
     expect(head).toMatch(/never repeat it in chat/);
     expect(head).toMatch(/never commit it to git/);
     expect(head).not.toContain(KEY);
@@ -340,6 +349,21 @@ describe("renderInstallPrompt", () => {
 
   describe("the test payment of the ten-minute path", () => {
     const hosts = ["api.example.com:443", TEST_PAYMENT_HOST];
+
+    // Feedback from a real agent run (2026-10-04): a cautious agent hesitated at an mk_live_ key next to a payment
+    // instruction, and "two sentences" did not fit the three items it was asked to report.
+    it("says on its very first line that this is a testnet with test USDC of no real value, and asks for three short lines", () => {
+      const p = renderInstallPrompt({ ...base, agent: "codex", testPayment: { allowedHosts: hosts, testnet: true } });
+      const first = p.split("\n")[0];
+      expect(first).toMatch(/测试网/);
+      expect(first).toMatch(/testnet: test USDC with no real value/);
+      expect(headOf(p)).toMatch(/at most three short lines: setup result; the test payment's tx_hash; today's remaining budget \(remaining_today\)/);
+    });
+
+    it("does not claim testnet on its first line when no test payment is offered", () => {
+      const first = renderInstallPrompt({ ...base, agent: "codex" }).split("\n")[0];
+      expect(first).not.toMatch(/testnet|测试网/);
+    });
 
     it("on a testnet, for a key that may pay the test host: after the status call, ONE test payment to the test endpoint, then its tx_hash is reported", () => {
       const head = headOf(renderInstallPrompt({ ...base, agent: "codex", testPayment: { allowedHosts: hosts, testnet: true } }));
