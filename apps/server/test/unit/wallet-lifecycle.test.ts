@@ -174,7 +174,7 @@ describe("create", () => {
 describe("health", () => {
   it("no wallet yet", async () => {
     const info = await walletInfo();
-    expect(info).toMatchObject({ address: null, unlocked: false, has_keystore: false, auto_unlock_configured: false, usdc_balance: null, simulated: false });
+    expect(info).toMatchObject({ address: null, unlocked: false, has_keystore: false, auto_unlock_configured: false, usdc_balance: null });
     expect(info.health).toEqual({
       protection: "none",
       unlock_mode: "none",
@@ -203,7 +203,6 @@ describe("health", () => {
       auto_unlock_configured: true,
       usdc_balance: "0.52",
       network: TESTNET.caip2,
-      simulated: false,
     });
   });
 

@@ -48,10 +48,10 @@ export interface FirstRunSecrets {
 export interface BuildContextOptions {
   /**
    * Replaces the default "print the admin token + one-time setup link to
-   * stdout" on the first boot of a data dir. Used by the offline demo
-   * runner, which is the process that owns that stdout anyway: it opens the
-   * very same one-time link in the browser. Same secrets, same channel —
-   * no extra way to obtain them.
+   * stdout" on the first boot of a data dir. Used by the Windows desktop
+   * launcher (scripts/local-server.mjs), which owns that stdout anyway and
+   * opens the very same one-time link in the browser. Same secrets, same
+   * channel — no extra way to obtain them.
    */
   onFirstRun?: (secrets: FirstRunSecrets) => void;
   /** Test seam: options for the wallet driver (cheap scrypt, no OS-level ACL work, a short drain). Leave unset in production. */
@@ -185,10 +185,7 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
 
   await unlockWalletOnStartup(wallet, config.walletPassword);
 
-  // Demo mode settles through the mock facilitator only (0xmock… hashes that
-  // never exist on chain): leave the reader unset so reconcile is a no-op and
-  // nothing ever talks to a real RPC endpoint.
-  const chainReader = config.demo ? undefined : createMultiNetworkAuthorizationReader();
+  const chainReader = createMultiNetworkAuthorizationReader();
 
   return { db, sqlite, wallet, config, setup, chainReader };
 }

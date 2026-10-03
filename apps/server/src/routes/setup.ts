@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { writeAudit, SetupTokenStore } from "@moneyswitch/core";
 import { getActiveNetwork, getEnabledNetworks, isMainnet, isMainnetNetwork } from "@moneyswitch/x402";
@@ -9,29 +6,16 @@ import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
 import { publicBase } from "../public-base.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** apps/cli, resolved relative to this file (works from apps/server/src via tsx and apps/server/dist via node). */
-function cliDir(): string {
-  return path.resolve(__dirname, "..", "..", "..", "cli");
-}
-
-export function defaultCliTarballPath(): string {
-  return path.join(cliDir(), "pack", "moneyswitch.tgz");
-}
-
 const FAUCET_URL = "https://faucet.circle.com/";
 
 /**
  * First-run setup + Dashboard metadata routes (docs/ux-audit.md).
  *
  * - GET  /v1/setup/status   unauthenticated, returns ONLY whether a one-time setup link is still claimable
- *                           (+ whether this is the offline demo, for the Dashboard's DEMO banner).
+
  * - POST /v1/setup/claim    unauthenticated, exchanges the one-time setup token (printed to stdout on first boot)
  *                           for the admin token. Single use, 30 min, burns after 10 bad attempts (SetupTokenStore).
- * - GET  /v1/admin/meta     admin only: network facts + demo seller URL + local CLI paths for copy-paste snippets.
- * - GET  /dl/moneyswitch.tgz unauthenticated: the packed Apache-2.0 client CLI (no secrets), so
- *                           `npx -y --package=<server>/dl/moneyswitch.tgz moneyswitch connect …` works without npm publish.
+ * - GET  /v1/admin/meta     admin only: network facts + the public base URL the skill is written for.
  */
 export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
@@ -55,12 +39,7 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.get("/v1/setup/status", async (_req, reply) => {
-    // `demo` only tells the Dashboard to render the "DEMO · simulated
-    // settlement" banner on every screen (login/setup included); it grants
-    // nothing and is never true outside `moneyswitch-server demo`.
-    return reply
-      .header("cache-control", "no-store")
-      .send({ setup_link_active: ctx.setup?.isActive() ?? false, demo: Boolean(ctx.config.demo) });
+    return reply.header("cache-control", "no-store").send({ setup_link_active: ctx.setup?.isActive() ?? false });
   });
 
   app.post("/v1/setup/claim", async (req, reply) => {
@@ -79,9 +58,6 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get("/v1/admin/meta", { preHandler: adminGuard }, async (req, reply) => {
     const network = getActiveNetwork();
     const chainId = Number(network.caip2.split(":")[1] ?? 0) || null;
-    const cliJs = path.join(cliDir(), "dist", "cli.js");
-    const mcpJs = path.join(cliDir(), "dist", "mcp.js");
-    const tarball = ctx.config.cliTarballPath ?? defaultCliTarballPath();
     const proxy = getInstalledOutboundProxy();
     return reply.send({
       network: network.caip2,
@@ -96,34 +72,16 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       is_mainnet: isMainnet(),
       // Circle's faucet only mints testnet USDC — pointing it at mainnet would be misleading.
       faucet_url: isMainnet() ? null : FAUCET_URL,
-      demo_seller_url: ctx.config.demoSellerUrl ?? null,
-      cli_tarball_available: fs.existsSync(tarball),
-      cli_local_path: fs.existsSync(cliJs) ? cliJs.replace(/\\/g, "/") : null,
-      mcp_local_path: fs.existsSync(mcpJs) ? mcpJs.replace(/\\/g, "/") : null,
       wallet_password_from_env: Boolean(ctx.config.walletPassword),
-      // v0.5 (SPEC-v0.5 §2): default receiving address for toll booths (the
-      // wallet receives and pays) + the base URL buyers use (/t/<slug>/…).
+      // The base URL the skill is written for (MONEYSWITCH_PUBLIC_URL, else the origin of this request).
       wallet_address: ctx.wallet.getAddress(),
       public_base: publicBase(ctx, req),
       public_base_from_env: Boolean(ctx.config.publicUrl),
-      demo: Boolean(ctx.config.demo),
       // Read-only: host:port + source only, never credentials (see
       // packages/net's redactProxyUrl/hostPortOf and the README "behind a
       // proxy" section).
       outbound_proxy:
         proxy && proxy.url ? { host_port: hostPortOf(proxy.url), source: proxy.source } : { host_port: null, source: proxy?.source ?? "none" },
     });
-  });
-
-  app.get("/dl/moneyswitch.tgz", async (_req, reply) => {
-    const tarball = ctx.config.cliTarballPath ?? defaultCliTarballPath();
-    if (!fs.existsSync(tarball)) {
-      return reply.status(404).send({ error: "not_found", message: "CLI tarball not built — run `pnpm build`" });
-    }
-    return reply
-      .header("content-type", "application/gzip")
-      .header("content-disposition", 'attachment; filename="moneyswitch.tgz"')
-      .header("cache-control", "no-cache")
-      .send(fs.createReadStream(tarball));
   });
 }

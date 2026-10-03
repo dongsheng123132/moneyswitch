@@ -1,7 +1,6 @@
 // Builds the `moneyswitch-server` npm package (AGPL-3.0-only):
-//   dist/cli.js      one ESM bundle: apps/server + packages/{core,db,x402,wallet,
-//                    tollbooth,mock-facilitator} + apps/demo-seller + fastify,
-//                    express, @x402/*, viem, ethers, drizzle… (everything except
+//   dist/cli.js      one ESM bundle: apps/server + packages/{core,db,net,x402,wallet,
+//                    skill} + fastify, @x402/*, viem, ethers, drizzle… (everything except
 //                    the native better-sqlite3, which stays a real dependency so
 //                    npm installs its prebuilt binary for the user's platform).
 //   dashboard/       copy of apps/dashboard/dist (served as static files).
@@ -40,7 +39,7 @@ await build({
   // Native addon: installed by npm from the registry (prebuilt binaries for
   // win32/darwin/linux x64+arm64), never bundled.
   // @x402/extensions + @x402/paywall: optional runtime-only imports of the
-  // x402 SDK that neither the toll booth nor the demo seller ever trigger.
+  // x402 SDK that the server never triggers.
   // pino-pretty: optional fastify logger transport (not used).
   external: ["better-sqlite3", "@x402/extensions", "@x402/extensions/*", "@x402/paywall", "pino-pretty"],
   define: { __MONEYSWITCH_SERVER_VERSION__: JSON.stringify(pkg.version) },

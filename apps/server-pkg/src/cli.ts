@@ -4,9 +4,8 @@ import { installOutboundProxy, redactProxyUrl } from "@moneyswitch/net";
 import { loadConfig, startServer } from "@moneyswitch/server/start";
 import { parseArgs, DEFAULT_HOST, DEFAULT_PORT } from "./args.js";
 import { bundledDashboardDir, bundledMigrationsDir } from "./paths.js";
-import { runDemo } from "./demo.js";
 
-// Earliest possible point: before parseArgs()/serve()/runDemo() make any
+// Earliest possible point: before parseArgs()/serve() make any
 // outbound call themselves (facilitator, viem RPC, toll booth forwarding,
 // paid_fetch all go through the global fetch dispatcher this installs) —
 // mirrors apps/server/src/index.ts, which this npx-installed package does
@@ -27,9 +26,8 @@ export const HELP = `moneyswitch-server ${VERSION} — self-hosted MoneySwitch s
 
 Usage:
   npx moneyswitch-server [--data-dir <dir>] [--port ${DEFAULT_PORT}] [--host ${DEFAULT_HOST}]
-  npx moneyswitch-server demo [--port ${DEFAULT_PORT}] [--no-open]
 
-Self-hosted server (default command):
+Options:
   --data-dir <dir>   where the database + encrypted wallet keystore live
                      (default: ~/.moneyswitch/server, or $MONEYSWITCH_DATA_DIR)
   --port <n>         HTTP port (default: ${DEFAULT_PORT}, or $MONEYSWITCH_PORT)
@@ -39,15 +37,6 @@ Self-hosted server (default command):
   one-time setup link (valid 30 min, single use) — open it to finish setup.
   Other settings keep their MONEYSWITCH_* environment variables
   (MONEYSWITCH_WALLET_PASSWORD(_FILE), MONEYSWITCH_PUBLIC_URL, …).
-
-demo — fully offline 30-second tour, no real money:
-  Starts a mock x402 facilitator, a demo seller (LLM echo mode) and a
-  server on free ports (from --port, default ${DEFAULT_PORT}) with a throwaway
-  data directory, pre-loads a mock wallet, a demo channel, two MoneyKeys
-  ("Claude Code", "Codex") and a few payments, then opens the
-  Dashboard already signed in. Settlement is simulated (0xmock… hashes);
-  nothing touches a real chain. Ctrl+C stops everything and deletes the data.
-  --no-open          print the link instead of opening a browser
 
   -h, --help         show this help
   -v, --version      print the version
@@ -65,9 +54,6 @@ async function serve(dataDirFlag: string | null, portFlag: number | null, hostFl
     dbFilePath: process.env.MONEYSWITCH_DB_PATH || path.join(dataDir, "moneyswitch.sqlite"),
     dashboardDir: bundledDashboardDir(),
     migrationsDir: bundledMigrationsDir(),
-    // The Apache-2.0 client CLI is its own npm package (`npx moneyswitch`);
-    // this AGPL package does not ship its tarball.
-    cliTarballPath: path.join(dataDir, "moneyswitch-cli-not-bundled.tgz"),
   };
   console.log(`[moneyswitch] moneyswitch-server ${VERSION} — data dir: ${dataDir}`);
   let running;
@@ -113,9 +99,6 @@ async function main(): Promise<void> {
     case "error":
       process.stderr.write(`moneyswitch-server: ${parsed.message}\n\nRun "moneyswitch-server --help" for usage.\n`);
       process.exit(2);
-      return;
-    case "demo":
-      await runDemo({ startPort: parsed.port, host: parsed.host, open: parsed.open, version: VERSION });
       return;
     case "serve":
       await serve(parsed.dataDir, parsed.port, parsed.host);

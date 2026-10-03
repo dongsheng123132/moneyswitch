@@ -12,13 +12,9 @@ describe("moneyswitch-server argv", () => {
     });
   });
 
-  it("parses demo with defaults and --no-open", () => {
-    expect(parseArgs(["demo"])).toEqual({ kind: "demo", port: 4020, host: "127.0.0.1", open: true });
-    expect(parseArgs(["demo", "--no-open", "--port", "4100"])).toEqual({ kind: "demo", port: 4100, host: "127.0.0.1", open: false });
-  });
-
-  it("refuses --data-dir for demo (always a throwaway temp dir)", () => {
-    expect(parseArgs(["demo", "--data-dir", "x"]).kind).toBe("error");
+  it("has no offline demo any more: `demo` and --no-open are unknown arguments", () => {
+    expect(parseArgs(["demo"]).kind).toBe("error");
+    expect(parseArgs(["demo", "--no-open", "--port", "4100"]).kind).toBe("error");
   });
 
   it("rejects bad ports and unknown args", () => {
@@ -29,8 +25,8 @@ describe("moneyswitch-server argv", () => {
   });
 
   it("help / version", () => {
-    expect(parseArgs(["--help"])).toEqual({ kind: "help", topic: "serve" });
-    expect(parseArgs(["demo", "-h"])).toEqual({ kind: "help", topic: "demo" });
+    expect(parseArgs(["--help"])).toEqual({ kind: "help" });
+    expect(parseArgs(["-h"])).toEqual({ kind: "help" });
     expect(parseArgs(["-v"])).toEqual({ kind: "version" });
   });
 });

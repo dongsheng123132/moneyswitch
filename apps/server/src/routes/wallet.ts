@@ -98,21 +98,10 @@ async function readBalance(ctx: AppContext, address: string, network: NetworkCon
   return value;
 }
 
-function demoBalanceMicros(ctx: AppContext): number {
-  const start = ctx.config.demo?.startingBalanceMicros ?? 0;
-  const spent = ctx.sqlite.prepare(`SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE status = 'settled'`).get() as { s: number };
-  return Math.max(0, start - Number(spent.s));
-}
-
-/** Balance on every enabled chain where it can be read (null = unknown). Demo: simulated, active chain only. */
+/** Balance on every enabled chain where it can be read (null = unknown). */
 async function balancesByNetwork(ctx: AppContext, address: string | null, networks: NetworkConfig[]): Promise<Map<string, bigint | null>> {
   const out = new Map<string, bigint | null>();
   if (!address) return out;
-  if (ctx.config.demo) {
-    const active = getActiveNetwork().caip2;
-    for (const n of networks) out.set(n.caip2, n.caip2 === active ? BigInt(demoBalanceMicros(ctx)) : null);
-    return out;
-  }
   await Promise.all(networks.map(async (n) => out.set(n.caip2, await readBalance(ctx, address, n))));
   return out;
 }
@@ -183,7 +172,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
 
     const meta = address ? getWalletMeta(ctx.db, address) : undefined;
     let backup: WalletHealth["backup"] = "not_applicable";
-    if (hasKeystore && !ctx.config.demo && ctx.wallet.keystoreHasRecoveryPhrase()) {
+    if (hasKeystore && ctx.wallet.keystoreHasRecoveryPhrase()) {
       // Only a wallet that has a recovery phrase can be "backed up" by writing it down. One imported from a
       // bare private key has nothing to confirm: its owner already holds the key.
       backup = meta?.backupConfirmedAt ? "confirmed" : "missing";
@@ -234,7 +223,6 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       auto_unlock_configured: Boolean(ctx.config.walletPassword?.trim()) || ctx.wallet.protection() === "auto",
       usdc_balance: selected === null ? null : formatMicrosToUsdc(selected),
       network: network.caip2,
-      simulated: Boolean(ctx.config.demo),
       has_recovery_phrase: ctx.wallet.hasKeystore() && ctx.wallet.keystoreHasRecoveryPhrase(),
       backup_confirmed_at: (address ? getWalletMeta(ctx.db, address)?.backupConfirmedAt : null) ?? null,
       health,
@@ -471,9 +459,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!network) return reply.status(400).send({ error: "UNSUPPORTED_NETWORK" });
     const rows = listRetiredWallets(ctx.db);
     const balances = new Map<string, bigint | null>();
-    if (!ctx.config.demo) {
-      await Promise.all([...new Set(rows.map((r) => r.address))].map(async (address) => balances.set(address, await readBalance(ctx, address, network))));
-    }
+    await Promise.all([...new Set(rows.map((r) => r.address))].map(async (address) => balances.set(address, await readBalance(ctx, address, network))));
     return reply.send({
       network: network.caip2,
       folder: "retired",

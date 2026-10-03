@@ -9,10 +9,6 @@ export interface ServerConfig {
   dataDir: string;
   dbFilePath: string;
   walletPassword: string | null;
-  /** Base URL of the demo x402 seller (set by scripts/demo-*.mjs), used by the Dashboard's one-click demo channel. */
-  demoSellerUrl?: string | null;
-  /** Absolute path of the packed client CLI tarball served at GET /dl/moneyswitch.tgz (defaults to apps/cli/pack/moneyswitch.tgz). */
-  cliTarballPath?: string | null;
   /** v0.4 (SPEC-v0.4 §A): MONEYSWITCH_MAX_KEY_DEPTH (default 3 = root + 3 levels of child keys). */
   maxKeyDepth?: number;
   /**
@@ -46,20 +42,6 @@ export interface ServerConfig {
   dashboardDir?: string | null;
   /** Directory with the SQL migrations (defaults to packages/db/migrations). */
   migrationsDir?: string | null;
-  /**
-   * Offline demo mode (`npx moneyswitch-server demo`). Only ever set in code by
-   * the demo runner — there is no environment variable for it. It never
-   * relaxes authentication; it only (a) tells the Dashboard to show the
-   * "DEMO · simulated settlement" banner + guide card, (b) reports a simulated
-   * wallet balance instead of querying the chain, (c) skips on-chain
-   * reconciliation (every settlement goes through the mock facilitator).
-   */
-  demo?: DemoModeInfo | null;
-}
-
-export interface DemoModeInfo {
-  /** Simulated starting wallet balance, in USDC micros. */
-  startingBalanceMicros: number;
 }
 
 function defaultDataDir(): string {
@@ -93,7 +75,6 @@ export function loadConfig(): ServerConfig {
   const dataDir = process.env.MONEYSWITCH_DATA_DIR || defaultDataDir();
   const dbFilePath = process.env.MONEYSWITCH_DB_PATH || path.join(dataDir, "moneyswitch.sqlite");
   const walletPassword = readWalletPassword();
-  const demoSellerUrl = process.env.MONEYSWITCH_DEMO_SELLER_URL?.trim() || null;
   const maxKeyDepth = parseMaxKeyDepth(process.env.MONEYSWITCH_MAX_KEY_DEPTH);
   const publicUrl = process.env.MONEYSWITCH_PUBLIC_URL?.trim().replace(/\/+$/, "") || null;
   const rawReconcileInterval = process.env.MONEYSWITCH_RECONCILE_INTERVAL_MS;
@@ -111,7 +92,6 @@ export function loadConfig(): ServerConfig {
     dataDir,
     dbFilePath,
     walletPassword,
-    demoSellerUrl,
     maxKeyDepth,
     publicUrl,
     reconcileIntervalMs,

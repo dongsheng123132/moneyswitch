@@ -6,7 +6,7 @@ import { startReconcileLoop } from "./reconcileJob.js";
 import { DEFAULT_NOTIFY_INTERVAL_MS, startNotifyLoop } from "./notify/outbox.js";
 import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork } from "@moneyswitch/x402";
 
-export { loadConfig, type ServerConfig, type DemoModeInfo } from "./config.js";
+export { loadConfig, type ServerConfig } from "./config.js";
 export type { AppContext, FirstRunSecrets, BuildContextOptions } from "./context.js";
 
 export interface RunningServer {
@@ -20,7 +20,7 @@ export interface RunningServer {
 /**
  * Boots one MoneySwitch server (context + HTTP app + reconcile loop). Shared
  * by `apps/server/src/index.ts` (the classic `node dist/index.js` entry) and
- * the `moneyswitch-server` npm package (self-host + offline demo).
+ * the `moneyswitch-server` npm package (self-host).
  */
 export async function startServer(config: ServerConfig, opts: BuildContextOptions = {}): Promise<RunningServer> {
   getActiveNetwork(); // Validate the configured default before opening a database.
@@ -45,11 +45,8 @@ export async function startServer(config: ServerConfig, opts: BuildContextOption
     ctx.sqlite.close();
     throw err;
   }
-  const reconcile = startReconcileLoop(ctx, config.demo ? 0 : config.reconcileIntervalMs ?? 60_000);
+  const reconcile = startReconcileLoop(ctx, config.reconcileIntervalMs ?? 60_000);
   // Approval push notifications: a decoupled outbox loop, never on the payment path.
-  // The offline demo runs it too, so a channel configured in the demo Dashboard really delivers; but it ignores
-  // MONEYSWITCH_NOTIFY_* from the environment, so demo approvals never reach channels set up for a real deployment.
-  if (config.demo) ctx.notify = { ...ctx.notify, env: {} };
   const notify = startNotifyLoop(ctx, config.notifyIntervalMs ?? DEFAULT_NOTIFY_INTERVAL_MS);
   return {
     app,

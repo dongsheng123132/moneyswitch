@@ -10,15 +10,7 @@ export interface ServeArgs {
   host: string | null;
 }
 
-export interface DemoArgs {
-  kind: "demo";
-  /** First port to try (the demo picks the first free one from here). */
-  port: number;
-  host: string;
-  open: boolean;
-}
-
-export type ParsedArgs = ServeArgs | DemoArgs | { kind: "help"; topic: "serve" | "demo" } | { kind: "version" } | { kind: "error"; message: string };
+export type ParsedArgs = ServeArgs | { kind: "help" } | { kind: "version" } | { kind: "error"; message: string };
 
 function parsePort(v: string | undefined): number | null {
   if (v == null || !/^\d+$/.test(v)) return null;
@@ -28,18 +20,11 @@ function parsePort(v: string | undefined): number | null {
 
 export function parseArgs(argv: string[]): ParsedArgs {
   let rest = argv;
-  let mode: "serve" | "demo" = "serve";
-  if (rest[0] === "demo") {
-    mode = "demo";
-    rest = rest.slice(1);
-  } else if (rest[0] === "start" || rest[0] === "serve") {
-    rest = rest.slice(1);
-  }
+  if (rest[0] === "start" || rest[0] === "serve") rest = rest.slice(1);
 
   let dataDir: string | null = null;
   let port: number | null = null;
   let host: string | null = null;
-  let open = true;
 
   for (let i = 0; i < rest.length; i++) {
     const raw = rest[i]!;
@@ -50,7 +35,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     switch (flag) {
       case "-h":
       case "--help":
-        return { kind: "help", topic: mode };
+        return { kind: "help" };
       case "-v":
       case "--version":
         return { kind: "version" };
@@ -69,21 +54,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       }
       case "--data-dir": {
-        if (mode === "demo") return { kind: "error", message: "demo always uses a fresh temporary data directory (--data-dir is for the self-hosted server)" };
         const v = value();
         if (!v) return { kind: "error", message: "--data-dir needs a path" };
         dataDir = v;
         break;
       }
-      case "--no-open":
-        if (mode !== "demo") return { kind: "error", message: "--no-open only applies to `moneyswitch-server demo`" };
-        open = false;
-        break;
       default:
         return { kind: "error", message: `unknown argument "${raw}"` };
     }
   }
 
-  if (mode === "demo") return { kind: "demo", port: port ?? DEFAULT_PORT, host: host ?? DEFAULT_HOST, open };
   return { kind: "serve", dataDir, port, host };
 }

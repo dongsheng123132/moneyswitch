@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Local demo stack wired to the REAL Monad testnet facilitator
+ * Local test stack (test seller + server) wired to the REAL Monad testnet facilitator
  * (https://x402-facilitator.molandak.org). No mock-facilitator is started.
  *
  * This script does NOT auto-fund anything and does NOT send any payment by
@@ -76,9 +76,6 @@ async function main() {
         MONEYSWITCH_PORT: String(SERVER_PORT),
         MONEYSWITCH_DATA_DIR: DATA_DIR,
         MONEYSWITCH_WALLET_PASSWORD: effectiveWalletPassword,
-        // Lets the Dashboard's "one-click demo channel" point at THIS seller
-        // instead of a hard-coded port (docs/ux-audit.md A-7).
-        MONEYSWITCH_DEMO_SELLER_URL: `http://127.0.0.1:${SELLER_PORT}`,
       },
       cwd: REPO_ROOT,
     },

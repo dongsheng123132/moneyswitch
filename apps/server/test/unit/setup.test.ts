@@ -25,14 +25,14 @@ describe("First-run setup link", () => {
     t = await buildTestApp();
     const res = await t.app.inject({ method: "GET", url: "/v1/setup/status" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ setup_link_active: false, demo: false });
+    expect(res.json()).toEqual({ setup_link_active: false });
     const claim = await t.app.inject({ method: "POST", url: "/v1/setup/claim", payload: { setup_token: "ms_setup_x" } });
     expect(claim.statusCode).toBe(410);
   });
 
   it("claim hands over a working admin token exactly once, with no-store", async () => {
     const setupToken = await withSetup();
-    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: true, demo: false });
+    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: true });
 
     const res = await t.app.inject({ method: "POST", url: "/v1/setup/claim", payload: { setup_token: setupToken } });
     expect(res.statusCode).toBe(200);
@@ -46,7 +46,7 @@ describe("First-run setup link", () => {
     const again = await t.app.inject({ method: "POST", url: "/v1/setup/claim", payload: { setup_token: setupToken } });
     expect(again.statusCode).toBe(410);
     expect(again.json()).toEqual({ error: "SETUP_USED" });
-    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: false, demo: false });
+    expect((await t.app.inject({ method: "GET", url: "/v1/setup/status" })).json()).toEqual({ setup_link_active: false });
   });
 
   it("wrong token, a MoneyKey, or the admin token itself cannot claim", async () => {
@@ -78,14 +78,11 @@ describe("First-run setup link", () => {
   it("/v1/admin/meta requires the admin token and exposes no secrets", async () => {
     t = await buildTestApp();
     expect((await t.app.inject({ method: "GET", url: "/v1/admin/meta" })).statusCode).toBe(403);
-    t.ctx.config.demoSellerUrl = "http://127.0.0.1:18021";
     const res = await t.app.inject({ method: "GET", url: "/v1/admin/meta", headers: { authorization: `Bearer ${t.adminToken}` } });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.network).toBe("eip155:10143");
     expect(body.chain_id).toBe(10143);
-    expect(body.demo_seller_url).toBe("http://127.0.0.1:18021");
-    expect(typeof body.cli_tarball_available).toBe("boolean");
     expect(body.explorer_base).toBe("https://testnet.monadvision.com");
     expect(body.network_label).toBe("Monad testnet");
     expect(body.is_mainnet).toBe(false);
@@ -109,22 +106,6 @@ describe("First-run setup link", () => {
     } finally {
       setGlobalDispatcher(originalDispatcher);
     }
-  });
-
-  it("/dl/moneyswitch.tgz serves the packed CLI when present, JSON 404 otherwise", async () => {
-    t = await buildTestApp();
-    t.ctx.config.cliTarballPath = path.join(t.tmpDir, "missing.tgz");
-    const missing = await t.app.inject({ method: "GET", url: "/dl/moneyswitch.tgz" });
-    expect(missing.statusCode).toBe(404);
-    expect(missing.json().error).toBe("not_found");
-
-    const p = path.join(t.tmpDir, "moneyswitch.tgz");
-    fs.writeFileSync(p, Buffer.from([0x1f, 0x8b, 1, 2, 3]));
-    t.ctx.config.cliTarballPath = p;
-    const ok = await t.app.inject({ method: "GET", url: "/dl/moneyswitch.tgz" });
-    expect(ok.statusCode).toBe(200);
-    expect(ok.headers["content-type"]).toBe("application/gzip");
-    expect(ok.rawPayload.subarray(0, 2)).toEqual(Buffer.from([0x1f, 0x8b]));
   });
 });
 
