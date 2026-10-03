@@ -13,7 +13,7 @@ body:
     id: component
     attributes:
       label: Component
-      description: Which part of the repo (apps/server, apps/dashboard, apps/mcp, apps/connect, apps/cli / `moneyswitch` npm package, a specific package/*)?
+      description: Which part of the repo (apps/server, apps/dashboard, apps/server-pkg / `moneyswitch-server` npm package, a specific package/*)?
       placeholder: apps/server
     validations:
       required: true
@@ -21,7 +21,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: Git commit / tag, or the `moneyswitch` npm package version if applicable.
+      description: Git commit / tag, or the `moneyswitch-server` npm package version if applicable.
     validations:
       required: true
   - type: textarea
@@ -35,7 +35,7 @@ body:
     id: repro
     attributes:
       label: Steps to reproduce
-      description: Exact commands/requests, ideally against `pnpm demo:local` (offline) rather than a real testnet run.
+      description: Exact commands/requests, ideally against the offline test stack (`pnpm test:e2e`) rather than a real testnet run.
     validations:
       required: true
   - type: textarea

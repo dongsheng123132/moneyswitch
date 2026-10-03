@@ -37,7 +37,7 @@ pnpm build              # build every workspace package, in dependency order
 pnpm test                # T1: offline unit/integration tests, must be green
 pnpm test:e2e             # T2: offline end-to-end (mock-facilitator)
 pnpm test:testnet         # T3: read-only checks against live Monad testnet RPC
-pnpm demo:local           # run the full local stack (mock facilitator + demo-seller + server)
+pnpm demo:testnet         # test seller + server against the real Monad testnet facilitator (needs a funded wallet)
 pnpm dev:server           # apps/server in watch mode
 pnpm dev:seller           # apps/demo-seller in watch mode
 ```
@@ -57,7 +57,7 @@ contract each layer must satisfy:
   package's own unit tests.
 - **T2 — offline end-to-end** (`pnpm test:e2e`): still no real network —
   `mock-facilitator` does real EIP-3009 signature verification (via viem)
-  but settles with a fake tx hash. Exercises the full MCP → server →
+  but settles with a fake tx hash. Exercises the full /v1/fetch → server →
   demo-seller → 402 → sign → verify → settle → 200 chain offline.
 - **T3 — testnet read-only checks** (`pnpm test:testnet`): the funds-free
   parts (RPC chain ID, USDC contract metadata) run by default whenever
@@ -96,6 +96,6 @@ funds-requiring half is never run in CI.
 
 By submitting a contribution you agree it's licensed under the same terms
 as the file(s) you changed (AGPL-3.0-only for `apps/server`,
-`apps/dashboard`, `packages/*`; Apache-2.0 for `apps/mcp`, `apps/connect`,
-`apps/cli`, `apps/demo-seller`), and you grant the maintainers the
+`apps/dashboard`, `packages/*`; Apache-2.0 for `apps/demo-seller`,
+`apps/qwen-agent`), and you grant the maintainers the
 re-licensing rights described in [CLA.md](CLA.md).

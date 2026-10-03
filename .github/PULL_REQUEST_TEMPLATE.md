@@ -4,7 +4,7 @@
 
 ## Which component(s)?
 
-<!-- apps/server, apps/dashboard, apps/mcp, apps/connect, apps/cli (moneyswitch npm package), packages/*, docs -->
+<!-- apps/server, apps/dashboard, apps/server-pkg (moneyswitch-server npm package), packages/*, docs -->
 
 ## Spec impact
 

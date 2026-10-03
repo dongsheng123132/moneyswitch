@@ -20,8 +20,8 @@ Contribution and derivative works of it.
 
 MoneySwitch is distributed under different licenses for different
 components — currently AGPL-3.0-only for the self-hosted server/
-dashboard/core packages and Apache-2.0 for the client-side packages
-(`apps/mcp`, `apps/connect`, `apps/cli`, `apps/demo-seller`) — and the
+dashboard/core packages and Apache-2.0 for the side packages
+(`apps/demo-seller`, `apps/qwen-agent`) — and the
 Maintainers may in the future offer the Project (or parts of it) under
 additional or different license terms, including commercial licenses,
 to third parties.

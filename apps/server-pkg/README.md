@@ -4,12 +4,9 @@ Self-hosted MoneySwitch service and Dashboard for personal, team and enterprise 
 
 ```sh
 moneyswitch-server --data-dir ./data --port 4020
-moneyswitch-server demo --no-open
 ```
 
 The first start prints a one-time setup link and administrator credentials to the private terminal. The service stores SQLite data and an encrypted wallet in the selected directory. Copy a personalized skill and capped MoneyKey from the Dashboard to your AI. Use HTTPS for remote access.
-
-The offline demo uses disposable data, real payment signatures and simulated settlement. It does not move real funds. Ctrl+C stops the demo.
 
 For persistent production use, see [the source deployment guide](https://github.com/dongsheng123132/moneyswitch/blob/main/deploy/README.zh-CN.md). Docker Compose runs behind HTTPS with a durable volume, health checks, backups and rollback.
 

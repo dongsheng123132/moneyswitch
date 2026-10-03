@@ -4,6 +4,43 @@ All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per the repository's own `SPEC*.md`
 files.
 
+## Unreleased — atomic features only (2026-10-03)
+
+MoneySwitch keeps the wallet, MoneyKeys (with child keys), approvals + push notifications, the ledger / usage, the test-payment page,
+the employee self-service portal, the agent skill (per key and `/skill.md`), the Windows desktop launchers, the testnet 0.01 receiver
+and `apps/demo-seller` as a test seller. Everything else is removed. Rationale and list: `SPEC-v0.6.md` §2. The database is
+**additive only**: no DROP and no deleting migration; old tables and columns stay and are simply no longer read or written.
+
+- **Removed: the OpenAI-compatible gateway and the model channels.** `POST /v1/chat/completions`, `GET /v1/models`, the
+  `/v1/dashboard/billing/*` stubs, the admin channel routes (CRUD and probe-models), the Channels page, the chat mode of the Playground,
+  the wizard's channel step, the key `allowed_models` field (API and UI; the column is ignored), the model / token columns of Usage
+  and History, and the OpenAI error mapping. The `channels` table, `money_keys.allowed_models` and `payments.model / prompt_tokens /
+  completion_tokens` stay in the database; old `kind = "chat"` payments still list as ordinary payments. `apps/demo-seller` keeps only
+  the minimal x402 test seller (`/free`, `/premium-report`, `/deep-report`, `/greedy`, a priced `POST /echo`, test-only
+  `/always-rejected`).
+- **Removed: the "Connect an agent" pages** (admin and employee) and every hand-off format but two: the skill (primary) and one raw
+  HTTP example for `POST /v1/fetch`. MCP, Codex TOML, OpenAI base-URL, new-api and "message for a colleague" snippets are gone. The skill
+  is still one click away everywhere it was: create key, reset secret (drawer and row button), the setup wizard's last step, a newly
+  created sub-key and, new, a card on the employee's budget page for the holder's own key.
+- **Removed: the offline demo** (`moneyswitch demo`, `moneyswitch-server demo`, `src/demo.ts`, the demo banner / guide card / simulated
+  balance / `demo` flags of `/v1/setup/status` and `/v1/admin/meta`, `pnpm demo:local`). `packages/mock-facilitator` stays as a test
+  fixture; `pnpm demo:testnet` (test seller + server on the real testnet facilitator) stays.
+- **Removed: MCP and the `moneyswitch` CLI package** (`apps/mcp`, `apps/cli`, which contained nothing but `demo` and `mcp`), the
+  `GET /dl/moneyswitch.tgz` download and the CLI / MCP path fields of `/v1/admin/meta`; dropped from the workspace, the build / test
+  chains and the lockfile (the MCP SDK and the root `openai` dev dependency go with them).
+- **Setup wizard and navigation.** The wizard is admin -> wallet -> first key (it now asks for the allowed hosts the channels used to
+  supply) -> give the skill to your AI. Admin nav: Overview, Test payment, Keys, Usage, Approvals, Wallet. Employee nav: Budget, Test
+  payment, History, Sub-keys.
+- **Copy.** The Receive card no longer mentions a toll booth, the dead `PayToField` and the seller / channel / demo strings are gone,
+  READMEs, the website and the docs that only covered removed features (`docs/claude.md`, `docs/codex.md`, `docs/desktop-agents.md`,
+  `docs/demo*.md`) were cut back to the product that is left. `retiredHint` no longer promises "import its recovery phrase": the funds
+  of a retired wallet are recoverable only with something the owner kept (phrase or private key, or the file plus its password).
+- **Shell scripts are pinned to LF** (`.gitattributes`: `*.sh text eol=lf`; `deploy/*.sh` normalised): a Windows checkout turned
+  `upgrade-us.sh` into a CRLF file that `sh` cannot run.
+- **Tests.** `buyer-only.test.ts` pins the 404s (gateway, models, billing stubs, channels, demo routes, CLI download) and that old chat
+  rows still list; the `moneyswitch-server` end-to-end test now boots the built bundle on a throw-away data dir (setup link, key, skill,
+  removed routes, `demo` refused).
+
 ## Unreleased — a wallet you cannot lose by forgetting a password
 
 Incident: two funded wallets became unreachable in one week (a local mainnet

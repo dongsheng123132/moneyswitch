@@ -27,9 +27,7 @@ body:
       options:
         - apps/server
         - apps/dashboard
-        - apps/mcp
-        - apps/connect
-        - apps/cli (moneyswitch npm package)
+        - apps/server-pkg (moneyswitch-server npm package)
         - packages/* (policy/wallet/x402/core)
         - docs
         - other / not sure

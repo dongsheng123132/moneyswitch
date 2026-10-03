@@ -129,10 +129,6 @@ curl -s -X POST http://127.0.0.1:4020/v1/admin/notify/test -H "Authorization: Be
   channel, then a single summary message ("this key has N approvals waiting"),
   then silence until the minute is over. Other keys are not affected, and the
   decision is stored, so it is never reversed later.
-- The offline demo (`moneyswitch-server demo`) delivers too, but only to
-  channels you save in the demo Dashboard: `MONEYSWITCH_NOTIFY_*` from the
-  environment are ignored there, so demo approvals never reach the channels of
-  a real deployment.
 - Outbound requests use the same proxy as the rest of the server
   (`MONEYSWITCH_PROXY`, `HTTPS_PROXY`, Windows system proxy). Redirects are not
   followed.

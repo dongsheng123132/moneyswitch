@@ -14,13 +14,11 @@ Node.js 22+ and pnpm are required. The v0.6 changes in this source are not repre
 pnpm install --frozen-lockfile
 pnpm build
 node apps/server-pkg/dist/cli.js --data-dir ./data
-# Offline tour, simulated settlement:
-node apps/server-pkg/dist/cli.js demo --no-open
 ```
 
-Open the first-run setup link, create an encrypted wallet and create a MoneyKey. Copy the personalized skill from the Dashboard to your agent. Each agent gets its own key and skill directory. Keys are stored as hashes; rotating a key revokes the old secret while retaining its budgets and history.
+Open the first-run setup link, create the encrypted wallet (it shows a 12-word recovery phrase) and create one MoneyKey per agent. Copy that key's personalized skill from the Dashboard into the agent (Claude Code, Codex, OpenClaw, Hermes…). Keys are stored as hashes; "Reset secret and copy skill" revokes the old secret while retaining the key's budgets and history. Payments above a key's approval threshold wait on the Approvals page (and can push to Feishu, WeCom, Telegram or a webhook); the Usage page is the ledger; "Test payment" makes one real x402 payment from the browser.
 
-Skill + key is the primary integration. `GET /skill.md` serves generic instructions without secrets. HTTP API, MCP and the OpenAI-compatible gateway are additional callers.
+Skill + key is the integration. `GET /skill.md` serves generic instructions without secrets; the only other way in is the plain HTTP call `POST /v1/fetch`.
 
 ## Deploy on your own server
 
@@ -36,9 +34,9 @@ Only the configured USDC contract is accepted on each chain. Balances, receipts 
 
 `POST /v1/fetch` returns `charged: yes/no/maybe`. A timeout after signing, missing settlement proof or an incomplete paid response must not trigger blind retries. Reservations remain until reconciliation resolves the payment. Approval notifications use an independent outbox.
 
-The OpenAI gateway exposes `/v1/models` and `/v1/chat/completions`. Current-key status and history are available at `/v1/status` and `/v1/history`. Health is `/healthz`.
+Current-key status and history are available at `/v1/status` and `/v1/history`. Health is `/healthz`.
 
-v0.6 removes seller toll booths, `sell`, local desktop UI and automatic agent-configuration editing. Historical database tables remain intact; historical code is archived at `archive/tollbooth-v0.5`. The demo seller remains a test fixture.
+v0.6 removes seller toll booths, `sell`, local desktop UI and automatic agent-configuration editing. The "atomic" trim then removed the OpenAI-compatible gateway and model channels, the offline demo, the MCP server and the `moneyswitch` CLI package. Historical database tables and columns remain intact (nothing reads or writes them); historical code is archived at `archive/tollbooth-v0.5`. `apps/demo-seller` remains a test fixture.
 
 ## Validation and licensing
 
@@ -49,4 +47,4 @@ pnpm test:e2e
 
 Offline tests verify real signatures with simulated settlement. Actual chain payments and deployed HTTPS/persistence require separate acceptance.
 
-Server/core/Dashboard: AGPL-3.0-only. Client CLI/MCP: Apache-2.0. See each package LICENSE.
+Server/core/Dashboard: AGPL-3.0-only. `apps/demo-seller` and `apps/qwen-agent`: Apache-2.0. See each package LICENSE.

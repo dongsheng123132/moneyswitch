@@ -1,37 +1,12 @@
 # Quickstart
 
-This walks through running MoneySwitch + the demo-seller locally (no
-Docker required — Docker daemon is not assumed to be running).
+This walks through running MoneySwitch + the test seller (`apps/demo-seller`)
+locally (no Docker required — Docker daemon is not assumed to be running).
 
-## 0. Fastest path: one-command local demo
-
-```bash
-pnpm install
-pnpm build
-pnpm demo:local
-```
-
-This starts mock-facilitator (4099), demo-seller (4021, pointed at the
-mock facilitator — no real payment ever happens) and the server (4020,
-also serving the Dashboard UI at `/`) together, with data under the
-repo-local `.data/local/` directory (gitignored). Press Ctrl+C to stop all
-three. On the first boot of a fresh data dir the terminal shows a one-time
-setup link (`…/setup#ms_setup_…`) — open it to sign in and follow the setup
-guide. The admin token itself is printed exactly once, into
-`.data/local/server.log`.
-`MONEYSWITCH_WALLET_PASSWORD` defaults to `demo-password` if unset — fine
-for this offline demo, never for anything with real funds.
-
-Once it's up, open `http://127.0.0.1:4020/` for the Dashboard, or follow
-steps 5–7 below (against the already-running services) to drive it via
-curl / MCP instead.
-
-For a real Monad testnet run (no mock, real facilitator, needs a funded
-wallet — see step 5), use `DEMO_SELLER_PAY_TO=0xYourAddress pnpm
-demo:testnet` instead; see `docs/demo.md` for details. It does not auto-fund
-or auto-pay anything.
-
-The rest of this document walks through the same steps manually, useful if
+For a real Monad testnet run (real facilitator, needs a funded wallet — see
+step 5) there is a helper that starts the test seller and the server for you:
+`DEMO_SELLER_PAY_TO=0xYourAddress pnpm demo:testnet`. It does not auto-fund or
+auto-pay anything. The rest of this document does the same by hand, useful if
 you want to run each piece with your own ports/config.
 
 ## 1. Install and build
@@ -41,7 +16,7 @@ pnpm install
 pnpm build
 ```
 
-## 2. Start the mock facilitator (for local demo without a real facilitator)
+## 2. Start the mock facilitator (for a local run without a real facilitator)
 
 ```bash
 MOCK_FACILITATOR_PORT=4099 node packages/mock-facilitator/dist/server.js
@@ -81,8 +56,7 @@ by a one-time setup link:
 ```
 
 Open the link: it signs you in and walks you through steps 5–8 below in the
-Dashboard (wallet + test-USDC faucet, demo channel, first key, connecting an
-agent). Save the admin token — it is stored only as a hash and cannot be
+Dashboard (wallet + test-USDC faucet, first key, giving the skill to your AI). Save the admin token — it is stored only as a hash and cannot be
 recovered (see the end of this file if you lose it). The setup link works
 once, expires after 30 minutes and does not survive a restart; its security
 reasoning is in [`docs/ux-audit.md`](ux-audit.md#安全相关改动与威胁分析).
@@ -149,9 +123,12 @@ curl -X POST http://127.0.0.1:4020/v1/fetch \
   -d '{"url":"http://127.0.0.1:4021/premium-report"}'
 ```
 
-## 8. Use it from Claude Code / Codex via MCP
+## 8. Give the key to your AI
 
-See [`docs/claude.md`](claude.md) and [`docs/codex.md`](codex.md).
+In the Dashboard, the new key's drawer (and "Reset secret and copy skill" on
+the key list) offers the key's **skill**: one block of text to paste into
+Claude Code, Codex, OpenClaw or Hermes. The only other way is the plain
+`POST /v1/fetch` call from step 7.
 
 ## 丢了 admin token 怎么办
 
@@ -162,7 +139,7 @@ pnpm build   # 确保 scripts/admin-reset-token.mjs 依赖的 @moneyswitch/db、
 pnpm admin:reset-token -- --data-dir ~/.moneyswitch
 ```
 
-（把 `~/.moneyswitch` 换成你实际的 `MONEYSWITCH_DATA_DIR`；`pnpm demo:local` 用的是 `.data/local`。）
+（把 `~/.moneyswitch` 换成你实际的 `MONEYSWITCH_DATA_DIR`；`pnpm demo:testnet` 用的是 `.data/testnet`。）
 
 这条命令直接操作该数据目录下的 `moneyswitch.sqlite`，生成一个新 admin token 并替换掉存储的哈希——**旧 token 立刻失效**，新 token 只打印这一次，同样不会被再次显示。server 不需要先停掉再跑这条命令：数据库是 WAL 模式，允许这条命令和正在运行的 server 同时读写同一个文件。跑完把新 token 记下来，其余管理接口（创建 Key、审批等）照常用新 token 调用即可。
 

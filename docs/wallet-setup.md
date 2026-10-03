@@ -188,8 +188,8 @@ built in:
   A request takes a lease on the signer only when a payment is about to be created (after the unpaid probe, after the
   seller asked for money) and gives it back when the call ends, however it ends; a free resource, or a 402 that is never
   paid, holds nothing. While a replace is waiting, **no new lease is handed out**: a request that reaches the point of
-  paying meanwhile is answered `WALLET_BUSY` with `charged: "no"` (`/v1/fetch`: `status: "error"`; the OpenAI-compatible
-  gateway: HTTP 503), with nothing reserved or signed, and can simply be retried a moment later. So steady traffic cannot
+  paying meanwhile is answered `WALLET_BUSY` with `charged: "no"` (`/v1/fetch`: `status: "error"`), with nothing
+  reserved or signed, and can simply be retried a moment later. So steady traffic cannot
   starve a replace. It waits up to 60 s for the leases that are already open; if payments are still in flight after
   that, it answers **409 `WALLET_BUSY`** and changes nothing. The count is in-process, not a database query. Locking
   the wallet is still refused at once, without waiting. As a second line of defence a signer checks, when it is asked to
@@ -241,7 +241,7 @@ authorization, which has none of those, so a requirement is accepted only when `
 | `secret_protected` | `true` / `false` (red warning) / `null` (no secret on disk to protect); `secret_protection_detail` says why not |
 | `orphan_files` | `{ secrets, retired, wallet_file_missing }`: credential files that belong to no live wallet |
 | `retired_secrets_open_live_key` | password wallets: names of files in `retired/` whose unlock secret still opens the live wallet without its password (empty = none; they are removed when the password is entered) |
-| `backup` | `confirmed`, `missing`, or `not_applicable` (no phrase to confirm, or the offline demo) |
+| `backup` | `confirmed`, `missing`, or `not_applicable` (no phrase to confirm) |
 | `float_limit` | `MONEYSWITCH_WALLET_FLOAT_LIMIT` in USDC (default `50`) |
 | `over_float_limit` | per enabled chain where the balance is known: is it above the limit |
 | `retired_wallets` | `{ address, retired_at, reason }` for every replaced wallet |
@@ -299,7 +299,7 @@ extracted, no secret is printed) and exits 1 unless `wallet.json` is inside and,
 | `wallet.json` is missing but the Dashboard shows credential files | The data folder is probably mounted from the wrong place. Fix that first; do not create a new wallet over it unless you mean to |
 | The Overview says the unlock secret is not protected | Fix the folder permissions (or move the data folder to a local disk the server's account owns), restart, and check that the warning is gone. Meanwhile keep only a tiny float |
 | `409 WALLET_BUSY` on replace | Payments were still in flight after the replace had waited 60 s (and it refused new ones meanwhile). Nothing was changed; try again |
-| `WALLET_BUSY` on a payment (`/v1/fetch`: `status: "error"`, `charged: "no"`; gateway: HTTP 503) | A wallet replacement is waiting for the payments in flight; nothing was signed or charged. Retry once after a moment |
+| `WALLET_BUSY` on a payment (`/v1/fetch`: `status: "error"`, `charged: "no"`) | A wallet replacement is waiting for the payments in flight; nothing was signed or charged. Retry once after a moment |
 | The server (or its disk) is gone | Create a new instance, import the **recovery phrase** (or private key). The address and funds come back |
 | You think the key leaked | Move the funds out with a wallet app using the phrase, then *Replace wallet* with reason *Suspected leak* |
 | You never confirmed the backup | Wallet page → *Finish the backup first* → *Show my recovery phrase*, write the words down, answer two |

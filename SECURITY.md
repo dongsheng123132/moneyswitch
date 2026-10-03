@@ -18,7 +18,7 @@ vulnerability itself.
 
 Please include:
 
-- What component is affected (server, dashboard, MCP, connect/cli, a
+- What component is affected (server, dashboard, demo-seller, qwen-agent, a
   specific package).
 - Steps to reproduce, or a minimal proof of concept.
 - What you believe the impact is (e.g. "an agent with a scoped MoneyKey can

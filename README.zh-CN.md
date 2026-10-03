@@ -14,13 +14,11 @@ MoneySwitch 持有加密的低余额钱包，通过 x402 支付 USDC。AI 只拿
 pnpm install --frozen-lockfile
 pnpm build
 node apps/server-pkg/dist/cli.js --data-dir ./data
-# 离线体验，无真实付款：
-node apps/server-pkg/dist/cli.js demo --no-open
 ```
 
-打开首次启动的设置链接，创建钱包和 MoneyKey。在后台点「交给你的 AI」，复制个性化 skill 给 Claude Code、Codex、OpenClaw 或 Hermes。每个 AI 保存独立 Key。Key 仅存哈希，丢失时点「重置密钥并复制 skill」；旧密钥立即失效，预算与历史保留。
+打开首次启动的设置链接，创建钱包（会显示 12 个词的恢复短语），再为每个 AI 建一把 MoneyKey。在后台点「交给你的 AI」，复制这把 Key 的个性化 skill 给 Claude Code、Codex、OpenClaw 或 Hermes。每个 AI 保存独立 Key。Key 仅存哈希，丢失时点「重置密钥并复制 skill」；旧密钥立即失效，预算与历史保留。超过审批阈值的付款会停在「审批」页（可推送到飞书、企业微信、Telegram 或 webhook）；「用量流水」是账本；「付款测试」可以在浏览器里真实付一笔 x402。
 
-公开 `GET /skill.md` 是不含 Key 的通用说明。`skills/moneyswitch-pay/SKILL.md` 也是通用版本。skill + Key 是主要接入方式，HTTP API、MCP 和 OpenAI 兼容入口为其他调用方。
+公开 `GET /skill.md` 是不含 Key 的通用说明。`skills/moneyswitch-pay/SKILL.md` 也是通用版本。接入方式只有 skill + Key，另外就是直接调用 HTTP 接口 `POST /v1/fetch`。
 
 ## 自己的服务器
 
@@ -44,12 +42,11 @@ node apps/server-pkg/dist/cli.js demo --no-open
 - `POST /v1/fetch`：受预算保护的 HTTP 请求。
 - `GET /v1/status`、`GET /v1/history`：当前 Key 的余额和历史。
 - `POST /v1/keys/:id/rotate`：管理员重置密钥。
-- `POST /v1/chat/completions`：OpenAI 兼容渠道。
 - `GET /healthz`：服务健康。
 
 付款结果带 `charged: yes/no/maybe`。发送签名后超时、缺结算凭证或响应中断时，不盲目重试；保留预算预留并对账，避免重复付款。审批通知使用独立 outbox，可配置飞书、企业微信、Telegram 或 webhook。
 
-v0.6 聚焦买方基础设施，已移除卖方收费亭、`sell`、本机 UI 和自动修改 AI 配置的命令。历史数据库表保留，旧实现归档于 `archive/tollbooth-v0.5`。demo-seller 仅用于测试和演示。
+v0.6 聚焦买方基础设施，已移除卖方收费亭、`sell`、本机 UI 和自动修改 AI 配置的命令。随后的“原子化”精简又移除了 OpenAI 兼容网关与模型渠道、离线 demo、MCP 服务和 `moneyswitch` 命令行包。历史数据库表和列保留（不再读写），旧实现归档于 `archive/tollbooth-v0.5`。demo-seller 仅用于测试。
 
 ## 验证与许可
 
@@ -60,7 +57,7 @@ pnpm test:e2e
 
 离线测试使用真实签名和模拟结算，不代表真实链上付款。部署验收另核对 HTTPS、持久化、重启和备份。
 
-服务端、核心和 Dashboard：AGPL-3.0-only；客户端 CLI/MCP：Apache-2.0。详见各包 LICENSE。
+服务端、核心和 Dashboard：AGPL-3.0-only；`apps/demo-seller` 和 `apps/qwen-agent`：Apache-2.0。详见各包 LICENSE。
 
 ## Windows 本地桌面入口
 
