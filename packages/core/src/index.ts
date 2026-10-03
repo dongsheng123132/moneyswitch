@@ -17,3 +17,4 @@ export * from "./channels.js";
 export * from "./setup.js";
 export * from "./reconcile.js";
 export * from "./rotate.js";
+export * from "./wallet.js";

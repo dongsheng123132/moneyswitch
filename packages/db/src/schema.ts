@@ -142,10 +142,29 @@ export const adminAuth = sqliteTable("admin_auth", {
   createdAt: text("created_at").notNull(),
 });
 
+/** One row per wallet address the server has managed (id = lower-case 0x address). */
 export const walletMeta = sqliteTable("wallet_meta", {
   id: text("id").primaryKey(),
   address: text("address"),
   createdAt: text("created_at").notNull(),
+  /** Set when the operator proved they hold the recovery phrase (two-word check), or imported the wallet. NULL = not confirmed. */
+  backupConfirmedAt: text("backup_confirmed_at"),
+  /** "generated" (created by the server) | "imported" (recovery phrase, private key or keystore). */
+  origin: text("origin"),
+});
+
+/**
+ * A wallet that was replaced. Its key files were moved into <dataDir>/retired/
+ * (names recorded here, never absolute paths) and are never deleted.
+ */
+export const walletRetirements = sqliteTable("wallet_retirements", {
+  id: text("id").primaryKey(),
+  address: text("address").notNull(),
+  retiredAt: text("retired_at").notNull(),
+  reason: text("reason").notNull(),
+  keystoreFile: text("keystore_file").notNull(),
+  secretFile: text("secret_file"),
+  replacedBy: text("replaced_by"),
 });
 
 /** v0.5 (SPEC-v0.5 §2): a toll booth in front of a seller's own API. */

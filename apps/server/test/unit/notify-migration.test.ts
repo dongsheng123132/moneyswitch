@@ -163,7 +163,8 @@ describe("migration 0005_approval_notify on a database created by the base commi
       const { db, sqlite } = openDb({ filePath: file });
       try {
         const applied = (sqlite.prepare(`SELECT name FROM __migrations ORDER BY name`).all() as { name: string }[]).map((r) => r.name);
-        expect(applied.slice(-2)).toEqual(["0005_approval_notify.sql", "0006_approval_notify_deliveries.sql"]);
+        // 0005 stays recorded, 0006 is applied right after it (later migrations may follow)
+        expect(applied.slice(5, 7)).toEqual(["0005_approval_notify.sql", "0006_approval_notify_deliveries.sql"]);
         const cols = (sqlite.prepare(`PRAGMA table_info(approval_notify_deliveries)`).all() as { name: string }[]).map((c) => c.name);
         expect(cols).toEqual(["approval_id", "channel", "kind", "attempts", "attempt_at", "delivered_at", "skipped", "created_at"]);
         // nothing was lost or rewritten
