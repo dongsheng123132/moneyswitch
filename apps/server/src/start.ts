@@ -6,6 +6,8 @@ import { startReconcileLoop } from "./reconcileJob.js";
 import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork } from "@moneyswitch/x402";
 
 export { loadConfig, type ServerConfig } from "./config.js";
+// the administrator-token reset (`moneyswitch-server reset-admin-token`): one implementation, shared with scripts/admin-reset-token.mjs
+export { resetAdminTokenInFile, AdminResetError, type AdminResetFailure } from "@moneyswitch/core";
 export type { AppContext, BuildContextOptions } from "./context.js";
 
 export interface RunningServer {

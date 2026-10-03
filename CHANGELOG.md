@@ -39,6 +39,15 @@ database is still **additive only**: no migration was added or removed, no table
   database in place and checks that the bundled migrations are byte-identical to the source ones.
 - **Removed: the Windows launchers** (`scripts/start-local.ps1`, `install-local-shortcut.ps1`, `local-server.mjs`,
   `docs/local-desktop.md`) and the routes only they used (`POST /v1/admin/local-link`, `POST /v1/local/claim`).
+- **Admin-token reset on Docker and npm (SPEC §2).** `moneyswitch-server reset-admin-token [--data-dir <dir>]` replaces a lost administrator
+  token: run on the server itself, as the user that runs the service (the Docker image: `docker compose exec server node /app/dist/cli.js
+  reset-admin-token`). It uses the data directory the server uses, the old token stops working at once and the running server needs no restart,
+  the new token goes to stdout once and nowhere else (not the server log, not the database: only its hash), and it exits non-zero, changing
+  nothing, when there is no database (it never creates one), when the file belongs to another OS user (POSIX) or cannot be updated. It is not an
+  HTTP route, so the route inventory is unchanged. `scripts/admin-reset-token.mjs` calls the same `resetAdminTokenInFile` (packages/core); the
+  token swap is now one transaction, `openDb` takes `migrate: false` (the reset never runs migrations) and closes its handle when opening
+  fails. The Login page shows the command for npm, Docker and a source checkout. `--version` and `--help` no longer start with the
+  outbound-proxy line; it is printed only when serving.
 - **First start.** The one-time link is `/login#ms_setup_…` (it was `/setup#…`): it signs the administrator in and lands on the Wallet
   page.
 - **Dead seller leftovers** removed: the `facilitatorUrl` config field, the `/t/` exclusion in the static-file fallback, stale toll-booth
@@ -47,7 +56,7 @@ database is still **additive only**: no migration was added or removed, no table
   it with an explicit list: 26 routes (37 before this round), plus the Dashboard's file wildcard when a Dashboard is built. Administrator
   routes must refuse no credentials and a MoneyKey, MoneyKey routes no credentials and the administrator token; the routes removed in
   this round answer a JSON 404.
-- **`scripts/deploy-smoke.mjs`** follows the new surface (22 checks): wallet created without a password, unlocked by itself after a
+- **`scripts/deploy-smoke.mjs`** follows the new surface (26 checks, with the reset command): wallet created without a password, unlocked by itself after a
   restart, unlock file named after the address and protected, an approval link opens the Dashboard, the removed routes are absent.
 - **Docs** cut back to this product and pointed at `SPEC.md`: both READMEs, `deploy/README.zh-CN.md`, `docs/wallet-setup.md`,
   `docs/security.md`, `docs/quickstart.md`, `CONTRIBUTING.md`, the pull-request template.

@@ -16,14 +16,14 @@ pnpm build
 node apps/server-pkg/dist/cli.js --data-dir ./data
 ```
 
-The first start prints an administrator token and a one-time sign-in link (valid 30 minutes, single use). Open the link: it signs you in and lands on the Wallet page. Set `MONEYSWITCH_PUBLIC_URL` to the address people will reach the server at; approval links and the skill text use it.
+The first start prints an administrator token and a one-time sign-in link (valid 30 minutes, single use). Open the link: it signs you in and lands on the Wallet page. Set `MONEYSWITCH_PUBLIC_URL` to the address people will reach the server at; approval links and the skill text use it. Lost the administrator token? On the server itself, as the user that runs it: `moneyswitch-server reset-admin-token` (Docker: `docker compose exec server node /app/dist/cli.js reset-admin-token`; from source: `pnpm admin:reset-token -- --data-dir <dir>`); see [docs/security.md](docs/security.md).
 
 The Dashboard has four pages and a login:
 
 | Page | What you do |
 |---|---|
 | **Wallet** | Create the wallet. Write down the 12 words (shown once) and tick "I wrote them down". Send it a little USDC. It unlocks itself after a restart. |
-| **Keys** | Issue one key per AI: daily, total and per-request limits, allowed hosts, approval line, expiry. The key and its skill paragraph are shown once; paste the paragraph into the AI. |
+| **Keys** | Issue one key per AI: daily, total and per-request limits, allowed hosts, approval line, expiry. The key and its skill paragraph are shown once; paste the paragraph into the AI. Limits are fixed once a key is issued: to change them, revoke the key and issue a new one. |
 | **Approvals** | Approve or deny a payment that is over a key's approval line. |
 | **Bills** | Every payment: time, key, amount, URL, chain, transaction hash, charged yes / no / maybe. |
 

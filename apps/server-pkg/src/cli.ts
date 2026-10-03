@@ -1,23 +1,25 @@
-import os from "node:os";
-import path from "node:path";
 import { installOutboundProxy, redactProxyUrl } from "@moneyswitch/net";
 import { loadConfig, startServer } from "@moneyswitch/server/start";
 import { parseArgs, DEFAULT_HOST, DEFAULT_PORT } from "./args.js";
-import { bundledDashboardDir, bundledMigrationsDir } from "./paths.js";
+import { bundledDashboardDir, bundledMigrationsDir, resolveDataPaths } from "./paths.js";
+import { runResetAdminToken } from "./reset.js";
 
-// Earliest possible point: before parseArgs()/serve() make any
-// outbound call themselves (facilitator, viem RPC and paid fetches all go
-// through the global fetch dispatcher this installs) —
+// Before the server makes any outbound call (facilitator, viem RPC and paid
+// fetches all go through the global fetch dispatcher this installs) —
 // mirrors apps/server/src/index.ts, which this npx-installed package does
 // not import (it consumes @moneyswitch/server/start directly, not its
 // entrypoint), so the proxy install here is this package's own copy of the
-// same "earliest point" wiring, not a duplicate of an already-installed one.
-const outboundProxy = installOutboundProxy();
-console.log(
-  outboundProxy.url
-    ? `[moneyswitch] outbound proxy: ${redactProxyUrl(outboundProxy.url)} (source: ${outboundProxy.source})`
-    : "[moneyswitch] outbound proxy: none (direct)"
-);
+// same wiring, not a duplicate of an already-installed one. Only when serving:
+// --help, --version and reset-admin-token make no outbound call and must print
+// nothing but their own output (reset-admin-token's stdout is the bare token).
+function installProxy(): void {
+  const outboundProxy = installOutboundProxy();
+  console.log(
+    outboundProxy.url
+      ? `[moneyswitch] outbound proxy: ${redactProxyUrl(outboundProxy.url)} (source: ${outboundProxy.source})`
+      : "[moneyswitch] outbound proxy: none (direct)"
+  );
+}
 
 declare const __MONEYSWITCH_SERVER_VERSION__: string | undefined;
 export const VERSION = typeof __MONEYSWITCH_SERVER_VERSION__ === "string" ? __MONEYSWITCH_SERVER_VERSION__ : "0.0.0-dev";
@@ -26,6 +28,7 @@ export const HELP = `moneyswitch-server ${VERSION} — self-hosted MoneySwitch s
 
 Usage:
   npx moneyswitch-server [--data-dir <dir>] [--port ${DEFAULT_PORT}] [--host ${DEFAULT_HOST}]
+  moneyswitch-server reset-admin-token [--data-dir <dir>]
 
 Options:
   --data-dir <dir>   where the database + encrypted wallet keystore live
@@ -38,6 +41,12 @@ Options:
   Other settings keep their MONEYSWITCH_* environment variables
   (MONEYSWITCH_WALLET_PASSWORD(_FILE), MONEYSWITCH_PUBLIC_URL, …).
 
+  reset-admin-token  lost the administrator token? Run this ON THE SERVER, as the user that runs
+                     the service, with the same data directory. It makes a new token (the old one
+                     stops working at once, the server keeps running) and prints it once, on the
+                     terminal only. In the Docker image:
+                       docker compose exec server node /app/dist/cli.js reset-admin-token
+
   -h, --help         show this help
   -v, --version      print the version
 
@@ -45,13 +54,13 @@ Docs: https://github.com/dongsheng123132/moneyswitch#readme`;
 
 async function serve(dataDirFlag: string | null, portFlag: number | null, hostFlag: string | null): Promise<void> {
   const base = loadConfig();
-  const dataDir = path.resolve(dataDirFlag ?? process.env.MONEYSWITCH_DATA_DIR ?? path.join(os.homedir(), ".moneyswitch", "server"));
+  const { dataDir, dbFilePath } = resolveDataPaths(dataDirFlag);
   const config = {
     ...base,
     port: portFlag ?? base.port,
     host: hostFlag ?? base.host,
     dataDir,
-    dbFilePath: process.env.MONEYSWITCH_DB_PATH || path.join(dataDir, "moneyswitch.sqlite"),
+    dbFilePath,
     dashboardDir: bundledDashboardDir(),
     migrationsDir: bundledMigrationsDir(),
   };
@@ -100,7 +109,12 @@ async function main(): Promise<void> {
       process.stderr.write(`moneyswitch-server: ${parsed.message}\n\nRun "moneyswitch-server --help" for usage.\n`);
       process.exit(2);
       return;
+    case "reset-admin-token":
+      // exitCode, not process.exit(): the token on stdout must be flushed before the process ends
+      process.exitCode = runResetAdminToken(parsed.dataDir);
+      return;
     case "serve":
+      installProxy();
       await serve(parsed.dataDir, parsed.port, parsed.host);
       return;
   }

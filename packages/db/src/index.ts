@@ -58,6 +58,11 @@ export interface OpenDbOptions {
    * `moneyswitch-server` npm package pass their own copy.
    */
   migrationsDir?: string;
+  /**
+   * Apply pending migrations after opening (default true). Only maintenance tools that must work on a database exactly as it is
+   * (the administrator-token reset) pass false; the server always migrates.
+   */
+  migrate?: boolean;
 }
 
 export function openDb(opts: OpenDbOptions): { db: MoneySwitchDb; sqlite: Database.Database } {
@@ -65,11 +70,16 @@ export function openDb(opts: OpenDbOptions): { db: MoneySwitchDb; sqlite: Databa
     fs.mkdirSync(path.dirname(opts.filePath), { recursive: true });
   }
   const sqlite = new Database(opts.filePath);
-  if (opts.filePath !== ":memory:") {
-    sqlite.pragma("journal_mode = WAL");
+  try {
+    if (opts.filePath !== ":memory:") {
+      sqlite.pragma("journal_mode = WAL");
+    }
+    sqlite.pragma("foreign_keys = ON");
+    if (opts.migrate !== false) runMigrations(sqlite, opts.migrationsDir);
+  } catch (e) {
+    sqlite.close(); // a file that is not a database (or a failed migration) must not stay locked by a handle nobody has
+    throw e;
   }
-  sqlite.pragma("foreign_keys = ON");
-  runMigrations(sqlite, opts.migrationsDir);
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };
 }

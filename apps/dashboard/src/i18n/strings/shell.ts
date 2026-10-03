@@ -22,7 +22,11 @@ export const shellStrings = defineMessages(
     login_where:
       "On its first start the server prints the token once, together with a one-time sign-in link (…/login#ms_setup_…). Open the link, or paste the token here.",
     login_lostTitle: "Lost the administrator token?",
-    login_lostBody: "It's stored only as a hash and can't be shown again. Run this on the server to create a new one (the old one stops working):",
+    login_lostBody:
+      "It's stored only as a hash and can't be shown again. On the server itself, as the user that runs MoneySwitch, run the command for your setup. The old token stops working at once, the new one is printed once in that terminal only, and the server keeps running:",
+    login_lostNpm: "npm install",
+    login_lostDocker: "Docker",
+    login_lostSource: "From the source code",
     login_setupActiveTitle: "This server was just set up",
     login_setupActiveBody: "Go back to the terminal that started it and open the one-time link that starts with /login# — it signs you in.",
     login_claimFailed: "That one-time link was already used or has expired. Paste the administrator token instead: it was printed right next to the link.",
@@ -49,7 +53,11 @@ export const shellStrings = defineMessages(
     login_whereTitle: "去哪里找？",
     login_where: "服务器第一次启动时会把令牌打印一次，并附一条一次性登录链接（…/login#ms_setup_…）。直接打开链接即可，也可以把令牌粘贴到这里。",
     login_lostTitle: "管理员令牌丢了？",
-    login_lostBody: "服务器只存它的哈希，无法再次显示。在服务器上运行下面的命令生成一个新的（旧的立即失效）：",
+    login_lostBody:
+      "服务器只存它的哈希，无法再次显示。请在服务器本机、用运行 MoneySwitch 的那个系统用户，执行与你的部署方式对应的命令。旧令牌立即失效，新令牌只在那个终端里打印一次，服务不用停：",
+    login_lostNpm: "npm 安装",
+    login_lostDocker: "Docker",
+    login_lostSource: "源码运行",
     login_setupActiveTitle: "这台服务器刚刚初始化",
     login_setupActiveBody: "回到启动它的终端，打开以 /login# 开头的那条一次性链接——会直接登录。",
     login_claimFailed: "这条一次性链接已被用过或已过期。请改为粘贴管理员令牌：它就打印在链接旁边。",

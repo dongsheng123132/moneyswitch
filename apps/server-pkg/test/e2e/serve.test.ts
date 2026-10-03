@@ -133,4 +133,99 @@ describe("moneyswitch-server (built bundle)", () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/unknown argument/);
   });
+
+  it("--version prints the version and nothing else (no startup banner); --help documents reset-admin-token", () => {
+    const v = spawnSync(process.execPath, [cli, "--version"], { encoding: "utf8", timeout: 20_000 });
+    expect(v.status).toBe(0);
+    expect(v.stdout).toMatch(/^\d+\.\d+\.\d+\S*\n$/);
+    const h = spawnSync(process.execPath, [cli, "--help"], { encoding: "utf8", timeout: 20_000 });
+    expect(h.status).toBe(0);
+    expect(h.stdout).toContain("reset-admin-token");
+    expect(h.stdout).toContain("docker compose exec server node /app/dist/cli.js reset-admin-token");
+    expect(h.stdout).not.toContain("outbound proxy");
+  });
+});
+
+/**
+ * SPEC.md §2: a lost administrator token is replaced by a command on the server itself - also inside the Docker image, where it is
+ * `docker compose exec server node /app/dist/cli.js reset-admin-token` (the image sets MONEYSWITCH_DATA_DIR=/data, so no --data-dir).
+ * These run the built bundle against the data directory of the server started above, which keeps running throughout. They come
+ * last because the first one retires the token the tests above used.
+ */
+describe("moneyswitch-server reset-admin-token (built bundle, server running)", () => {
+  const reset = (args: string[], env: NodeJS.ProcessEnv = {}) =>
+    spawnSync(process.execPath, [cli, "reset-admin-token", ...args], { encoding: "utf8", timeout: 30_000, env: { ...process.env, ...env } });
+  const databaseBytes = () =>
+    Buffer.concat(fs.readdirSync(dataDir).filter((f) => f.startsWith("moneyswitch.sqlite")).map((f) => fs.readFileSync(path.join(dataDir, f))));
+
+  it("prints only the new token on stdout; the old token stops working at once, the new one works, no restart", async () => {
+    const oldToken = adminToken;
+    const r = reset(["--data-dir", dataDir]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/^ms_admin_[A-Za-z0-9]+\n$/);
+    const fresh = r.stdout.trim();
+    expect(fresh).not.toBe(oldToken);
+    expect(r.stderr).not.toContain(fresh);
+
+    expect((await j("/v1/keys", {}, oldToken)).status).toBe(403);
+    expect((await j("/v1/keys", {}, fresh)).status).toBe(200);
+    adminToken = fresh;
+  });
+
+  it("the new token is nowhere else: not in the server's output, not in the database files (only its hash is)", () => {
+    expect(out).not.toContain(adminToken);
+    expect(databaseBytes().includes(Buffer.from(adminToken))).toBe(false);
+  });
+
+  it("finds the data directory the way the Docker image sets it (MONEYSWITCH_DATA_DIR, no --data-dir)", async () => {
+    const r = reset([], { MONEYSWITCH_DATA_DIR: dataDir });
+    expect(r.status, r.stderr).toBe(0);
+    const fresh = r.stdout.trim();
+    expect(fresh).toMatch(/^ms_admin_/);
+    expect((await j("/v1/keys", {}, adminToken)).status).toBe(403);
+    expect((await j("/v1/keys", {}, fresh)).status).toBe(200);
+    adminToken = fresh;
+  });
+
+  it("everything else is untouched: the keys are still there", async () => {
+    expect((await j("/v1/keys")).body.keys.length).toBeGreaterThan(0);
+  });
+
+  it("refuses a data directory without a database: exit 1, a clear message, nothing on stdout, nothing created", () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "ms-reset-empty-"));
+    try {
+      const r = reset(["--data-dir", empty]);
+      expect(r.status).toBe(1);
+      expect(r.stdout).toBe("");
+      expect(r.stderr).toMatch(/No MoneySwitch database found at .*moneyswitch\.sqlite/);
+      expect(r.stderr).toMatch(/Nothing was changed/);
+      expect(fs.readdirSync(empty)).toEqual([]);
+    } finally {
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a file that is not a database: exit 1, nothing on stdout, the file left as it was", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-reset-junk-"));
+    try {
+      const junk = Buffer.alloc(4096, 9);
+      fs.writeFileSync(path.join(dir, "moneyswitch.sqlite"), junk);
+      const r = reset(["--data-dir", dir]);
+      expect(r.status).toBe(1);
+      expect(r.stdout).toBe("");
+      expect(r.stderr).toMatch(/Could not open the database/);
+      expect(fs.readFileSync(path.join(dir, "moneyswitch.sqlite")).equals(junk)).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
+  });
+
+  it("usage errors exit 2 and print nothing on stdout", () => {
+    for (const args of [["--port", "5000"], ["now"], ["--data-dir"]]) {
+      const r = reset(args);
+      expect(r.status, args.join(" ")).toBe(2);
+      expect(r.stdout).toBe("");
+      expect(r.stderr).toMatch(/moneyswitch-server:/);
+    }
+  });
 });

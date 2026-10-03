@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
@@ -100,5 +100,15 @@ describe("scripts/admin-reset-token.mjs", () => {
       headers: { authorization: `Bearer ${newToken}` },
     });
     expect(newAfter.statusCode).toBe(200);
+  });
+
+  it("refuses a data directory without a database: exit 1, a clear message, nothing created", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-reset-token-empty-"));
+    const scriptPath = path.resolve(__dirname, "../../../../scripts/admin-reset-token.mjs");
+    const r = spawnSync(process.execPath, [scriptPath, "--data-dir", tmpDir], { encoding: "utf-8" });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/No MoneySwitch database found/);
+    expect(r.stdout).toBe("");
+    expect(fs.readdirSync(tmpDir)).toEqual([]);
   });
 });

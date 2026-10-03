@@ -10,7 +10,13 @@ export interface ServeArgs {
   host: string | null;
 }
 
-export type ParsedArgs = ServeArgs | { kind: "help" } | { kind: "version" } | { kind: "error"; message: string };
+/** `moneyswitch-server reset-admin-token [--data-dir <dir>]`: a new administrator token, printed once (run on the server, by the service's user). */
+export interface ResetAdminTokenArgs {
+  kind: "reset-admin-token";
+  dataDir: string | null;
+}
+
+export type ParsedArgs = ServeArgs | ResetAdminTokenArgs | { kind: "help" } | { kind: "version" } | { kind: "error"; message: string };
 
 function parsePort(v: string | undefined): number | null {
   if (v == null || !/^\d+$/.test(v)) return null;
@@ -20,7 +26,12 @@ function parsePort(v: string | undefined): number | null {
 
 export function parseArgs(argv: string[]): ParsedArgs {
   let rest = argv;
+  let command: "serve" | "reset-admin-token" = "serve";
   if (rest[0] === "start" || rest[0] === "serve") rest = rest.slice(1);
+  else if (rest[0] === "reset-admin-token") {
+    command = "reset-admin-token";
+    rest = rest.slice(1);
+  }
 
   let dataDir: string | null = null;
   let port: number | null = null;
@@ -41,6 +52,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         return { kind: "version" };
       case "--port":
       case "-p": {
+        if (command !== "serve") return { kind: "error", message: `${flag} does not apply to ${command} (it only takes --data-dir)` };
         const v = value();
         const p = parsePort(v);
         if (p == null) return { kind: "error", message: `--port needs a number between 1 and 65535 (got ${v ?? "nothing"})` };
@@ -48,6 +60,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       }
       case "--host": {
+        if (command !== "serve") return { kind: "error", message: `${flag} does not apply to ${command} (it only takes --data-dir)` };
         const v = value();
         if (!v) return { kind: "error", message: "--host needs a value, e.g. 127.0.0.1 or 0.0.0.0" };
         host = v;
@@ -64,5 +77,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
-  return { kind: "serve", dataDir, port, host };
+  return command === "serve" ? { kind: "serve", dataDir, port, host } : { kind: "reset-admin-token", dataDir };
 }

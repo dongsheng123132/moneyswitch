@@ -117,7 +117,11 @@ describe("Login", () => {
     assert.ok(html.includes('id="login-token"'));
     assert.ok(html.includes(esc(en.shell.login_label)));
     assert.ok(html.includes(esc(en.shell.login_where)), "the first-start link points at /login#ms_setup_…");
-    assert.ok(html.includes("pnpm admin:reset-token"));
+    // a lost token: the one command per way of running it (SPEC.md §2 - Docker included), all run on the server itself
+    assert.ok(html.includes("moneyswitch-server reset-admin-token --data-dir"), "npm");
+    assert.ok(html.includes("docker compose exec server node /app/dist/cli.js reset-admin-token"), "Docker");
+    assert.ok(html.includes("pnpm admin:reset-token -- --data-dir"), "from source");
+    assert.ok(html.includes(esc(en.shell.login_lostBody)));
     assert.ok(!html.includes("employee"), "no employee login any more");
     assert.ok(!/setup#/.test(html));
   });

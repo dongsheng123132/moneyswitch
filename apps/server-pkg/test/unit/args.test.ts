@@ -30,3 +30,33 @@ describe("moneyswitch-server argv", () => {
     expect(parseArgs(["-v"])).toEqual({ kind: "version" });
   });
 });
+
+describe("moneyswitch-server reset-admin-token", () => {
+  it("is a subcommand that takes only --data-dir (optional: the service's own data directory by default)", () => {
+    expect(parseArgs(["reset-admin-token"])).toEqual({ kind: "reset-admin-token", dataDir: null });
+    expect(parseArgs(["reset-admin-token", "--data-dir", "/srv/ms"])).toEqual({ kind: "reset-admin-token", dataDir: "/srv/ms" });
+    expect(parseArgs(["reset-admin-token", "--data-dir=/srv/ms"])).toEqual({ kind: "reset-admin-token", dataDir: "/srv/ms" });
+  });
+
+  it("refuses what does not belong to it: --port, --host, extra words, a missing path, and the subcommand anywhere but first", () => {
+    for (const argv of [
+      ["reset-admin-token", "--port", "5000"],
+      ["reset-admin-token", "-p", "5000"],
+      ["reset-admin-token", "--host", "0.0.0.0"],
+      ["reset-admin-token", "now"],
+      ["reset-admin-token", "--data-dir"],
+      ["reset-admin-token", "--bogus"],
+      ["--data-dir", "/srv/ms", "reset-admin-token"],
+      ["serve", "reset-admin-token"],
+    ]) {
+      expect(parseArgs(argv).kind, argv.join(" ")).toBe("error");
+    }
+    expect(parseArgs(["reset-admin-token", "--port", "5000"])).toMatchObject({ message: expect.stringMatching(/--port does not apply to reset-admin-token/) });
+  });
+
+  it("--help and --version still answer, and serving is unchanged", () => {
+    expect(parseArgs(["reset-admin-token", "--help"])).toEqual({ kind: "help" });
+    expect(parseArgs(["reset-admin-token", "-v"])).toEqual({ kind: "version" });
+    expect(parseArgs(["start", "--port", "4100"])).toEqual({ kind: "serve", dataDir: null, port: 4100, host: null });
+  });
+});

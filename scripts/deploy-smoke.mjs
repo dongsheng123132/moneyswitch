@@ -1,6 +1,6 @@
 // Acceptance of the built server bundle in a disposable directory. Never uses an existing wallet.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -105,6 +105,20 @@ try {
   const after = await api('/v1/admin/wallet');
   check('the wallet unlocks itself after a restart: same address, no password given', after.body.unlocked === true && after.body.address === created.body.address && after.body.health.unlock_mode === 'auto' && after.body.health.auto_unlock_ok === true);
   check('the restart printed no new sign-in link and no admin token', !output.includes('Admin token (save this now') && !/\/login#ms_setup_/.test(output));
+
+  // A lost administrator token (SPEC.md §2): the reset command, run on the server itself while the server keeps running.
+  const reset = spawnSync(process.execPath, [entry, 'reset-admin-token', '--data-dir', dataDir], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+  const fresh = reset.stdout.trim();
+  check('reset-admin-token prints only the new token on stdout', reset.status === 0 && /^ms_admin_[A-Za-z0-9]+$/.test(fresh) && reset.stdout === `${fresh}\n`);
+  check('the old administrator token is refused at once and the new one works, without a restart', fresh !== admin && (await api('/v1/keys', 'GET', undefined, admin)).status === 403 && (await api('/v1/keys', 'GET', undefined, fresh)).status === 200);
+  check('the new token is in no server output and not on the reset command\'s stderr', !output.includes(fresh) && !reset.stderr.includes(fresh));
+  const emptyDir = await fs.mkdtemp(path.join(os.tmpdir(), 'moneyswitch-acceptance-empty-'));
+  try {
+    const refused = spawnSync(process.execPath, [entry, 'reset-admin-token', '--data-dir', emptyDir], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+    check('reset-admin-token refuses a data directory without a database: exit 1, nothing on stdout, nothing created', refused.status === 1 && refused.stdout === '' && /No MoneySwitch database found/.test(refused.stderr) && (await fs.readdir(emptyDir)).length === 0);
+  } finally {
+    await fs.rm(emptyDir, { recursive: true, force: true });
+  }
   console.log(JSON.stringify({ passed, failed: 0, real_payments: 0, data: 'disposable' }));
 } catch (error) {
   console.error(String(error.message).replace(/(?:ms_admin_|ms_setup_|mk_live_)[A-Za-z0-9]+/g, '[redacted]'));

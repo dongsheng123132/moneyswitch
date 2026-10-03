@@ -16,14 +16,14 @@ pnpm build
 node apps/server-pkg/dist/cli.js --data-dir ./data
 ```
 
-首次启动会打印管理员令牌和一条一次性登录链接（30 分钟内有效，只能用一次）。打开链接：自动登录并停在「钱包」页。请把 `MONEYSWITCH_PUBLIC_URL` 设成大家访问这台服务的地址，审批链接和技能说明都用它。
+首次启动会打印管理员令牌和一条一次性登录链接（30 分钟内有效，只能用一次）。打开链接：自动登录并停在「钱包」页。请把 `MONEYSWITCH_PUBLIC_URL` 设成大家访问这台服务的地址，审批链接和技能说明都用它。管理员令牌丢了：在服务器本机、用运行服务的系统用户执行 `moneyswitch-server reset-admin-token`（Docker：`docker compose exec server node /app/dist/cli.js reset-admin-token`；源码：`pnpm admin:reset-token -- --data-dir <目录>`），详见 [docs/security.md](docs/security.md)。
 
 后台只有 4 个页面加登录：
 
 | 页面 | 做什么 |
 |---|---|
 | **钱包** | 创建钱包，12 个词只显示一次，抄下后勾选「我已抄下」，再转入少量 USDC。重启后自动解锁。 |
-| **Key** | 一个 AI 一把：日额度、总额度、单笔上限、允许的域名、审批线、过期时间。创建后 key 和技能段落只显示一次，把技能段落粘贴给 AI。 |
+| **Key** | 一个 AI 一把：日额度、总额度、单笔上限、允许的域名、审批线、过期时间。创建后 key 和技能段落只显示一次，把技能段落粘贴给 AI。发出后额度不可改：要改就撤销旧 key、发一把新的。 |
 | **审批** | 批准或拒绝超过审批线的付款。 |
 | **账单** | 每一笔：时间、key、金额、网址、链、交易号、扣款状态（yes / no / maybe）。 |
 

@@ -23,9 +23,28 @@ curl --fail http://127.0.0.1:4020/healthz
 
 修改 `.env`：`MONEYSWITCH_PUBLIC_URL` 必须是大家实际访问的 HTTPS 地址（审批链接 `{MONEYSWITCH_PUBLIC_URL}/approvals?id=…` 和给 AI 的技能说明都用它），再设端口和允许付款的链。把 `deploy/moneyswitch.caddy` 的域名和端口替换为实际值，装进自己的 Caddy 配置：先 `caddy validate`，再 reload；80/443 对外，4020 只监听本机。反向代理必须保留 Authorization 头，付款请求不要自动重试。
 
-首次启动会打印管理员令牌和一条 30 分钟有效的一次性登录链接。只在私有终端看 `docker compose logs server`，用 HTTPS 地址打开链接：自动登录，停在「钱包」页。日志里有首次管理员凭据，不要公开。以后登录输入管理员令牌。令牌丢了：在服务器上的源码目录（先 `pnpm build`）运行 `pnpm admin:reset-token -- --data-dir <数据目录>`，旧令牌立刻失效，新令牌只打印一次。Docker 镜像里不带这个脚本；Docker 部署要对数据卷在宿主机上的目录运行它（`docker volume inspect` 查路径，需要 root），这个用法没有在容器环境里验证过。
+首次启动会打印管理员令牌和一条 30 分钟有效的一次性登录链接。只在私有终端看 `docker compose logs server`，用 HTTPS 地址打开链接：自动登录，停在「钱包」页。日志里有首次管理员凭据，不要公开。以后登录输入管理员令牌。
 
 首次使用：登录 → 钱包页创建钱包 → Key 页发 key、复制技能给 AI。后台只有钱包、Key、审批、账单四页。
+
+### 管理员令牌丢了
+
+令牌只存哈希，找不回来，但可以在**服务器本机**换一个新的：服务不用停，旧令牌立刻失效，新令牌只在这个终端打印一次（不进服务日志，也不写进任何文件）。在 `docker-compose.yml` 所在目录执行：
+
+```sh
+docker compose exec server node /app/dist/cli.js reset-admin-token
+```
+
+不在那个目录、或者不用 compose 时，按容器名执行（`docker compose ps` 或 `docker ps` 查名字）：
+
+```sh
+docker exec <容器名> node /app/dist/cli.js reset-admin-token
+```
+
+- 必须以服务自己的系统用户运行。镜像里服务以 `node` 用户运行，`docker exec` 默认就是它，**不要加 `-u root`**；数据库文件属于别的用户时命令会拒绝，什么都不改。
+- 它读容器里已有的 `MONEYSWITCH_DATA_DIR=/data`，不用写 `--data-dir`；找不到 `/data/moneyswitch.sqlite` 时拒绝，以非 0 退出，不会新建数据库。
+- 标准输出里只有令牌本身，说明文字在标准错误：脚本里可以 `NEW=$(docker compose exec -T server node /app/dist/cli.js reset-admin-token)`。
+- 不是 Docker 的部署：npm 安装用 `moneyswitch-server reset-admin-token --data-dir <数据目录>`；源码运行用 `pnpm admin:reset-token -- --data-dir <数据目录>`（两者是同一段代码）。
 
 ## 钱包
 
@@ -72,4 +91,4 @@ docker compose start server
 
 ## 验收
 
-检查 `/healthz`；首次登录链接能登录并停在钱包页；创建钱包后 12 个词只显示一次；**重启服务后钱包仍是解锁状态且不需要任何密码**；`/data` 里的解锁文件以地址命名且只有服务账户可读（钱包页没有红色警告）；Key 的创建和重置密钥、给 AI 的技能段落；超额度被拦截；超过审批线时 `/v1/fetch` 返回的 `approve_url` 能打开（未登录会先跳登录，登录后回到该审批）、批准后重发只付一次；扣款状态 yes / no / maybe；重启后数据库保留。可以运行 `node scripts/deploy-smoke.mjs` 对已构建的包做独立沙箱验收，它不会使用已有的钱包。发布记录要写明是否实际验证过 HTTPS、容器重启和真实链上付款，不能把离线模拟当成真钱交易。
+检查 `/healthz`；首次登录链接能登录并停在钱包页；创建钱包后 12 个词只显示一次；**重启服务后钱包仍是解锁状态且不需要任何密码**；`/data` 里的解锁文件以地址命名且只有服务账户可读（钱包页没有红色警告）；Key 的创建和重置密钥、给 AI 的技能段落；超额度被拦截；超过审批线时 `/v1/fetch` 返回的 `approve_url` 能打开（未登录会先跳登录，登录后回到该审批）、批准后重发只付一次；扣款状态 yes / no / maybe；重启后数据库保留。`docker compose exec server node /app/dist/cli.js reset-admin-token` 能换出新令牌（旧令牌立刻被拒、新令牌能登录、不用重启）。可以运行 `node scripts/deploy-smoke.mjs` 对已构建的包做独立沙箱验收（含这条重置命令），它不会使用已有的钱包。发布记录要写明是否实际验证过 HTTPS、容器重启和真实链上付款，不能把离线模拟当成真钱交易。

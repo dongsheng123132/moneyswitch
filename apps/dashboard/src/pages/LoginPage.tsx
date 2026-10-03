@@ -11,7 +11,11 @@ import Callout from "../components/Callout";
 import Snippet from "../components/Snippet";
 import { useKeyInputGuard } from "../components/KeyInputGuard";
 
-const RESET_CMD = "pnpm admin:reset-token -- --data-dir <MONEYSWITCH_DATA_DIR>";
+// SPEC.md §2: a lost token is replaced by a command run on the server itself (by the user that runs the service). The same code answers
+// all three: the npm package, the Docker image (WORKDIR /app, MONEYSWITCH_DATA_DIR=/data) and a source checkout.
+const RESET_NPM = "moneyswitch-server reset-admin-token --data-dir <data directory>";
+const RESET_DOCKER = "docker compose exec server node /app/dist/cli.js reset-admin-token";
+const RESET_SOURCE = "pnpm admin:reset-token -- --data-dir <data directory>";
 
 /** One claim per setup token, however often the page mounts (React StrictMode runs effects twice in development; the token works once). */
 const claims = new Map<string, Promise<string>>();
@@ -140,7 +144,9 @@ export default function LoginPage() {
             <details className="login-lost">
               <summary>{t("login_lostTitle")}</summary>
               <p>{t("login_lostBody")}</p>
-              <Snippet code={RESET_CMD} />
+              <Snippet title={t("login_lostNpm")} code={RESET_NPM} />
+              <Snippet title={t("login_lostDocker")} code={RESET_DOCKER} />
+              <Snippet title={t("login_lostSource")} code={RESET_SOURCE} />
             </details>
           </div>
           <div className="login-footnote">USDC · x402</div>
