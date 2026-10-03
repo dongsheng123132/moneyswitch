@@ -329,12 +329,26 @@ export function isMockPayment(p: PaymentRow): boolean {
 // Wallet
 // ---------------------------------------------------------------------------
 
+/** Why one unlock source did not open the wallet (never contains a credential). */
+export type UnlockFailureReason = "env_wrong" | "secret_missing" | "secret_empty" | "secret_unreadable" | "secret_wrong";
+
 /** GET /v1/admin/wallet → health: what would happen after a restart, whether the backup is done, how much is at risk. */
 export interface WalletHealth {
-  /** auto = wallet-unlock.secret; env_or_file = MONEYSWITCH_WALLET_PASSWORD(_FILE); manual = a human unlocks it; none = no wallet. */
+  /** How wallet.json is protected, as RECORDED in it: auto = a random secret kept on the server, password = a human password, none = no wallet. Absent on older servers. */
+  protection?: "auto" | "password" | "none";
+  /** auto = the wallet's own unlock secret; env_or_file = MONEYSWITCH_WALLET_PASSWORD(_FILE); manual = a human unlocks it; none = no wallet. */
   unlock_mode: "auto" | "env_or_file" | "manual" | "none";
   /** Result of the last real decrypt attempt; null = no attempt (manual / none / not tried yet). */
   auto_unlock_ok: boolean | null;
+  /** The last startup attempt per source, each with its own reason when it failed. Absent on older servers. */
+  unlock_sources?: Array<{ source: "env_or_file" | "auto"; ok: boolean; reason?: UnlockFailureReason }>;
+  /** Auto wallets only: does the unlock secret file exist right now? false = the next restart leaves the wallet locked. */
+  secret_file_present?: boolean | null;
+  /** false = the data folder / unlock secret could NOT be restricted to the server's account (red warning); null = nothing to protect. */
+  secret_protected?: boolean | null;
+  secret_protection_detail?: string | null;
+  /** Credential files that belong to no live wallet.json. wallet_file_missing = wallet.json is gone but they remain. */
+  orphan_files?: { secrets: string[]; retired: number; wallet_file_missing: boolean };
   backup: "confirmed" | "missing" | "not_applicable";
   /** USDC, e.g. "50". */
   float_limit: string;
@@ -391,10 +405,18 @@ export type WalletImport =
   | { kind: "keystore"; keystore: string; source_password: string }
   | { kind: "mnemonic"; mnemonic: string };
 
-export async function importWallet(source: WalletImport, opts: { password?: string } = {}): Promise<{ address: string }> {
+/**
+ * Only the account-0 private key is kept, never the phrase. `expectedAddress` makes the server refuse
+ * (400 EXPECTED_ADDRESS_MISMATCH) unless the key belongs to that address.
+ */
+export async function importWallet(source: WalletImport, opts: { password?: string; expectedAddress?: string } = {}): Promise<{ address: string }> {
   return request("/v1/admin/wallet/import", {
     method: "POST",
-    body: JSON.stringify(opts.password === undefined ? source : { ...source, password: opts.password }),
+    body: JSON.stringify({
+      ...source,
+      ...(opts.password === undefined ? {} : { password: opts.password }),
+      ...(opts.expectedAddress === undefined ? {} : { expected_address: opts.expectedAddress }),
+    }),
   });
 }
 
@@ -445,11 +467,17 @@ export async function replaceWallet(
   confirmAddress: string,
   reason: ReplaceReason,
   next: { kind: "create" } | WalletImport,
-  opts: { password?: string } = {}
+  opts: { password?: string; expectedAddress?: string } = {}
 ): Promise<ReplacedWallet> {
   return request("/v1/admin/wallet/replace", {
     method: "POST",
-    body: JSON.stringify({ confirm_address: confirmAddress, reason, ...next, ...(opts.password === undefined ? {} : { password: opts.password }) }),
+    body: JSON.stringify({
+      confirm_address: confirmAddress,
+      reason,
+      ...next,
+      ...(opts.password === undefined ? {} : { password: opts.password }),
+      ...(opts.expectedAddress === undefined || next.kind === "create" ? {} : { expected_address: opts.expectedAddress }),
+    }),
   });
 }
 

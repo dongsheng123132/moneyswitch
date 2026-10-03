@@ -36,7 +36,10 @@ let WalletHealthCard: typeof import("../src/components/WalletHealth.tsx").Wallet
 let WalletBanners: typeof import("../src/components/WalletHealth.tsx").WalletBanners;
 let walletBannerKinds: typeof import("../src/components/WalletHealth.tsx").walletBannerKinds;
 let WalletDangerZone: typeof import("../src/components/WalletDangerZone.tsx").WalletDangerZone;
+let ReplaceSection: typeof import("../src/components/WalletDangerZone.tsx").ReplaceSection;
 let RetiredWalletsList: typeof import("../src/components/WalletDangerZone.tsx").RetiredWalletsList;
+let WalletChip: typeof import("../src/components/WalletChip.tsx").WalletChip;
+let WalletAccess: typeof import("../src/components/WalletAccess.tsx").WalletAccess;
 let freshPhrase: typeof import("../src/freshPhrase.ts").freshPhrase;
 let L: (typeof import("../src/i18n/strings/walletLifecycle.ts"))["walletLifecycle"];
 
@@ -49,7 +52,9 @@ before(async () => {
   ({ WalletSetup, BackupFlow, PhraseView, pickPositions } = setup);
   ({ WalletHealthCard, WalletBanners, walletBannerKinds } = await import("../src/components/WalletHealth.tsx"));
   const danger = await import("../src/components/WalletDangerZone.tsx");
-  ({ WalletDangerZone, RetiredWalletsList } = danger);
+  ({ WalletDangerZone, RetiredWalletsList, ReplaceSection } = danger);
+  WalletChip = (await import("../src/components/WalletChip.tsx")).WalletChip;
+  WalletAccess = (await import("../src/components/WalletAccess.tsx")).WalletAccess;
   freshPhrase = (await import("../src/freshPhrase.ts")).freshPhrase;
   L = (await import("../src/i18n/strings/walletLifecycle.ts")).walletLifecycle;
 });
@@ -66,7 +71,21 @@ const fill = (s: string, vars: Record<string, string | number>) => esc(s.replace
 const noop = () => undefined;
 
 function health(over: Partial<Health> = {}): Health {
-  return { unlock_mode: "auto", auto_unlock_ok: true, backup: "confirmed", float_limit: "50", over_float_limit: { [NETWORK]: false }, retired_wallets: [], ...over };
+  return {
+    protection: "auto",
+    unlock_mode: "auto",
+    auto_unlock_ok: true,
+    unlock_sources: [{ source: "auto", ok: true }],
+    secret_file_present: true,
+    secret_protected: true,
+    secret_protection_detail: null,
+    orphan_files: { secrets: [], retired: 0, wallet_file_missing: false },
+    backup: "confirmed",
+    float_limit: "50",
+    over_float_limit: { [NETWORK]: false },
+    retired_wallets: [],
+    ...over,
+  };
 }
 function wallet(over: Partial<Wallet> = {}, healthOver: Partial<Health> | null = {}): Wallet {
   return {
@@ -82,7 +101,15 @@ function wallet(over: Partial<Wallet> = {}, healthOver: Partial<Health> | null =
     ...over,
   };
 }
-const noWallet = (): Wallet => ({ address: null, unlocked: false, has_keystore: false, usdc_balance: null, network: NETWORK, health: health({ unlock_mode: "none", auto_unlock_ok: null, backup: "not_applicable", over_float_limit: {} }) });
+const noWallet = (): Wallet => ({
+  address: null,
+  unlocked: false,
+  has_keystore: false,
+  usdc_balance: null,
+  network: NETWORK,
+  health: health({ protection: "none", unlock_mode: "none", auto_unlock_ok: null, unlock_sources: [], secret_file_present: null, secret_protected: null, backup: "not_applicable", over_float_limit: {} }),
+});
+const manualHealth: Partial<Health> = { protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [], secret_file_present: null, secret_protected: null };
 
 describe("set-up step: no password by default", () => {
   it("the wizard's wallet step offers 'Create wallet (recommended)' and has NO password field", () => {
@@ -124,7 +151,7 @@ describe("set-up step: no password by default", () => {
   });
 
   it("a locked wallet gets the unlock form (the one place a password is asked), and says what to do if it is lost", () => {
-    const html = render(h(WalletStep, { wallet: wallet({ unlocked: false }, { unlock_mode: "manual", auto_unlock_ok: null }), refresh: noop }));
+    const html = render(h(WalletStep, { wallet: wallet({ unlocked: false }, manualHealth), refresh: noop }));
     assert.ok(html.includes('data-action-id="wallet.unlock"'));
     assert.ok(html.includes('type="password"'));
     assert.ok(html.includes(esc(L.en.lockedRecovery)));
@@ -154,7 +181,7 @@ describe("set-up step: no password by default", () => {
 
 describe("recovery phrase flow", () => {
   it("right after creation the 12 numbered words and the warning are shown", () => {
-    freshPhrase.set(PHRASE);
+    freshPhrase.set(ADDRESS, PHRASE);
     const html = render(h(WalletSetup, { onDone: noop }));
     assert.ok(html.includes('data-testid="backup-required"'));
     assert.equal((html.match(/class="wallet-phrase-index"/g) ?? []).length, 12);
@@ -194,7 +221,7 @@ describe("recovery phrase flow", () => {
   });
 
   it("the fresh phrase lives in memory only", () => {
-    freshPhrase.set(PHRASE);
+    freshPhrase.set(ADDRESS, PHRASE);
     render(h(WalletSetup, { onDone: noop }));
     assert.equal(store.size, 1, "only the language preference was written to storage (the render helper sets it)");
     assert.ok(![...store.values()].some((v) => v.includes("junk")));
@@ -204,14 +231,15 @@ describe("recovery phrase flow", () => {
 });
 
 describe("wallet health card", () => {
-  it("healthy auto-unlock wallet: three green rows and the balance against the float limit", () => {
+  it("healthy auto-unlock wallet: four green rows (unlock, secret protection, backup, balance) and the balance against the float limit", () => {
     const html = render(h(WalletHealthCard, { wallet: wallet() }));
     assert.ok(html.includes('data-testid="wallet-health"'));
     assert.ok(html.includes(esc(L.en.healthTitle)));
     assert.ok(html.includes(esc(L.en.hAutoOk)));
     assert.ok(html.includes(esc(L.en.hBackupConfirmed)));
     assert.ok(html.includes(fill(L.en.hFloatLine, { balance: "12.34", limit: "50" })));
-    assert.equal((html.match(/pill pill-green/g) ?? []).length, 3);
+    assert.ok(html.includes(esc(L.en.hProtectOk)));
+    assert.equal((html.match(/pill pill-green/g) ?? []).length, 4);
     assert.ok(!html.includes("pill-red") && !html.includes("pill-yellow"));
     assert.ok(!html.includes(esc(L.en.hFloatOver)));
   });
@@ -248,9 +276,9 @@ describe("wallet health card", () => {
   });
 
   it("manual mode and the legacy password are described as such", () => {
-    assert.ok(render(h(WalletHealthCard, { wallet: wallet({}, { unlock_mode: "manual", auto_unlock_ok: null }) })).includes(esc(L.en.hManual)));
-    assert.ok(render(h(WalletHealthCard, { wallet: wallet({}, { unlock_mode: "env_or_file", auto_unlock_ok: true }) })).includes(esc(L.en.hEnvOk)));
-    assert.ok(render(h(WalletHealthCard, { wallet: wallet({}, { unlock_mode: "env_or_file", auto_unlock_ok: false }) })).includes(esc(L.en.hEnvBroken)));
+    assert.ok(render(h(WalletHealthCard, { wallet: wallet({}, manualHealth) })).includes(esc(L.en.hManual)));
+    assert.ok(render(h(WalletHealthCard, { wallet: wallet({}, { ...manualHealth, unlock_mode: "env_or_file", auto_unlock_ok: true }) })).includes(esc(L.en.hEnvOk)));
+    assert.ok(render(h(WalletHealthCard, { wallet: wallet({}, { ...manualHealth, unlock_mode: "env_or_file", auto_unlock_ok: false }) })).includes(esc(L.en.hEnvBroken)));
   });
 
   it("renders nothing for an older server (no health) or before a wallet exists", () => {
@@ -325,7 +353,7 @@ describe("Wallet page", () => {
   });
 
   it("a locked wallet shows the unlock form and keeps the danger zone open (a lost password is exactly when it is needed)", () => {
-    const html = view(wallet({ unlocked: false }, { unlock_mode: "manual", auto_unlock_ok: null }));
+    const html = view(wallet({ unlocked: false }, manualHealth));
     assert.ok(html.includes('data-action-id="wallet.unlock"'));
     assert.match(html, /<details open=""><summary id="wallet-danger-title">/);
   });
@@ -359,6 +387,14 @@ describe("danger zone", () => {
     assert.ok(html.includes(esc(L.en.backupDlTitle)));
   });
 
+  it("while the backup is unfinished the address is shown nowhere, so reveal points at the guided backup instead of asking for it to be typed", () => {
+    const html = zone(wallet({}, { backup: "missing" }));
+    assert.ok(html.includes('data-section="reveal"'));
+    assert.ok(html.includes(esc(L.en.revealUseBackupFlow)));
+    assert.ok(!html.includes('id="wallet-reveal-address"'));
+    assert.ok(html.includes('id="replace-address"'));
+  });
+
   it("reveal and replace both make the operator type the wallet address", () => {
     const html = zone(wallet());
     assert.ok(html.includes('id="wallet-reveal-address"'));
@@ -378,7 +414,7 @@ describe("danger zone", () => {
   });
 
   it("a manual wallet offers to turn auto-unlock ON, and downloads its own file without asking for a password", () => {
-    const html = zone(wallet({}, { unlock_mode: "manual", auto_unlock_ok: null }));
+    const html = zone(wallet({}, manualHealth));
     assert.ok(html.includes(esc(L.en.autoManualBody)));
     assert.ok(html.includes(esc(L.en.autoOnButton)));
     assert.ok(!html.includes('id="auto-off-password"'));
@@ -393,7 +429,7 @@ describe("danger zone", () => {
   });
 
   it("a locked wallet cannot be re-encrypted: the toggle says to unlock first", () => {
-    const html = zone(wallet({ unlocked: false }, { unlock_mode: "manual", auto_unlock_ok: null }));
+    const html = zone(wallet({ unlocked: false }, manualHealth));
     assert.ok(html.includes(esc(L.en.autoNeedUnlock)));
     assert.match(html, /<button type="button" class="btn secondary" disabled="">[^<]*Turn on auto-unlock/);
   });
@@ -430,6 +466,296 @@ describe("retired wallets list", () => {
 
   it("Chinese", () => {
     assert.ok(render(h(RetiredWalletsList, { rows }), "zh").includes(L.zh.retiredHint));
+  });
+});
+
+describe("m6: the health card names the reason each unlock source failed", () => {
+  const SECRET_REASONS = [
+    ["secret_missing", "hSecretMissing"],
+    ["secret_empty", "hSecretEmpty"],
+    ["secret_unreadable", "hSecretUnreadable"],
+    ["secret_wrong", "hSecretWrong"],
+  ] as const;
+
+  for (const [reason, key] of SECRET_REASONS) {
+    it(`auto wallet, ${reason}: red, in its own words and in nobody else's`, () => {
+      const html = render(h(WalletHealthCard, { wallet: wallet({}, { auto_unlock_ok: false, unlock_sources: [{ source: "auto", ok: false, reason }] }) }));
+      assert.ok(html.includes(esc(L.en[key])));
+      for (const [, other] of SECRET_REASONS) if (other !== key) assert.ok(!html.includes(esc(L.en[other])), other);
+      assert.ok(!html.includes(esc(L.en.hEnvStale)) && !html.includes(esc(L.en.hEnvBroken)), "an env password is not blamed");
+      assert.match(html, /data-health="unlock"><div class="wallet-health-head"><span class="wallet-health-label">[^<]*<\/span><span class="pill pill-red">/);
+    });
+  }
+
+  it("a stale env password and a wrong secret are two findings: the secret's reason plus a separate note about the password", () => {
+    const sources = [
+      { source: "env_or_file", ok: false, reason: "env_wrong" },
+      { source: "auto", ok: false, reason: "secret_wrong" },
+    ] as Health["unlock_sources"];
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { auto_unlock_ok: false, unlock_sources: sources }) }));
+    assert.ok(html.includes(esc(L.en.hSecretWrong)));
+    assert.ok(html.includes(esc(L.en.hEnvStale)));
+    assert.ok(!html.includes(esc(L.en.hEnvBroken)), "the env password is not the headline");
+  });
+
+  it("a stale env password next to a secret that works: still green, with the note", () => {
+    const sources = [
+      { source: "env_or_file", ok: false, reason: "env_wrong" },
+      { source: "auto", ok: true },
+    ] as Health["unlock_sources"];
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { auto_unlock_ok: true, unlock_sources: sources }) }));
+    assert.ok(html.includes(esc(L.en.hAutoOk)));
+    assert.ok(html.includes(esc(L.en.hEnvStale)));
+    assert.match(html, /data-health="unlock"><div class="wallet-health-head"><span class="wallet-health-label">[^<]*<\/span><span class="pill pill-green">/);
+  });
+
+  it("the secret file gone while the wallet is open: red 'broken soon', before the restart that would lock it", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { auto_unlock_ok: true, secret_file_present: false }) }));
+    assert.ok(html.includes(esc(L.en.hSecretGone)));
+    assert.match(html, /data-health="unlock"><div class="wallet-health-head"><span class="wallet-health-label">[^<]*<\/span><span class="pill pill-red">/);
+    assert.deepEqual(walletBannerKinds(wallet({}, { auto_unlock_ok: true, secret_file_present: false })), ["autoBroken"]);
+  });
+
+  it("a legacy password that fails is still described as the env password", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { ...manualHealth, unlock_mode: "env_or_file", auto_unlock_ok: false, unlock_sources: [{ source: "env_or_file", ok: false, reason: "env_wrong" }] }) }));
+    assert.ok(html.includes(esc(L.en.hEnvBroken)));
+  });
+
+  it("a LOCKED auto wallet has no password to ask for: no unlock form, the reason and the way out instead", () => {
+    const w = wallet({ unlocked: false }, { auto_unlock_ok: false, unlock_sources: [{ source: "auto", ok: false, reason: "secret_missing" }] });
+    const html = render(h(WalletAccess, { wallet: w, onChanged: noop }));
+    assert.ok(html.includes('data-testid="auto-locked"'));
+    assert.ok(html.includes(esc(L.en.hSecretMissing)));
+    assert.ok(html.includes(esc(L.en.autoLockedBody)));
+    assert.ok(!html.includes('type="password"') && !html.includes("wallet.unlock"), "asking for a password that does not exist is a dead end");
+    assert.ok(!html.includes(esc(L.en.lockedRecovery)));
+    // through the wizard step and the Wallet page as well
+    assert.ok(render(h(WalletStep, { wallet: w, refresh: noop })).includes('data-testid="auto-locked"'));
+    assert.ok(render(h(WalletView, { wallet: w, meta: null, onChanged: noop })).includes('data-testid="auto-locked"'));
+  });
+
+  it("an older server (no recorded protection) that calls it auto is treated the same way", () => {
+    const w = wallet({ unlocked: false }, { protection: undefined, auto_unlock_ok: false, unlock_sources: undefined });
+    assert.ok(render(h(WalletAccess, { wallet: w, onChanged: noop })).includes('data-testid="auto-locked"'));
+  });
+
+  it("the recorded mode decides: a manual wallet whose env password failed still gets the unlock form", () => {
+    const html = render(h(WalletAccess, { wallet: wallet({ unlocked: false }, { ...manualHealth, unlock_mode: "env_or_file", auto_unlock_ok: false }), onChanged: noop }));
+    assert.ok(html.includes('data-action-id="wallet.unlock"'));
+    assert.ok(html.includes(esc(L.en.hEnvBroken)));
+  });
+
+  it("Chinese", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { auto_unlock_ok: false, unlock_sources: [{ source: "auto", ok: false, reason: "secret_missing" }] }) }), "zh");
+    assert.ok(html.includes(L.zh.hSecretMissing));
+  });
+});
+
+describe("M3: the protection of the unlock secret is shown, and a failure is a red warning", () => {
+  const exposed: Partial<Health> = { secret_protected: false, secret_protection_detail: "could not set the ACL (access denied)" };
+
+  it("not protected: red pill, the reason, and the hot-wallet advice (the wallet still works)", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, exposed) }));
+    assert.match(html, /data-health="protect"><div class="wallet-health-head"><span class="wallet-health-label">[^<]*<\/span><span class="pill pill-red">/);
+    assert.ok(html.includes(esc(L.en.hProtectBadTitle)));
+    assert.ok(html.includes(fill(L.en.hProtectBad, { detail: "could not set the ACL (access denied)" })));
+    assert.ok(html.includes("callout-error"));
+    assert.ok(html.includes(esc(L.en.hAutoOk)), "auto-unlock itself is not refused");
+  });
+
+  it("protected: a green row", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet() }));
+    assert.match(html, /data-health="protect"><div class="wallet-health-head"><span class="wallet-health-label">[^<]*<\/span><span class="pill pill-green">/);
+    assert.ok(!html.includes(esc(L.en.hProtectBadTitle)));
+  });
+
+  it("a password wallet has no secret on disk: no protection row at all", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, manualHealth) }));
+    assert.ok(!html.includes('data-health="protect"'));
+  });
+
+  it("an older server that does not report it: no row, no claim", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { secret_protected: undefined }) }));
+    assert.ok(!html.includes('data-health="protect"'));
+  });
+
+  it("Overview banner: red, with a link to the Wallet page, listed after 'auto-unlock broken' and before 'backup'", () => {
+    const html = render(h(WalletBanners, { wallet: wallet({}, { ...exposed, backup: "missing" }) }));
+    assert.ok(html.includes(esc(L.en.bannerSecretUnprotected)));
+    assert.ok(html.includes(esc(L.en.bannerProtectAction)));
+    assert.ok(html.indexOf(esc(L.en.bannerSecretUnprotected)) < html.indexOf(esc(L.en.bannerBackupMissing)));
+    assert.deepEqual(walletBannerKinds(wallet({}, { ...exposed, backup: "missing", auto_unlock_ok: false })), ["autoBroken", "secretUnprotected", "backupMissing"]);
+    assert.deepEqual(walletBannerKinds(wallet({}, exposed), true), [], "none in the offline demo");
+    assert.deepEqual(walletBannerKinds(wallet({}, { secret_protected: true })), []);
+    assert.deepEqual(walletBannerKinds(wallet({}, { secret_protected: null })), []);
+  });
+
+  it("the danger zone opens by itself when the secret is exposed", () => {
+    assert.match(render(h(WalletDangerZone, { wallet: wallet({}, exposed), onChanged: noop })), /<details open="">/);
+  });
+
+  it("Chinese", () => {
+    assert.ok(render(h(WalletBanners, { wallet: wallet({}, exposed) }), "zh").includes(L.zh.bannerSecretUnprotected));
+    assert.ok(render(h(WalletHealthCard, { wallet: wallet({}, exposed) }), "zh").includes(L.zh.hProtectBadTitle));
+  });
+});
+
+describe("M1: wallet.json is missing but credentials of an earlier wallet remain", () => {
+  const orphans = { secrets: [OLD_ADDRESS], retired: 2, wallet_file_missing: true };
+
+  it("the set-up screen says so before offering anything, and Create / Import wait for an explicit yes", () => {
+    const html = render(h(WalletSetup, { onDone: noop, orphans }));
+    assert.ok(html.includes('data-testid="orphan-warning"'));
+    assert.ok(html.includes(esc(L.en.orphanTitle)));
+    assert.ok(html.includes(fill(L.en.orphanBody, { secrets: 1, retired: 2 })));
+    assert.ok(html.includes(esc(L.en.orphanAck)));
+    assert.match(html, /<button type="button" class="btn" data-action-id="wallet\.create" disabled="">/);
+    assert.match(html, /<button class="btn secondary" type="submit" disabled="">/);
+  });
+
+  it("a clean data folder gets no warning and an enabled Create button", () => {
+    for (const o of [undefined, { secrets: [], retired: 0, wallet_file_missing: false }, { secrets: [OLD_ADDRESS], retired: 0, wallet_file_missing: false }]) {
+      const html = render(h(WalletSetup, { onDone: noop, orphans: o }));
+      assert.ok(!html.includes('data-testid="orphan-warning"'));
+      assert.match(html, /<button type="button" class="btn" data-action-id="wallet\.create">/);
+    }
+  });
+
+  it("the Wallet page and the wizard step pass the server's finding on", () => {
+    const w: Wallet = { ...noWallet(), health: health({ ...noWallet().health, orphan_files: orphans }) };
+    assert.ok(render(h(WalletView, { wallet: w, meta: null, onChanged: noop })).includes('data-testid="orphan-warning"'));
+    assert.ok(render(h(WalletStep, { wallet: w, refresh: noop })).includes('data-testid="orphan-warning"'));
+  });
+
+  it("Chinese", () => {
+    assert.ok(render(h(WalletSetup, { onDone: noop, orphans }), "zh").includes(L.zh.orphanTitle));
+  });
+});
+
+describe("M2: the import screens say what may be imported and what is kept", () => {
+  it("set-up: the warning stands above the import fields, with the optional expected address", () => {
+    const html = render(h(WalletSetup, { onDone: noop }));
+    assert.ok(html.includes('data-testid="import-warning"'));
+    assert.ok(html.includes(esc(L.en.importWarnTitle)));
+    assert.ok(html.includes(esc(L.en.importWarnBody)));
+    assert.ok(html.indexOf(esc(L.en.importWarnBody)) < html.indexOf('id="wallet-import-phrase"'), "before the fields, not after");
+    assert.ok(html.includes('id="wallet-import-expected"'));
+    assert.ok(html.includes(esc(L.en.expectedAddressHint)));
+    assert.ok(html.includes(esc(L.en.phraseInputHint)));
+  });
+
+  it("the warning says the two things that matter: nothing else may share the funds, and only the key is kept", () => {
+    assert.match(L.en.importWarnBody, /Never import/);
+    assert.match(L.en.importWarnBody, /other funds/);
+    assert.match(L.en.importWarnBody, /dedicated small-float wallet/);
+    assert.match(L.en.importWarnBody, /phrase is not/);
+    assert.match(L.zh.importWarnBody, /绝不要导入/);
+  });
+
+  it("replace with a recovery phrase or a private key: the same warning and field; replace with a new wallet: neither", () => {
+    for (const initialWith of ["mnemonic", "private_key"] as const) {
+      const html = render(h(ReplaceSection, { wallet: wallet(), onChanged: noop, initialWith }));
+      assert.ok(html.includes('data-testid="import-warning"'), initialWith);
+      assert.ok(html.includes('id="replace-expected"'), initialWith);
+    }
+    const create = render(h(ReplaceSection, { wallet: wallet(), onChanged: noop }));
+    assert.ok(!create.includes('data-testid="import-warning"') && !create.includes('id="replace-expected"'));
+  });
+
+  it("Chinese", () => {
+    assert.ok(render(h(WalletSetup, { onDone: noop }), "zh").includes(L.zh.importWarnTitle));
+  });
+});
+
+describe("m8: the top-bar wallet chip shows no address until the backup is confirmed", () => {
+  const chip = (w: Wallet | null, lang: "en" | "zh" = "en", loading = false) => render(h(WalletChip, { wallet: w, loading }), lang);
+
+  it("confirmed backup: the short address and a Copy button", () => {
+    const html = chip(wallet());
+    assert.ok(html.includes("0xf39F...2266"));
+    assert.ok(html.includes("chip-copy"));
+  });
+
+  it("backup missing: no address (short or full), no Copy button, a link to the backup instead", () => {
+    const html = chip(wallet({}, { backup: "missing" }));
+    assert.ok(!html.includes("0xf39F") && !html.includes(ADDRESS) && !html.includes("2266"), "no part of the address");
+    assert.ok(!html.includes("chip-copy"), "no Copy button");
+    assert.ok(html.includes('data-testid="wallet-chip-backup"') && html.includes('href="/wallet"'));
+    assert.ok(html.includes(esc(L.en.chipBackupFirst)));
+  });
+
+  it("a wallet with nothing to back up (imported) still shows its address", () => {
+    assert.ok(chip(wallet({}, { backup: "not_applicable" })).includes("0xf39F...2266"));
+  });
+
+  it("an older server (no health) behaves as before", () => {
+    assert.ok(chip(wallet({}, null)).includes("0xf39F...2266"));
+  });
+
+  it("locked, no wallet and loading are unchanged and show no address", () => {
+    assert.ok(!chip(wallet({ unlocked: false })).includes("0xf39F"));
+    assert.ok(chip(noWallet()).includes('href="/wallet"'));
+    assert.ok(chip(null, "en", true).includes("wallet-chip dim"));
+  });
+
+  it("Chinese", () => {
+    assert.ok(chip(wallet({}, { backup: "missing" }), "zh").includes(L.zh.chipBackupFirst));
+  });
+});
+
+describe("m9: a fresh recovery phrase belongs to one wallet and is shown only for it", () => {
+  it("it is remembered together with the address, and only handed out for that address (any letter case)", () => {
+    freshPhrase.set(ADDRESS, PHRASE);
+    assert.deepEqual(freshPhrase.get(), { address: ADDRESS, phrase: PHRASE });
+    assert.equal(freshPhrase.getFor(ADDRESS), PHRASE);
+    assert.equal(freshPhrase.getFor(ADDRESS.toLowerCase()), PHRASE);
+    assert.equal(freshPhrase.getFor(OLD_ADDRESS), null);
+  });
+
+  it("the backup flow of the wallet it was made for shows the words", () => {
+    freshPhrase.set(ADDRESS, PHRASE);
+    const html = render(h(BackupFlow, { onConfirmed: noop, address: ADDRESS }));
+    assert.equal((html.match(/class="wallet-phrase-index"/g) ?? []).length, 12);
+  });
+
+  it("the backup flow of ANOTHER wallet never shows it", () => {
+    freshPhrase.set(OLD_ADDRESS, PHRASE);
+    const html = render(h(BackupFlow, { onConfirmed: noop, address: ADDRESS }));
+    assert.ok(!html.includes("wallet-phrase-index"), "no words");
+    assert.ok(!html.includes(">junk<"));
+    assert.ok(html.includes('data-action-id="wallet.reveal"'), "it offers to reveal this wallet's own phrase instead");
+  });
+
+  it("the set-up screen right after 'Create' (no wallet known yet) shows the phrase the server just returned", () => {
+    freshPhrase.set(ADDRESS, PHRASE);
+    const html = render(h(WalletSetup, { onDone: noop }));
+    assert.equal((html.match(/class="wallet-phrase-index"/g) ?? []).length, 12);
+  });
+
+  it("without a fresh phrase the page asks for one click, never for the address it must not display", () => {
+    const html = render(h(BackupFlow, { onConfirmed: noop, address: ADDRESS }));
+    assert.ok(html.includes(esc(L.en.revealNowBody)));
+    assert.ok(html.includes(esc(L.en.showPhraseButton)));
+    assert.ok(!html.includes('id="wallet-reveal-address"'), "no typed-address field");
+    assert.ok(!html.includes(ADDRESS), "and the address is nowhere on the page");
+  });
+
+  it("the Wallet page with an unfinished backup shows the address nowhere, yet can still reveal the phrase", () => {
+    const html = render(h(WalletView, { wallet: wallet({}, { backup: "missing" }), meta: null, onChanged: noop }));
+    assert.ok(!html.includes(ADDRESS) && !html.includes("0xf39F"));
+    assert.ok(html.includes('data-action-id="wallet.reveal"'));
+  });
+});
+
+describe("wording: nothing promises what the server no longer does", () => {
+  it("no string mentions a wallet.json.bak copy, the single-name secret file or the 0600 mode", () => {
+    for (const lang of ["en", "zh"] as const) {
+      for (const [key, value] of Object.entries(L[lang])) {
+        assert.ok(!/\.bak/.test(value), `${lang}.${key} mentions a .bak copy`);
+        assert.ok(!/wallet-unlock\.secret/.test(value), `${lang}.${key} names the old single secret file`);
+        assert.ok(!/0600/.test(value), `${lang}.${key} claims a file mode`);
+      }
+    }
   });
 });
 

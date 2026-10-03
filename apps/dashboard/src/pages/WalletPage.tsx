@@ -114,7 +114,7 @@ export function WalletView({
   const network = wallet.network;
 
   if (!wallet.has_keystore) {
-    return <div className="card"><WalletSetup onDone={onChanged} /></div>;
+    return <div className="card"><WalletSetup onDone={onChanged} orphans={wallet.health?.orphan_files} /></div>;
   }
 
   const balance = wallet.usdc_balance;
@@ -143,7 +143,7 @@ export function WalletView({
         <div className="card wallet-receive-card">
           <div className="stat-label">{t("receiveTitle")}</div>
           {backupMissing ? (
-            <BackupRequired onConfirmed={onChanged} />
+            <BackupRequired onConfirmed={onChanged} address={wallet.address} />
           ) : (
             <>
               {wallet.address ? (

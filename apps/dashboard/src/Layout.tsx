@@ -1,12 +1,12 @@
 import React from "react";
-import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
-import { Gauge, MessageSquare, KeyRound, Radio, Activity, ShieldAlert, Wallet, Plug, LogOut, Compass, Lock } from "lucide-react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Gauge, MessageSquare, KeyRound, Radio, Activity, ShieldAlert, Wallet, Plug, LogOut, Compass } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { getWallet, listApprovals } from "./api";
-import { shortAddr, formatUsdc } from "./money";
-import CopyButton from "./components/CopyButton";
+import { formatUsdc } from "./money";
 import LangSwitch from "./components/LangSwitch";
+import { WalletChip } from "./components/WalletChip";
 import { useT } from "./i18n";
 import { shellStrings } from "./i18n/strings/shell";
 import { common } from "./i18n/strings/common";
@@ -97,22 +97,7 @@ export default function Layout() {
               <span className="network-dot" />
               {demo ? td("networkBadge") : meta?.network_label ?? (meta?.is_mainnet ? tc("networkMainnet") : tc("networkTestnet"))}
             </span>
-            {walletLoading && !wallet ? (
-              <span className="wallet-chip dim">{t("walletLoading")}</span>
-            ) : !wallet?.has_keystore ? (
-              <Link className="wallet-chip warn" to="/wallet">
-                {t("walletNone")}
-              </Link>
-            ) : !wallet.unlocked ? (
-              <Link className="wallet-chip warn" to="/wallet">
-                <Lock size={12} aria-hidden /> {t("walletLocked")}
-              </Link>
-            ) : wallet.address ? (
-              <span className="wallet-chip">
-                <span className="mono">{shortAddr(wallet.address)}</span>
-                <CopyButton text={wallet.address} className="chip-copy icon-only" />
-              </span>
-            ) : null}
+            <WalletChip wallet={wallet} loading={walletLoading} />
             {wallet?.has_keystore && (
               <span className="wallet-balance" title={wallet.usdc_balance == null ? t("walletBalanceUnknown") : undefined}>
                 {wallet.usdc_balance != null ? `${formatUsdc(wallet.usdc_balance, { maxDecimals: 2 })} USDC` : "—"}

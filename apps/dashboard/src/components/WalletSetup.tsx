@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { ApiError, confirmBackup, createWallet, importWallet, revealWallet, type RevealedWalletSecret, type WalletImport } from "../api";
+import { ApiError, confirmBackup, createWallet, importWallet, revealWallet, type RevealedWalletSecret, type WalletHealth, type WalletImport } from "../api";
 import { freshPhrase, useFreshPhrase } from "../freshPhrase";
 import { useT } from "../i18n";
 import { walletLifecycle } from "../i18n/strings/walletLifecycle";
@@ -24,10 +24,21 @@ export function pickPositions(count: number): [number, number] {
  * the phrase is shown and checked (BackupRequired). Importing an existing wallet and the
  * "ask for a password on every restart" mode are secondary.
  */
-export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () => void; initialAdvanced?: boolean }) {
+export function WalletSetup({
+  onDone,
+  initialAdvanced = false,
+  orphans,
+}: {
+  onDone: () => void;
+  initialAdvanced?: boolean;
+  /** health.orphan_files: when wallet.json is gone but credentials remain, creating is not offered silently. */
+  orphans?: WalletHealth["orphan_files"];
+}) {
   const t = useT(walletLifecycle);
-  const fresh = useFreshPhrase();
+  const fresh = useFreshPhrase(null); // no wallet is known yet: the creation response is the authority
   const [advanced, setAdvanced] = useState(initialAdvanced);
+  const [ackOrphans, setAckOrphans] = useState(false);
+  const [expectedAddress, setExpectedAddress] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [method, setMethod] = useState<ImportMethod>("mnemonic");
@@ -40,7 +51,12 @@ export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () =>
   const fileRead = useRef(0);
 
   // The wallet exists and its phrase is on screen: keep showing it through the next polls.
-  if (fresh) return <BackupRequired onConfirmed={onDone} />;
+  if (fresh) return <BackupRequired onConfirmed={onDone} address={null} />;
+
+  // wallet.json is missing but credentials of an earlier wallet are still in the data folder: the likely cause is a data
+  // folder mounted from the wrong place, not a wish for a brand-new empty wallet. Creating or importing needs an explicit yes.
+  const orphaned = Boolean(orphans?.wallet_file_missing);
+  const blocked = orphaned && !ackOrphans;
 
   function passwordProblem(): string | null {
     if (!advanced) return null;
@@ -56,7 +72,7 @@ export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () =>
     setBusy("create");
     try {
       const created = await createWallet(advanced ? { password } : {});
-      freshPhrase.set(created.recovery_phrase);
+      freshPhrase.set(created.address, created.recovery_phrase);
       setPassword("");
       setConfirm("");
       onDone();
@@ -80,7 +96,11 @@ export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () =>
         : { kind: "keystore", keystore, source_password: sourcePassword };
     setBusy("import");
     try {
-      await importWallet(source, advanced ? { password } : {});
+      await importWallet(source, {
+        ...(advanced ? { password } : {}),
+        ...(expectedAddress.trim() ? { expectedAddress: expectedAddress.trim() } : {}),
+      });
+      setExpectedAddress("");
       setPhrase("");
       setPrivateKey("");
       setKeystore("");
@@ -88,8 +108,8 @@ export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () =>
       setPassword("");
       setConfirm("");
       onDone();
-    } catch {
-      setError(t("importFailed"));
+    } catch (err) {
+      setError(err instanceof ApiError && err.error === "EXPECTED_ADDRESS_MISMATCH" ? t("importMismatch") : t("importFailed"));
     } finally {
       setBusy(null);
     }
@@ -100,10 +120,22 @@ export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () =>
       <h2 id="wallet-setup-title">{t("setupTitle")}</h2>
       <p>{t("setupLead")}</p>
 
+      {orphaned && (
+        <div data-testid="orphan-warning">
+          <Callout tone="error" title={t("orphanTitle")}>
+            {t("orphanBody", { secrets: orphans!.secrets.length, retired: orphans!.retired })}
+          </Callout>
+          <label className="setup-check">
+            <input type="checkbox" checked={ackOrphans} disabled={busy !== null} onChange={(e) => setAckOrphans(e.target.checked)} />
+            {t("orphanAck")}
+          </label>
+        </div>
+      )}
+
       <div className="wallet-setup-primary">
         <h3>{t("createRecommended")}</h3>
         <p>{t("createExplain")}</p>
-        <button type="button" className="btn" data-action-id="wallet.create" disabled={busy !== null} onClick={create}>
+        <button type="button" className="btn" data-action-id="wallet.create" disabled={busy !== null || blocked} onClick={create}>
           {busy === "create" ? t("creating") : t("createButton")}
         </button>
       </div>
@@ -145,6 +177,7 @@ export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () =>
       <details className="advanced-details wallet-setup-other">
         <summary>{t("otherWays")}</summary>
         <form onSubmit={submitImport} data-action-id="wallet.import">
+          <ImportWarning />
           <div className="field">
             <label htmlFor="wallet-import-method">{t("importMethod")}</label>
             <select
@@ -221,12 +254,40 @@ export function WalletSetup({ onDone, initialAdvanced = false }: { onDone: () =>
               </div>
             </>
           )}
-          <button className="btn secondary" type="submit" disabled={busy !== null || (method === "keystore" && !keystore)}>
+          <ExpectedAddressField id="wallet-import-expected" value={expectedAddress} onChange={setExpectedAddress} disabled={busy !== null} />
+          <button className="btn secondary" type="submit" disabled={busy !== null || blocked || (method === "keystore" && !keystore)}>
             {busy === "import" ? t("working") : t("importButton")}
           </button>
         </form>
       </details>
     </section>
+  );
+}
+
+/**
+ * Said right where a key or phrase is typed in. The server stores the key on its own disk, so what goes in must be a
+ * wallet made for this job, never one that also holds other funds. Only the first account's key is kept, not the phrase.
+ */
+export function ImportWarning() {
+  const t = useT(walletLifecycle);
+  return (
+    <div data-testid="import-warning">
+      <Callout tone="warn" title={t("importWarnTitle")}>
+        {t("importWarnBody")}
+      </Callout>
+    </div>
+  );
+}
+
+/** Optional: the import is refused unless the key belongs to exactly this address. */
+export function ExpectedAddressField({ id, value, onChange, disabled }: { id: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  const t = useT(walletLifecycle);
+  return (
+    <div className="field">
+      <label htmlFor={id}>{t("expectedAddress")}</label>
+      <input id={id} className="mono" spellCheck={false} autoComplete="off" placeholder="0x…" disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)} />
+      <div className="field-hint">{t("expectedAddressHint")}</div>
+    </div>
   );
 }
 
@@ -374,16 +435,22 @@ export function RevealForm({
  * Show the phrase (fresh from creation, or revealed on request), then check two words.
  * Leaves `freshPhrase` cleared once the server has accepted the check.
  */
-export function BackupFlow({ onConfirmed }: { onConfirmed: () => void }) {
+export function BackupFlow({ onConfirmed, address }: { onConfirmed: () => void; address?: string | null }) {
   const t = useT(walletLifecycle);
-  const fresh = useFreshPhrase();
+  const fresh = useFreshPhrase(address ?? null); // a phrase that belongs to another wallet is never shown here
   const [revealed, setRevealed] = useState<string | null>(null);
   const [step, setStep] = useState<"show" | "check">("show");
   const phrase = fresh ?? revealed;
 
   if (!phrase) {
+    const onRevealed = (secret: RevealedWalletSecret) => {
+      if (secret.kind === "mnemonic") setRevealed(secret.recovery_phrase);
+    };
+    // While the backup is unfinished the page does not show the wallet's address anywhere (it must not be funded yet), so
+    // it cannot ask to have it typed: the page already knows it and passes it on with one click.
+    if (address) return <RevealNow address={address} onRevealed={onRevealed} />;
     return (
-      <RevealForm onRevealed={(secret) => secret.kind === "mnemonic" && setRevealed(secret.recovery_phrase)}>
+      <RevealForm onRevealed={onRevealed}>
         <p>{t("typeAddress")}</p>
       </RevealForm>
     );
@@ -402,15 +469,44 @@ export function BackupFlow({ onConfirmed }: { onConfirmed: () => void }) {
   );
 }
 
+/** Show the phrase again with one click: the wallet is known to the page, its address is not displayed. */
+function RevealNow({ address, onRevealed }: { address: string; onRevealed: (secret: RevealedWalletSecret) => void }) {
+  const t = useT(walletLifecycle);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function reveal() {
+    setError(null);
+    setBusy(true);
+    try {
+      onRevealed(await revealWallet(address));
+    } catch (err) {
+      setError(err instanceof ApiError && err.error === "WALLET_LOCKED" ? t("revealLocked") : t("revealFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="wallet-reveal">
+      <p>{t("revealNowBody")}</p>
+      {error && <Callout tone="error">{error}</Callout>}
+      <button type="button" className="btn" data-action-id="wallet.reveal" disabled={busy} onClick={reveal}>
+        {t("showPhraseButton")}
+      </button>
+    </div>
+  );
+}
+
 /** What stands where the deposit address would be until the recovery phrase is written down and checked. */
-export function BackupRequired({ onConfirmed }: { onConfirmed: () => void }) {
+export function BackupRequired({ onConfirmed, address }: { onConfirmed: () => void; address?: string | null }) {
   const t = useT(walletLifecycle);
   return (
     <div className="wallet-backup-required" data-testid="backup-required">
       <Callout tone="warn" title={t("finishBackupTitle")}>
         {t("finishBackupBody")}
       </Callout>
-      <BackupFlow onConfirmed={onConfirmed} />
+      <BackupFlow onConfirmed={onConfirmed} address={address} />
     </div>
   );
 }

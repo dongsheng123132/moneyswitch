@@ -374,11 +374,11 @@ export function WalletStep({ wallet, refresh }: { wallet: Awaited<ReturnType<typ
   const t = useT(setupStrings);
   if (!wallet) return <div className="setup-note">…</div>;
   // 1. no wallet yet: one click creates it (no password), the phrase is shown and checked
-  if (!wallet.has_keystore) return <WalletSetup onDone={refresh} />;
+  if (!wallet.has_keystore) return <WalletSetup onDone={refresh} orphans={wallet.health?.orphan_files} />;
   // 2. a wallet that is closed (manual mode after a restart, or a broken unlock secret)
   if (!wallet.unlocked) return <WalletAccess wallet={wallet} onChanged={refresh} />;
   // 3. open, but the recovery phrase is not written down: the deposit address stays hidden
-  if (wallet.health?.backup === "missing") return <BackupRequired onConfirmed={refresh} />;
+  if (wallet.health?.backup === "missing") return <BackupRequired onConfirmed={refresh} address={wallet.address} />;
 
   const balance = wallet.usdc_balance;
   const funded = balance != null && toMicros(balance) > 0n;

@@ -18,7 +18,15 @@ import { walletLifecycle } from "../i18n/strings/walletLifecycle";
 import { formatUsdc } from "../money";
 import Callout from "./Callout";
 import CopyButton from "./CopyButton";
-import { PhraseWords, RevealForm } from "./WalletSetup";
+import { secretGoneWhileRunning } from "./WalletHealth";
+import { ExpectedAddressField, ImportWarning, PhraseWords, RevealForm } from "./WalletSetup";
+
+/** The recorded protection mode; an older server that does not send it is judged by what it calls the unlock mode. */
+function isAutoWallet(wallet: WalletInfo): boolean {
+  const health = wallet.health;
+  if (!health) return false;
+  return health.protection === "auto" || (health.protection === undefined && health.unlock_mode === "auto");
+}
 
 /**
  * Everything that recovers, protects or replaces the wallet, behind one collapsed section. Each action
@@ -28,8 +36,8 @@ import { PhraseWords, RevealForm } from "./WalletSetup";
 export function WalletDangerZone({ wallet, onChanged }: { wallet: WalletInfo; onChanged: () => void }) {
   const t = useT(walletLifecycle);
   const health = wallet.health;
-  // A wallet that cannot open itself (locked, or its unlock secret is broken) is when people need this section most.
-  const needsAttention = !wallet.unlocked || health?.auto_unlock_ok === false;
+  // A wallet that cannot open itself (locked, or its unlock secret is broken or gone) or whose secret is exposed is when people need this section most.
+  const needsAttention = !wallet.unlocked || health?.auto_unlock_ok === false || (health ? secretGoneWhileRunning(health) : false) || health?.secret_protected === false;
   // Starts open when it is needed; after that the operator's own opening and closing wins (the 3 s polls must not fold it away mid-action).
   const [open, setOpen] = useState(needsAttention);
   return (
@@ -38,7 +46,15 @@ export function WalletDangerZone({ wallet, onChanged }: { wallet: WalletInfo; on
         <summary id="wallet-danger-title">{t("dangerTitle")}</summary>
         <p className="field-hint">{t("dangerLead")}</p>
         {/* keyed by address: a revealed phrase belongs to ONE wallet and must not stay on screen after it is replaced */}
-        <RevealSection key={`reveal-${wallet.address}`} />
+        {health?.backup === "missing" ? (
+          // The address is shown nowhere until the backup is confirmed, so it cannot be typed here: the guided backup above does the job.
+          <div className="wallet-danger-item" data-section="reveal">
+            <h4>{t("revealTitle")}</h4>
+            <p>{t("revealUseBackupFlow")}</p>
+          </div>
+        ) : (
+          <RevealSection key={`reveal-${wallet.address}`} />
+        )}
         {health && health.unlock_mode !== "none" && <AutoUnlockSection wallet={wallet} onChanged={onChanged} />}
         <DownloadBackupSection wallet={wallet} />
         <ReplaceSection wallet={wallet} onChanged={onChanged} />
@@ -99,7 +115,7 @@ function RevealSection() {
 function AutoUnlockSection({ wallet, onChanged }: { wallet: WalletInfo; onChanged: () => void }) {
   const t = useT(walletLifecycle);
   const mode = wallet.health?.unlock_mode;
-  const broken = wallet.health?.auto_unlock_ok === false;
+  const broken = wallet.health ? wallet.health.auto_unlock_ok === false || secretGoneWhileRunning(wallet.health) : false;
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -178,7 +194,8 @@ function AutoUnlockSection({ wallet, onChanged }: { wallet: WalletInfo; onChange
 
 function DownloadBackupSection({ wallet }: { wallet: WalletInfo }) {
   const t = useT(walletLifecycle);
-  const [needsPassword, setNeedsPassword] = useState(wallet.health?.unlock_mode === "auto");
+  // The RECORDED mode decides: an auto wallet's own wallet.json needs a secret nobody is shown, so a portable copy needs a password.
+  const [needsPassword, setNeedsPassword] = useState(isAutoWallet(wallet));
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<"idle" | "done" | "failed">("idle");
@@ -230,12 +247,14 @@ function DownloadBackupSection({ wallet }: { wallet: WalletInfo }) {
 
 type ReplaceWith = "create" | "mnemonic" | "private_key";
 
-function ReplaceSection({ wallet, onChanged }: { wallet: WalletInfo; onChanged: () => void }) {
+/** (`initialWith` only lets a render test start on an import variant.) */
+export function ReplaceSection({ wallet, onChanged, initialWith = "create" }: { wallet: WalletInfo; onChanged: () => void; initialWith?: ReplaceWith }) {
   const t = useT(walletLifecycle);
   const [reason, setReason] = useState<ReplaceReason>("lost_password");
-  const [withWhat, setWithWhat] = useState<ReplaceWith>("create");
+  const [withWhat, setWithWhat] = useState<ReplaceWith>(initialWith);
   const [phrase, setPhrase] = useState("");
   const [privateKey, setPrivateKey] = useState("");
+  const [expectedAddress, setExpectedAddress] = useState("");
   const [askPassword, setAskPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -254,9 +273,13 @@ function ReplaceSection({ wallet, onChanged }: { wallet: WalletInfo; onChanged: 
       withWhat === "create" ? { kind: "create" } : withWhat === "mnemonic" ? { kind: "mnemonic", mnemonic: phrase } : { kind: "private_key", private_key: privateKey };
     setBusy(true);
     try {
-      const result = await replaceWallet(address.trim(), reason, next, askPassword ? { password } : {});
-      if (result.recovery_phrase) freshPhrase.set(result.recovery_phrase);
+      const result = await replaceWallet(address.trim(), reason, next, {
+        ...(askPassword ? { password } : {}),
+        ...(withWhat !== "create" && expectedAddress.trim() ? { expectedAddress: expectedAddress.trim() } : {}),
+      });
+      if (result.recovery_phrase) freshPhrase.set(result.address, result.recovery_phrase);
       setAddress("");
+      setExpectedAddress("");
       setPhrase("");
       setPrivateKey("");
       setPassword("");
@@ -269,6 +292,8 @@ function ReplaceSection({ wallet, onChanged }: { wallet: WalletInfo; onChanged: 
           ? t("replaceBusy")
           : err instanceof ApiError && err.error === "ADDRESS_MISMATCH"
           ? t("replaceMismatch")
+          : err instanceof ApiError && err.error === "EXPECTED_ADDRESS_MISMATCH"
+          ? t("importMismatch")
           : t("replaceFailed")
       );
     } finally {
@@ -297,6 +322,7 @@ function ReplaceSection({ wallet, onChanged }: { wallet: WalletInfo; onChanged: 
             <option value="private_key">{t("replaceWithKey")}</option>
           </select>
         </div>
+        {withWhat !== "create" && <ImportWarning />}
         {withWhat === "mnemonic" && (
           <div className="field">
             <label htmlFor="replace-phrase">{t("phraseInput")}</label>
@@ -309,6 +335,7 @@ function ReplaceSection({ wallet, onChanged }: { wallet: WalletInfo; onChanged: 
             <input id="replace-key" type="password" autoComplete="off" spellCheck={false} required value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} />
           </div>
         )}
+        {withWhat !== "create" && <ExpectedAddressField id="replace-expected" value={expectedAddress} onChange={setExpectedAddress} disabled={busy} />}
         <label className="setup-check">
           <input type="checkbox" checked={askPassword} disabled={busy} onChange={(e) => setAskPassword(e.target.checked)} />
           {t("advancedToggle")}
