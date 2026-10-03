@@ -8,7 +8,6 @@ import { openDb } from "@moneyswitch/db";
 import {
   confirmWalletBackup,
   getWalletMeta,
-  hasReservedPayments,
   listRetiredWallets,
   recordWalletOrigin,
   recordWalletRetirement,
@@ -64,21 +63,6 @@ describe("wallet_meta: backup confirmation", () => {
     expect(imported.backupConfirmedAt).toBe("2026-10-03T01:00:00.000Z");
     const again = recordWalletOrigin(db, ADDRESS, "generated");
     expect(again.backupConfirmedAt).toBe("2026-10-03T01:00:00.000Z");
-  });
-});
-
-describe("hasReservedPayments", () => {
-  it("is true only while a payment row is in status reserved", () => {
-    const { db, sqlite } = freshDb();
-    expect(hasReservedPayments(db)).toBe(false);
-    insertPayment(sqlite, "p-settled", "settled");
-    insertPayment(sqlite, "p-unknown", "unknown");
-    insertPayment(sqlite, "p-failed", "failed");
-    expect(hasReservedPayments(db)).toBe(false);
-    insertPayment(sqlite, "p-reserved", "reserved");
-    expect(hasReservedPayments(db)).toBe(true);
-    sqlite.prepare(`UPDATE payments SET status = 'settled' WHERE id = 'p-reserved'`).run();
-    expect(hasReservedPayments(db)).toBe(false);
   });
 });
 

@@ -73,7 +73,7 @@ describe("Log redaction", () => {
   });
 
   it("recovery phrase / wallet passwords / unlock secret never appear in log output across the wallet lifecycle routes", async () => {
-    t = await buildTestApp({ walletOptions: { scrypt: { N: 2 ** 10, r: 8, p: 1 } } });
+    t = await buildTestApp({ walletOptions: { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false } });
 
     let captured = "";
     const stream = new Writable({
@@ -92,7 +92,7 @@ describe("Log redaction", () => {
     const words = created.recovery_phrase.split(" ");
     await call("/v1/admin/wallet/backup/confirm", { positions: [1, 12], words: [words[0], words[11]] });
     await call("/v1/admin/wallet/reveal", { confirm_address: created.address });
-    const unlockSecret = fs.readFileSync(unlockSecretPath(t.tmpDir), "utf-8");
+    const unlockSecret = fs.readFileSync(unlockSecretPath(t.tmpDir, created.address), "utf-8");
     await call("/v1/admin/wallet/backup", { password: "redaction-file-password" });
     await call("/v1/admin/wallet/auto-unlock", { enabled: false, password: "redaction-wallet-password" });
     await call("/v1/admin/wallet/unlock", { password: "redaction-wallet-password" });

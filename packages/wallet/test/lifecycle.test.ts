@@ -13,8 +13,9 @@ import {
 } from "../src/index.js";
 import { addressFromPhrase } from "./bip44.js";
 
-// Test-only: a cheap scrypt keeps the suite fast. Production costs are exercised in the dedicated test below.
-const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 } };
+// Test-only: a cheap scrypt keeps the suite fast, and no OS-level ACL work (that is exercised for real in
+// protect.win32.test.ts / protect.posix.test.ts). Production costs are exercised in the dedicated test below.
+const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false } as const;
 const HARDHAT_PHRASE = "test test test test test test test test test test test junk";
 const HARDHAT_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const ABANDON_PHRASE = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -25,6 +26,11 @@ let tmpDir: string;
 const drv = (dir = tmpDir) => new LocalWalletDriver(dir, FAST);
 const files = (dir = tmpDir) => fs.readdirSync(dir).sort();
 const read = (p: string) => fs.readFileSync(p, "utf-8");
+/** The auto-unlock secret file of the wallet with this address (the name carries the address, lower case). */
+const secretFile = (address: string, dir = tmpDir) => unlockSecretPath(dir, address);
+const secretName = (address: string) => path.basename(unlockSecretPath("", address));
+/** What a pristine unlockStatus looks like: nothing tried. */
+const UNTRIED = { source: null, ok: null, attempts: [] };
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-wallet-life-"));
@@ -133,22 +139,25 @@ describe("recovery phrase and standard derivation path", () => {
 });
 
 describe("import a recovery phrase", () => {
-  it("12 words: same address as the independent derivation, auto-unlock by default, phrase kept in the keystore", async () => {
+  // M2: whatever is imported, ONLY the account-0 private key is kept. A phrase can control many other accounts and
+  // must not sit on a hot server; reveal() therefore returns the key, never the words.
+  it("12 words: same address as the independent derivation, auto-unlock by default, only the account-0 key is kept", async () => {
     const driver = drv();
     const imported = await driver.importFrom({ kind: "mnemonic", mnemonic: HARDHAT_PHRASE });
-    expect(imported).toEqual({ address: HARDHAT_ADDRESS, mode: "auto", hasRecoveryPhrase: true });
+    expect(imported).toEqual({ address: HARDHAT_ADDRESS, mode: "auto", hasRecoveryPhrase: false });
     expect(addressFromPhrase(HARDHAT_PHRASE)).toBe(HARDHAT_ADDRESS);
-    expect(driver.reveal()).toEqual({ kind: "mnemonic", phrase: HARDHAT_PHRASE });
-    expect(files()).toEqual(["wallet-unlock.secret", "wallet.json"]);
+    expect(driver.keystoreHasRecoveryPhrase()).toBe(false);
+    expect(driver.reveal()).toEqual({ kind: "private_key", privateKey: HDNodeWallet.fromPhrase(HARDHAT_PHRASE).privateKey });
+    expect(files()).toEqual([secretName(HARDHAT_ADDRESS), "wallet.json"]);
   });
 
   it("24 words work too, with extra whitespace and capitals tolerated", async () => {
     const imported = await drv().importFrom({ kind: "mnemonic", mnemonic: `  ${ZOO_24.toUpperCase().replace(/ /g, "  ")}\n` });
     expect(imported.address).toBe(addressFromPhrase(ZOO_24));
-    expect(imported.hasRecoveryPhrase).toBe(true);
+    expect(imported.hasRecoveryPhrase).toBe(false);
     const restarted = drv();
     await restarted.unlockOnStartup({});
-    expect(restarted.reveal()).toEqual({ kind: "mnemonic", phrase: ZOO_24 });
+    expect(restarted.reveal()).toEqual({ kind: "private_key", privateKey: HDNodeWallet.fromPhrase(ZOO_24).privateKey });
   });
 
   it("manual mode: the supplied password protects it and no secret file is written", async () => {
@@ -182,22 +191,22 @@ describe("import a recovery phrase", () => {
 });
 
 describe("auto-unlock secret", () => {
-  it("is written next to the keystore (0600 where supported), never inside it, and unlocks a fresh process without any password", async () => {
+  it("is written next to the keystore under the wallet's own name (0600 where supported), never inside it, and unlocks a fresh process without any password", async () => {
     const created = await drv().createWithPhrase();
-    expect(files()).toEqual(["wallet-unlock.secret", "wallet.json"]);
-    const secret = read(unlockSecretPath(tmpDir));
+    expect(files()).toEqual([`wallet-unlock-${created.address.toLowerCase()}.secret`, "wallet.json"]);
+    const secret = read(secretFile(created.address));
     expect(secret).toMatch(/^[0-9a-f]{64}$/);
     expect(read(walletFilePath(tmpDir))).not.toContain(secret);
-    if (process.platform !== "win32") expect(fs.statSync(unlockSecretPath(tmpDir)).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(fs.statSync(secretFile(created.address)).mode & 0o777).toBe(0o600);
 
     const restarted = drv();
     expect(restarted.isUnlocked()).toBe(false);
-    expect(restarted.unlockStatus).toEqual({ source: null, ok: null });
+    expect(restarted.unlockStatus).toEqual(UNTRIED);
     const report = await restarted.unlockOnStartup({ password: null });
     expect(report).toEqual({ unlocked: true, attempts: [{ source: "auto", ok: true }] });
     expect(restarted.isUnlocked()).toBe(true);
     expect(restarted.getAddress()).toBe(created.address);
-    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: true });
+    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: true, attempts: [{ source: "auto", ok: true }] });
     // and it can really sign
     const sig = await restarted.getSigner()!.signTypedData({
       domain: { name: "USDC", version: "2", chainId: 10143, verifyingContract: "0x534b2f3A21130d7a60830c2Df862319e593943A3" },
@@ -209,9 +218,9 @@ describe("auto-unlock secret", () => {
   });
 
   it("every wallet gets its own random secret", async () => {
-    await drv(path.join(tmpDir, "a")).createWithPhrase();
-    await drv(path.join(tmpDir, "b")).createWithPhrase();
-    expect(read(unlockSecretPath(path.join(tmpDir, "a")))).not.toBe(read(unlockSecretPath(path.join(tmpDir, "b"))));
+    const a = await drv(path.join(tmpDir, "a")).createWithPhrase();
+    const b = await drv(path.join(tmpDir, "b")).createWithPhrase();
+    expect(read(secretFile(a.address, path.join(tmpDir, "a")))).not.toBe(read(secretFile(b.address, path.join(tmpDir, "b"))));
   });
 
   it("an empty or whitespace-only configured password counts as unset: the secret file is used (the empty password file mounted by an old deployment)", async () => {
@@ -229,7 +238,7 @@ describe("auto-unlock secret", () => {
     const restarted = drv();
     expect(await restarted.unlockOnStartup({ password: "" })).toEqual({ unlocked: false, attempts: [] });
     expect(restarted.isUnlocked()).toBe(false);
-    expect(restarted.unlockStatus).toEqual({ source: null, ok: null });
+    expect(restarted.unlockStatus).toEqual(UNTRIED);
   });
 
   it("the configured password has priority, and is reported as the source", async () => {
@@ -238,44 +247,59 @@ describe("auto-unlock secret", () => {
     const restarted = drv();
     const report = await restarted.unlockOnStartup({ password: "manual-pass-1" });
     expect(report).toEqual({ unlocked: true, attempts: [{ source: "env_or_file", ok: true }] });
-    expect(restarted.unlockStatus).toEqual({ source: "env_or_file", ok: true });
+    expect(restarted.unlockStatus).toEqual({ source: "env_or_file", ok: true, attempts: [{ source: "env_or_file", ok: true }] });
   });
 
-  it("a stale configured password does not lock out a wallet whose secret works (it is reported, then the secret is tried)", async () => {
+  it("a stale configured password does not lock out a wallet whose secret works (it is reported as env_wrong, then the secret is tried)", async () => {
     await drv().createWithPhrase();
     const restarted = drv();
     const report = await restarted.unlockOnStartup({ password: "an-old-password" });
     expect(report.unlocked).toBe(true);
-    expect(report.attempts).toEqual([
-      { source: "env_or_file", ok: false, reason: "wrong_credential" },
+    const attempts = [
+      { source: "env_or_file", ok: false, reason: "env_wrong" },
       { source: "auto", ok: true },
-    ]);
-    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: true });
+    ];
+    expect(report.attempts).toEqual(attempts);
+    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: true, attempts });
   });
 
-  it("a wrong secret leaves the wallet locked and says so (status ok=false), without echoing any credential", async () => {
-    await drv().createWithPhrase();
-    fs.writeFileSync(unlockSecretPath(tmpDir), "ab".repeat(32));
+  it("a wrong secret leaves the wallet locked and says so as secret_wrong (not as a wrong env password), without echoing any credential", async () => {
+    const created = await drv().createWithPhrase();
+    fs.writeFileSync(secretFile(created.address), "ab".repeat(32));
     const restarted = drv();
     const report = await restarted.unlockOnStartup({});
-    expect(report).toEqual({ unlocked: false, attempts: [{ source: "auto", ok: false, reason: "wrong_credential" }] });
+    const attempts = [{ source: "auto", ok: false, reason: "secret_wrong" }];
+    expect(report).toEqual({ unlocked: false, attempts });
     expect(JSON.stringify(report)).not.toContain("abab");
     expect(restarted.isUnlocked()).toBe(false);
     expect(restarted.getSigner()).toBeNull();
-    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: false });
+    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: false, attempts });
   });
 
-  it("an empty or unreadable secret file is a failure with its own reason, not a silent manual mode", async () => {
-    await drv().createWithPhrase();
-    fs.writeFileSync(unlockSecretPath(tmpDir), "");
-    let restarted = drv();
-    expect((await restarted.unlockOnStartup({})).attempts).toEqual([{ source: "auto", ok: false, reason: "secret_empty" }]);
-    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: false });
+  it("a missing, empty or unreadable secret file is a failure with its own reason, never a silent manual mode", async () => {
+    const created = await drv().createWithPhrase();
+    const file = secretFile(created.address);
+    const original = read(file);
 
-    fs.rmSync(unlockSecretPath(tmpDir));
-    fs.mkdirSync(unlockSecretPath(tmpDir)); // a directory where the file should be
+    fs.rmSync(file);
+    let restarted = drv();
+    expect((await restarted.unlockOnStartup({})).attempts).toEqual([{ source: "auto", ok: false, reason: "secret_missing" }]);
+    expect(restarted.protection()).toBe("auto"); // still an auto wallet, whose secret went missing
+
+    fs.writeFileSync(file, "");
+    restarted = drv();
+    expect((await restarted.unlockOnStartup({})).attempts).toEqual([{ source: "auto", ok: false, reason: "secret_empty" }]);
+    expect(restarted.unlockStatus).toEqual({ source: "auto", ok: false, attempts: [{ source: "auto", ok: false, reason: "secret_empty" }] });
+
+    fs.rmSync(file);
+    fs.mkdirSync(file); // a directory where the file should be
     restarted = drv();
     expect((await restarted.unlockOnStartup({})).attempts).toEqual([{ source: "auto", ok: false, reason: "secret_unreadable" }]);
+
+    fs.rmdirSync(file);
+    fs.writeFileSync(file, original);
+    restarted = drv();
+    expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
   });
 
   it("no keystore: nothing to unlock", async () => {
@@ -300,22 +324,20 @@ describe("turning auto-unlock on and off", () => {
     return { created, driver, password };
   }
 
-  it("ON re-encrypts with a fresh secret, keeps the address, keeps the old keystore as wallet.json.bak-*, and survives a restart", async () => {
+  it("ON re-encrypts with a fresh secret, keeps the address, leaves NO copy of the previous keystore on disk, and survives a restart", async () => {
     const { created, driver, password } = await manualWallet();
     const before = read(walletFilePath(tmpDir));
     expect(await driver.enableAutoUnlock()).toEqual({ address: created.address });
 
     expect(driver.hasUnlockSecret()).toBe(true);
-    expect(driver.unlockStatus).toEqual({ source: "auto", ok: true });
-    const after = read(walletFilePath(tmpDir));
-    expect(after).not.toBe(before);
-    const backups = files().filter((f) => f.startsWith("wallet.json.bak-"));
-    expect(backups).toHaveLength(1);
-    expect(read(path.join(tmpDir, backups[0]))).toBe(before);
-    expect(files().filter((f) => f.endsWith(".tmp") || f.startsWith("."))).toEqual([]);
+    expect(driver.protection()).toBe("auto");
+    expect(driver.unlockStatus).toEqual({ source: "auto", ok: true, attempts: [{ source: "auto", ok: true }] });
+    expect(read(walletFilePath(tmpDir))).not.toBe(before);
+    // nothing but the live pair: no wallet.json.bak-*, no temp file, no retired/
+    expect(files()).toEqual([secretName(created.address), "wallet.json"]);
+    for (const name of files()) expect(read(path.join(tmpDir, name)), name).not.toBe(before);
 
-    // the previous keystore still opens with the previous password; the live one no longer does
-    expect((await EthersWallet.fromEncryptedJson(read(path.join(tmpDir, backups[0])), password)).address).toBe(created.address);
+    // the live keystore no longer opens with the previous password
     await expect(drv().unlock(password)).rejects.toThrow();
 
     const restarted = drv();
@@ -333,38 +355,37 @@ describe("turning auto-unlock on and off", () => {
     await expectCode(drv(path.join(tmpDir, "empty")).enableAutoUnlock(), "NO_WALLET");
   });
 
-  it("ON repairs a stale secret (the wallet is unlocked with its password, the secret no longer fits)", async () => {
+  it("ON repairs a stale secret (the wallet is unlocked with its password, the secret no longer fits): the stale one is moved to retired/, not deleted", async () => {
     const { created, driver } = await manualWallet();
-    fs.writeFileSync(unlockSecretPath(tmpDir), "cd".repeat(32)); // left over from some earlier attempt
+    fs.writeFileSync(secretFile(created.address), "cd".repeat(32)); // left over from some earlier attempt
     await driver.enableAutoUnlock();
     const restarted = drv();
     expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
     expect(restarted.getAddress()).toBe(created.address);
+    const retired = fs.readdirSync(path.join(tmpDir, "retired"));
+    expect(retired).toHaveLength(1);
+    expect(read(path.join(tmpDir, "retired", retired[0]))).toBe("cd".repeat(32));
   });
 
-  it("OFF needs a password, re-encrypts with it, removes the secret, keeps the address; the old keystore stays as a backup", async () => {
+  it("OFF needs a password, re-encrypts with it, removes the secret, keeps the address, and leaves nothing on disk that opens the key without the password", async () => {
     const created = await drv().createWithPhrase();
     const driver = drv();
     await driver.unlockOnStartup({});
-    const secretBefore = read(unlockSecretPath(tmpDir));
-    const before = read(walletFilePath(tmpDir));
+    const secretBefore = read(secretFile(created.address));
 
     expect(await driver.disableAutoUnlock("a new password 42")).toEqual({ address: created.address });
     expect(driver.hasUnlockSecret()).toBe(false);
-    expect(files().filter((f) => f === "wallet-unlock.secret")).toEqual([]);
-    expect(driver.unlockStatus).toEqual({ source: null, ok: null });
+    expect(driver.protection()).toBe("password");
+    expect(driver.unlockStatus).toEqual(UNTRIED);
     expect(driver.isUnlocked()).toBe(true);
+    // just wallet.json: no secret, no wallet.json.bak-*, no temp file, no retired/
+    expect(files()).toEqual(["wallet.json"]);
 
     const restarted = drv();
     expect(await restarted.unlockOnStartup({})).toEqual({ unlocked: false, attempts: [] });
     await expect(restarted.unlock(secretBefore)).rejects.toThrow(); // the old secret is useless now
     await expect(restarted.unlock("a new password 42")).resolves.toEqual({ address: created.address });
     expect(restarted.reveal()).toEqual({ kind: "mnemonic", phrase: created.mnemonic });
-
-    const backups = files().filter((f) => f.startsWith("wallet.json.bak-"));
-    expect(backups).toHaveLength(1);
-    expect(read(path.join(tmpDir, backups[0]))).toBe(before);
-    expect(files().filter((f) => f.endsWith(".tmp"))).toEqual([]);
   });
 
   it("OFF is refused when auto-unlock is not on, or the wallet is locked", async () => {
@@ -383,7 +404,7 @@ describe("turning auto-unlock on and off", () => {
     await driver.disableAutoUnlock(password);
     const restarted = drv();
     await expect(restarted.unlock(password)).resolves.toEqual({ address: created.address });
-    expect(files().filter((f) => f.startsWith("wallet.json.bak-"))).toHaveLength(4);
+    expect(files()).toEqual(["wallet.json"]); // four re-encryptions, and not one leftover file
   });
 
   describe("simulated failures never lose the old keystore", () => {
@@ -399,7 +420,7 @@ describe("turning auto-unlock on and off", () => {
       expect(read(walletFilePath(tmpDir))).toBe(before);
       expect(driver.hasUnlockSecret()).toBe(false);
       expect(files()).toEqual(filesBefore);
-      expect(driver.unlockStatus).toEqual({ source: null, ok: null });
+      expect(driver.unlockStatus).toEqual(UNTRIED);
       await expect(drv().unlock(password)).resolves.toEqual({ address: created.address });
       // and the operation can simply be retried
       await driver.enableAutoUnlock();
@@ -418,25 +439,27 @@ describe("turning auto-unlock on and off", () => {
       await expect(drv().unlock(password)).resolves.toBeTruthy();
     });
 
-    it("ON: a stale secret that was replaced is restored byte for byte when the keystore swap fails", async () => {
-      const { driver, password } = await manualWallet();
-      fs.writeFileSync(unlockSecretPath(tmpDir), "ef".repeat(32));
-      failNthCall("renameSync", 2);
+    it("ON: a stale secret that was moved aside is restored byte for byte when the keystore swap fails", async () => {
+      const { created, driver, password } = await manualWallet();
+      fs.writeFileSync(secretFile(created.address), "ef".repeat(32));
+      // renames: 1 stale secret -> retired/, 2 new secret in, 3 new keystore over wallet.json
+      failNthCall("renameSync", 3);
       await expectCode(driver.enableAutoUnlock(), "STORAGE_FAILED");
       vi.restoreAllMocks();
-      expect(read(unlockSecretPath(tmpDir))).toBe("ef".repeat(32));
+      expect(read(secretFile(created.address))).toBe("ef".repeat(32));
+      const retiredDir = path.join(tmpDir, "retired");
+      expect(fs.existsSync(retiredDir) ? fs.readdirSync(retiredDir) : []).toEqual([]);
       await expect(drv().unlock(password)).resolves.toBeTruthy();
     });
 
-    it("OFF: if even the restore cannot run, the safety copy of the previous keystore is kept and still opens with the old secret", async () => {
+    it("OFF: if the secret cannot be removed AND the restore cannot run either, wallet.json is the verified new keystore (the password just chosen opens it) and the leftover secret is moved to retired/ at the next start", async () => {
       const created = await drv().createWithPhrase();
       const driver = drv();
       await driver.unlockOnStartup({});
-      const before = read(walletFilePath(tmpDir));
-      const secret = read(unlockSecretPath(tmpDir));
+      const secret = read(secretFile(created.address));
       const eio = () => Object.assign(new Error("disk went away"), { code: "EIO" });
       // removing the secret fails AND nothing can be written back to wallet.json any more
-      failNthCall("unlinkSync", 1, (args) => String(args[0]).endsWith("wallet-unlock.secret"));
+      failNthCall("unlinkSync", 1, (args) => String(args[0]).endsWith(".secret"));
       const realRename = fs.renameSync;
       let renames = 0;
       vi.spyOn(fs, "renameSync").mockImplementation(((...args: Parameters<typeof realRename>) => {
@@ -451,12 +474,17 @@ describe("turning auto-unlock on and off", () => {
       await expectCode(driver.disableAutoUnlock("new password 123"), "STORAGE_FAILED");
       vi.restoreAllMocks();
 
-      const copies = files().filter((f) => f.startsWith("wallet.json.bak-")).map((f) => read(path.join(tmpDir, f)));
-      expect(copies).toEqual([before]); // the previous keystore was NOT cleaned up
-      expect((await EthersWallet.fromEncryptedJson(before, secret)).address).toBe(created.address);
-      expect(driver.hasUnlockSecret()).toBe(true);
-      // the live keystore is the new one, which the operator can open with the password they just chose
+      // no copy of the previous keystore is kept anywhere: what the operator was told to expect is what is on disk
+      expect(files().filter((f) => f.includes(".bak"))).toEqual([]);
+      expect(driver.protection()).toBe("password");
       await expect(drv().unlock("new password 123")).resolves.toEqual({ address: created.address });
+      expect(read(secretFile(created.address))).toBe(secret); // still there, and it opens nothing
+      const restarted = drv();
+      expect(await restarted.unlockOnStartup({})).toEqual({ unlocked: false, attempts: [] });
+      expect(files()).toEqual(["retired", "wallet.json"]);
+      const retired = fs.readdirSync(path.join(tmpDir, "retired"));
+      expect(retired).toHaveLength(1);
+      expect(read(path.join(tmpDir, "retired", retired[0]))).toBe(secret);
     });
 
     it("OFF: a failure removing the secret restores the secret-encrypted keystore, so the wallet is still auto", async () => {
@@ -464,14 +492,14 @@ describe("turning auto-unlock on and off", () => {
       const driver = drv();
       await driver.unlockOnStartup({});
       const before = read(walletFilePath(tmpDir));
-      const secret = read(unlockSecretPath(tmpDir));
-      failNthCall("unlinkSync", 1, (args) => String(args[0]).endsWith("wallet-unlock.secret"));
+      const secret = read(secretFile(created.address));
+      failNthCall("unlinkSync", 1, (args) => String(args[0]).endsWith(".secret"));
       await expectCode(driver.disableAutoUnlock("new password 123"), "STORAGE_FAILED");
       vi.restoreAllMocks();
 
       expect(read(walletFilePath(tmpDir))).toBe(before);
-      expect(read(unlockSecretPath(tmpDir))).toBe(secret);
-      expect(files().filter((f) => f.endsWith(".tmp"))).toEqual([]);
+      expect(read(secretFile(created.address))).toBe(secret);
+      expect(files()).toEqual([secretName(created.address), "wallet.json"]);
       const restarted = drv();
       expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
       expect(restarted.getAddress()).toBe(created.address);
@@ -482,22 +510,29 @@ describe("turning auto-unlock on and off", () => {
       const driver = drv();
       await driver.unlockOnStartup({});
       const before = read(walletFilePath(tmpDir));
-      const secret = read(unlockSecretPath(tmpDir));
+      const secret = read(secretFile(created.address));
       failNthCall("renameSync", 1);
       await expectCode(driver.disableAutoUnlock("new password 123"), "STORAGE_FAILED");
       vi.restoreAllMocks();
       expect(read(walletFilePath(tmpDir))).toBe(before);
-      expect(read(unlockSecretPath(tmpDir))).toBe(secret);
+      expect(read(secretFile(created.address))).toBe(secret);
+      expect(files()).toEqual([secretName(created.address), "wallet.json"]);
       expect((await drv().unlockOnStartup({})).unlocked).toBe(true);
       expect(driver.getAddress()).toBe(created.address);
     });
 
-    it("a failure copying the safety backup stops before anything is changed", async () => {
+    it("a failure writing the new keystore (disk full) stops before anything is changed, and no copy of the old one is ever made", async () => {
       const { driver, password } = await manualWallet();
       const before = read(walletFilePath(tmpDir));
       const filesBefore = files();
-      failNthCall("copyFileSync", 1);
+      const real = fs.writeFileSync;
+      vi.spyOn(fs, "writeFileSync").mockImplementation(((...args: Parameters<typeof real>) => {
+        if (String(args[0]).endsWith(".tmp")) throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
+        return real(...args);
+      }) as never);
+      const copies = vi.spyOn(fs, "copyFileSync");
       await expectCode(driver.enableAutoUnlock(), "STORAGE_FAILED");
+      expect(copies).not.toHaveBeenCalled(); // re-encryption has no "safety copy" step any more
       vi.restoreAllMocks();
       expect(read(walletFilePath(tmpDir))).toBe(before);
       expect(files()).toEqual(filesBefore);
@@ -516,7 +551,7 @@ describe("a password-protected copy for download", () => {
     const opened = await EthersWallet.fromEncryptedJson(exported, "portable pass 9");
     expect(opened.address).toBe(created.address);
     expect((opened as HDNodeWallet).mnemonic?.phrase).toBe(created.mnemonic);
-    await expect(EthersWallet.fromEncryptedJson(exported, read(unlockSecretPath(tmpDir)))).rejects.toThrow();
+    await expect(EthersWallet.fromEncryptedJson(exported, read(secretFile(created.address)))).rejects.toThrow();
     expect(files()).toEqual(filesBefore);
     expect(read(walletFilePath(tmpDir))).toBe(wallet);
     expect(exported).not.toContain(created.mnemonic);
@@ -529,11 +564,11 @@ describe("a password-protected copy for download", () => {
 });
 
 describe("replace wallet", () => {
-  it("auto wallet: old keystore AND secret are moved (not deleted) into retired/ under names with the old address and a timestamp; the new wallet is live", async () => {
+  it("auto wallet: old keystore AND secret are kept (never deleted) in retired/ under names with the old address and a timestamp; the new wallet is live", async () => {
     const driver = drv();
     const first = await driver.createWithPhrase();
     const oldKeystore = read(walletFilePath(tmpDir));
-    const oldSecret = read(unlockSecretPath(tmpDir));
+    const oldSecret = read(secretFile(first.address));
     let hookSaw: { keystoreExists: boolean; walletJsonIsNew: boolean } | null = null;
     const guard = vi.fn();
 
@@ -567,12 +602,13 @@ describe("replace wallet", () => {
 
     // the new wallet is live, auto, and survives a restart
     expect(driver.getAddress()).toBe(result.address);
-    expect(driver.unlockStatus).toEqual({ source: "auto", ok: true });
-    expect(read(unlockSecretPath(tmpDir))).not.toBe(oldSecret);
+    expect(driver.unlockStatus).toEqual({ source: "auto", ok: true, attempts: [{ source: "auto", ok: true }] });
+    expect(read(secretFile(result.address))).not.toBe(oldSecret);
     const restarted = drv();
     expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
     expect(restarted.getAddress()).toBe(result.address);
-    expect(files()).toEqual(["retired", "wallet-unlock.secret", "wallet.json"]);
+    // the live directory holds only the NEW pair; the old secret lives on in retired/ only
+    expect(files()).toEqual(["retired", secretName(result.address), "wallet.json"]);
   });
 
   it("works while the old wallet is LOCKED and its password is lost (the whole point)", async () => {
@@ -597,19 +633,21 @@ describe("replace wallet", () => {
     const result = await driver.replaceWallet({ kind: "create" }, { password: "new manual pass" });
     expect(result.mode).toBe("manual");
     expect(driver.hasUnlockSecret()).toBe(false);
-    expect(driver.unlockStatus).toEqual({ source: null, ok: null });
+    expect(driver.protection()).toBe("password");
+    expect(driver.unlockStatus).toEqual(UNTRIED);
     await expect(drv().unlock("new manual pass")).resolves.toEqual({ address: result.address });
     // the old auto secret moved away with the old keystore
     expect(result.retired.secretFile).not.toBeNull();
   });
 
-  it("can replace with an imported recovery phrase or private key", async () => {
+  it("can replace with an imported recovery phrase or private key (either way only the account-0 key is kept)", async () => {
     const driver = drv();
     await driver.createWithPhrase();
     const viaPhrase = await driver.replaceWallet({ kind: "import", source: { kind: "mnemonic", mnemonic: HARDHAT_PHRASE } });
     expect(viaPhrase.address).toBe(HARDHAT_ADDRESS);
     expect(viaPhrase.mnemonic).toBeUndefined();
-    expect(viaPhrase.hasRecoveryPhrase).toBe(true);
+    expect(viaPhrase.hasRecoveryPhrase).toBe(false);
+    expect(driver.reveal()).toEqual({ kind: "private_key", privateKey: HDNodeWallet.fromPhrase(HARDHAT_PHRASE).privateKey });
 
     const key = EthersWallet.createRandom();
     const viaKey = await driver.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: key.privateKey } });
@@ -661,29 +699,32 @@ describe("replace wallet", () => {
     const driver = drv();
     const first = await driver.createWithPhrase();
     const keystore = read(walletFilePath(tmpDir));
-    const secret = read(unlockSecretPath(tmpDir));
+    const secret = read(secretFile(first.address));
     const boom = Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" });
     const e = await rejection(driver.replaceWallet({ kind: "create" }, {}, { onSwapped: () => { throw boom; } }));
     expect(e).toBe(boom);
     expect(read(walletFilePath(tmpDir))).toBe(keystore);
-    expect(read(unlockSecretPath(tmpDir))).toBe(secret);
-    expect(files()).toEqual(["wallet-unlock.secret", "wallet.json"]); // no retired/, no temp files
+    expect(read(secretFile(first.address))).toBe(secret);
+    expect(files()).toEqual([secretName(first.address), "wallet.json"]); // no retired/, no temp files, no stray new secret
     expect(driver.getAddress()).toBe(first.address);
-    expect(driver.unlockStatus).toEqual({ source: "auto", ok: true });
+    expect(driver.unlockStatus).toEqual({ source: "auto", ok: true, attempts: [{ source: "auto", ok: true }] });
   });
 
-  it("a file-system failure half-way moves the old files back", async () => {
+  it.each([
+    // the old files are COPIED into retired/ (copyFileSync, no rename), so the renames are: 1 new secret in, 2 new keystore over wallet.json
+    ["installing the new secret", 1],
+    ["swapping in the new keystore", 2],
+  ])("a file-system failure half-way (%s) leaves the old pair live and the retired/ copies removed", async (_where, nthRename) => {
     const driver = drv();
     const first = await driver.createWithPhrase();
     const keystore = read(walletFilePath(tmpDir));
-    const secret = read(unlockSecretPath(tmpDir));
-    // renames: 1 old keystore -> retired, 2 old secret -> retired, 3 new secret in, 4 new keystore in
-    failNthCall("renameSync", 4);
+    const secret = read(secretFile(first.address));
+    failNthCall("renameSync", nthRename);
     await expectCode(driver.replaceWallet({ kind: "create" }), "STORAGE_FAILED");
     vi.restoreAllMocks();
     expect(read(walletFilePath(tmpDir))).toBe(keystore);
-    expect(read(unlockSecretPath(tmpDir))).toBe(secret);
-    expect(files()).toEqual(["wallet-unlock.secret", "wallet.json"]);
+    expect(read(secretFile(first.address))).toBe(secret);
+    expect(files()).toEqual([secretName(first.address), "wallet.json"]);
     expect(driver.getAddress()).toBe(first.address);
     const restarted = drv();
     expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
@@ -741,19 +782,25 @@ describe("creation stays exclusive and complete", () => {
     const results = await Promise.allSettled([a.createWithPhrase(), b.createWithPhrase()]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const winner = (results.find((r) => r.status === "fulfilled") as PromiseFulfilledResult<{ address: string }>).value;
-    expect(files()).toEqual(["wallet-unlock.secret", "wallet.json"]);
+    expect(files()).toEqual([secretName(winner.address), "wallet.json"]);
     const restarted = drv();
     expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
     expect(restarted.getAddress()).toBe(winner.address);
   });
 
-  it("a stale secret left behind without a keystore is replaced, never trusted", async () => {
-    fs.writeFileSync(unlockSecretPath(tmpDir), "12".repeat(32));
+  it("a stray secret left behind without a keystore is never trusted and never destroyed: the new wallet gets its own secret under its own name, and startup moves the stray one to retired/", async () => {
+    const stray = EthersWallet.createRandom().address;
+    fs.writeFileSync(secretFile(stray), "12".repeat(32));
     const created = await drv().createWithPhrase();
-    expect(read(unlockSecretPath(tmpDir))).not.toBe("12".repeat(32));
+    expect(read(secretFile(stray))).toBe("12".repeat(32));
+    expect(read(secretFile(created.address))).not.toBe("12".repeat(32));
     const restarted = drv();
     expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
     expect(restarted.getAddress()).toBe(created.address);
+    expect(files()).toEqual(["retired", secretName(created.address), "wallet.json"]);
+    const retired = fs.readdirSync(path.join(tmpDir, "retired"));
+    expect(retired).toHaveLength(1);
+    expect(read(path.join(tmpDir, "retired", retired[0]))).toBe("12".repeat(32));
   });
 
   it("create and import refuse to overwrite an existing wallet and leave its files untouched", async () => {
@@ -771,6 +818,6 @@ describe("creation stays exclusive and complete", () => {
     const created = await driver.createWallet("legacy-password");
     expect(Object.keys(created)).toEqual(["address"]);
     expect(files()).toEqual(["wallet.json"]);
-    expect(driver.unlockStatus).toEqual({ source: null, ok: null });
+    expect(driver.unlockStatus).toEqual(UNTRIED);
   });
 });

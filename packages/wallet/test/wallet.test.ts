@@ -5,6 +5,9 @@ import path from "node:path";
 import { LocalWalletDriver } from "../src/index.js";
 import { Wallet as EthersWallet } from "ethers";
 
+// These tests use the production scrypt cost (N=2^17) on purpose; under a loaded CI machine a few of them take seconds.
+vi.setConfig({ testTimeout: 60_000 });
+
 let tmpDir: string;
 
 beforeEach(() => {

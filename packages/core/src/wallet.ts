@@ -78,17 +78,6 @@ export function confirmWalletBackup(db: MoneySwitchDb, address: string, now = ne
   return now;
 }
 
-/** True while any payment is mid-flight (reserved, not yet settled / failed / unknown). */
-export function hasReservedPayments(db: MoneySwitchDb): boolean {
-  const row = db
-    .select({ id: schema.payments.id })
-    .from(schema.payments)
-    .where(eq(schema.payments.status, "reserved"))
-    .limit(1)
-    .get();
-  return Boolean(row);
-}
-
 export interface RetiredWalletRow {
   id: string;
   address: string;

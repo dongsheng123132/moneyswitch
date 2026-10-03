@@ -249,9 +249,24 @@ export async function performPaidFetch(
   // The seller's PAYMENT-RESPONSE said success:false: it could not (or could not yet) confirm the settlement.
   let settleUnconfirmed: { reason: string | null } | null = null;
 
+  // The wallet refused to sign because it was replaced or locked after this request took its signer (WALLET_CHANGED).
+  // Nothing was signed, so the reservation must be RELEASED (failed), never held as `unknown` like a transport error.
+  let signerRefused = false;
+  const guardedSigner: EvmTypedDataSigner = {
+    address: signer.address,
+    async signTypedData(msg) {
+      try {
+        return await signer.signTypedData(msg);
+      } catch (e) {
+        if ((e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
+        throw e;
+      }
+    },
+  };
+
   const client = new x402Client();
   for (const enabled of networks) {
-    client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(signer as any));
+    client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(guardedSigner as any));
   }
   client.registerPolicy((_version, reqs) =>
       reqs.filter(
@@ -493,13 +508,21 @@ export async function performPaidFetch(
       // deadlineBeforeSend: the row (if any) was already released as failed by the
       // after-creation hook; do not turn it back into a held `unknown` one.
       if (!signed && paymentId && !deadlineBeforeSend) {
-        markUnknown(db, paymentId, "UPSTREAM_ERROR");
+        if (signerRefused) {
+          // The signer refused before producing a signature: no authorization exists, no money can move. Release the budget.
+          failPayment(db, paymentId, "WALLET_CHANGED");
+        } else {
+          markUnknown(db, paymentId, "UPSTREAM_ERROR");
+        }
       }
       if (ownAbortApprovalId) {
         throw new ApprovalRequiredError(ownAbortApprovalId);
       }
       if (ownAbortCode) {
         throw new MoneySwitchError(ownAbortCode, undefined, ownAbortLimit);
+      }
+      if (signerRefused) {
+        throw new MoneySwitchError("WALLET_LOCKED", "The wallet was replaced or locked while this request was in progress; nothing was signed and nothing was charged");
       }
       if (signed) {
         return afterSignFailure(e, null);

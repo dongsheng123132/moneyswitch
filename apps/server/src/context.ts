@@ -1,7 +1,8 @@
+import path from "node:path";
 import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
-import { bootstrapAdminToken, SetupTokenStore, type AuthorizationReader } from "@moneyswitch/core";
+import { bootstrapAdminToken, SetupTokenStore, sweepStaleReservations, type AuthorizationReader } from "@moneyswitch/core";
 import { createMultiNetworkAuthorizationReader } from "@moneyswitch/x402";
 import type { ServerConfig } from "./config.js";
 import type { NotifyRuntimeOptions } from "./notify/types.js";
@@ -57,41 +58,80 @@ export interface BuildContextOptions {
 
 /**
  * Unlocks the wallet at startup, in this order: MONEYSWITCH_WALLET_PASSWORD(_FILE)
- * when it is non-empty, else wallet-unlock.secret, else stay locked. Only outcomes
+ * when it is non-empty, else the wallet's own unlock secret, else stay locked. Every
+ * source that was tried gets its OWN log line with its OWN reason (a stale environment
+ * password is never blamed for a wrong secret, or the other way round); only outcomes
  * are logged, never a credential. The result is also kept on the driver
- * (unlockStatus) so GET /v1/admin/wallet can report a broken auto-unlock.
+ * (unlockStatus) so GET /v1/admin/wallet can report it.
  */
 export async function unlockWalletOnStartup(wallet: LocalWalletDriver, password: string | null | undefined): Promise<void> {
-  if (!wallet.hasKeystore()) return;
   const report = await wallet.unlockOnStartup({ password });
+  if (!wallet.hasKeystore()) {
+    const orphans = wallet.orphanFiles();
+    if (orphans.secrets.length > 0 || orphans.retired > 0) {
+      console.error(
+        "[moneyswitch] WARNING: wallet.json is missing from the data directory, but credential files of an earlier wallet are still there " +
+          `(${orphans.secrets.length} unlock secret file(s), ${orphans.retired} file(s) in retired/). ` +
+          "Is the data directory mounted from the right place? Restore wallet.json from your backup, or create/import a wallet in the Dashboard: " +
+          "the existing files are kept, never overwritten."
+      );
+    }
+    return;
+  }
+  const secretName = (): string => {
+    const file = wallet.secretPath;
+    return file ? path.basename(file) : "wallet-unlock-<address>.secret";
+  };
+  const autoWallet = wallet.protection() === "auto";
   for (const attempt of report.attempts) {
     if (attempt.ok) {
       console.log(
         attempt.source === "env_or_file"
           ? "[moneyswitch] Wallet unlocked from MONEYSWITCH_WALLET_PASSWORD(_FILE)"
-          : "[moneyswitch] Wallet unlocked automatically (wallet-unlock.secret)"
+          : `[moneyswitch] Wallet unlocked automatically (unlock secret ${secretName()})`
       );
     } else if (attempt.source === "env_or_file") {
       console.error(
-        "[moneyswitch] ERROR: MONEYSWITCH_WALLET_PASSWORD(_FILE) is set but does not unlock wallet.json. " +
-          "Fix or remove it" + (wallet.hasUnlockSecret() ? "; wallet-unlock.secret is tried next." : ".")
+        "[moneyswitch] ERROR: MONEYSWITCH_WALLET_PASSWORD(_FILE) is set but does not unlock wallet.json (wrong password). Fix or remove it." +
+          (autoWallet ? " The wallet's own auto-unlock is tried next." : "")
       );
     } else {
-      const why = attempt.reason === "secret_empty" ? "is empty" : attempt.reason === "secret_unreadable" ? "cannot be read" : "does not unlock wallet.json";
+      const what: Record<string, string> = {
+        secret_missing: "is missing",
+        secret_empty: "is empty",
+        secret_unreadable: "cannot be read",
+        secret_wrong: "does not open wallet.json",
+      };
       console.error(
-        `[moneyswitch] ERROR: wallet-unlock.secret ${why}, so auto-unlock is broken and the wallet stays LOCKED. ` +
-          "Unlock it in the Dashboard with its password, or replace the wallet there."
+        `[moneyswitch] ERROR: auto-unlock is ON for this wallet, but its unlock secret (${secretName()}) ${what[attempt.reason ?? "secret_wrong"] ?? "does not work"}, so the wallet stays LOCKED. ` +
+          "Restore that file from a backup of the data directory, or use Replace wallet in the Dashboard (import your recovery phrase or private key)."
       );
     }
   }
   if (!report.unlocked && report.attempts.length === 0) {
     console.log("[moneyswitch] Wallet is locked: no unlock credential configured. Unlock it in the Dashboard (Wallet page).");
   }
+  const protection = wallet.secretProtection;
+  if (protection && !protection.ok) {
+    console.error(
+      `[moneyswitch] WARNING: could not restrict access to the data directory / unlock secret to this account (${protection.detail ?? "unverified"}). ` +
+        "Other accounts or programs on this machine may be able to read the secret that opens the wallet. Keep only a small float in it; the Dashboard shows the same warning."
+    );
+  }
 }
 
 /** Builds the app context, running DB migrations and printing a fresh admin token exactly once. */
 export async function buildContext(config: ServerConfig, opts: BuildContextOptions = {}): Promise<AppContext> {
+  // "This boot": every payment still `reserved` that was created before it belongs to a process that no longer exists.
+  const bootedAt = new Date().toISOString();
   const { db, sqlite } = openDb({ filePath: config.dbFilePath, migrationsDir: config.migrationsDir ?? undefined });
+  const swept = sweepStaleReservations(db, bootedAt);
+  if (swept.toUnknown.length > 0 || swept.toFailed.length > 0) {
+    console.log(
+      `[moneyswitch] Startup: ${swept.toFailed.length + swept.toUnknown.length} payment(s) were in flight when the previous process stopped: ` +
+        `${swept.toFailed.length} had nothing signed and were released, ${swept.toUnknown.length} were kept as unknown until the chain is checked.`
+    );
+  }
   const wallet = new LocalWalletDriver(config.dataDir);
 
   const setup = new SetupTokenStore();

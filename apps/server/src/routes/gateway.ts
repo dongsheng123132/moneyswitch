@@ -130,7 +130,6 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!ctx.wallet.isUnlocked()) {
         return sendPolicyError("WALLET_LOCKED", "Wallet is locked");
       }
-      const signer = ctx.wallet.getSigner()!;
 
       // Step 3: always force stream:false to the upstream (SPEC-v0.2 §2 step 3).
       // approval_id is MoneySwitch's own retry field, never forwarded: the
@@ -141,16 +140,27 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       const { approval_id: approvalIdFromBody, ...forwardBody } = body as ChatCompletionsBody & { approval_id?: string };
       const upstreamBody = { ...forwardBody, stream: false };
 
-      const result = await performPaidFetch(ctx.db, ctx.sqlite, key, signer, {
-        url: upstreamUrl,
-        host: url.hostname + ":" + (url.port || (url.protocol === "https:" ? 443 : 80)),
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: upstreamBody,
-        approvalId: typeof approvalIdFromBody === "string" ? approvalIdFromBody : null,
-        kind: "chat",
-        model: body.model,
-      });
+      // A lease on the signer, held until the paid request is over (see routes/agent.ts): taken right before the
+      // call so nothing can throw between taking it and the `finally` that gives it back.
+      const lease = ctx.wallet.leaseSigner();
+      if (!lease) {
+        return sendPolicyError("WALLET_LOCKED", "Wallet is locked");
+      }
+      let result: Awaited<ReturnType<typeof performPaidFetch>>;
+      try {
+        result = await performPaidFetch(ctx.db, ctx.sqlite, key, lease.signer, {
+          url: upstreamUrl,
+          host: url.hostname + ":" + (url.port || (url.protocol === "https:" ? 443 : 80)),
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: upstreamBody,
+          approvalId: typeof approvalIdFromBody === "string" ? approvalIdFromBody : null,
+          kind: "chat",
+          model: body.model,
+        });
+      } finally {
+        lease.release();
+      }
       chargedSoFar = result.charged;
 
       if (result.paymentUnknown || result.bodyIncomplete) {

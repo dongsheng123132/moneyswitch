@@ -139,8 +139,12 @@ describe("a restart does not lock the wallet", () => {
     expect(confirmed.status).toBe(200);
     const before = (await api(first, token, "GET", "/v1/admin/wallet")).json;
     expect(before).toMatchObject({ address, unlocked: true, has_keystore: true });
-    expect(before.health).toMatchObject({ unlock_mode: "auto", auto_unlock_ok: true, backup: "confirmed" });
-    expect(fs.readdirSync(dataDir)).toEqual(expect.arrayContaining(["wallet.json", "wallet-unlock.secret"]));
+    expect(before.health).toMatchObject({ protection: "auto", unlock_mode: "auto", auto_unlock_ok: true, backup: "confirmed" });
+    const secretFile = `wallet-unlock-${address.toLowerCase()}.secret`;
+    expect(fs.readdirSync(dataDir).sort()).toEqual(expect.arrayContaining(["wallet.json", secretFile]));
+    // M3, for real: the OS-level protection of the data directory and the secret was applied AND verified (icacls /
+    // PowerShell on Windows, chmod 0700/0600 elsewhere) by the real server process, not by a stub.
+    expect(before.health).toMatchObject({ secret_protected: true, secret_protection_detail: null });
     await first.stop();
 
     // --- second run: the same data dir. The deployment mounts an EMPTY password file and an empty variable.
@@ -151,16 +155,16 @@ describe("a restart does not lock the wallet", () => {
       expect(second.adminToken, "the admin token is only ever printed on the first boot").toBeNull();
       const after = (await api(second, token, "GET", "/v1/admin/wallet")).json;
       expect(after).toMatchObject({ address, unlocked: true, has_keystore: true, auto_unlock_configured: true });
-      expect(after.health).toMatchObject({ unlock_mode: "auto", auto_unlock_ok: true, backup: "confirmed" });
+      expect(after.health).toMatchObject({ protection: "auto", unlock_mode: "auto", auto_unlock_ok: true, backup: "confirmed", secret_protected: true });
       // really unlocked: the encrypted keystore opened, and the phrase inside it is intact
       const reveal = await api(second, token, "POST", "/v1/admin/wallet/reveal", { confirm_address: address });
       expect(reveal.status).toBe(200);
       expect(reveal.json.recovery_phrase).toBe(phrase);
       // what the operator can read in the process output says what happened, and nothing secret
       const log = second.output();
-      expect(log).toContain("Wallet unlocked automatically (wallet-unlock.secret)");
+      expect(log).toContain(`Wallet unlocked automatically (unlock secret ${secretFile})`);
       expect(log).toContain("MONEYSWITCH_WALLET_PASSWORD_FILE is empty; ignoring it");
-      const secret = fs.readFileSync(path.join(dataDir, "wallet-unlock.secret"), "utf-8");
+      const secret = fs.readFileSync(path.join(dataDir, secretFile), "utf-8");
       for (const hidden of [phrase, secret, token]) expect(log).not.toContain(hidden);
       await second.stop();
 
@@ -179,12 +183,17 @@ describe("a restart does not lock the wallet", () => {
     const created = (await api(first, token, "POST", "/v1/admin/wallet/create", {})).json as { address: string };
     await first.stop();
 
-    fs.writeFileSync(path.join(dataDir, "wallet-unlock.secret"), "ab".repeat(32));
+    fs.writeFileSync(path.join(dataDir, `wallet-unlock-${created.address.toLowerCase()}.secret`), "ab".repeat(32));
     const second = await boot(dataDir);
     const info = (await api(second, token, "GET", "/v1/admin/wallet")).json;
     expect(info).toMatchObject({ address: created.address, unlocked: false });
-    expect(info.health).toMatchObject({ unlock_mode: "auto", auto_unlock_ok: false });
-    expect(second.output()).toContain("auto-unlock is broken");
+    expect(info.health).toMatchObject({
+      protection: "auto",
+      unlock_mode: "auto",
+      auto_unlock_ok: false,
+      unlock_sources: [{ source: "auto", ok: false, reason: "secret_wrong" }],
+    });
+    expect(second.output()).toContain("does not open wallet.json");
     expect(second.output()).not.toContain("abab");
   });
 
@@ -194,7 +203,7 @@ describe("a restart does not lock the wallet", () => {
     const token = first.adminToken!;
     const created = (await api(first, token, "POST", "/v1/admin/wallet/create", {})).json as { address: string };
     expect((await api(first, token, "POST", "/v1/admin/wallet/auto-unlock", { enabled: false, password: "a long manual password" })).status).toBe(200);
-    expect(fs.existsSync(path.join(dataDir, "wallet-unlock.secret"))).toBe(false);
+    expect(fs.readdirSync(dataDir).filter((f) => f.startsWith("wallet-unlock"))).toEqual([]);
     await first.stop();
 
     const second = await boot(dataDir);

@@ -9,8 +9,9 @@ import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { readWalletPassword } from "../../src/config.js";
 import { unlockWalletOnStartup } from "../../src/context.js";
 
-// Test-only: a cheap scrypt keeps the suite fast (the production costs are covered in packages/wallet).
-const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 } };
+// Test-only: a cheap scrypt keeps the suite fast (the production costs are covered in packages/wallet), and no OS-level
+// ACL work (it is exercised for real in packages/wallet/test/protect.*.test.ts).
+const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false } as const;
 const HARDHAT_PHRASE = "test test test test test test test test test test test junk";
 const HARDHAT_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
@@ -42,7 +43,14 @@ const post = (url: string, payload?: unknown, h: Record<string, string> = header
 const walletInfo = async () => (await get("/v1/admin/wallet")).json();
 const auditRows = () => t.ctx.sqlite.prepare("SELECT action, detail FROM audit_log ORDER BY created_at, rowid").all() as Array<{ action: string; detail: string }>;
 const auditDump = () => JSON.stringify(auditRows());
-const secretOnDisk = () => fs.readFileSync(unlockSecretPath(t.tmpDir), "utf-8");
+/** The unlock secret files in the data directory: one per wallet, named after its (lower-case) address. */
+const secretFiles = () => fs.readdirSync(t.tmpDir).filter((f) => /^wallet-unlock-0x[0-9a-f]{40}\.secret$/.test(f));
+const secretName = (address: string) => `wallet-unlock-${address.toLowerCase()}.secret`;
+/** The content of the (single) live unlock secret. */
+const secretOnDisk = () => {
+  expect(secretFiles()).toHaveLength(1);
+  return fs.readFileSync(path.join(t.tmpDir, secretFiles()[0]), "utf-8");
+};
 
 /** A fresh process on the same data dir: new driver, then the real startup unlock. */
 async function restart(password: string | null = null) {
@@ -121,7 +129,7 @@ describe("create", () => {
     expect(body.backup_confirmed).toBe(false);
     expect(body.recovery_phrase.split(" ")).toHaveLength(12);
     expect(HDNodeWallet.fromPhrase(body.recovery_phrase).address).toBe(body.address);
-    expect(fs.readdirSync(t.tmpDir).sort()).toEqual(["wallet-unlock.secret", "wallet.json"]);
+    expect(fs.readdirSync(t.tmpDir).sort()).toEqual([secretName(body.address), "wallet.json"]);
     // the secret and the phrase are in no later response
     const later = [await walletInfo(), (await post("/v1/admin/wallet/backup", { password: "portable-pass-1" })).json()];
     for (const r of later) {
@@ -168,8 +176,14 @@ describe("health", () => {
     const info = await walletInfo();
     expect(info).toMatchObject({ address: null, unlocked: false, has_keystore: false, auto_unlock_configured: false, usdc_balance: null, simulated: false });
     expect(info.health).toEqual({
+      protection: "none",
       unlock_mode: "none",
       auto_unlock_ok: null,
+      unlock_sources: [],
+      secret_file_present: null,
+      secret_protected: null,
+      secret_protection_detail: null,
+      orphan_files: { secrets: [], retired: 0, wallet_file_missing: false },
       backup: "not_applicable",
       float_limit: "50",
       over_float_limit: {},
@@ -218,15 +232,15 @@ describe("health", () => {
   });
 
   it("a wrong secret leaves the wallet locked and says auto-unlock is broken", async () => {
-    await createAuto();
-    fs.writeFileSync(unlockSecretPath(t.tmpDir), "ab".repeat(32));
+    const created = await createAuto();
+    fs.writeFileSync(unlockSecretPath(t.tmpDir, created.address), "ab".repeat(32));
     const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await restart();
     const { health, unlocked, auto_unlock_configured } = await walletInfo();
     expect(unlocked).toBe(false);
     expect(health).toMatchObject({ unlock_mode: "auto", auto_unlock_ok: false });
     expect(auto_unlock_configured).toBe(true);
-    expect(errors.mock.calls.flat().join("\n")).toContain("auto-unlock is broken");
+    expect(errors.mock.calls.flat().join("\n")).toContain("does not open wallet.json");
     expect(errors.mock.calls.flat().join("\n")).not.toContain("abab");
   });
 
@@ -427,14 +441,15 @@ describe("reveal", () => {
 });
 
 describe("import", () => {
-  it("a recovery phrase: same address a wallet app shows, auto-unlock by default, counted as backed up, nothing echoed", async () => {
+  it("a recovery phrase: same address a wallet app shows, auto-unlock by default, only the key is kept (nothing to back up), nothing echoed", async () => {
     const res = await post("/v1/admin/wallet/import", { kind: "mnemonic", mnemonic: HARDHAT_PHRASE });
     expect(res.statusCode).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
     expect(res.json()).toEqual({ address: HARDHAT_ADDRESS });
-    expect(fs.readdirSync(t.tmpDir).sort()).toEqual(["wallet-unlock.secret", "wallet.json"]);
+    expect(fs.readdirSync(t.tmpDir).sort()).toEqual([secretName(HARDHAT_ADDRESS), "wallet.json"]);
     const info = await walletInfo();
-    expect(info.health).toMatchObject({ unlock_mode: "auto", auto_unlock_ok: true, backup: "confirmed" });
+    // M2: the phrase is NOT kept (it may control other funds), so there is nothing for the operator to write down
+    expect(info.health).toMatchObject({ unlock_mode: "auto", auto_unlock_ok: true, backup: "not_applicable" });
     expect(res.body + auditDump()).not.toContain("junk");
   });
 
@@ -508,7 +523,7 @@ describe("turning auto-unlock on and off", () => {
     expect(on.statusCode).toBe(200);
     expect(on.headers["cache-control"]).toBe("no-store");
     expect(on.json()).toEqual({ address: created.address, unlock_mode: "auto", auto_unlock_ok: true });
-    expect(fs.existsSync(unlockSecretPath(t.tmpDir))).toBe(true);
+    expect(fs.existsSync(unlockSecretPath(t.tmpDir, created.address))).toBe(true);
     expect((await toggle({ enabled: true })).statusCode).toBe(409);
     await restart();
     expect(await walletInfo()).toMatchObject({ address: created.address, unlocked: true, health: { unlock_mode: "auto", auto_unlock_ok: true } });
@@ -518,7 +533,8 @@ describe("turning auto-unlock on and off", () => {
     const off = await toggle({ enabled: false, password: "second-pass-2" });
     expect(off.statusCode).toBe(200);
     expect(off.json()).toEqual({ address: created.address, unlock_mode: "manual", auto_unlock_ok: null });
-    expect(fs.existsSync(unlockSecretPath(t.tmpDir))).toBe(false);
+    expect(fs.existsSync(unlockSecretPath(t.tmpDir, created.address))).toBe(false);
+    expect(fs.readdirSync(t.tmpDir)).toEqual(["wallet.json"]); // no secret, no .bak, nothing that opens the key without the password
     expect((await toggle({ enabled: false, password: "third-pass-3" })).statusCode).toBe(409); // already off
     await restart();
     expect((await walletInfo()).unlocked).toBe(false);
@@ -552,7 +568,7 @@ describe("turning auto-unlock on and off", () => {
     expect(res.statusCode).toBe(500);
     expect(res.json().error).toBe("STORAGE_FAILED");
     expect(fs.readFileSync(walletFilePath(t.tmpDir), "utf-8")).toBe(before);
-    expect(fs.existsSync(unlockSecretPath(t.tmpDir))).toBe(false);
+    expect(secretFiles()).toEqual([]);
     await restart();
     expect((await post("/v1/admin/wallet/unlock", { password: "manual-pass-1" })).json().address).toBe(created.address);
   });
@@ -655,20 +671,8 @@ describe("replace wallet", () => {
     expect(auditRows().filter((r) => r.action === "wallet.replace.denied")).toHaveLength(5);
   });
 
-  it("is refused with 409 WALLET_BUSY while a payment is reserved, and works once it is resolved", async () => {
-    const old = await createAuto();
-    const before = fs.readFileSync(walletFilePath(t.tmpDir), "utf-8");
-    insertPayment({ id: "pay-in-flight", status: "reserved" });
-    const busy = await replace({ confirm_address: old.address });
-    expect(busy.statusCode).toBe(409);
-    expect(busy.json().error).toBe("WALLET_BUSY");
-    expect(fs.readFileSync(walletFilePath(t.tmpDir), "utf-8")).toBe(before);
-    expect(fs.readdirSync(t.tmpDir).sort()).toEqual(["wallet-unlock.secret", "wallet.json"]);
-    expect(t.ctx.sqlite.prepare("SELECT count(*) AS n FROM wallet_retirements").get()).toEqual({ n: 0 });
-
-    t.ctx.sqlite.prepare("UPDATE payments SET status = 'unknown' WHERE id = 'pay-in-flight'").run(); // unknown does not block
-    expect((await replace({ confirm_address: old.address })).statusCode).toBe(200);
-  });
+  // (Refusing while a payment is in flight is covered by wallet-hardening.test.ts [lease] and
+  // test/e2e/wallet-inflight.test.ts [a real paid fetch]; a payment row's status no longer decides it.)
 
   it("old unknown payments still reconcile after the swap: reconcile reads the address stored on each payment, not the current wallet", async () => {
     const old = await createAuto();
@@ -701,13 +705,13 @@ describe("replace wallet", () => {
     expect(out.reconciledPaymentIds).toEqual(["pay-unknown-2"]);
   });
 
-  it("can replace with a recovery phrase or a private key; those count as backed up and return no new phrase", async () => {
+  it("can replace with a recovery phrase or a private key; either way only the key is kept, so there is no new phrase to back up", async () => {
     const old = await createAuto();
     const viaPhrase = await replace({ confirm_address: old.address, kind: "mnemonic", mnemonic: HARDHAT_PHRASE });
     expect(viaPhrase.statusCode).toBe(200);
     expect(viaPhrase.json().address).toBe(HARDHAT_ADDRESS);
     expect(viaPhrase.body).not.toContain("recovery_phrase");
-    expect((await walletInfo()).health.backup).toBe("confirmed");
+    expect((await walletInfo()).health.backup).toBe("not_applicable");
 
     const key = Wallet.createRandom();
     const viaKey = await replace({ confirm_address: HARDHAT_ADDRESS, kind: "private_key", private_key: key.privateKey, reason: "suspected_leak" });
@@ -723,7 +727,7 @@ describe("replace wallet", () => {
     const res = await replace({ confirm_address: old.address, password: "new-manual-pass" });
     expect(res.statusCode).toBe(200);
     expect(res.json().unlock_mode).toBe("manual");
-    expect(fs.existsSync(unlockSecretPath(t.tmpDir))).toBe(false);
+    expect(secretFiles()).toEqual([]); // the old secret moved to retired/ with the old keystore; the new wallet has none
     expect((await walletInfo()).health).toMatchObject({ unlock_mode: "manual", auto_unlock_ok: null });
   });
 
@@ -760,7 +764,7 @@ describe("replace wallet", () => {
     const res = await replace({ confirm_address: old.address });
     expect(res.statusCode).toBe(500);
     expect(fs.readFileSync(walletFilePath(t.tmpDir), "utf-8")).toBe(before);
-    expect(fs.readdirSync(t.tmpDir).sort()).toEqual(["wallet-unlock.secret", "wallet.json"]);
+    expect(fs.readdirSync(t.tmpDir).sort()).toEqual([secretName(old.address), "wallet.json"]);
     expect(t.ctx.wallet.getAddress()).toBe(old.address);
   });
 
@@ -900,15 +904,25 @@ describe("startup credentials", () => {
     await createAuto();
     const lines: string[] = [];
     for (const method of ["log", "error"] as const) vi.spyOn(console, method).mockImplementation((...a: unknown[]) => void lines.push(a.join(" ")));
+    const secret = secretOnDisk();
     t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST);
     await unlockWalletOnStartup(t.ctx.wallet, null);
-    expect(lines.join("\n")).toContain("Wallet unlocked automatically (wallet-unlock.secret)");
-    expect(lines.join("\n")).not.toContain(secretOnDisk());
+    expect(lines.join("\n")).toContain(`Wallet unlocked automatically (unlock secret ${secretFiles()[0]})`);
+    expect(lines.join("\n")).not.toContain(secret);
 
+    // a password wallet with nothing configured just says it is locked
+    const manualDir = fs.mkdtempSync(path.join(t.tmpDir, "manual-"));
+    await new LocalWalletDriver(manualDir, FAST).createWithPhrase({ password: "manual-pass-1" });
     lines.length = 0;
-    fs.rmSync(unlockSecretPath(t.tmpDir));
+    await unlockWalletOnStartup(new LocalWalletDriver(manualDir, FAST), null);
+    expect(lines.join("\n")).toContain("Wallet is locked: no unlock credential configured");
+
+    // an auto wallet whose secret went missing says THAT, not "no credential configured"
+    lines.length = 0;
+    fs.rmSync(path.join(t.tmpDir, secretFiles()[0]));
     t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST);
     await unlockWalletOnStartup(t.ctx.wallet, null);
-    expect(lines.join("\n")).toContain("Wallet is locked: no unlock credential configured");
+    expect(lines.join("\n")).toContain("is missing");
+    expect(lines.join("\n")).not.toContain("no unlock credential configured");
   });
 });

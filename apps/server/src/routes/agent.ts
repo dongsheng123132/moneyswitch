@@ -169,19 +169,30 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!ctx.wallet.isUnlocked()) {
         return reply.send(envelope("error", "WALLET_LOCKED", "no"));
       }
-      const signer = ctx.wallet.getSigner()!;
 
       const maxPrice = body.max_price != null ? parseUsdcToMicros(body.max_price) : undefined;
 
-      const result = await performPaidFetch(ctx.db, ctx.sqlite, key, signer, {
-        url: body.url,
-        host: url.hostname + ":" + (url.port || (url.protocol === "https:" ? 443 : 80)),
-        method: body.method || "GET",
-        headers: body.headers,
-        body: body.body,
-        maxPrice,
-        approvalId: body.approval_id ?? null,
-      });
+      // A lease on the signer, held until the request is over: the wallet cannot be replaced or locked under a
+      // payment that is in flight (replace answers 409 WALLET_BUSY), and a signer that outlives its wallet refuses to sign.
+      // Taken right before the call so nothing can throw between taking it and the `finally` that gives it back.
+      const lease = ctx.wallet.leaseSigner();
+      if (!lease) {
+        return reply.send(envelope("error", "WALLET_LOCKED", "no"));
+      }
+      let result: Awaited<ReturnType<typeof performPaidFetch>>;
+      try {
+        result = await performPaidFetch(ctx.db, ctx.sqlite, key, lease.signer, {
+          url: body.url,
+          host: url.hostname + ":" + (url.port || (url.protocol === "https:" ? 443 : 80)),
+          method: body.method || "GET",
+          headers: body.headers,
+          body: body.body,
+          maxPrice,
+          approvalId: body.approval_id ?? null,
+        });
+      } finally {
+        lease.release();
+      }
       chargedSoFar = result.charged;
 
       if (result.paymentUnknown) {

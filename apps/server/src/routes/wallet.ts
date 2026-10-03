@@ -3,7 +3,6 @@ import {
   confirmWalletBackup,
   formatMicrosToUsdc,
   getWalletMeta,
-  hasReservedPayments,
   listRetiredWallets,
   parseUsdcToMicros,
   recordWalletOrigin,
@@ -29,11 +28,20 @@ const BALANCE_FAILURE_TTL_MS = 2_000;
 
 type Body = Record<string, unknown>;
 
-class WalletBusyError extends Error {}
-
 export interface WalletHealth {
+  /** How wallet.json is protected, as RECORDED in it (never guessed from which files happen to exist). */
+  protection: "auto" | "password" | "none";
   unlock_mode: "auto" | "env_or_file" | "manual" | "none";
   auto_unlock_ok: boolean | null;
+  /** The last startup unlock attempt per source, with the reason it failed: nothing is blamed on the wrong source. */
+  unlock_sources: Array<{ source: "env_or_file" | "auto"; ok: boolean; reason?: string }>;
+  /** Auto wallets only: does the unlock secret file exist right now? (false = the next restart will leave the wallet locked.) */
+  secret_file_present: boolean | null;
+  /** false = the data directory / unlock secret could not be restricted to this user (red warning); null = nothing to protect. */
+  secret_protected: boolean | null;
+  secret_protection_detail: string | null;
+  /** Credential files that belong to no live wallet.json; wallet_file_missing = wallet.json is gone but these remain. */
+  orphan_files: { secrets: string[]; retired: number; wallet_file_missing: boolean };
   backup: "confirmed" | "missing" | "not_applicable";
   float_limit: string;
   over_float_limit: Record<string, boolean>;
@@ -127,6 +135,18 @@ function parseImportSource(body: Body): WalletImport | null {
   return null;
 }
 
+/**
+ * Optional guard on an import: refuse unless the key belongs to this address. A blank or non-string value is an error
+ * (never silently "no check"): a script whose variable came out empty must not skip the safety it asked for.
+ */
+function parseExpectedAddress(body: Body): { expectedAddress: string | undefined } | { error: string } {
+  if (body.expected_address === undefined) return { expectedAddress: undefined };
+  if (typeof body.expected_address !== "string" || body.expected_address.trim() === "") {
+    return { error: "expected_address must be the 0x address you expect this key to have (leave it out to skip the check)" };
+  }
+  return { expectedAddress: body.expected_address.trim() };
+}
+
 function parseReason(body: Body): string | null {
   if (body.reason === undefined || body.reason === null) return "replaced";
   // A short machine token, never free text: this lands in the audit log and the retirement table.
@@ -136,17 +156,23 @@ function parseReason(body: Body): string | null {
 export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
 
-  /** Mode, last real decrypt attempt, backup state, float limit and retired wallets. */
+  /** Recorded protection mode, last real decrypt attempt per source, secret protection, backup state, float limit and retired wallets. */
   async function buildHealth(address: string | null, balances: Map<string, bigint | null>): Promise<WalletHealth> {
     const hasKeystore = ctx.wallet.hasKeystore();
     const envConfigured = Boolean(ctx.config.walletPassword && ctx.config.walletPassword.trim() !== "");
     const status = ctx.wallet.unlockStatus;
+    // The mode comes from what wallet.json SAYS about itself. A wallet.json that cannot be read at all is treated as a
+    // password keystore (what every keystore without the marker is): the safe assumption, nothing is claimed to be automatic.
+    const protection: WalletHealth["protection"] = hasKeystore ? ctx.wallet.protection() ?? "password" : "none";
     let unlockMode: WalletHealth["unlock_mode"];
-    if (!hasKeystore) unlockMode = "none";
-    else if (status.ok && status.source) unlockMode = status.source; // what actually unlocked it
+    if (protection === "none") unlockMode = "none";
+    else if (status.ok && status.source === "env_or_file") unlockMode = "env_or_file"; // what actually unlocked it
+    else if (protection === "auto") unlockMode = "auto";
     else if (envConfigured) unlockMode = "env_or_file";
-    else if (ctx.wallet.hasUnlockSecret()) unlockMode = "auto";
     else unlockMode = "manual";
+
+    const orphans = ctx.wallet.orphanFiles();
+    const secretProtection = ctx.wallet.secretProtection;
 
     const meta = address ? getWalletMeta(ctx.db, address) : undefined;
     let backup: WalletHealth["backup"] = "not_applicable";
@@ -161,8 +187,18 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     for (const [network, balance] of balances) if (balance !== null) over[network] = balance > limit.micros;
 
     return {
+      protection,
       unlock_mode: unlockMode,
       auto_unlock_ok: unlockMode === "manual" || unlockMode === "none" ? null : status.ok,
+      unlock_sources: status.attempts.map((a) => ({ source: a.source, ok: a.ok, ...(a.reason ? { reason: a.reason } : {}) })),
+      secret_file_present: protection === "auto" ? ctx.wallet.hasUnlockSecret() : null,
+      secret_protected: secretProtection ? secretProtection.ok : null,
+      secret_protection_detail: secretProtection && !secretProtection.ok ? secretProtection.detail ?? "the protection could not be verified" : null,
+      orphan_files: {
+        secrets: orphans.secrets,
+        retired: orphans.retired,
+        wallet_file_missing: !hasKeystore && (orphans.secrets.length > 0 || orphans.retired > 0),
+      },
       backup,
       float_limit: limit.text,
       over_float_limit: over,
@@ -185,9 +221,9 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       address,
       unlocked: ctx.wallet.isUnlocked(),
       has_keystore: ctx.wallet.hasKeystore(),
-      // An unlock credential is in place: MONEYSWITCH_WALLET_PASSWORD(_FILE), or the wallet's own wallet-unlock.secret.
+      // An unlock credential is in place: MONEYSWITCH_WALLET_PASSWORD(_FILE), or the wallet is recorded as auto-unlock.
       // (Independent of whether a wallet exists yet, as before.)
-      auto_unlock_configured: Boolean(ctx.config.walletPassword?.trim()) || ctx.wallet.hasUnlockSecret(),
+      auto_unlock_configured: Boolean(ctx.config.walletPassword?.trim()) || ctx.wallet.protection() === "auto",
       usdc_balance: selected === null ? null : formatMicrosToUsdc(selected),
       network: network.caip2,
       simulated: Boolean(ctx.config.demo),
@@ -219,13 +255,18 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     if ("error" in choice) return reply.status(400).send({ error: choice.error });
     const source = parseImportSource(body);
     if (!source) return reply.status(400).send({ error: "unsupported wallet import format" });
+    const expected = parseExpectedAddress(body);
+    if ("error" in expected) return reply.status(400).send({ error: expected.error });
     try {
-      const imported = await ctx.wallet.importFrom(source, { password: choice.password });
+      const imported = await ctx.wallet.importFrom(source, { password: choice.password, expectedAddress: expected.expectedAddress });
       // The operator brought the credential, so there is nothing for them to write down.
       recordWalletOrigin(ctx.db, imported.address, "imported", { backupConfirmed: true });
       writeAudit(ctx.db, "admin", "wallet.import", { address: imported.address, kind: source.kind, unlock_mode: imported.mode });
       return reply.send({ address: imported.address });
-    } catch {
+    } catch (e) {
+      if (e instanceof WalletError && e.code === "EXPECTED_ADDRESS_MISMATCH") {
+        return reply.status(400).send({ error: e.code, message: e.message });
+      }
       return reply
         .status(400)
         .send({ error: "Import failed: check the recovery phrase, private key or backup password; an existing wallet cannot be replaced (use Replace wallet)" });
@@ -249,12 +290,8 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
         writeAudit(ctx.db, "admin", "wallet.backup", { address, password_protected: true });
         return reply.send({ address, keystore });
       }
-      if (ctx.wallet.hasUnlockSecret()) {
-        return reply.status(409).send({
-          error: "BACKUP_NEEDS_PASSWORD",
-          message: "This wallet is encrypted with the server's auto-unlock secret, which is never exported. Send a password to get a portable backup, or write down the recovery phrase.",
-        });
-      }
+      // The mode RECORDED in wallet.json decides (not which files lie around): the driver refuses an auto wallet's
+      // wallet.json (BACKUP_NEEDS_PASSWORD), a password wallet's is handed out as it is.
       const keystore = ctx.wallet.exportKeystore();
       writeAudit(ctx.db, "admin", "wallet.backup", { address, password_protected: false });
       return reply.send({ address, keystore });
@@ -357,20 +394,22 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     const reason = parseReason(body);
     if (reason === null) return reply.status(400).send({ error: "reason must be a short token such as lost_password or suspected_leak" });
     let spec: { kind: "create" } | { kind: "import"; source: WalletImport };
+    let expectedAddress: string | undefined;
     if (body.kind === undefined || body.kind === "create") spec = { kind: "create" };
     else {
       const source = parseImportSource(body);
       if (!source) return reply.status(400).send({ error: "unsupported wallet import format" });
+      const expected = parseExpectedAddress(body);
+      if ("error" in expected) return reply.status(400).send({ error: expected.error });
+      expectedAddress = expected.expectedAddress;
       spec = { kind: "import", source };
     }
 
     try {
-      const result = await ctx.wallet.replaceWallet(spec, { password: choice.password }, {
-        // Runs in the same synchronous stretch as the file swap: no payment can start in between.
-        guard: () => {
-          if (hasReservedPayments(ctx.db)) throw new WalletBusyError();
-        },
-        // Same stretch, after the files moved. If this throws, the driver puts the old files back.
+      // WALLET_BUSY comes from the driver: it refuses while any request holds a signer lease (an in-process counter, not
+      // database rows), both before it starts and again in the synchronous stretch that swaps the files.
+      const result = await ctx.wallet.replaceWallet(spec, { password: choice.password, expectedAddress }, {
+        // Runs in the same synchronous stretch as the file swap, after the files moved. If this throws, the driver puts the old files back.
         onSwapped: (info) => {
           ctx.sqlite.transaction(() => {
             recordWalletRetirement(ctx.db, {
@@ -408,12 +447,6 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
         },
       });
     } catch (e) {
-      if (e instanceof WalletBusyError) {
-        return reply.status(409).send({
-          error: "WALLET_BUSY",
-          message: "A payment is in flight. Wait for it to finish (a few seconds to a few minutes), then try again.",
-        });
-      }
       if (e instanceof WalletError && e.code === "INVALID_IMPORT") {
         return reply.status(400).send({ error: "Import failed: check the recovery phrase, private key or backup password" });
       }
@@ -454,7 +487,13 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
 function sendWalletError(reply: FastifyReply, e: unknown): FastifyReply {
   if (e instanceof WalletError) {
     const status =
-      e.code === "NO_WALLET" ? 404 : e.code === "STORAGE_FAILED" ? 500 : e.code === "INVALID_IMPORT" ? 400 : 409;
+      e.code === "NO_WALLET"
+        ? 404
+        : e.code === "STORAGE_FAILED"
+          ? 500
+          : e.code === "INVALID_IMPORT" || e.code === "EXPECTED_ADDRESS_MISMATCH"
+            ? 400
+            : 409; // WALLET_BUSY, WALLET_LOCKED, WALLET_EXISTS, BACKUP_NEEDS_PASSWORD, ...
     return reply.status(status).send({ error: e.code, message: e.message });
   }
   return reply.status(500).send({ error: "WALLET_ERROR" });

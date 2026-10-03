@@ -473,14 +473,18 @@ describe("probe deadline expiring around the signature: never report a never-sen
     // A second app over the same DB whose signer is slow: the 402 arrives at once,
     // the budget is reserved, and signing then outlasts the probe deadline.
     const slowWallet = Object.create(wallet) as LocalWalletDriver;
-    slowWallet.getSigner = () => {
-      const real = wallet.getSigner()!;
+    slowWallet.leaseSigner = () => {
+      const lease = wallet.leaseSigner();
+      if (!lease) return null;
       return {
-        address: real.address,
-        signTypedData: async (m) => {
-          await new Promise((r) => setTimeout(r, 900));
-          return real.signTypedData(m);
+        signer: {
+          address: lease.signer.address,
+          signTypedData: async (m) => {
+            await new Promise((r) => setTimeout(r, 900));
+            return lease.signer.signTypedData(m);
+          },
         },
+        release: () => lease.release(),
       };
     };
     const slowApp = buildApp({
