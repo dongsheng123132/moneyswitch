@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { LocalWalletDriver } from "../src/index.js";
+import { defaultProtector } from "../src/protect.js";
 
 // Starting PowerShell and icacls takes seconds on a loaded machine (the five tests below each start several processes).
 vi.setConfig({ testTimeout: 90_000 });
@@ -120,5 +121,61 @@ describe.skipIf(process.platform !== "win32")("Windows: the data directory and t
     const driver = new LocalWalletDriver(path.join(root, "pw"), FAST_SCRYPT);
     await driver.createWithPhrase({ password: "a password to test with" });
     expect(driver.secretProtection).toBeNull();
+  });
+
+  // #4: the PowerShell calls used to be execFileSync: the whole server stood still for 1-3 s per call (30 s if it hung).
+  it("#4: PowerShell runs without blocking the event loop (other requests are served meanwhile)", async () => {
+    const dir = path.join(root, "nonblocking");
+    fs.mkdirSync(dir);
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 5);
+    let result;
+    try {
+      result = await defaultProtector()({ dir });
+    } finally {
+      clearInterval(timer);
+    }
+    expect(result).toMatchObject({ ok: true, method: "acl" });
+    expect(ticks, "the event loop kept turning while PowerShell was running").toBeGreaterThan(20);
+  });
+
+  it("#4: creating a wallet does not stand the server still either", async () => {
+    const driver = new LocalWalletDriver(path.join(root, "create-nonblocking"), FAST_SCRYPT);
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 5);
+    try {
+      await driver.createWithPhrase();
+    } finally {
+      clearInterval(timer);
+    }
+    expect(driver.secretProtection).toMatchObject({ ok: true });
+    expect(ticks, "create kept the event loop turning across both PowerShell calls").toBeGreaterThan(40);
+  });
+
+  it("#4: a PowerShell that never answers is cut off at the timeout and reported as not protected, without blocking anything", async () => {
+    const dir = path.join(root, "hangs");
+    fs.mkdirSync(dir);
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 5);
+    const started = Date.now();
+    let result;
+    try {
+      result = await defaultProtector({ timeoutMs: 700, script: "Start-Sleep -Seconds 60" })({ dir });
+    } finally {
+      clearInterval(timer);
+    }
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/did not answer within/i);
+    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(ticks).toBeGreaterThan(20);
+  });
+
+  it("#3: the real read-back on this machine is by SID: the current user and SYSTEM only", async () => {
+    const dir = path.join(root, "by-sid");
+    fs.mkdirSync(dir);
+    const result = await defaultProtector()({ dir });
+    expect(result).toEqual({ ok: true, method: "acl" });
+    // the same two SIDs icacls reports (and no BUILTIN\Users, Administrators or Authenticated Users)
+    expect(aclOf(dir).trustees).toEqual([currentSid(), "S-1-5-18"].sort());
   });
 });

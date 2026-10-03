@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -12,11 +12,14 @@ import path from "node:path";
  *
  *  - Windows: a protected DACL (inheritance removed) with exactly two allow entries, the current user and
  *    SYSTEM, set with PowerShell on the directory and on the secret file, then read back and verified. Trustees
- *    are SIDs (the user SID, S-1-5-18), never localized account names.
+ *    are SIDs (the user SID, S-1-5-18), never localized account names, and the read-back is by SID too:
+ *    SDDL writes the well-known accounts as aliases (SY, LS, NS, LA, BA, ...), which cannot be mapped back
+ *    reliably (LA is the built-in Administrator, whose SID depends on the machine).
  *  - POSIX: the directory 0700 and the secret 0600, verified.
  *
  * Nothing here refuses to run: when the protection cannot be applied or verified the caller keeps working and
- * reports `ok: false` (health.secret_protected = false) so the operator sees a red warning.
+ * reports `ok: false` (health.secret_protected = false) so the operator sees a red warning. And nothing here
+ * blocks the event loop: PowerShell takes 1-3 s, so it runs as a child process the server keeps serving around.
  */
 export interface SecretProtection {
   ok: boolean;
@@ -32,17 +35,23 @@ export interface ProtectTargets {
   file?: string;
 }
 
-export type Protector = (targets: ProtectTargets) => SecretProtection;
+/** Applies and verifies the protection. May be synchronous (tests inject plain functions); the real ones are asynchronous. */
+export type Protector = (targets: ProtectTargets) => SecretProtection | Promise<SecretProtection>;
 
 export interface ProtectOptions {
   /** Test seam: the PowerShell executable to use on Windows. */
   powershellPath?: string;
+  /** How long PowerShell may take before it is given up on and the protection reported as not verified (default 30 s). */
+  timeoutMs?: number;
+  /** Test seam: a script to run instead of the real one (for example one that never answers). */
+  script?: string;
 }
 
 const SYSTEM_SID = "S-1-5-18";
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export function defaultProtector(options: ProtectOptions = {}): Protector {
-  return process.platform === "win32" ? (targets) => protectWindows(targets, options) : protectPosix;
+  return process.platform === "win32" ? (targets) => protectWindows(targets, options) : async (targets) => protectPosix(targets);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -70,6 +79,10 @@ function protectPosix({ dir, file }: ProtectTargets): SecretProtection {
 
 // The paths arrive in an environment variable (never spliced into the script), so spaces, quotes and
 // non-ASCII characters in the data directory cannot break out of it.
+//
+// What it prints (one line each, SIDs only):  ME|<sid of the current user>
+//                                              PROT|<index>|<True if inheritance is blocked>
+//                                              ACE|<index>|<Allow/Deny>|<sid>|<rights as a number>|<True if inherited>
 const POWERSHELL_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
@@ -95,31 +108,64 @@ foreach ($p in ($env:MS_ACL_PATHS -split '\|')) {
     $acl.AddAccessRule($rule)
   }
   $item.SetAccessControl($acl)
+  # Read it back from the system, as SIDs.
   $now = Get-Acl -LiteralPath $p
-  Write-Output ('SDDL|' + $index + '|' + $now.GetSecurityDescriptorSddlForm('Access'))
+  Write-Output ('PROT|' + $index + '|' + $now.AreAccessRulesProtected)
+  foreach ($r in $now.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+    Write-Output ('ACE|' + $index + '|' + $r.AccessControlType + '|' + $r.IdentityReference.Value + '|' + [int]$r.FileSystemRights + '|' + $r.IsInherited)
+  }
   $index++
 }
 `;
 
-function shortError(e: unknown): string {
-  const err = e as NodeJS.ErrnoException & { stderr?: Buffer | string };
-  const text = (typeof err.stderr === "string" ? err.stderr : err.stderr?.toString("utf-8") ?? "").trim().split(/\r?\n/)[0];
-  return (text || err.code || err.message || "unknown error").slice(0, 200);
+export interface AclEntry {
+  /** "Allow" or "Deny". */
+  type: string;
+  /** The trustee as a SID string. */
+  sid: string;
+  /** FileSystemRights as a number. */
+  rights: number;
+  inherited: boolean;
 }
 
-/** Does this SDDL describe a protected DACL whose only entries are full-control allows for `allowed` SIDs? */
-export function evaluateSddl(sddl: string, allowed: string[]): { ok: boolean; why?: string } {
-  const match = /^D:([A-Z]*)((?:\([^)]*\))*)/.exec(sddl.trim());
-  if (!match) return { ok: false, why: "unreadable ACL" };
-  if (!match[1].includes("P")) return { ok: false, why: "inheritance is not blocked" };
-  const aces = [...match[2].matchAll(/\(([^)]*)\)/g)].map((m) => m[1].split(";"));
-  if (aces.length === 0) return { ok: false, why: "the ACL is empty" };
-  const trustees = new Set<string>();
-  for (const ace of aces) {
-    if (ace[0] !== "A") return { ok: false, why: "unexpected non-allow entry" };
-    trustees.add(ace[5] === "SY" ? SYSTEM_SID : ace[5]);
+export interface AclReadback {
+  /** True when inheritance from the parent is blocked. */
+  protected: boolean;
+  entries: AclEntry[];
+}
+
+/** Parses what the PowerShell script printed: the current user's SID and, per target (by position), its read-back ACL. */
+export function parseAclOutput(output: string): { me: string | null; readbacks: Map<number, AclReadback> } {
+  let me: string | null = null;
+  const readbacks = new Map<number, AclReadback>();
+  const at = (index: number): AclReadback => {
+    let r = readbacks.get(index);
+    if (!r) readbacks.set(index, (r = { protected: false, entries: [] }));
+    return r;
+  };
+  for (const line of output.split(/\r?\n/)) {
+    const parts = line.trim().split("|");
+    if (parts[0] === "ME" && parts[1]) me = parts[1].trim();
+    else if (parts[0] === "PROT" && parts.length >= 3) at(Number(parts[1])).protected = parts[2].trim().toLowerCase() === "true";
+    else if (parts[0] === "ACE" && parts.length >= 6) {
+      at(Number(parts[1])).entries.push({ type: parts[2], sid: parts[3], rights: Number(parts[4]), inherited: parts[5].trim().toLowerCase() === "true" });
+    }
   }
-  const want = new Set(allowed);
+  return { me, readbacks };
+}
+
+/** Does this read-back describe a protected ACL whose only entries are allows for exactly `allowedSids`? */
+export function evaluateAcl(readback: AclReadback | undefined, allowedSids: string[]): { ok: boolean; why?: string } {
+  if (!readback) return { ok: false, why: "ACL could not be read back" };
+  if (!readback.protected) return { ok: false, why: "inheritance is not blocked" };
+  if (readback.entries.length === 0) return { ok: false, why: "the ACL is empty" };
+  const trustees = new Set<string>();
+  for (const entry of readback.entries) {
+    if (entry.type !== "Allow") return { ok: false, why: "unexpected non-allow entry" };
+    if (entry.inherited) return { ok: false, why: "unexpected inherited entry" };
+    trustees.add(entry.sid);
+  }
+  const want = new Set(allowedSids);
   const extra = [...trustees].filter((t) => !want.has(t));
   const missing = [...want].filter((t) => !trustees.has(t));
   if (extra.length) return { ok: false, why: `other accounts still have access (${extra.join(", ")})` };
@@ -127,31 +173,47 @@ export function evaluateSddl(sddl: string, allowed: string[]): { ok: boolean; wh
   return { ok: true };
 }
 
-function protectWindows({ dir, file }: ProtectTargets, options: ProtectOptions): SecretProtection {
+function shortError(e: unknown, timeoutMs: number): string {
+  const err = e as NodeJS.ErrnoException & { stderr?: Buffer | string; killed?: boolean };
+  if (err.killed) return `PowerShell did not answer within ${Math.round(timeoutMs / 1000) || 1} s`;
+  const text = (typeof err.stderr === "string" ? err.stderr : err.stderr?.toString("utf-8") ?? "").trim().split(/\r?\n/)[0];
+  return (text || err.code || err.message || "unknown error").slice(0, 200);
+}
+
+/** Runs PowerShell as a child process the event loop keeps serving around (never execFileSync: it would stop the whole server). */
+function runPowerShell(exe: string, script: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      exe,
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")],
+      { env, encoding: "utf-8", timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          Object.assign(error, { stderr });
+          reject(error);
+        } else resolve(stdout);
+      }
+    );
+    child.stdin?.end(); // nothing to read: PowerShell must never wait for input
+  });
+}
+
+async function protectWindows({ dir, file }: ProtectTargets, options: ProtectOptions): Promise<SecretProtection> {
   const exe = options.powershellPath ?? path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const targets = [dir, ...(file ? [file] : [])];
   let output: string;
   try {
-    output = execFileSync(
-      exe,
-      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(POWERSHELL_SCRIPT, "utf16le").toString("base64")],
-      { env: { ...process.env, MS_ACL_PATHS: targets.join("|") }, encoding: "utf-8", timeout: 30_000, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }
-    );
+    output = await runPowerShell(exe, options.script ?? POWERSHELL_SCRIPT, { ...process.env, MS_ACL_PATHS: targets.join("|") }, timeoutMs);
   } catch (e) {
-    return { ok: false, method: "acl", detail: `could not set the ACL (PowerShell): ${shortError(e)}` };
+    return { ok: false, method: "acl", detail: `could not set the ACL (PowerShell): ${shortError(e, timeoutMs)}` };
   }
-  const lines = output.split(/\r?\n/).filter(Boolean);
-  const me = lines.find((l) => l.startsWith("ME|"))?.slice(3).trim();
+  const { me, readbacks } = parseAclOutput(output);
   if (!me) return { ok: false, method: "acl", detail: "could not determine the current user" };
   const problems: string[] = [];
   // (results are matched by position, not by echoing the path: console encodings mangle non-ASCII paths)
   targets.forEach((target, i) => {
-    const line = lines.find((l) => l.startsWith(`SDDL|${i}|`));
-    if (!line) {
-      problems.push(`${path.basename(target)}: ACL could not be read back`);
-      return;
-    }
-    const verdict = evaluateSddl(line.slice(`SDDL|${i}|`.length), [me, SYSTEM_SID]);
+    const verdict = evaluateAcl(readbacks.get(i), [me, SYSTEM_SID]);
     if (!verdict.ok) problems.push(`${path.basename(target)}: ${verdict.why}`);
   });
   return problems.length ? { ok: false, method: "acl", detail: problems.join("; ") } : { ok: true, method: "acl" };

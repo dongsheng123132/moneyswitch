@@ -5,7 +5,7 @@ import os from "node:os";
 import { randomBytes, randomUUID } from "node:crypto";
 import { defaultProtector, type Protector, type SecretProtection } from "./protect.js";
 
-export { evaluateSddl, type Protector, type ProtectTargets, type SecretProtection } from "./protect.js";
+export { evaluateAcl, parseAclOutput, type Protector, type ProtectTargets, type SecretProtection } from "./protect.js";
 
 export type WalletImport =
   | { kind: "private_key"; private_key: string }
@@ -578,8 +578,10 @@ export class LocalWalletDriver {
       if (this.hasKeystore()) throw new WalletError("WALLET_EXISTS", "Wallet already exists; use a separate data directory for another wallet");
       const wallet = Wallet.createRandom();
       const staged = await this.stage(wallet, mode, opts.password);
+      if (staged.secret) await this.protectDirectory(); // the folder is locked down BEFORE the secret is written into it
       this.publishNew(staged);
       this.adopt(staged);
+      if (staged.protection === "auto") await this.refreshProtection();
       return { address: wallet.address, mnemonic: wallet.mnemonic!.phrase, mode };
     });
   }
@@ -597,8 +599,10 @@ export class LocalWalletDriver {
       const wallet = await this.parseImport(source);
       this.assertExpectedAddress(wallet, opts.expectedAddress);
       const staged = await this.stage(wallet, mode, opts.password);
+      if (staged.secret) await this.protectDirectory();
       this.publishNew(staged);
       this.adopt(staged);
+      if (staged.protection === "auto") await this.refreshProtection();
       // Adopting a key in password mode: retired copies of that key that open without the password go.
       const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "import") : null;
       return { address: wallet.address, mode, hasRecoveryPhrase: false, ...scrubReport(scrub) };
@@ -681,10 +685,10 @@ export class LocalWalletDriver {
       const attempts: UnlockAttempt[] = [];
       let restoredSecret: string | undefined;
       let retiredSecretFiles: string[] | undefined;
-      const finish = (wallet: AnyWallet | null, by: UnlockSource | null): StartupUnlock => {
+      const finish = async (wallet: AnyWallet | null, by: UnlockSource | null): Promise<StartupUnlock> => {
         if (wallet) this.adoptUnlocked(wallet);
         this.unlockState = { unlockedBy: wallet ? by : null, attempts };
-        this.refreshProtection();
+        await this.refreshProtection();
         return {
           unlocked: wallet !== null,
           attempts: attempts.map((a) => ({ ...a })),
@@ -816,9 +820,10 @@ export class LocalWalletDriver {
       this.assertSameWallet(wallet, live);
       if (live.protection === "auto" && (await this.secretOpens(live))) throw new WalletError("ALREADY_AUTO", "Auto-unlock is already on");
       const staged = await this.stage(wallet, "auto");
+      await this.protectDirectory();
       this.swapProtection(live, staged);
       this.unlockState = { unlockedBy: "auto", attempts: [{ source: "auto", ok: true }] };
-      this.refreshProtection();
+      await this.refreshProtection();
       return { address: wallet.address };
     });
   }
@@ -870,11 +875,13 @@ export class LocalWalletDriver {
       const wallet = spec.kind === "create" ? Wallet.createRandom() : await this.parseImport(spec.source);
       if (spec.kind === "import") this.assertExpectedAddress(wallet, opts.expectedAddress);
       const staged = await this.stage(wallet, mode, opts.password);
+      if (staged.secret) await this.protectDirectory();
       // --- synchronous from here to the end of the swap ---
       this.assertIdle();
       hooks.guard?.({ oldAddress: old.address, newAddress: wallet.address });
       const retired = this.swapForReplacement(old, staged, hooks);
       this.adopt(staged);
+      if (staged.protection === "auto") await this.refreshProtection();
       // Adopting a key in password mode (including the pair this very call just retired, when it is the same key).
       const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "replace") : null;
       return {
@@ -1033,8 +1040,7 @@ export class LocalWalletDriver {
     this.setWallet(staged.wallet);
     this.unlockState =
       staged.protection === "auto" ? { unlockedBy: "auto", attempts: [{ source: "auto", ok: true }] } : { unlockedBy: null, attempts: [] };
-    if (staged.protection === "auto") this.refreshProtection();
-    else this.protectionState = null;
+    if (staged.protection !== "auto") this.protectionState = null;
   }
 
   private makeSigner(wallet: AnyWallet, epoch: number): EvmTypedDataSigner {
@@ -1055,18 +1061,23 @@ export class LocalWalletDriver {
   // internals: protection of the directory and the secret
   // -------------------------------------------------------------------------
 
-  /** Locks the data directory down BEFORE a secret is written into it (a new file then inherits the restricted ACL). */
-  private protectDirectory(): void {
+  /**
+   * Locks the data directory down BEFORE a secret is written into it (a new file then inherits the restricted ACL). Asynchronous on
+   * purpose: on Windows this runs PowerShell, and the server must keep answering requests while it does. Callers await it BEFORE
+   * their synchronous stretch of file operations.
+   */
+  private async protectDirectory(): Promise<void> {
     if (!this.protector) return;
     try {
-      this.protectionState = this.protector({ dir: this.dataDir });
+      fs.mkdirSync(this.dataDir, { recursive: true });
+      this.protectionState = await this.protector({ dir: this.dataDir });
     } catch (e) {
       this.protectionState = { ok: false, method: process.platform === "win32" ? "acl" : "posix", detail: String((e as Error)?.message ?? e).slice(0, 200) };
     }
   }
 
   /** Applies and verifies the protection of the directory and of the live wallet's secret. Never throws; the result is health.secret_protected. */
-  private refreshProtection(): void {
+  private async refreshProtection(): Promise<void> {
     if (!this.protector) return;
     const live = this.readLive();
     if (!live) {
@@ -1080,7 +1091,7 @@ export class LocalWalletDriver {
       return;
     }
     try {
-      this.protectionState = this.protector({ dir: this.dataDir, file: hasSecret ? secret : undefined });
+      this.protectionState = await this.protector({ dir: this.dataDir, file: hasSecret ? secret : undefined });
     } catch (e) {
       this.protectionState = { ok: false, method: process.platform === "win32" ? "acl" : "posix", detail: String((e as Error)?.message ?? e).slice(0, 200) };
     }
@@ -1314,7 +1325,6 @@ export class LocalWalletDriver {
     const temps: string[] = [];
     let installed: string | null = null;
     try {
-      if (staged.secret) this.protectDirectory();
       const tempKeystore = writeTemp(this.dataDir, "wallet", staged.keystoreJson);
       temps.push(tempKeystore);
       if (staged.secret) {
@@ -1352,7 +1362,6 @@ export class LocalWalletDriver {
     const undo = new Undo();
     const temps: string[] = [];
     try {
-      if (adding) this.protectDirectory();
       const tempKeystore = writeTemp(this.dataDir, "wallet", staged.keystoreJson);
       temps.push(tempKeystore);
       let tempSecret: string | null = null;
@@ -1431,7 +1440,6 @@ export class LocalWalletDriver {
       const tempKeystore = writeTemp(this.dataDir, "wallet", staged.keystoreJson);
       temps.push(tempKeystore);
       if (staged.secret) {
-        this.protectDirectory();
         const newSecretFile = this.secretPathFor(staged.wallet.address);
         const tempSecret = writeTemp(this.dataDir, "wallet-unlock", staged.secret);
         temps.push(tempSecret);
