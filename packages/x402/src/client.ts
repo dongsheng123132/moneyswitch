@@ -31,6 +31,21 @@ export interface SignerSource {
   leaseSigner(): SignerLease | null;
 }
 
+/**
+ * MoneySwitch pays with EIP-3009 (transferWithAuthorization) and nothing else: that is the one payload whose `authorization`
+ * (from, nonce, validBefore) is recorded before the request is sent, and the startup sweep of stale reservations reads a
+ * reservation WITHOUT those fields as "never signed" and releases its budget. @x402/evm (2.27) routes on
+ * `extra.assetTransferMethod ?? "eip3009"` and signs a Permit2 authorization - no `authorization` in the payload - for
+ * "permit2". So a requirement is acceptable only when the method is absent (or null) or exactly "eip3009"; anything else,
+ * including a value this client has never heard of, is not signed.
+ */
+export function usesEip3009(requirement: { extra?: unknown }): boolean {
+  const extra = requirement.extra;
+  if (extra === undefined || extra === null || typeof extra !== "object") return true;
+  const method = (extra as { assetTransferMethod?: unknown }).assetTransferMethod;
+  return method === undefined || method === null || method === "eip3009";
+}
+
 export interface PaidFetchInput {
   url: string;
   host: string;
@@ -265,6 +280,8 @@ export async function performPaidFetch(
   // The signer lease, taken in onBeforePaymentCreation (see SignerSource) and given back in the `finally` at the end.
   // (declared with a cast: it is assigned inside a hook, which would otherwise make the compiler believe it is still null below)
   let lease = null as SignerLease | null;
+  // Every requirement the seller offered was removed by our own policy filter (wrong asset or network, a Permit2 request, ...).
+  let offerRefusedByPolicy = false;
   // The wallet refused to sign because it was replaced or locked after this request took its signer (WALLET_CHANGED).
   // Nothing was signed, so the reservation must be RELEASED (failed), never held as `unknown` like a transport error.
   let signerRefused = false;
@@ -288,13 +305,18 @@ export async function performPaidFetch(
   for (const enabled of networks) {
     client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(leasedSigner as any));
   }
-  client.registerPolicy((_version, reqs) =>
-      reqs.filter(
+  client.registerPolicy((_version, reqs) => {
+      const acceptable = reqs.filter(
         (r: PaymentRequirements) =>
           r.scheme === SCHEME &&
+          usesEip3009(r) &&
           networks.some((n) => r.network === n.caip2 && r.asset.toLowerCase() === n.usdcAddress.toLowerCase())
-      )
-    )
+      );
+      // The SDK then throws its own "filtered out by policies" error; remember that WE emptied the list so it is reported as
+      // UNSUPPORTED_PAYMENT (nothing was reserved or signed) whatever wording the SDK uses.
+      if (acceptable.length === 0) offerRefusedByPolicy = true;
+      return acceptable;
+    })
     .onBeforePaymentCreation(async (ctx) => {
       network = networks.find((n) => n.caip2 === ctx.selectedRequirements.network)!;
       // The probe deadline may already have expired: @x402/fetch swallows an
@@ -364,9 +386,11 @@ export async function performPaidFetch(
     // settle header (e.g. its own upstream 500s), the row stays `unknown`
     // with these fields set, and reconcileUnknownPayments can later ask the
     // USDC contract on-chain whether that authorization was ever used.
-    // Non-EIP-3009 payloads (e.g. a future permit2 fallback) have no
-    // `authorization` field and are silently left uncaptured — nothing to
-    // reconcile them against on-chain via authorizationState() anyway.
+    // Only EIP-3009 requirements get this far (see usesEip3009 in the policy
+    // above): @x402/evm signs a Permit2 authorization, which has no
+    // `authorization` / nonce and could not be reconciled through
+    // authorizationState(), for a requirement that says so. The startup sweep
+    // reads "no auth_*" as "never signed", so such a payment must never be made.
     //
     // This hook is also the "payment signed" point of the two-phase deadline:
     // when it completes the payload is handed back to the SDK and sent, so from
@@ -568,6 +592,9 @@ export async function performPaidFetch(
       if (deadlineBeforeSend) {
         // Our own probe deadline: nothing was sent, nothing is charged.
         throw new MoneySwitchError("UPSTREAM_ERROR", `upstream did not answer within ${probeMs}ms (no payment was sent)`);
+      }
+      if (offerRefusedByPolicy) {
+        throw new MoneySwitchError("UNSUPPORTED_PAYMENT");
       }
       const msg = e instanceof Error ? e.message : String(e);
       // The SDK's own outer spendControls ceiling (set to key.perRequestLimit)

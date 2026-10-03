@@ -54,6 +54,13 @@ export interface SellerBehavior {
   free: boolean;
   /** Price in atomic USDC (6 decimals). Default 10000 = 0.01 USDC. */
   amount: string;
+  /**
+   * `extra.assetTransferMethod` of the offered requirement. undefined (default) = the key is absent, which x402 reads as EIP-3009;
+   * "permit2" makes @x402/evm sign a Permit2 authorization instead (no `authorization` / nonce in the payload).
+   */
+  assetTransferMethod: string | undefined;
+  /** Offer a second, plain EIP-3009 requirement for the same asset AFTER the first one (a seller that supports both methods). */
+  alsoOfferEip3009: boolean;
 }
 
 /** The tx hash the "settle-failed-402" response claims the facilitator broadcast. */
@@ -68,6 +75,8 @@ export const DEFAULT_BEHAVIOR: SellerBehavior = {
   bodyDelayMs: 0,
   free: false,
   amount: "10000",
+  assetTransferMethod: undefined,
+  alsoOfferEip3009: false,
 };
 
 export interface SellerRequest {
@@ -144,8 +153,25 @@ export async function startStubSeller(opts: { facilitatorUrl: string; payTo: str
           asset: network.usdcAddress,
           payTo: opts.payTo,
           maxTimeoutSeconds: 60,
-          extra: { name: network.usdcDomainName, version: network.usdcDomainVersion },
+          extra: {
+            name: network.usdcDomainName,
+            version: network.usdcDomainVersion,
+            ...(b.assetTransferMethod !== undefined ? { assetTransferMethod: b.assetTransferMethod } : {}),
+          },
         },
+        ...(b.alsoOfferEip3009
+          ? [
+              {
+                scheme: "exact",
+                network: network.caip2,
+                amount: b.amount,
+                asset: network.usdcAddress,
+                payTo: opts.payTo,
+                maxTimeoutSeconds: 60,
+                extra: { name: network.usdcDomainName, version: network.usdcDomainVersion },
+              },
+            ]
+          : []),
       ],
     });
     if (paid && b.response === "reject-402") {
