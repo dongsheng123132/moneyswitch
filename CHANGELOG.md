@@ -12,7 +12,7 @@ database is still **additive only**: no migration was added or removed, no table
 - **Dashboard: four pages and a login.** Wallet, Keys, Approvals and Bills (the old Usage page; `/usage` is now `/bills`, without a
   redirect). Removed: the employee portal (layout, four pages, MoneyKey login), the Playground / test-payment page, the Overview page, the
   setup wizard, the local-launcher entry page, and the wallet import / password / reveal / download / auto-unlock-switch forms with
-  everything that only they used. Pages 13 to 5; `apps/dashboard/src` from 13,935 to 6,504 lines (ts + tsx + css). The agent API (`/v1/fetch`,
+  everything that only they used. Pages 13 to 5; `apps/dashboard/src` from 13,935 to 6,598 lines (ts + tsx + css). The agent API (`/v1/fetch`,
   `/v1/status`, `/v1/history`, `GET /v1/approvals/:id`) and the child-key back end and routes are unchanged (no UI for child keys).
 - **Approval link (SPEC §3).** The `approval_required` envelope of `POST /v1/fetch` now carries `approve_url`
   (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, else the address the server itself listens on, never the request's Host). The link has no token; approving needs the administrator
