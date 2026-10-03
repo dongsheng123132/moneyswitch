@@ -78,6 +78,11 @@ try {
   const skill = await (await fetch(`${base}/skill.md`)).text();
   check('public skill contains no secret', skill.includes('/v1/fetch') && !skill.includes(admin) && !skill.includes(rotated.body.key));
   check('retired seller route is absent', (await api('/v1/admin/tollbooths')).status === 404);
+  check('removed OpenAI gateway, models and channel routes are absent', (await Promise.all([
+    api('/v1/chat/completions', 'POST', { model: 'm', messages: [] }, rotated.body.key),
+    api('/v1/models', 'GET', undefined, rotated.body.key),
+    api('/v1/admin/channels'),
+  ])).every((r) => r.status === 404));
   await stop();
   await start();
   check('admin and rotated key survive a restart', (await api('/v1/keys')).body.keys.some((key) => key.id === created.body.id) && (await api('/v1/status', 'GET', undefined, rotated.body.key)).status === 200);
