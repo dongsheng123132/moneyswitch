@@ -7,7 +7,6 @@ export const approvalsStrings = defineMessages(
     introBody:
       "Payments at or above a key's approval threshold pause here. After you approve, the agent (or Playground) re-sends the request with the approval id to complete it. Requests you don't handle in time expire.",
 
-    chatViaHost: "Chat via {host}",
     payTo: "pay to {addr}",
     countdownLeft: "{m}m {s}s left",
     countdownExpired: "expired",
@@ -36,7 +35,6 @@ export const approvalsStrings = defineMessages(
     introBody:
       "单笔金额达到这把 Key 的审批阈值时会先暂停在这里。你批准之后，Agent（或 Playground）会带着审批编号重新发起请求来完成付款；没有及时处理的请求会自动过期。",
 
-    chatViaHost: "通过 {host} 对话",
     payTo: "付给 {addr}",
     countdownLeft: "剩 {m} 分 {s} 秒",
     countdownExpired: "已过期",

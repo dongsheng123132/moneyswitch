@@ -8,7 +8,6 @@ import {
   claimSetupToken,
   createKey,
   getWallet,
-  listChannels,
   listKeys,
   ApiError,
   type CreateMoneyKeyResponse,
@@ -28,12 +27,10 @@ import PublicAddress from "../components/PublicAddress";
 import { ThreeThingsButton } from "../components/ThreeThings";
 import { useAdminMeta } from "../useAdminMeta";
 import { skillBaseUrl } from "../skillText";
-import { claudeMcpCommand, openaiBase, useCliSource } from "../snippets";
+import { restFetchCurl } from "../snippets";
 import { FundingGuide } from "./WalletPage";
 import { WalletAccess } from "../components/WalletAccess";
 import { WalletSetup, BackupRequired } from "../components/WalletSetup";
-import { addDemoChannel } from "./ChannelsPage";
-import { fetchDemoMode, PLAYGROUND_KEY_STORAGE } from "../demoMode";
 import "../styles/setup.css";
 
 const SKIPPED_KEY = "moneyswitch_setup_skipped";
@@ -41,8 +38,8 @@ const HIDDEN_KEY = "moneyswitch_setup_hidden";
 const ACK_KEY = "moneyswitch_setup_token_saved";
 const RESET_CMD = "pnpm admin:reset-token -- --data-dir <MONEYSWITCH_DATA_DIR>";
 
-type StepId = "admin" | "wallet" | "channel" | "key" | "connect";
-const STEPS: StepId[] = ["admin", "wallet", "channel", "key", "connect"];
+type StepId = "admin" | "wallet" | "key" | "connect";
+const STEPS: StepId[] = ["admin", "wallet", "key", "connect"];
 
 // Survives React StrictMode's double effect run: a setup token is single-use.
 let claimInFlight: Promise<string> | null = null;
@@ -57,21 +54,6 @@ function readSkipped(): Set<StepId> {
 
 const DECIMAL_RE = /^\d+(\.\d{1,6})?$/;
 
-/** host:port of each enabled channel, used as the new key's allowed hosts (only matters for paid fetch). */
-function hostsFromChannels(channels: Array<{ base_url: string; enabled: boolean }>): string[] {
-  const hosts = new Set<string>();
-  for (const c of channels) {
-    if (!c.enabled) continue;
-    try {
-      const u = new URL(c.base_url);
-      hosts.add(`${u.hostname}:${u.port || (u.protocol === "https:" ? "443" : "80")}`);
-    } catch {
-      // skip malformed
-    }
-  }
-  return [...hosts];
-}
-
 export default function SetupPage() {
   const t = useT(setupStrings);
   const tc = useT(common);
@@ -79,16 +61,11 @@ export default function SetupPage() {
   const navigate = useNavigate();
 
   // --- one-time setup link claim (/setup#ms_setup_…) -------------------------
-  // "#ms_setup_…" (printed on first boot); the offline demo appends
-  // "&demo_key=mk_live_…" so the Playground is ready to use (demo mode only).
-  const [{ hashToken, demoKey }] = useState(() => {
+  // "#ms_setup_…" (printed on first boot).
+  const [hashToken] = useState(() => {
     const h = window.location.hash;
-    if (!h.startsWith("#ms_setup_")) return { hashToken: null, demoKey: null };
-    const [tok, rest] = h.slice(1).split("&", 2);
-    const dk = new URLSearchParams(rest ?? "").get("demo_key");
-    return { hashToken: tok, demoKey: dk && dk.startsWith("mk_live_") ? dk : null };
+    return h.startsWith("#ms_setup_") ? h.slice(1).split("&", 1)[0] : null;
   });
-  const [demoLanding, setDemoLanding] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimedToken, setClaimedToken] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(Boolean(hashToken) && !token);
@@ -105,14 +82,6 @@ export default function SetupPage() {
     claimInFlight
       .then(async (admin) => {
         await loginAdmin(admin);
-        // Offline demo: everything is pre-configured, so skip the wizard and
-        // land on the overview (its guide card), with the demo key in the
-        // Playground. Only when the server itself says it is the demo.
-        if (await fetchDemoMode()) {
-          if (demoKey) sessionStorage.setItem(PLAYGROUND_KEY_STORAGE, demoKey);
-          setDemoLanding(true);
-          return;
-        }
         setClaimedToken(admin);
         sessionStorage.removeItem(ACK_KEY);
       })
@@ -147,7 +116,6 @@ export default function SetupPage() {
     );
   }
   if (!token) return <Navigate to="/login" replace />;
-  if (demoLanding) return <Navigate to="/" replace />;
 
   return <Wizard claimedToken={claimedToken} onFinish={() => navigate("/")} />;
 }
@@ -178,9 +146,7 @@ function SetupShell({ children, right }: { children: React.ReactNode; right?: Re
 function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFinish: () => void }) {
   const t = useT(setupStrings);
   const meta = useAdminMeta();
-  const cliSrc = useCliSource(meta);
   const { data: wallet, refresh: refreshWallet } = usePolling(getWallet, 3000);
-  const { data: channels, refresh: refreshChannels } = usePolling(listChannels, 3000);
   const { data: keys, refresh: refreshKeys } = usePolling(listKeys, 3000);
   const [skipped, setSkipped] = useState<Set<StepId>>(readSkipped);
   const [ack, setAck] = useState(() => sessionStorage.getItem(ACK_KEY) === "1");
@@ -191,18 +157,17 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
     admin: claimedToken ? ack : true,
     // done = it exists, is open, and its recovery phrase is written down (nobody should fund it before that)
     wallet: Boolean(wallet?.has_keystore && wallet.unlocked && wallet.health?.backup !== "missing"),
-    channel: (channels?.length ?? 0) > 0,
     key: (keys?.length ?? 0) > 0,
     connect: Boolean(keys?.some((k) => k.last_used_at)),
   };
-  const loaded = wallet != null && channels != null && keys != null;
+  const loaded = wallet != null && keys != null;
 
   // Land on the first step that is neither done nor skipped (once data is in).
   const autoPicked = useRef(false);
   useEffect(() => {
     if (!loaded || autoPicked.current) return;
     autoPicked.current = true;
-    setActive(STEPS.find((s) => s !== "channel" && !done[s] && !skipped.has(s)) ?? "connect");
+    setActive(STEPS.find((s) => !done[s] && !skipped.has(s)) ?? "connect");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
@@ -212,7 +177,7 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
   }
   function goNext(from: StepId) {
     const idx = STEPS.indexOf(from);
-    const next = STEPS.slice(idx + 1).find((s) => s !== "channel" && !done[s]) ?? STEPS[Math.min(idx + 1, STEPS.length - 1)];
+    const next = STEPS.slice(idx + 1).find((s) => !done[s]) ?? STEPS[Math.min(idx + 1, STEPS.length - 1)];
     setActive(next);
   }
   function skip(step: StepId) {
@@ -226,20 +191,18 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
     onFinish();
   }
 
-  const allDone = STEPS.every((s) => s === "channel" || done[s]);
+  const allDone = STEPS.every((s) => done[s]);
   const current = active ?? "admin";
 
   const stepTitle: Record<StepId, string> = {
     admin: t("s1_title"),
     wallet: t("s2_title"),
-    channel: t("s3_title"),
     key: t("s4_title"),
     connect: t("s5_title"),
   };
   const stepDesc: Record<StepId, string> = {
     admin: t("s1_desc"),
     wallet: t("s2_desc"),
-    channel: t("s3_desc"),
     key: t("s4_desc"),
     connect: t("s5_desc"),
   };
@@ -294,11 +257,9 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
 
           {current === "admin" && <AdminStep claimedToken={claimedToken} ack={ack} setAck={(v) => { setAck(v); sessionStorage.setItem(ACK_KEY, v ? "1" : "0"); }} />}
           {current === "wallet" && <WalletStep wallet={wallet} refresh={refreshWallet} />}
-          {current === "channel" && <ChannelStep channels={channels ?? []} demoSellerUrl={meta?.demo_seller_url ?? null} metaLoaded={meta != null} refresh={refreshChannels} />}
           {current === "key" && (
             <KeyStep
               keysCount={keys?.length ?? 0}
-              channels={channels ?? []}
               created={createdKey}
               onCreated={(k) => {
                 setCreatedKey(k);
@@ -310,7 +271,6 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
             <ConnectStep
               created={createdKey}
               usedAt={createdKey ? keys?.find((k) => k.id === createdKey.id)?.last_used_at ?? null : null}
-              cliSrc={cliSrc}
               skillBase={skillBaseUrl(meta, window.location.origin)}
             />
           )}
@@ -414,89 +374,14 @@ export function WalletStep({ wallet, refresh }: { wallet: Awaited<ReturnType<typ
   );
 }
 
-// --- Step 3 ------------------------------------------------------------------
-
-function ChannelStep({
-  channels,
-  demoSellerUrl,
-  metaLoaded,
-  refresh,
-}: {
-  channels: Array<{ id: string; name: string; base_url: string; models: string[]; enabled: boolean }>;
-  demoSellerUrl: string | null;
-  metaLoaded: boolean;
-  refresh: () => void;
-}) {
-  const t = useT(setupStrings);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-
-  async function addDemo() {
-    setBusy(true);
-    setErr(null);
-    try {
-      const ch = await addDemoChannel(demoSellerUrl);
-      setOkMsg(t("s3_added", { n: ch.models.length }));
-      refresh();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div>
-      <p className="setup-text">
-        <Term k="channel">{t("s3_intro")}</Term>
-      </p>
-      {okMsg && <Callout tone="success">{okMsg}</Callout>}
-      {channels.length > 0 ? (
-        <div>
-          <div className="setup-note">{t("s3_have", { n: channels.length })}</div>
-          <ul className="setup-list">
-            {channels.map((c) => (
-              <li key={c.id}>
-                <span className="setup-list-name">{c.name}</span>
-                <span className="mono dim">{c.base_url}</span>
-                <span className="dim">{c.models.join(", ")}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <div>
-          {metaLoaded && (
-            <div className="setup-note">
-              {demoSellerUrl ? t("s3_demoTarget", { url: demoSellerUrl }) : t("s3_demoUnknown")}
-            </div>
-          )}
-          {err && <Callout tone="error">{err}</Callout>}
-          <div className="btn-group">
-            <button type="button" className="btn" onClick={addDemo} disabled={busy}>
-              {busy ? t("s3_demoAdding") : t("s3_demo")}
-            </button>
-            <Link className="btn secondary" to="/channels">
-              {t("s3_manual")}
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // --- Step 4 ------------------------------------------------------------------
 
 function KeyStep({
   keysCount,
-  channels,
   created,
   onCreated,
 }: {
   keysCount: number;
-  channels: Array<{ base_url: string; enabled: boolean }>;
   created: CreateMoneyKeyResponse | null;
   onCreated: (k: CreateMoneyKeyResponse) => void;
 }) {
@@ -506,6 +391,7 @@ function KeyStep({
   const [per, setPer] = useState("0.10");
   const [threshold, setThreshold] = useState("");
   const [total, setTotal] = useState("5.00");
+  const [hosts, setHosts] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -544,7 +430,7 @@ function KeyStep({
         per_request_limit: per.trim(),
         approval_threshold: threshold.trim() ? threshold.trim() : null,
         total_budget: total.trim(),
-        allowed_hosts: hostsFromChannels(channels),
+        allowed_hosts: hosts.split(",").map((h) => h.trim()).filter(Boolean),
       });
       onCreated(res);
     } catch (e) {
@@ -595,7 +481,11 @@ function KeyStep({
           {t("s4_preview", preview)} {threshold.trim() === "" ? t("s4_noApproval") : t("s4_withApproval", { amount: threshold.trim() })}
         </div>
       ) : <Callout tone="warn">{t("s4_invalid")}</Callout>}
-      {channels.length === 0 && <p className="setup-note">{t("s4_noChannelHosts")}</p>}
+      <div className="field">
+        <label htmlFor="setup-key-hosts">{t("s4_hosts")}</label>
+        <input id="setup-key-hosts" value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder={t("s4_hostsPlaceholder")} />
+        <div className="field-hint">{t("s4_hostsHint")}</div>
+      </div>
       {err && <Callout tone="error">{err}</Callout>}
       <button className="btn" type="submit" disabled={busy || !valid}>
         {busy ? t("s4_creating") : t("s4_create")}
@@ -606,16 +496,14 @@ function KeyStep({
 
 // --- Step 5 ------------------------------------------------------------------
 
-/** Last wizard step. Exported so a render test can pin that the skill is offered first and the CLI/MCP command only under "other ways". */
+/** Last wizard step. Exported so a render test can pin that the skill is offered first and the plain HTTP example only under "other ways". */
 export function ConnectStep({
   created,
   usedAt,
-  cliSrc,
   skillBase,
 }: {
   created: CreateMoneyKeyResponse | null;
   usedAt: string | null;
-  cliSrc: ReturnType<typeof useCliSource>;
   /** Address to write into the skill (MONEYSWITCH_PUBLIC_URL, else this page's origin). */
   skillBase: string;
 }) {
@@ -626,8 +514,8 @@ export function ConnectStep({
     return (
       <div>
         <p className="setup-text">{t("s5_noKey")}</p>
-        <Link className="btn secondary" to="/connect">
-          {t("s5_openConnect")}
+        <Link className="btn secondary" to="/keys">
+          {t("s5_openKeys")}
         </Link>
       </div>
     );
@@ -648,12 +536,7 @@ export function ConnectStep({
       <details className="setup-other">
         <summary>{t("s5_otherWays")}</summary>
         <p className="setup-text">{t("s5_intro")}</p>
-        {cliSrc.kind === "npm" && <Callout tone="warn">{t("s5_npmWarn")}</Callout>}
-        <Snippet title={t("s5_cmd")} code={claudeMcpCommand(cliSrc, origin, created.key)} />
-        <div className="setup-sub">
-          <div className="snippet-title">{t("s5_openai")}</div>
-          <p className="setup-note">{t("s5_openaiNote", { base: openaiBase(origin) })}</p>
-        </div>
+        <Snippet title={t("s5_cmd")} code={restFetchCurl(origin, created.key)} />
       </details>
       <button
         type="button"

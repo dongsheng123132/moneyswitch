@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Gauge, MessageSquare, KeyRound, Radio, Activity, ShieldAlert, Wallet, Plug, LogOut, Compass } from "lucide-react";
+import { Gauge, MessageSquare, KeyRound, Activity, ShieldAlert, Wallet, LogOut, Compass } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { getWallet, listApprovals } from "./api";
@@ -10,37 +10,29 @@ import { WalletChip } from "./components/WalletChip";
 import { useT } from "./i18n";
 import { shellStrings } from "./i18n/strings/shell";
 import { common } from "./i18n/strings/common";
-import { useDemoMode } from "./demoMode";
-import { demoStrings } from "./i18n/strings/demo";
 import { useAdminMeta } from "./useAdminMeta";
 
 type NavKey =
   | "nav_overview"
   | "nav_playground"
   | "nav_keys"
-  | "nav_channels"
   | "nav_usage"
   | "nav_approvals"
-  | "nav_wallet"
-  | "nav_connect";
+  | "nav_wallet";
 
-const NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof Gauge }> = [
+export const NAV: Array<{ to: string; label: NavKey; end: boolean; icon: typeof Gauge }> = [
   { to: "/", label: "nav_overview", end: true, icon: Gauge },
   { to: "/playground", label: "nav_playground", end: false, icon: MessageSquare },
   { to: "/keys", label: "nav_keys", end: false, icon: KeyRound },
-  { to: "/channels", label: "nav_channels", end: false, icon: Radio },
   { to: "/usage", label: "nav_usage", end: false, icon: Activity },
   { to: "/approvals", label: "nav_approvals", end: false, icon: ShieldAlert },
   { to: "/wallet", label: "nav_wallet", end: false, icon: Wallet },
-  { to: "/connect", label: "nav_connect", end: false, icon: Plug },
 ];
 
 
 export default function Layout() {
   const t = useT(shellStrings);
   const tc = useT(common);
-  const td = useT(demoStrings);
-  const demo = useDemoMode();
   const meta = useAdminMeta();
   const { logout } = useAuth();
   const location = useLocation();
@@ -93,9 +85,9 @@ export default function Layout() {
         <header className="topbar">
           <h1 className="topbar-title">{title}</h1>
           <div className="topbar-right">
-            <span className={`network-badge${demo ? " demo" : ""}`}>
+            <span className="network-badge">
               <span className="network-dot" />
-              {demo ? td("networkBadge") : meta?.network_label ?? (meta?.is_mainnet ? tc("networkMainnet") : tc("networkTestnet"))}
+              {meta?.network_label ?? (meta?.is_mainnet ? tc("networkMainnet") : tc("networkTestnet"))}
             </span>
             <WalletChip wallet={wallet} loading={walletLoading} />
             {wallet?.has_keystore && (

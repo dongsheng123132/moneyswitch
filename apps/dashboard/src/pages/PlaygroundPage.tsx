@@ -5,7 +5,6 @@ import { listKeys } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
 import ProgressBar from "../components/ProgressBar";
 import Avatar from "../components/Avatar";
-import PlaygroundChat from "../components/PlaygroundChat";
 import PaidFetchPanel from "../components/PaidFetchPanel";
 import Callout from "../components/Callout";
 import Term from "../components/Term";
@@ -20,8 +19,7 @@ export default function PlaygroundPage() {
   const [searchParams] = useSearchParams();
   const [apiKey, setApiKey] = useState<string>(() => sessionStorage.getItem(PLAYGROUND_KEY_STORAGE) ?? "");
   const [refreshTick, setRefreshTick] = useState(0);
-  // SPEC-v0.5.md §3: /playground?mode=fetch&url=<url>&method=<GET|POST> deep-links into the paid-request tab.
-  const [tab, setTab] = useState<"chat" | "fetch">(() => (searchParams.get("mode") === "chat" ? "chat" : "fetch"));
+  // /playground?url=<url>&method=<GET|POST> deep-links into the paid request.
   const prefillUrl = searchParams.get("url") ?? undefined;
   const prefillMethod = searchParams.get("method") ?? undefined;
 
@@ -90,34 +88,14 @@ export default function PlaygroundPage() {
         </Callout>
       )}
 
-      <div className="pg-tabs">
-        <button type="button" className={`tab-btn ${tab === "chat" ? "active" : ""}`} onClick={() => setTab("chat")}>
-          {t("tabChat")}
-        </button>
-        <button type="button" className={`tab-btn ${tab === "fetch" ? "active" : ""}`} onClick={() => setTab("fetch")}>
-          {t("tabFetch")}
-        </button>
-      </div>
-
-      {tab === "chat" ? (
-        <PlaygroundChat
-          apiKey={apiKey}
-          onApiKeyChange={setApiKey}
-          audience="admin"
-          approvalsLinkTo="/approvals"
-          onMessageSettled={() => setRefreshTick((tk) => tk + 1)}
-          rightPanel={statusPanel}
-        />
-      ) : (
-        <PaidFetchPanel
-          apiKey={apiKey}
-          onApiKeyChange={setApiKey}
-          initialUrl={prefillUrl}
-          initialMethod={prefillMethod}
-          rightPanel={statusPanel}
-          onDone={() => setRefreshTick((tk) => tk + 1)}
-        />
-      )}
+      <PaidFetchPanel
+        apiKey={apiKey}
+        onApiKeyChange={setApiKey}
+        initialUrl={prefillUrl}
+        initialMethod={prefillMethod}
+        rightPanel={statusPanel}
+        onDone={() => setRefreshTick((tk) => tk + 1)}
+      />
     </div>
   );
 }

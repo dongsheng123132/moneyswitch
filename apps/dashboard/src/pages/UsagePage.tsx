@@ -60,7 +60,7 @@ export default function UsagePage() {
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
       if (!withinRange(p.created_at, range, now)) return false;
       if (needle) {
-        const haystack = [p.tx_hash, p.url, p.host, p.model, p.id].filter(Boolean).join(" ").toLowerCase();
+        const haystack = [p.tx_hash, p.url, p.host, p.id].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(needle)) return false;
       }
       return true;
@@ -76,18 +76,16 @@ export default function UsagePage() {
   }
 
   function exportCsv() {
-    const headers = ["time", "key_id", "key_name", "type", "model", "host", "method", "amount", "status", "tokens", "mock", "tx_hash", "error_code"];
+    const headers = ["time", "key_id", "key_name", "type", "host", "method", "amount", "status", "mock", "tx_hash", "error_code"];
     const rows = filtered.map((p) => [
       p.created_at,
       p.key_id,
       keyById.get(p.key_id)?.name ?? "",
       p.kind ?? "fetch",
-      p.model ?? "",
       p.host,
       p.method,
       p.amount,
       p.status,
-      (p.prompt_tokens ?? 0) + (p.completion_tokens ?? 0) || "",
       isMockPayment(p) ? "true" : "false",
       p.tx_hash ?? "",
       p.error_code ?? "",
@@ -197,7 +195,6 @@ export default function UsagePage() {
                 <th>{t("colType")}</th>
                 <th>{t("colTarget")}</th>
                 <th className="num">{t("colAmount")}</th>
-                <th className="num">{t("colTokens")}</th>
                 <th>{t("colStatus")}</th>
                 <th>{t("colTx")}</th>
               </tr>
@@ -205,7 +202,7 @@ export default function UsagePage() {
             <tbody>
               {filtered.map((p: PaymentRow) => {
                 const mock = isMockPayment(p);
-                const target = p.kind === "chat" ? p.model ?? "-" : `${p.host}${urlPath(p.url)}`;
+                const target = `${p.host}${urlPath(p.url)}`;
                 return (
                   <tr key={p.id} className={p.status === "unknown" ? "row-unknown" : ""}>
                     <td>{dateTime(p.created_at)}</td>
@@ -225,9 +222,6 @@ export default function UsagePage() {
                       {target}
                     </td>
                     <td className="num">{formatUsdc(p.amount, { maxDecimals: 4 })}</td>
-                    <td className="num">
-                      {p.prompt_tokens != null || p.completion_tokens != null ? (p.prompt_tokens ?? 0) + (p.completion_tokens ?? 0) : "-"}
-                    </td>
                     <td>
                       <StatusPill status={p.status} mock={mock} errorCode={p.error_code} />
                     </td>

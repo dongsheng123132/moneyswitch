@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth";
 import { usePolling } from "../../usePolling";
-import { getStatus, listModelsForKey, getHistory } from "../../api";
+import { getStatus, getHistory } from "../../api";
 import { toMicros, ratioMicros, formatUsdc } from "../../money";
 import RingProgress from "../../components/RingProgress";
 import Term from "../../components/Term";
@@ -11,14 +11,34 @@ import EmptyState from "../../components/EmptyState";
 import StatusPill from "../../components/StatusPill";
 import { isMockTx } from "../../components/TxLink";
 import { SkeletonCard } from "../../components/Skeleton";
+import SkillForAi from "../../components/SkillForAi";
+import { skillBaseUrl } from "../../skillText";
+import { skillStrings } from "../../i18n/strings/skill";
 import { useT } from "../../i18n";
 import { useRelativeTime } from "../../i18n/format";
 import { common } from "../../i18n/strings/common";
 import { employeeStrings } from "../../i18n/strings/employee";
 
 async function fetchBudget(key: string) {
-  const [status, models, history] = await Promise.all([getStatus(key), listModelsForKey(key), getHistory(key)]);
-  return { status, models, history };
+  const [status, history] = await Promise.all([getStatus(key), getHistory(key)]);
+  return { status, history };
+}
+
+/**
+ * The holder's own key, ready to hand to an AI: the skill built from the logged-in key (the employee portal's
+ * only place for it; sub-keys get theirs when they are created, see MySubKeysPage). Exported for render tests.
+ */
+export function OwnKeySkillCard({ secret, origin }: { secret: string; origin: string }) {
+  const ts = useT(skillStrings);
+  return (
+    <div className="card connect-section">
+      <div className="card-header">
+        <h3>{ts("employeeTitle")}</h3>
+      </div>
+      <div className="connect-section-body">{ts("employeeBody")}</div>
+      <SkillForAi baseUrl={skillBaseUrl(null, origin)} secret={secret} showNudge={false} />
+    </div>
+  );
 }
 
 export default function MyBudgetPage() {
@@ -39,7 +59,6 @@ export default function MyBudgetPage() {
   }
 
   const status = data?.status;
-  const models = data?.models ?? [];
   const history = (data?.history ?? []).slice(0, 5);
 
   const hasDaily = status?.daily_budget != null;
@@ -135,38 +154,10 @@ export default function MyBudgetPage() {
               )}
             </div>
 
-            <div className="stat-label" style={{ marginTop: 16 }}>
-              {t("whatCanIDo")}
-            </div>
-            <div className="action-cards">
-              <Link className="action-card" to="/me/playground">
-                <div className="action-card-title">{t("actionChatTitle")}</div>
-                <div className="action-card-body">{t("actionChatBody")}</div>
-              </Link>
-              <Link className="action-card" to="/me/connect">
-                <div className="action-card-title">{t("actionConnectTitle")}</div>
-                <div className="action-card-body">{t("actionConnectBody")}</div>
-              </Link>
-            </div>
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
-            <h3>{t("availableModels")}</h3>
-          </div>
-          {models.length === 0 ? (
-            <EmptyState title={t("emptyModels")} />
-          ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {models.map((m) => (
-                <span className="pill pill-gray" key={m}>
-                  {m}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        <OwnKeySkillCard secret={key} origin={window.location.origin} />
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
@@ -207,7 +198,7 @@ export default function MyBudgetPage() {
                   <td>
                     <span className="pill pill-blue">{h.kind === "chat" ? tc("kind_chat") : tc("kind_fetch")}</span>
                   </td>
-                  <td className="mono">{h.kind === "chat" ? h.model ?? "-" : h.url}</td>
+                  <td className="mono">{h.url}</td>
                   <td className="num">{formatUsdc(h.amount, { maxDecimals: 4 })}</td>
                   <td>
                     <StatusPill status={h.status} mock={isMockTx(h.tx_hash)} />

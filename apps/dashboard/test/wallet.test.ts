@@ -314,12 +314,10 @@ describe("Overview banners", () => {
     assert.ok(html.includes("callout-error"));
   });
 
-  it("nothing when all is well, with an older server, without a wallet, or in the offline demo", () => {
+  it("nothing when all is well, with an older server, or without a wallet", () => {
     assert.equal(render(h(WalletBanners, { wallet: wallet() })), "");
     assert.equal(render(h(WalletBanners, { wallet: wallet({}, null) })), "");
     assert.equal(render(h(WalletBanners, { wallet: null })), "");
-    assert.deepEqual(walletBannerKinds(wallet({}, { backup: "missing", auto_unlock_ok: false }), true), []);
-    assert.deepEqual(walletBannerKinds(wallet({ simulated: true }, { backup: "missing" })), []);
     assert.deepEqual(walletBannerKinds(wallet({}, { backup: "missing", auto_unlock_ok: false })), ["autoBroken", "backupMissing"]);
     assert.deepEqual(walletBannerKinds(wallet({}, { auto_unlock_ok: null })), []);
   });
@@ -590,7 +588,6 @@ describe("M3: the protection of the unlock secret is shown, and a failure is a r
     assert.ok(html.includes(esc(L.en.bannerProtectAction)));
     assert.ok(html.indexOf(esc(L.en.bannerSecretUnprotected)) < html.indexOf(esc(L.en.bannerBackupMissing)));
     assert.deepEqual(walletBannerKinds(wallet({}, { ...exposed, backup: "missing", auto_unlock_ok: false })), ["autoBroken", "secretUnprotected", "backupMissing"]);
-    assert.deepEqual(walletBannerKinds(wallet({}, exposed), true), [], "none in the offline demo");
     assert.deepEqual(walletBannerKinds(wallet({}, { secret_protected: true })), []);
     assert.deepEqual(walletBannerKinds(wallet({}, { secret_protected: null })), []);
   });
@@ -1054,5 +1051,28 @@ describe("round 3: retired copies that still open a password wallet are flagged 
     assert.ok(html.includes(L.zh.hRetiredOpenTitle));
     assert.ok(html.includes(fill(L.zh.hRetiredOpenBody, { files })));
     assert.ok(html.includes(L.zh.hRetiredOpen));
+  });
+});
+
+describe("retired wallets: the recovery hint promises nothing the owner may not have", () => {
+  it("English: recoverable ONLY with something that was kept (phrase or private key, or the file plus its password), else not at all", () => {
+    assert.doesNotMatch(L.en.retiredHint, /^To recover funds from a retired wallet, import its recovery phrase/);
+    assert.match(L.en.retiredHint, /only with something you kept/);
+    assert.match(L.en.retiredHint, /recovery phrase or private key/);
+    assert.match(L.en.retiredHint, /an older release never showed a recovery phrase/);
+    assert.match(L.en.retiredHint, /original password/);
+    assert.match(L.en.retiredHint, /cannot be recovered/);
+  });
+
+  it("Chinese says the same", () => {
+    assert.match(L.zh.retiredHint, /只有凭你另外保存的东西才能找回/);
+    assert.match(L.zh.retiredHint, /恢复短语或私钥/);
+    assert.match(L.zh.retiredHint, /旧版本创建的钱包从未显示过恢复短语/);
+    assert.match(L.zh.retiredHint, /以上都没有就无法找回/);
+  });
+
+  it("the retired list shows the Chinese hint too", () => {
+    const rows = [{ address: OLD_ADDRESS, retired_at: "2026-10-03T01:02:03.000Z", reason: "lost_password", keystore_file: "wallet-old.json", has_secret_file: false, replaced_by: ADDRESS, usdc_balance: "0.52" }];
+    assert.ok(render(h(RetiredWalletsList, { rows }), "zh").includes(esc(L.zh.retiredHint)));
   });
 });

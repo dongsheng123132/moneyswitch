@@ -5,9 +5,11 @@ export const skillStrings = defineMessages(
   {
     // tabs / grouping
     tabSkill: "Give this to your AI (skill)",
-    tabOther: "Other ways (advanced)",
+    tabOther: "Plain HTTP (advanced)",
     recommended: "Recommended",
-    otherIntro: "MCP, the CLI, the OpenAI-compatible gateway and plain REST still work. Use them when the skill is not an option.",
+    otherIntro: "Any program can call POST /v1/fetch directly. Use this when the skill is not an option.",
+    rawHttpTitle: "POST /v1/fetch",
+    rawHttpNote: "Replace the url with the paid API; max_price is the most this call may cost (USDC). The host must be in the key's allowed hosts.",
 
     // the block
     blockTitle: "Paste one block into your AI. It saves a skill and learns to pay.",
@@ -53,9 +55,11 @@ export const skillStrings = defineMessages(
   },
   {
     tabSkill: "交给你的 AI（skill）",
-    tabOther: "其他接入方式（进阶）",
+    tabOther: "纯 HTTP（进阶）",
     recommended: "推荐",
-    otherIntro: "MCP、命令行、OpenAI 兼容网关和纯 REST 仍然可用。skill 用不了时再选它们。",
+    otherIntro: "任何程序都可以直接调用 POST /v1/fetch。skill 用不了时再选它。",
+    rawHttpTitle: "POST /v1/fetch",
+    rawHttpNote: "把 url 换成要付费调用的 API；max_price 是这一次最多愿意花的 USDC。这个域名必须在这把 key 的允许域名里。",
 
     blockTitle: "把一整段文字粘贴给你的 AI，它会存成 skill 并学会付费。",
     blockBody: "这段文字里有本服务器的地址、这把 key，以及付费调用 x402 接口的说明。AI 把它存成 skill，之后遇到 402 或你让它买东西时就会用。",

@@ -18,16 +18,12 @@ const BASE = "https://pay.example.com";
 
 let SkillForAi: typeof import("../src/components/SkillForAi.tsx").default;
 let ConfirmDialog: typeof import("../src/components/ConfirmDialog.tsx").default;
-let EmployeeConnectPage: typeof import("../src/pages/employee/EmployeeConnectPage.tsx").default;
 let LangProvider: typeof import("../src/i18n/index.tsx").LangProvider;
-let AuthProvider: typeof import("../src/auth.tsx").AuthProvider;
 
 before(async () => {
   SkillForAi = (await import("../src/components/SkillForAi.tsx")).default;
   ConfirmDialog = (await import("../src/components/ConfirmDialog.tsx")).default;
-  EmployeeConnectPage = (await import("../src/pages/employee/EmployeeConnectPage.tsx")).default;
   LangProvider = (await import("../src/i18n/index.tsx")).LangProvider;
-  AuthProvider = (await import("../src/auth.tsx")).AuthProvider;
 });
 
 const render = (el: Parameters<typeof renderToStaticMarkup>[0], lang: "en" | "zh" = "en") => {
@@ -94,19 +90,3 @@ describe("ConfirmDialog (reset secret)", () => {
   });
 });
 
-describe("employee portal: connect page", () => {
-  it("leads with the skill block built from the logged-in key, before the CLI/MCP sections", () => {
-    store.set("moneyswitch_employee_key", KEY);
-    const html = render(h(AuthProvider, null, h(EmployeeConnectPage)));
-    const skillAt = html.indexOf("Give your AI the ability to pay");
-    const cliAt = html.indexOf("claude mcp add");
-    assert.ok(skillAt >= 0, "skill section present");
-    assert.ok(cliAt > skillAt, "manual MCP comes after the skill");
-    assert.ok(!html.includes("moneyswitch connect"), "retired config-writing command is absent");
-    assert.ok(html.includes("Copy for Codex"));
-    assert.ok(html.includes("name: moneyswitch-pay"));
-    assert.ok(html.includes("mk_live_Ab3d"));
-    assert.ok(!html.includes(KEY), "the real key is never rendered as text");
-    store.delete("moneyswitch_employee_key");
-  });
-});

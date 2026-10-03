@@ -31,15 +31,6 @@ const DECIDED_TONE: Record<string, "green" | "red" | "gray" | "blue"> = {
   used: "blue",
 };
 
-function targetInfo(a: ApprovalRow): { host: string; isChat: boolean } {
-  try {
-    const u = new URL(a.url);
-    return { host: u.host, isChat: a.url.endsWith("/chat/completions") };
-  } catch {
-    return { host: a.url, isChat: a.url.endsWith("/chat/completions") };
-  }
-}
-
 export default function ApprovalsPage() {
   const t = useT(approvalsStrings);
   const tc = useT(common);
@@ -137,7 +128,6 @@ export default function ApprovalsPage() {
           {approvals.map((a) => {
             const key = keyById.get(a.key_id);
             const keyLabel = key?.name ?? a.key_id.slice(0, 8);
-            const { host, isChat } = targetInfo(a);
             const showSuccess = successMsg?.id === a.id;
             return (
               <div className="approval-card" key={a.id}>
@@ -148,7 +138,7 @@ export default function ApprovalsPage() {
                 <div className="approval-amount num">
                   {formatUsdc(a.amount, { maxDecimals: 4 })} {tc("usdc")}
                 </div>
-                <div className="approval-url">{isChat ? t("chatViaHost", { host }) : a.url}</div>
+                <div className="approval-url">{a.url}</div>
                 <div className="approval-meta">
                   <span>{t("payTo", { addr: shortAddr(a.pay_to) })}</span>
                   <span>{countdown(a.expires_at)}</span>

@@ -6,13 +6,13 @@ import {
   listMyChildKeys,
   createMyChildKey,
   revokeMyChildKey,
-  ChatApiError,
+  KeyApiError,
   ChildKeyRow,
   CreateChildKeyResponse,
   StatusResponse,
 } from "../../api";
 import { toMicros, ratioMicros, formatUsdc, fromMicros } from "../../money";
-import { openaiBase } from "../../snippets";
+import { restFetchCurl } from "../../snippets";
 import ProgressBar from "../../components/ProgressBar";
 import Pill from "../../components/Pill";
 import Drawer from "../../components/Drawer";
@@ -27,7 +27,6 @@ import { useT } from "../../i18n";
 import { common } from "../../i18n/strings/common";
 import { subkeysStrings } from "../../i18n/strings/subkeys";
 import { keysStrings } from "../../i18n/strings/keys";
-import { employeeStrings } from "../../i18n/strings/employee";
 import { skillStrings } from "../../i18n/strings/skill";
 import { skillBaseUrl } from "../../skillText";
 import "../../styles/subkeys.css";
@@ -79,12 +78,11 @@ async function fetchMySubKeys(key: string) {
 /**
  * What a key holder sees right after creating a sub-key. One key per agent is the
  * point of sub-keys, so the skill for that agent (with THIS new key, not the
- * holder's own) comes first; the raw key and the OpenAI base URL are the other way.
+ * holder's own) comes first; the raw key and one plain HTTP example are the other way.
  * Exported for render tests.
  */
 export function SubKeyCreated({ created, origin, onDone }: { created: CreateChildKeyResponse; origin: string; onDone: () => void }) {
   const t = useT(subkeysStrings);
-  const te = useT(employeeStrings);
   const ts = useT(skillStrings);
   return (
     <div>
@@ -98,7 +96,7 @@ export function SubKeyCreated({ created, origin, onDone }: { created: CreateChil
       </SecretNotice>
       <SkillForAi baseUrl={skillBaseUrl(null, origin)} secret={created.key} keyName={created.name} />
       <div className="skill-other-intro">{ts("tabOther")}</div>
-      <Snippet title={te("baseUrlLabel")} code={openaiBase(origin)} />
+      <Snippet title={ts("rawHttpTitle")} code={restFetchCurl(origin, created.key)} note={ts("rawHttpNote")} />
       <div className="modal-actions">
         <button type="button" className="btn" onClick={onDone}>
           {t("doneBtn")}
@@ -205,7 +203,7 @@ export default function MySubKeysPage() {
       setCreated(res);
       refresh();
     } catch (err) {
-      if (err instanceof ChatApiError) {
+      if (err instanceof KeyApiError) {
         const fieldKey = `field_${err.field}`;
         const label = err.field && fieldKey in subkeysStrings.en ? t(fieldKey as keyof typeof subkeysStrings.en) : err.field ?? "";
         if (err.code === "CHILD_EXCEEDS_PARENT" && err.field) {
@@ -238,7 +236,7 @@ export default function MySubKeysPage() {
       setRevokeConfirmId(null);
       refresh();
     } catch (e) {
-      setRevokeError(e instanceof ChatApiError ? e.message : e instanceof Error ? e.message : "revoke_failed");
+      setRevokeError(e instanceof KeyApiError ? e.message : e instanceof Error ? e.message : "revoke_failed");
     } finally {
       setRevokingId(null);
     }

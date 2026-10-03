@@ -154,10 +154,10 @@ export function WalletHealthCard({ wallet }: { wallet: WalletInfo }) {
 
 export type WalletBannerKind = "autoBroken" | "secretUnprotected" | "backupMissing";
 
-/** Which warnings the Overview shows for this wallet (none in the offline demo, whose wallet holds nothing real). */
-export function walletBannerKinds(wallet: WalletInfo | null | undefined, demo = false): WalletBannerKind[] {
+/** Which warnings the Overview shows for this wallet. */
+export function walletBannerKinds(wallet: WalletInfo | null | undefined): WalletBannerKind[] {
   const health = wallet?.health;
-  if (!wallet || !health || demo || wallet.simulated) return [];
+  if (!wallet || !health) return [];
   const kinds: WalletBannerKind[] = [];
   if (health.auto_unlock_ok === false || secretGoneWhileRunning(health)) kinds.push("autoBroken");
   if (health.secret_protected === false) kinds.push("secretUnprotected");
@@ -165,9 +165,9 @@ export function walletBannerKinds(wallet: WalletInfo | null | undefined, demo = 
   return kinds;
 }
 
-export function WalletBanners({ wallet, demo = false }: { wallet: WalletInfo | null | undefined; demo?: boolean }) {
+export function WalletBanners({ wallet }: { wallet: WalletInfo | null | undefined }) {
   const t = useT(walletLifecycle);
-  const kinds = walletBannerKinds(wallet, demo);
+  const kinds = walletBannerKinds(wallet);
   return (
     <>
       {kinds.includes("autoBroken") && (

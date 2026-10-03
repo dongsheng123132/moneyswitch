@@ -115,10 +115,6 @@ export interface MoneyKeyRow {
   // the root row.
   used_today: string;
   used_total: string;
-  // SPEC-v0.2 §1: MoneyKey allowed_models — null = all models from enabled
-  // channels are allowed. Confirmed present on every /v1/keys row by the
-  // real v0.2 server (verified on testnet).
-  allowed_models: string[] | null;
   // --- SPEC-v0.4.md §A: child keys / multi-level delegation ---
   parent_id: string | null;
   depth: number;
@@ -145,8 +141,6 @@ export interface CreateMoneyKeyInput {
   allowed_hosts: string[];
   max_payments_per_minute?: number;
   expires_at?: string | null;
-  // ASSUMPTION (SPEC-v0.2 §1): optional; omitted/null = all models allowed.
-  allowed_models?: string[] | null;
   // SPEC-v0.4.md §A: lets the employee holding this key create sub-keys of
   // their own (POST /v1/keys/children). Defaults to false server-side.
   can_delegate?: boolean;
@@ -306,14 +300,8 @@ export interface PaymentRow {
   // with the `0xmock` convention from SPEC §9. This keeps the UI correct
   // once the server adds a `mock` field, and degrades gracefully today.
   mock?: boolean;
-  // SPEC-v0.2 §2.7: payments/usage/history rows always carry these four
-  // columns on the real v0.2 server (verified on testnet). kind defaults to
-  // "fetch" server-side; model/prompt_tokens/completion_tokens are null for
-  // kind="fetch" rows and for chat rows where the upstream didn't return usage.
+  // "fetch" for every payment made now; "chat" only on old rows written by the removed OpenAI-compatible gateway.
   kind: "fetch" | "chat";
-  model: string | null;
-  prompt_tokens: number | null;
-  completion_tokens: number | null;
 }
 
 export async function listUsage(): Promise<PaymentRow[]> {
@@ -369,8 +357,6 @@ export interface WalletInfo {
   auto_unlock_configured?: boolean;
   usdc_balance: string | null;
   network: string;
-  /** Offline demo: usdc_balance is simulated, not read from the chain. */
-  simulated?: boolean;
   /** Whether the keystore holds a 12-word recovery phrase (false for a wallet imported from a bare private key). */
   has_recovery_phrase?: boolean;
   backup_confirmed_at?: string | null;
@@ -538,162 +524,7 @@ export async function verifyAdminToken(token: string): Promise<boolean> {
   return res.ok;
 }
 
-// ---------------------------------------------------------------------------
-// v0.2 §1 — Channels (admin token)
-//
-// ASSUMPTION: shape taken verbatim from SPEC-v0.2.md §1. Backend endpoints
-// (GET/POST /v1/admin/channels, PATCH/DELETE /v1/admin/channels/:id) are
-// being implemented concurrently by another coder and did not exist at the
-// time this file was written. All fields below match the spec's described
-// request/response bodies; if the real server disagrees once it lands, only
-// this block plus ChannelsPage.tsx should need adjustment.
-// ---------------------------------------------------------------------------
-
-export interface ChannelRow {
-  id: string;
-  name: string;
-  base_url: string;
-  models: string[];
-  enabled: boolean;
-  created_at: string;
-}
-
-export interface CreateChannelInput {
-  name: string;
-  base_url: string;
-  models: string[];
-}
-
-export interface UpdateChannelInput {
-  enabled?: boolean;
-  models?: string[];
-  name?: string;
-}
-
-export async function listChannels(): Promise<ChannelRow[]> {
-  const res = await request<{ channels: ChannelRow[] }>("/v1/admin/channels");
-  return res.channels;
-}
-
-export async function createChannel(input: CreateChannelInput): Promise<ChannelRow> {
-  return request<ChannelRow>("/v1/admin/channels", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function updateChannel(id: string, input: UpdateChannelInput): Promise<ChannelRow> {
-  return request<ChannelRow>(`/v1/admin/channels/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function deleteChannel(id: string): Promise<{ id: string; deleted: boolean }> {
-  return request(`/v1/admin/channels/${id}`, { method: "DELETE" });
-}
-
-/**
- * "从上游拉取模型" — GET /v1/admin/channels/probe-models?base_url=<encoded>
- * (admin token). Server proxies the upstream /models call so the browser
- * never talks to the channel's base_url directly (avoids CORS + keeps SSRF
- * allow-listing server-side). Success: { models: string[] }. Failure (400/502):
- * { error: "PROBE_FAILED", message: "..." } — `message` is what we surface.
- */
-export async function probeChannelModels(baseUrl: string): Promise<string[]> {
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`/v1/admin/channels/probe-models?base_url=${encodeURIComponent(baseUrl)}`, { headers });
-  const text = await res.text();
-  let json: unknown = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
-    }
-  }
-  if (!res.ok) {
-    const body = json as { error?: string; message?: string } | null;
-    throw new ApiError(res.status, body?.message || body?.error || res.statusText, body?.error ?? null);
-  }
-  const models = (json as { models?: string[] } | null)?.models ?? [];
-  return models;
-}
-
-// ---------------------------------------------------------------------------
-// v0.2 §2 — OpenAI-compatible gateway (MoneyKey auth, Bearer — NOT admin
-// token). Used by the Playground page.
-//
-// ASSUMPTION: request/response/error shapes taken verbatim from
-// SPEC-v0.2.md §2. These endpoints are being implemented concurrently and
-// did not exist at the time this file was written. `sendChatCompletion` is
-// a real POST that spends real testnet USDC once the backend exists — it is
-// defined here (mirroring how `createKey`/`revokeKey` etc. were always
-// defined without ever being invoked outside the running app) but is never
-// called by this coder; only a human clicking "Send" in the Playground UI
-// triggers it.
-// ---------------------------------------------------------------------------
-
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
-
-export interface ChatCompletionMoneySwitchMeta {
-  cost: string;
-  currency: string;
-  tx_hash: string;
-  network: string;
-  remaining_today: string;
-}
-
-export interface ChatCompletionUsage {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-}
-
-export interface ChatCompletionChoice {
-  index: number;
-  message: { role: string; content: string };
-  finish_reason: string | null;
-}
-
-export interface ChatCompletionResponse {
-  id: string;
-  object: string;
-  model: string;
-  choices: ChatCompletionChoice[];
-  // Upstream's own usage object, passed through as-is (SPEC-v0.2 §2.7:
-  // "usage 是上游原样"); still optional since an upstream could omit it.
-  usage?: ChatCompletionUsage;
-  // Always present on a non-streaming success response (SPEC-v0.2 §2 step 5,
-  // confirmed by the real v0.2 server on testnet).
-  moneyswitch: ChatCompletionMoneySwitchMeta;
-}
-
-export interface OpenAiModelsResponse {
-  object: "list";
-  data: Array<{ id: string; object?: string }>;
-}
-
-export interface OpenAiErrorBody {
-  error: {
-    message: string;
-    type?: string;
-    code?: string;
-    approval_id?: string;
-    // SPEC-v0.4.md §A: a payment denial from a child key may name which
-    // ancestor's limit actually tripped (limit_scope "self" | "ancestor").
-    limit_scope?: "self" | "ancestor";
-    limit_key_prefix?: string;
-  };
-}
-
-// SPEC-v0.4.md §A: POST /v1/keys/children error bodies are NOT the nested
-// OpenAI shape above — they are flat, admin-`request()`-style bodies:
+// Error bodies of the MoneyKey-authed calls (SPEC-v0.4.md §A) are flat:
 //   400 { error, code: "CHILD_EXCEEDS_PARENT" | "INVALID_REQUEST", message, field?, parent_value? }
 //   403 { code: "DELEGATION_NOT_ALLOWED" | "MAX_DEPTH_EXCEEDED" | "CHILDREN_LIMIT_REACHED", message, field? }
 //   401 { status: "error", code, limit_scope?, limit_key_prefix? }
@@ -708,11 +539,10 @@ interface FlatKeyErrorBody {
   limit_key_prefix?: string;
 }
 
-/** Thrown by the MoneyKey-authed gateway/child-key calls; carries every shape's error fields (only the relevant ones are ever set). */
-export class ChatApiError extends Error {
+/** Thrown by the MoneyKey-authed calls (status, history, sub-keys); carries the error fields (only the relevant ones are ever set). */
+export class KeyApiError extends Error {
   status: number;
   code: string | null;
-  approvalId: string | null;
   /** SPEC-v0.4.md §A: the request field (snake_case) that violated a parent's limit, e.g. "daily_budget". */
   field: string | null;
   /** SPEC-v0.4.md §A: the parent's own value for `field`, to show "cannot exceed the parent: {parent_value}". */
@@ -724,13 +554,11 @@ export class ChatApiError extends Error {
     status: number,
     message: string,
     code?: string | null,
-    approvalId?: string | null,
     extra?: { field?: string | null; parentValue?: string | string[] | null; limitScope?: "self" | "ancestor" | null; limitKeyPrefix?: string | null }
   ) {
     super(message);
     this.status = status;
     this.code = code ?? null;
-    this.approvalId = approvalId ?? null;
     this.field = extra?.field ?? null;
     this.parentValue = extra?.parentValue ?? null;
     this.limitScope = extra?.limitScope ?? null;
@@ -756,19 +584,9 @@ async function keyAuthedRequest<T>(path: string, key: string, init?: RequestInit
     }
   }
   if (!res.ok) {
-    // The gateway (chat) error shape nests everything under `error` as an
-    // object; the child-key admin-style shape is flat with `error` (if
-    // present at all) as a plain string. Distinguish by the type of `error`.
-    const nested = json as OpenAiErrorBody | null;
-    if (nested?.error && typeof nested.error === "object") {
-      throw new ChatApiError(res.status, nested.error.message ?? res.statusText, nested.error.code, nested.error.approval_id, {
-        limitScope: nested.error.limit_scope ?? null,
-        limitKeyPrefix: nested.error.limit_key_prefix ?? null,
-      });
-    }
     const flat = json as FlatKeyErrorBody | null;
     const message = flat?.message ?? (typeof flat?.error === "string" ? flat.error : undefined) ?? res.statusText;
-    throw new ChatApiError(res.status, message, flat?.code ?? null, null, {
+    throw new KeyApiError(res.status, message, flat?.code ?? null, {
       field: flat?.field ?? null,
       parentValue: flat?.parent_value ?? null,
       limitScope: flat?.limit_scope ?? null,
@@ -776,21 +594,6 @@ async function keyAuthedRequest<T>(path: string, key: string, init?: RequestInit
     });
   }
   return json as T;
-}
-
-/** GET /v1/models — only the models allowed for this MoneyKey. */
-export async function listModelsForKey(key: string): Promise<string[]> {
-  const res = await keyAuthedRequest<OpenAiModelsResponse>("/v1/models", key);
-  return (res.data ?? []).map((m) => m.id);
-}
-
-/** POST /v1/chat/completions (non-streaming) — a real, paid call once the backend exists. */
-export async function sendChatCompletion(key: string, model: string, messages: ChatMessage[], approvalId?: string | null): Promise<ChatCompletionResponse> {
-  return keyAuthedRequest<ChatCompletionResponse>("/v1/chat/completions", key, {
-    method: "POST",
-    // approval_id: re-send after an admin approved an APPROVAL_REQUIRED payment (gateway reads it from the body).
-    body: JSON.stringify({ model, messages, stream: false, ...(approvalId ? { approval_id: approvalId } : {}) }),
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -845,7 +648,7 @@ export async function getStatus(key: string): Promise<StatusResponse> {
 }
 
 // Existing /v1/history shape (confirmed by coordinator):
-// { history: [{ id, url, method, network, amount, status, tx_hash, error_code, created_at, kind, model, prompt_tokens, completion_tokens }] }
+// { history: [{ id, url, method, network, amount, status, tx_hash, error_code, created_at, kind }] }
 export interface HistoryRow {
   id: string;
   url: string;
@@ -856,10 +659,8 @@ export interface HistoryRow {
   tx_hash: string | null;
   error_code: string | null;
   created_at: string;
+  /** "chat" only on old rows written by the removed OpenAI-compatible gateway. */
   kind: "fetch" | "chat";
-  model: string | null;
-  prompt_tokens: number | null;
-  completion_tokens: number | null;
 }
 
 /** GET /v1/history — the logged-in MoneyKey's own payment history (no key_id/host columns — it's implicitly "mine"). */
@@ -883,7 +684,6 @@ export interface CreateChildKeyInput {
   per_request_limit: string;
   approval_threshold?: string | null;
   allowed_hosts?: string[];
-  allowed_models?: string[] | null;
   expires_at?: string | null;
   can_delegate?: boolean;
   max_payments_per_minute?: number;
@@ -917,7 +717,7 @@ export async function revokeMyChildKey(key: string, id: string): Promise<{ id: s
 // ---------------------------------------------------------------------------
 
 /** GET /v1/setup/status — unauthenticated; only says whether a one-time setup link is still claimable. */
-export async function getSetupStatus(): Promise<{ setup_link_active: boolean; demo?: boolean }> {
+export async function getSetupStatus(): Promise<{ setup_link_active: boolean }> {
   const res = await fetch("/v1/setup/status");
   if (!res.ok) throw new ApiError(res.status, res.statusText);
   return res.json();
@@ -948,34 +748,18 @@ export interface AdminMeta {
   /** True when the active network is Monad mainnet (real USDC). */
   is_mainnet?: boolean;
   faucet_url: string | null;
-  demo_seller_url: string | null;
-  cli_tarball_available: boolean;
-  cli_local_path: string | null;
-  mcp_local_path: string | null;
   wallet_password_from_env: boolean;
-  /** v0.5: this MoneySwitch wallet's address = default receiving address for toll booths (null if no wallet yet). */
+  /** This MoneySwitch wallet's address (null if no wallet yet). */
   wallet_address: string | null;
-  /** v0.5: base URL buyers use, e.g. "http://127.0.0.1:4020" (toll booths live at <public_base>/t/<slug>). */
+  /** Base URL the skill is written for, e.g. "http://127.0.0.1:4020". */
   public_base: string;
-  /** v0.5: true when public_base comes from MONEYSWITCH_PUBLIC_URL rather than the browser's origin. */
+  /** True when public_base comes from MONEYSWITCH_PUBLIC_URL rather than the browser's origin. */
   public_base_from_env: boolean;
-  /** true only on the offline demo (`moneyswitch-server demo`). */
-  demo?: boolean;
 }
 
 /** GET /v1/admin/meta — admin only. */
 export async function getAdminMeta(): Promise<AdminMeta> {
   return request<AdminMeta>("/v1/admin/meta");
-}
-
-/** HEAD /dl/moneyswitch.tgz — is the packed client CLI downloadable from this server? (no auth; works for employees too) */
-export async function isCliTarballAvailable(): Promise<boolean> {
-  try {
-    const res = await fetch("/dl/moneyswitch.tgz", { method: "HEAD" });
-    return res.ok;
-  } catch {
-    return false;
-  }
 }
 
 // ---------------------------------------------------------------------------

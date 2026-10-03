@@ -39,7 +39,7 @@ export default function EmployeeHistoryPage() {
     const rows = filtered.map((h) => [
       h.created_at,
       h.kind === "chat" ? tc("kind_chat") : tc("kind_fetch"),
-      h.kind === "chat" ? h.model ?? "" : h.url,
+      h.url,
       h.amount,
       tc(`status_${h.status}` as const),
       h.tx_hash ?? "",
@@ -135,7 +135,7 @@ export default function EmployeeHistoryPage() {
                     <span className="pill pill-blue">{h.kind === "chat" ? tc("kind_chat") : tc("kind_fetch")}</span>
                   </td>
                   <td className="mono" style={{ maxWidth: 260, whiteSpace: "normal", wordBreak: "break-all" }}>
-                    {h.kind === "chat" ? h.model ?? "-" : urlPath(h.url) || h.url}
+                    {urlPath(h.url) || h.url}
                   </td>
                   <td className="num">{formatUsdc(h.amount, { maxDecimals: 4 })}</td>
                   <td>

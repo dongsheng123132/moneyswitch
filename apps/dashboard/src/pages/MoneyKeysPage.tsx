@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, KeyRound, ChevronRight, ChevronDown } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listKeys, createKey, revokeKey, rotateKey, listChannels, ApiError, ChannelRow, MoneyKeyRow } from "../api";
+import { listKeys, createKey, revokeKey, rotateKey, ApiError, MoneyKeyRow } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
 import Avatar from "../components/Avatar";
 import Pill from "../components/Pill";
@@ -23,7 +23,6 @@ import { skillStrings } from "../i18n/strings/skill";
 import { skillBaseUrl } from "../skillText";
 import { handoffFromCreated, rotateToHandoff, type Handoff } from "../keyHandoff";
 import { useAdminMeta } from "../useAdminMeta";
-import { useCliSource } from "../snippets";
 import "../styles/keys.css";
 
 const PLAYGROUND_KEY_STORAGE = "moneyswitch_playground_key";
@@ -39,7 +38,6 @@ interface FormState {
   allowed_hosts: string;
   max_payments_per_minute: string;
   expires_at: string; // yyyy-mm-dd from <input type="date">
-  allowed_models: string[];
   can_delegate: boolean;
 }
 
@@ -53,7 +51,6 @@ function emptyForm(hosts: string): FormState {
     allowed_hosts: hosts,
     max_payments_per_minute: "10",
     expires_at: "",
-    allowed_models: [],
     can_delegate: false,
   };
 }
@@ -99,32 +96,6 @@ const PRESETS: Array<{ key: keyof typeof keysStrings.en; patch: Partial<FormStat
   { key: "presetGenerous", patch: { daily_budget: "5", per_request_limit: "1", approval_threshold: "", total_budget: "50" } },
 ];
 
-function deriveAllowedHosts(
-  channels: ChannelRow[] | undefined | null,
-  demoSellerUrl: string | null | undefined
-): { hosts: string; hint: "derived" | "demo" | "empty" } {
-  const set = new Set<string>();
-  for (const c of channels ?? []) {
-    if (!c.enabled) continue;
-    try {
-      const u = new URL(c.base_url);
-      set.add(u.port ? `${u.hostname}:${u.port}` : u.hostname);
-    } catch {
-      // malformed base_url — skip rather than poison the allow-list
-    }
-  }
-  if (set.size > 0) return { hosts: Array.from(set).join(", "), hint: "derived" };
-  if (demoSellerUrl) {
-    try {
-      const u = new URL(demoSellerUrl);
-      return { hosts: u.port ? `${u.hostname}:${u.port}` : u.hostname, hint: "demo" };
-    } catch {
-      // fall through
-    }
-  }
-  return { hosts: "", hint: "empty" };
-}
-
 function isPositiveDecimal(v: string): boolean {
   return DECIMAL_RE.test(v.trim()) && parseFloat(v) > 0;
 }
@@ -142,18 +113,8 @@ export default function MoneyKeysPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const meta = useAdminMeta();
-  const src = useCliSource(meta);
 
   const { data: keys, error, loading, refresh } = usePolling(listKeys);
-  const { data: channels } = usePolling(listChannels);
-  const allModelOptions = Array.from(new Set((channels ?? []).flatMap((c) => c.models))).sort();
-  const hostsDefault = useMemo(() => deriveAllowedHosts(channels, meta?.demo_seller_url), [channels, meta]);
-  const firstModel = useMemo(() => {
-    for (const c of channels ?? []) {
-      if (c.enabled && c.models.length > 0) return c.models[0];
-    }
-    return "moneyswitch-demo-chat";
-  }, [channels]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm(""));
@@ -191,7 +152,7 @@ export default function MoneyKeysPage() {
   }, [revokeSuccess]);
 
   function openCreate() {
-    setForm(emptyForm(hostsDefault.hosts));
+    setForm(emptyForm(""));
     setCreateError(null);
     setHandoff(null);
     setShowCreate(true);
@@ -257,7 +218,6 @@ export default function MoneyKeysPage() {
           .filter(Boolean),
         max_payments_per_minute: form.max_payments_per_minute ? Number(form.max_payments_per_minute) : undefined,
         expires_at: expiresIso,
-        allowed_models: form.allowed_models.length > 0 ? form.allowed_models : null,
         can_delegate: form.can_delegate,
       });
       setHandoff(handoffFromCreated(res));
@@ -308,7 +268,6 @@ export default function MoneyKeysPage() {
 
   const apiBase = window.location.origin;
   const skillBase = skillBaseUrl(meta, apiBase);
-  const noChannelsYet = Boolean(channels && channels.length === 0);
 
   return (
     <div>
@@ -332,36 +291,17 @@ export default function MoneyKeysPage() {
         {loading && !keys ? (
           <SkeletonTable rows={4} cols={9} />
         ) : !keys || keys.length === 0 ? (
-          noChannelsYet ? (
-            <EmptyState
-              icon={<KeyRound size={28} />}
-              title={t("emptyNoChannelsTitle")}
-              action={
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Link to="/channels" className="btn small secondary">
-                    {t("actionAddChannel")}
-                  </Link>
-                  <button type="button" className="btn small" onClick={openCreate}>
-                    {t("actionCreateAnyway")}
-                  </button>
-                </div>
-              }
-            >
-              {t("emptyNoChannelsBody")}
-            </EmptyState>
-          ) : (
-            <EmptyState
-              icon={<KeyRound size={28} />}
-              title={t("emptyNoKeysTitle")}
-              action={
-                <button type="button" className="btn small" onClick={openCreate}>
-                  {t("actionCreateFirst")}
-                </button>
-              }
-            >
-              {t("emptyNoKeysBody")}
-            </EmptyState>
-          )
+          <EmptyState
+            icon={<KeyRound size={28} />}
+            title={t("emptyNoKeysTitle")}
+            action={
+              <button type="button" className="btn small" onClick={openCreate}>
+                {t("actionCreateFirst")}
+              </button>
+            }
+          >
+            {t("emptyNoKeysBody")}
+          </EmptyState>
         ) : (
           <table>
             <thead>
@@ -598,38 +538,7 @@ export default function MoneyKeysPage() {
                   onChange={(e) => setForm({ ...form, allowed_hosts: e.target.value })}
                   placeholder={t("allowedHostsPlaceholder")}
                 />
-                {hostsDefault.hint === "derived" && <div className="field-hint">{t("allowedHostsHintDerived")}</div>}
-                {hostsDefault.hint === "demo" && <div className="field-hint">{t("allowedHostsHintDemo")}</div>}
-                {hostsDefault.hint === "empty" && <Callout tone="warn">{t("allowedHostsHintEmpty")}</Callout>}
-              </div>
-              <div className="field">
-                <label>
-                  <Term k="allowedModels">{t("allowedModelsLabel")}</Term>
-                </label>
-                {allModelOptions.length === 0 ? (
-                  <div className="field-hint">{t("allowedModelsEmptyHint")}</div>
-                ) : (
-                  <div className="model-chip-row">
-                    {allModelOptions.map((m) => {
-                      const active = form.allowed_models.includes(m);
-                      return (
-                        <button
-                          type="button"
-                          key={m}
-                          className={`pill model-chip ${active ? "pill-blue" : "pill-gray"}`}
-                          onClick={() =>
-                            setForm((f) => ({
-                              ...f,
-                              allowed_models: active ? f.allowed_models.filter((x) => x !== m) : [...f.allowed_models, m],
-                            }))
-                          }
-                        >
-                          {m}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                {form.allowed_hosts.trim() === "" && <Callout tone="warn">{t("allowedHostsHintEmpty")}</Callout>}
               </div>
               <div className="field">
                 <label>
@@ -662,8 +571,6 @@ export default function MoneyKeysPage() {
             handoff={handoff}
             skillBase={skillBase}
             apiBase={apiBase}
-            src={src}
-            firstModel={firstModel}
             onTryPlayground={() => tryInPlayground(handoff.key)}
             onDone={closeDrawer}
           />

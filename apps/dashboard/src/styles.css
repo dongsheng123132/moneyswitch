@@ -809,7 +809,7 @@ th.num {
   flex: 1;
   /* Classic flexbox trap: without min-height:0 a flex child never shrinks
      below its content's intrinsic height, so overflow-y:auto never kicks in
-     and long content (e.g. the OpenAI/NewAPI client tab) spills past the
+     and long content (e.g. the skill preview) spills past the
      drawer instead of scrolling inside it. */
   min-height: 0;
 }
@@ -1548,95 +1548,3 @@ th.num {
   padding-right: 84px;
 }
 
-/* Offline demo (`moneyswitch-server demo`): always-visible banner. */
-.demo-banner {
-  position: sticky;
-  top: 0;
-  z-index: 60;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  font-size: 12.5px;
-  color: #1a1400;
-  background: repeating-linear-gradient(135deg, #f5c542 0 14px, #eab72c 14px 28px);
-  border-bottom: 1px solid #b88a12;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.demo-banner-tag {
-  background: #1a1400;
-  color: #f5c542;
-  border-radius: 4px;
-  padding: 1px 6px;
-  letter-spacing: 0.06em;
-  font-size: 11px;
-}
-.demo-banner-exit {
-  margin-left: auto;
-  opacity: 0.75;
-}
-body.ms-demo .sidebar {
-  top: 32px;
-  height: calc(100vh - 32px);
-}
-body.ms-demo .topbar {
-  top: 32px;
-}
-.demo-guide-card {
-  border: 1px solid var(--yellow);
-  background: linear-gradient(180deg, var(--yellow-bg), transparent 70%), var(--panel);
-}
-.demo-guide-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-  margin-top: 6px;
-}
-.demo-guide-item {
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--bg-elevated);
-}
-.demo-guide-item h4 {
-  margin: 0;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.demo-guide-item p {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 13px;
-  flex: 1;
-}
-.demo-guide-step {
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  background: var(--yellow);
-  color: #1a1400;
-}
-.demo-guide-footer {
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--text-faint);
-}
-.network-badge.demo {
-  border-color: var(--yellow);
-  color: var(--yellow);
-}
-.network-badge.demo .network-dot {
-  background: var(--yellow);
-}

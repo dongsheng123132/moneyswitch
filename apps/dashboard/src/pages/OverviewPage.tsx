@@ -6,7 +6,6 @@ import {
   listKeys,
   listUsage,
   listApprovals,
-  listChannels,
   getWallet,
   isCountedStatus,
   MoneyKeyRow,
@@ -29,16 +28,14 @@ import { useT } from "../i18n";
 import { common } from "../i18n/strings/common";
 import { overviewStrings } from "../i18n/strings/overview";
 import { useRelativeTime } from "../i18n/format";
-import DemoGuideCard from "../components/DemoGuideCard";
 import { WalletBanners, walletBannerKinds } from "../components/WalletHealth";
-import { useDemoMode } from "../demoMode";
 import "../styles/overview.css";
 
 const SETUP_HIDDEN_KEY = "moneyswitch_setup_hidden";
 
 async function fetchOverview() {
-  const [keys, payments, approvals, channels] = await Promise.all([listKeys(), listUsage(), listApprovals("pending"), listChannels()]);
-  return { keys, payments, approvals, channels };
+  const [keys, payments, approvals] = await Promise.all([listKeys(), listUsage(), listApprovals("pending")]);
+  return { keys, payments, approvals };
 }
 
 function yesterdayUtc(now: Date): Date {
@@ -63,7 +60,6 @@ export default function OverviewPage() {
   const t = useT(overviewStrings);
   const tc = useT(common);
   const relTime = useRelativeTime();
-  const demo = useDemoMode();
   const { data, error, loading } = usePolling(fetchOverview);
   const { data: wallet } = usePolling(getWallet);
   const [setupHidden, setSetupHidden] = useState(() => {
@@ -115,7 +111,6 @@ export default function OverviewPage() {
   const keys: MoneyKeyRow[] = data?.keys ?? [];
   const payments: PaymentRow[] = data?.payments ?? [];
   const approvals = data?.approvals ?? [];
-  const channels = data?.channels ?? [];
   const now = new Date();
 
   const countedPayments = payments.filter((p) => isCountedStatus(p.status));
@@ -175,11 +170,10 @@ export default function OverviewPage() {
   // Getting started (A-2): show while setup is incomplete and the user
   // hasn't dismissed the card.
   const hasWallet = Boolean(wallet?.has_keystore);
-  const hasChannel = channels.length > 0;
   const hasKey = keys.length > 0;
   const hasFirstCall = keys.some((k) => Boolean(k.last_used_at));
-  const setupIncomplete = !hasWallet || !hasChannel || !hasKey;
-  const showGettingStarted = setupIncomplete && !setupHidden && !demo;
+  const setupIncomplete = !hasWallet || !hasKey;
+  const showGettingStarted = setupIncomplete && !setupHidden;
 
   // Needs attention (D-2): only the callouts that currently apply.
   const pendingCount = approvals.length;
@@ -187,14 +181,12 @@ export default function OverviewPage() {
   const walletLocked = Boolean(wallet?.has_keystore) && wallet?.unlocked === false;
   const balanceZero = Boolean(wallet?.has_keystore) && wallet?.usdc_balance === "0";
   // Backup not confirmed / auto-unlock broken: the two states in which a restart or a lost disk can strand funds.
-  const walletWarnings = walletBannerKinds(wallet, demo);
+  const walletWarnings = walletBannerKinds(wallet);
   const hasAttention = pendingCount > 0 || walletNotCreated || walletLocked || balanceZero || walletWarnings.length > 0;
 
   return (
     <div>
       {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
-
-      {demo && <DemoGuideCard />}
 
       {showGettingStarted && (
         <div className="card getting-started-card">
@@ -210,7 +202,6 @@ export default function OverviewPage() {
           <div className="getting-started-list">
             {[
               { done: hasWallet, label: t("gettingStartedWallet") },
-              { done: hasChannel, label: t("gettingStartedChannel") },
               { done: hasKey, label: t("gettingStartedKey") },
               { done: hasFirstCall, label: t("gettingStartedCall") },
             ].map((item, i) => (
@@ -228,7 +219,7 @@ export default function OverviewPage() {
 
       {hasAttention && (
         <div className="attention-row">
-          <WalletBanners wallet={wallet} demo={demo} />
+          <WalletBanners wallet={wallet} />
           {pendingCount > 0 && (
             <Callout
               tone="warn"
@@ -457,7 +448,7 @@ export default function OverviewPage() {
               {recent.map((p) => {
                 const key = keyById.get(p.key_id);
                 const mock = isMockPayment(p);
-                const target = p.kind === "chat" && p.model ? p.model : p.host;
+                const target = p.host;
                 return (
                   <div className="activity-item" key={p.id}>
                     <span className={`activity-dot ${mock ? "mock" : p.status === "settled" ? "settled" : p.status === "failed" ? "failed" : "pending"}`} />

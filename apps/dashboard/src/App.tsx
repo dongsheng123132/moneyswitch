@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from "./auth";
 import { LangProvider } from "./i18n";
 import SetupPage from "./pages/SetupPage";
 import LocalEntryPage from "./pages/LocalEntryPage";
-import DemoBanner from "./components/DemoBanner";
 import "./styles/shell.css";
 import Layout from "./Layout";
 import EmployeeLayout from "./EmployeeLayout";
@@ -14,13 +13,10 @@ import MoneyKeysPage from "./pages/MoneyKeysPage";
 import UsagePage from "./pages/UsagePage";
 import ApprovalsPage from "./pages/ApprovalsPage";
 import WalletPage from "./pages/WalletPage";
-import ConnectAgentPage from "./pages/ConnectAgentPage";
-import ChannelsPage from "./pages/ChannelsPage";
 import PlaygroundPage from "./pages/PlaygroundPage";
 import MyBudgetPage from "./pages/employee/MyBudgetPage";
 import EmployeePlaygroundPage from "./pages/employee/EmployeePlaygroundPage";
 import EmployeeHistoryPage from "./pages/employee/EmployeeHistoryPage";
-import EmployeeConnectPage from "./pages/employee/EmployeeConnectPage";
 import MySubKeysPage from "./pages/employee/MySubKeysPage";
 
 function RequireAdmin({ children }: { children: React.ReactElement }) {
@@ -40,8 +36,6 @@ function Routed() {
   const loggedInPath = token ? "/" : employeeKey ? "/me" : null;
 
   return (
-    <>
-    <DemoBanner />
     <Routes>
       {/* First-run wizard (docs/ux-audit.md A-1/A-2). Not behind RequireAdmin: it
           handles the one-time /setup#ms_setup_… claim itself, and redirects
@@ -60,11 +54,9 @@ function Routed() {
         <Route index element={<OverviewPage />} />
         <Route path="playground" element={<PlaygroundPage />} />
         <Route path="keys" element={<MoneyKeysPage />} />
-        <Route path="channels" element={<ChannelsPage />} />
         <Route path="usage" element={<UsagePage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="wallet" element={<WalletPage />} />
-        <Route path="connect" element={<ConnectAgentPage />} />
       </Route>
 
       {/* SPEC-v0.3-employee.md §A — employee view, separate route tree, own
@@ -81,14 +73,12 @@ function Routed() {
         <Route path="budget" element={<MyBudgetPage />} />
         <Route path="playground" element={<EmployeePlaygroundPage />} />
         <Route path="history" element={<EmployeeHistoryPage />} />
-        <Route path="connect" element={<EmployeeConnectPage />} />
         {/* SPEC-v0.4.md §A: employee's own sub-keys, shown when their key can_delegate. */}
         <Route path="children" element={<MySubKeysPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to={loggedInPath ?? "/login"} replace />} />
     </Routes>
-    </>
   );
 }
 

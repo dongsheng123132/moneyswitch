@@ -4,7 +4,7 @@ import { defineMessages } from "../index";
 export const usageStrings = defineMessages(
   {
     allAgents: "All agents",
-    searchPlaceholder: "Search tx hash, URL, model…",
+    searchPlaceholder: "Search tx hash, URL…",
     clearFilters: "Clear filters",
     exportCsv: "Export CSV",
     rangeToday: "Today",
@@ -21,7 +21,6 @@ export const usageStrings = defineMessages(
     colType: "Type",
     colTarget: "Target",
     colAmount: "Amount",
-    colTokens: "Tokens",
     colStatus: "Status",
     colTx: "Tx",
 
@@ -33,7 +32,7 @@ export const usageStrings = defineMessages(
   },
   {
     allAgents: "全部 Agent",
-    searchPlaceholder: "搜索交易哈希 / URL / 模型…",
+    searchPlaceholder: "搜索交易哈希 / URL…",
     clearFilters: "清除筛选",
     exportCsv: "导出 CSV",
     rangeToday: "今天",
@@ -50,7 +49,6 @@ export const usageStrings = defineMessages(
     colType: "类型",
     colTarget: "目标",
     colAmount: "金额",
-    colTokens: "Tokens",
     colStatus: "状态",
     colTx: "交易",
 

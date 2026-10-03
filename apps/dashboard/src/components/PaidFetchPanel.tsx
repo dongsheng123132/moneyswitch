@@ -68,7 +68,7 @@ export interface PaidFetchPanelProps {
   audience?: "admin" | "employee";
   initialUrl?: string;
   initialMethod?: string;
-  /** Key status card shown on the right (same as the chat tab). */
+  /** Key status card shown on the right. */
   rightPanel?: React.ReactNode;
   /** Called after every completed request so the status card can refresh. */
   onDone?: () => void;

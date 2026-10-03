@@ -1,6 +1,7 @@
-// Page-level render tests (react-dom/server, no DOM): which way to connect an agent is FIRST and DEFAULT on every
-// path that hands out a key, that the pages survive an address the skill renderer refuses, and the Money Keys
-// handoff / row actions. Interactivity (clicks) is not exercised here; defaults and structure are.
+// Page-level render tests (react-dom/server, no DOM): the skill is FIRST and DEFAULT on every path that hands out a
+// key, the only other format is one plain HTTP example, the pages survive an address the skill renderer refuses, the
+// Money Keys handoff / row actions, and the navigation of the atomic product. Interactivity (clicks) is not exercised
+// here; defaults and structure are.
 import { describe, it, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createElement as h } from "react";
@@ -24,37 +25,41 @@ const PARENT_KEY = "mk_live_Prnt1234567890ParentSecretKeyAbCd";
 const BASE = "https://pay.example.com";
 const BAD_ORIGINS = ["http://moneyswitch_srv:4020", "http://example.com.:4020"];
 
-let ConnectAgentPage: typeof import("../src/pages/ConnectAgentPage.tsx").default;
 let MoneyKeysPage: typeof import("../src/pages/MoneyKeysPage.tsx").default;
-let EmployeeConnectPage: typeof import("../src/pages/employee/EmployeeConnectPage.tsx").default;
 let ConnectStep: typeof import("../src/pages/SetupPage.tsx").ConnectStep;
 let SubKeyCreated: typeof import("../src/pages/employee/MySubKeysPage.tsx").SubKeyCreated;
+let OwnKeySkillCard: typeof import("../src/pages/employee/MyBudgetPage.tsx").OwnKeySkillCard;
 let KeyHandoff: typeof import("../src/components/KeyHandoff.tsx").default;
 let KeyRowActions: typeof import("../src/components/KeyRowActions.tsx").default;
+let adminNav: typeof import("../src/Layout.tsx").NAV;
+let employeeNav: typeof import("../src/EmployeeLayout.tsx").NAV;
 let LangProvider: typeof import("../src/i18n/index.tsx").LangProvider;
 let AuthProvider: typeof import("../src/auth.tsx").AuthProvider;
 let en: {
-  connect: (typeof import("../src/i18n/strings/connect.ts"))["connectStrings"]["en"];
   keys: (typeof import("../src/i18n/strings/keys.ts"))["keysStrings"]["en"];
   skill: (typeof import("../src/i18n/strings/skill.ts"))["skillStrings"]["en"];
   setup: (typeof import("../src/i18n/strings/setup.ts"))["setupStrings"]["en"];
+  shell: (typeof import("../src/i18n/strings/shell.ts"))["shellStrings"]["en"];
+  employee: (typeof import("../src/i18n/strings/employee.ts"))["employeeStrings"]["en"];
 };
 
 before(async () => {
-  ConnectAgentPage = (await import("../src/pages/ConnectAgentPage.tsx")).default;
   MoneyKeysPage = (await import("../src/pages/MoneyKeysPage.tsx")).default;
-  EmployeeConnectPage = (await import("../src/pages/employee/EmployeeConnectPage.tsx")).default;
   ConnectStep = (await import("../src/pages/SetupPage.tsx")).ConnectStep;
   SubKeyCreated = (await import("../src/pages/employee/MySubKeysPage.tsx")).SubKeyCreated;
+  OwnKeySkillCard = (await import("../src/pages/employee/MyBudgetPage.tsx")).OwnKeySkillCard;
   KeyHandoff = (await import("../src/components/KeyHandoff.tsx")).default;
   KeyRowActions = (await import("../src/components/KeyRowActions.tsx")).default;
+  adminNav = (await import("../src/Layout.tsx")).NAV;
+  employeeNav = (await import("../src/EmployeeLayout.tsx")).NAV;
   LangProvider = (await import("../src/i18n/index.tsx")).LangProvider;
   AuthProvider = (await import("../src/auth.tsx")).AuthProvider;
   en = {
-    connect: (await import("../src/i18n/strings/connect.ts")).connectStrings.en,
     keys: (await import("../src/i18n/strings/keys.ts")).keysStrings.en,
     skill: (await import("../src/i18n/strings/skill.ts")).skillStrings.en,
     setup: (await import("../src/i18n/strings/setup.ts")).setupStrings.en,
+    shell: (await import("../src/i18n/strings/shell.ts")).shellStrings.en,
+    employee: (await import("../src/i18n/strings/employee.ts")).employeeStrings.en,
   };
 });
 
@@ -72,37 +77,8 @@ const render = (el: Parameters<typeof renderToStaticMarkup>[0], lang: "en" | "zh
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 /** Applies a "{name}" substitution the way t() does and escapes the result for markup, so assertions track the strings instead of copies of them. */
 const fill = (s: string, vars: Record<string, string | number>) => esc(s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k])));
-
-describe("Connect agent page", () => {
-  it("opens on the skill tab: it is the first tab, active, with the skill block and none of the MCP/OpenAI/REST content", () => {
-    const html = render(h(ConnectAgentPage));
-    const skillTab = html.indexOf(en.skill.tabSkill);
-    const mcpTab = html.indexOf(en.connect.tabMcp);
-    assert.ok(skillTab >= 0 && mcpTab > skillTab, "the skill tab comes before the MCP tab");
-    assert.match(html, new RegExp(`<button type="button" class="tab-btn active">${en.skill.tabSkill.replace(/[()]/g, "\\$&")}`), "the skill tab is the active one");
-    assert.ok(html.includes(en.skill.recommended));
-    assert.ok(html.includes(en.skill.tabOther), "the other ways are grouped under their own label");
-    assert.ok(html.includes(en.skill.blockTitle), "the skill block is shown");
-    assert.ok(!html.includes(en.connect.oneLineTitle), "the MCP section is not shown by default");
-  });
-
-  it("renders in Chinese too", () => {
-    const html = render(h(ConnectAgentPage), "zh");
-    assert.ok(html.includes("交给你的 AI（skill）"));
-    assert.ok(html.includes("class=\"tab-btn active\">交给你的 AI（skill）"));
-  });
-
-  for (const origin of BAD_ORIGINS) {
-    it(`survives an address the skill cannot use (${origin}): the page renders and explains instead of crashing`, () => {
-      setOrigin(origin);
-      let html = "";
-      assert.doesNotThrow(() => (html = render(h(ConnectAgentPage))));
-      assert.ok(html.includes(en.skill.tabSkill));
-      assert.ok(html.includes(fill(en.skill.badUrl, { url: origin })), "names the address and how to fix it");
-      assert.ok(!html.includes("copy-btn"), "no copy button for text that would carry a wrong address");
-    });
-  }
-});
+/** Formats that used to exist and must not come back as a way to hand a key to an AI. */
+const REMOVED_FORMATS = ["claude mcp add", "mcp_servers", "MCP", "OpenAI", "new-api", "NewAPI", "npx -y"];
 
 describe("Money Keys page", () => {
   for (const origin of BAD_ORIGINS) {
@@ -120,40 +96,25 @@ describe("Money Keys page", () => {
   });
 });
 
-describe("Employee connect page", () => {
-  it("survives an address the skill cannot use: renders, explains, still shows the other ways", () => {
-    store.set("moneyswitch_employee_key", KEY);
-    for (const origin of BAD_ORIGINS) {
-      setOrigin(origin);
-      let html = "";
-      assert.doesNotThrow(() => (html = render(h(EmployeeConnectPage))), origin);
-      assert.ok(html.includes(fill(en.skill.badUrl, { url: origin })), origin);
-      assert.ok(html.includes("npx"), "the CLI/MCP sections are still there");
-    }
-  });
-});
-
 describe("KeyHandoff (the drawer after 'Create key' or 'Reset secret and copy skill')", () => {
   const props = {
     skillBase: BASE,
     apiBase: BASE,
-    src: { kind: "tarball", url: `${BASE}/dl/moneyswitch.tgz` } as const,
-    firstModel: "moneyswitch-demo-chat",
     onTryPlayground() {},
     onDone() {},
   };
   const created = { id: 1, kind: "created", key: KEY, name: "Codex" } as const;
   const rotated = { id: 2, kind: "rotated", key: KEY, name: "Codex" } as const;
 
-  it("a new key opens on the skill tab: skill first, selected, the block with a copy button, the other ways not shown", () => {
+  it("a new key opens on the skill tab: skill first, selected, the block with a copy button, the plain HTTP example not shown", () => {
     const html = render(h(KeyHandoff, { ...props, handoff: created }));
     assert.ok(html.includes(en.keys.createdBanner));
     assert.match(html, /role="tab" aria-selected="true" class="tab-btn active">Give this to your AI \(skill\)/);
-    assert.match(html, /role="tab" aria-selected="false" class="tab-btn ">Other ways \(advanced\)/);
+    assert.match(html, /role="tab" aria-selected="false" class="tab-btn ">Plain HTTP \(advanced\)/);
     assert.ok(html.includes("Copy for Codex"), "named key -> agent preselected");
     assert.ok(html.includes("secret-notice"));
-    assert.ok(!html.includes(en.skill.otherIntro), "the other ways are behind their tab");
-    assert.ok(!html.includes("claude mcp add"));
+    assert.ok(!html.includes(en.skill.otherIntro), "the other way is behind its tab");
+    assert.ok(!html.includes(en.skill.rawHttpTitle));
   });
 
   it("the full key is shown once (the key box) and not again in the skill preview", () => {
@@ -169,13 +130,15 @@ describe("KeyHandoff (the drawer after 'Create key' or 'Reset secret and copy sk
     assert.match(html, /aria-selected="true" class="tab-btn active">Give this to your AI \(skill\)/);
   });
 
-  it("the other ways are still there: connect command, MCP, OpenAI, message for a colleague (initialTopTab=other)", () => {
+  it("the only other way is ONE raw HTTP example for POST /v1/fetch (initialTopTab=other); MCP, Codex TOML, OpenAI and new-api are gone", () => {
     const html = render(h(KeyHandoff, { ...props, handoff: created, initialTopTab: "other" }));
-    assert.match(html, /aria-selected="true" class="tab-btn active">Other ways \(advanced\)/);
+    assert.match(html, /aria-selected="true" class="tab-btn active">Plain HTTP \(advanced\)/);
     assert.ok(html.includes(en.skill.otherIntro));
-    for (const label of [en.keys.tabConnect, en.keys.tabClaude, en.keys.tabCodex, en.keys.tabOpenai, en.keys.tabEmployee]) assert.ok(html.includes(label), label);
-    assert.ok(html.includes("npx -y --package="), "the one-line connect command is the default of the other ways");
+    assert.ok(html.includes(en.skill.rawHttpTitle));
+    assert.ok(html.includes(`curl ${BASE}/v1/fetch`), "the curl example for /v1/fetch");
+    assert.equal(html.split("curl ").length - 1, 1, "exactly one example");
     assert.ok(!html.includes(en.skill.blockTitle), "the skill block is behind its own tab");
+    for (const removed of REMOVED_FORMATS) assert.ok(!html.includes(removed), `${removed} is not offered any more`);
   });
 
   it("a wrong page address does not break the drawer: the key is still shown, the skill explains", () => {
@@ -208,63 +171,63 @@ describe("KeyRowActions (key list row)", () => {
   });
 });
 
-describe("Setup wizard, last step 'Connect an agent'", () => {
+describe("Setup wizard, last step 'give the skill to your AI'", () => {
   const created = { id: "k1", name: "Codex", key: KEY } as unknown as Parameters<typeof ConnectStep>[0]["created"];
-  const cliSrc = { kind: "tarball", url: `${BASE}/dl/moneyswitch.tgz` } as const;
 
-  it("offers the skill FIRST (agent selector + copy button) and the CLI/MCP command only under 'other ways'", () => {
-    const html = render(h(ConnectStep, { created, usedAt: null, cliSrc, skillBase: BASE }));
+  it("offers the skill FIRST (agent selector + copy button) and the plain HTTP example only under 'other ways'", () => {
+    const html = render(h(ConnectStep, { created, usedAt: null, skillBase: BASE }));
     const skillAt = html.indexOf(en.skill.blockTitle);
     const otherAt = html.indexOf(en.setup.s5_otherWays);
-    const cliAt = html.indexOf("npx -y --package=");
+    const httpAt = html.indexOf(`curl ${BASE}/v1/fetch`);
     assert.ok(skillAt >= 0, "skill block present");
     assert.ok(html.includes("Copy for Codex"));
     assert.ok(html.includes('role="radiogroup"'));
     assert.ok(otherAt > skillAt, "other ways come after the skill");
-    assert.ok(cliAt > otherAt, "the CLI command sits under the 'other ways' heading");
+    assert.ok(httpAt > otherAt, "the HTTP example sits under the 'other ways' heading");
     assert.match(html, /<details class="setup-other"><summary>/);
     assert.ok(html.includes(en.setup.s5_waiting));
-    // The skill block shows the key masked; (as before) the advanced CLI snippet shows its command in full.
-    assert.ok(!html.slice(0, otherAt).includes(KEY), "the full key is not in the skill block");
+    for (const removed of REMOVED_FORMATS) assert.ok(!html.includes(removed), `${removed} is not offered any more`);
   });
 
   it("says it is connected once the key was used", () => {
-    assert.ok(render(h(ConnectStep, { created, usedAt: "2026-10-02T00:00:00Z", cliSrc, skillBase: BASE })).includes(en.setup.s5_connected));
+    assert.ok(render(h(ConnectStep, { created, usedAt: "2026-10-02T00:00:00Z", skillBase: BASE })).includes(en.setup.s5_connected));
   });
 
-  it("without a key: the hint and the way to the Connect page, no skill block", () => {
-    const html = render(h(ConnectStep, { created: null, usedAt: null, cliSrc, skillBase: BASE }));
+  it("without a key: the hint and the way to the Money Keys page, no skill block", () => {
+    const html = render(h(ConnectStep, { created: null, usedAt: null, skillBase: BASE }));
     assert.ok(html.includes(en.setup.s5_noKey));
+    assert.ok(html.includes('href="/keys"'));
     assert.ok(!html.includes(en.skill.blockTitle));
   });
 
   it("a wrong page address is explained instead of crashing the wizard", () => {
-    const html = render(h(ConnectStep, { created, usedAt: null, cliSrc, skillBase: "http://moneyswitch_srv:4020" }));
+    const html = render(h(ConnectStep, { created, usedAt: null, skillBase: "http://moneyswitch_srv:4020" }));
     assert.ok(html.includes(fill(en.skill.badUrl, { url: "http://moneyswitch_srv:4020" })));
-    assert.ok(html.includes("npx -y --package="), "the CLI route is still offered");
+    assert.ok(html.includes("/v1/fetch"), "the plain HTTP route is still offered");
   });
 
   it("Chinese", () => {
-    const html = render(h(ConnectStep, { created, usedAt: null, cliSrc, skillBase: BASE }), "zh");
+    const html = render(h(ConnectStep, { created, usedAt: null, skillBase: BASE }), "zh");
     assert.ok(html.includes("复制，给 Codex"));
-    assert.ok(html.includes("其他接入方式（进阶）"));
+    assert.ok(html.includes("其他方式（进阶）：纯 HTTP"));
   });
 });
 
-describe("Employee portal: sub-key created", () => {
+describe("Employee portal: the skill for the holder's own key and for a sub-key", () => {
   const created = { id: "c1", name: "Codex", key: CHILD_KEY } as unknown as Parameters<typeof SubKeyCreated>[0]["created"];
 
-  it("offers the skill for the NEW sub-key (not the holder's own key) before the raw OpenAI snippet", () => {
+  it("a new sub-key: the skill for the NEW key (not the holder's own) before the raw HTTP example", () => {
     store.set("moneyswitch_employee_key", PARENT_KEY);
     const html = render(h(SubKeyCreated, { created, origin: BASE, onDone() {} }));
     const skillAt = html.indexOf(en.skill.blockTitle);
     const otherAt = html.indexOf(en.skill.tabOther);
-    const baseUrlAt = html.lastIndexOf(`${BASE}/v1`); // the skill preview also mentions ${BASE}/v1/fetch: take the last one
-    assert.ok(skillAt >= 0 && otherAt > skillAt && baseUrlAt > otherAt, "skill, then 'other ways', then the OpenAI base URL");
+    const httpAt = html.indexOf(`curl ${BASE}/v1/fetch`);
+    assert.ok(skillAt >= 0 && otherAt > skillAt && httpAt > otherAt, "skill, then 'other way', then the HTTP example");
     assert.ok(html.includes("Copy for Codex"), "named after the agent");
     assert.ok(html.includes("mk_live_Chld"), "the preview carries the sub-key");
     assert.ok(!html.includes("mk_live_Prnt"), "never the holder's own key");
     assert.ok(html.includes("secret-notice"));
+    for (const removed of REMOVED_FORMATS) assert.ok(!html.includes(removed), `${removed} is not offered any more`);
   });
 
   it("a wrong page address is explained, the key itself is still shown", () => {
@@ -272,15 +235,76 @@ describe("Employee portal: sub-key created", () => {
     assert.ok(html.includes(CHILD_KEY));
     assert.ok(html.includes(fill(en.skill.badUrl, { url: "http://moneyswitch_srv:4020" })));
   });
+
+  it("the holder's OWN key has its skill on the budget page (there is no separate connect page any more)", () => {
+    const html = render(h(OwnKeySkillCard, { secret: KEY, origin: BASE }));
+    assert.ok(html.includes(en.skill.employeeTitle));
+    assert.ok(html.includes(en.skill.blockTitle));
+    assert.ok(html.includes("Copy for Codex"));
+    assert.ok(html.includes("name: moneyswitch-pay"));
+    assert.ok(html.includes("mk_live_Ab3d"), "masked preview");
+    assert.ok(!html.includes(KEY), "the real key is never rendered as text");
+    for (const removed of REMOVED_FORMATS) assert.ok(!html.includes(removed), `${removed} is not offered any more`);
+  });
+
+  it("the holder's own skill survives a wrong page address", () => {
+    const html = render(h(OwnKeySkillCard, { secret: KEY, origin: "http://moneyswitch_srv:4020" }));
+    assert.ok(html.includes(fill(en.skill.badUrl, { url: "http://moneyswitch_srv:4020" })));
+  });
 });
 
+describe("every way to copy the skill that exists after the trim", () => {
+  it("create key, reset secret (drawer and row button), setup wizard, sub-key created and the holder's own key all offer 'Copy for <agent>'", () => {
+    const handoff = { id: 1, kind: "created", key: KEY, name: "Codex" } as const;
+    const drawerProps = { skillBase: BASE, apiBase: BASE, onTryPlayground() {}, onDone() {} };
+    const row = { childrenCount: 0, confirmingRevoke: false, revoking: false, onRotate() {}, onAskRevoke() {}, onRevoke() {}, onCancelRevoke() {} };
+    const wizardKey = { id: "k1", name: "Codex", key: KEY } as unknown as Parameters<typeof ConnectStep>[0]["created"];
+    const subKey = { id: "c1", name: "Codex", key: CHILD_KEY } as unknown as Parameters<typeof SubKeyCreated>[0]["created"];
+    assert.ok(render(h(KeyHandoff, { ...drawerProps, handoff })).includes("Copy for Codex"), "create key");
+    assert.ok(render(h(KeyHandoff, { ...drawerProps, handoff: { ...handoff, kind: "rotated" } })).includes("Copy for Codex"), "reset secret (drawer)");
+    assert.ok(render(h(KeyRowActions, { ...row, status: "active" })).includes(">Reset secret and copy skill<"), "reset secret (row button)");
+    assert.ok(render(h(ConnectStep, { created: wizardKey, usedAt: null, skillBase: BASE })).includes("Copy for Codex"), "setup wizard");
+    assert.ok(render(h(SubKeyCreated, { created: subKey, origin: BASE, onDone() {} })).includes("Copy for Codex"), "sub-key created");
+    assert.ok(render(h(OwnKeySkillCard, { secret: KEY, origin: BASE })).includes("Copy for Codex"), "the holder's own key");
+  });
+});
+
+describe("navigation of the atomic product", () => {
+  it("admin: Overview, Test payment, Keys, Usage, Approvals, Wallet (and nothing else)", () => {
+    assert.deepEqual(
+      adminNav.map((n) => n.to),
+      ["/", "/playground", "/keys", "/usage", "/approvals", "/wallet"]
+    );
+    assert.deepEqual(
+      adminNav.map((n) => en.shell[n.label]),
+      ["Overview", "Test payment", "Money Keys", "Usage", "Approvals", "Wallet"]
+    );
+  });
+
+  it("employee: budget, test payment, history, sub-keys (sub-keys only for a key that can delegate)", () => {
+    assert.deepEqual(
+      employeeNav.map((n) => n.to),
+      ["/me/budget", "/me/playground", "/me/history", "/me/children"]
+    );
+    assert.deepEqual(
+      employeeNav.map((n) => en.employee[n.key]),
+      ["My budget", "Test payment", "History", "My sub-keys"]
+    );
+    assert.deepEqual(
+      employeeNav.filter((n) => "requiresDelegate" in n && n.requiresDelegate).map((n) => n.to),
+      ["/me/children"]
+    );
+  });
+});
 
 describe("Payment test entry", () => {
-  it("opens direct x402 requests by default for administrators", async () => {
+  it("opens direct x402 requests by default for administrators, with no chat tab", async () => {
     const Page = (await import("../src/pages/PlaygroundPage.tsx")).default;
     const html = render(h(Page));
     assert.ok(html.includes('id="paid-fetch-url"'));
     assert.ok(html.includes('data-action-id="payment.fetch"'));
+    assert.ok(!html.includes("pg-tabs"), "no tab bar: there is nothing but the paid request");
+    assert.ok(!/\bChat\b/.test(html), "no chat");
   });
   it("lets employees test x402 without re-entering or exposing their key", async () => {
     store.set("moneyswitch_employee_key", KEY);
@@ -291,5 +315,6 @@ describe("Payment test entry", () => {
     assert.ok(!html.includes(KEY));
     assert.ok(!html.includes('href="/wallet"'));
     assert.ok(html.includes("spending limit, not wallet balance"));
+    assert.ok(!html.includes("pg-tabs"));
   });
 });

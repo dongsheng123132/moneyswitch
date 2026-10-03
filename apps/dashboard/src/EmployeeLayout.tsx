@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { CircleDollarSign, MessageSquare, History, Plug, LogOut, GitBranch } from "lucide-react";
+import { CircleDollarSign, MessageSquare, History, LogOut, GitBranch } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
-import { getStatus, ChatApiError } from "./api";
+import { getStatus, KeyApiError } from "./api";
 import { shortAddr } from "./money";
 import { useT } from "./i18n";
 import { common } from "./i18n/strings/common";
@@ -13,11 +13,10 @@ import Callout from "./components/Callout";
 import { useAdminMeta } from "./useAdminMeta";
 import "./styles/employee.css";
 
-const NAV = [
+export const NAV = [
   { to: "/me/budget", key: "navBudget" as const, icon: CircleDollarSign },
-  { to: "/me/playground", key: "navChat" as const, icon: MessageSquare },
+  { to: "/me/playground", key: "navPayTest" as const, icon: MessageSquare },
   { to: "/me/history", key: "navHistory" as const, icon: History },
-  { to: "/me/connect", key: "navConnect" as const, icon: Plug },
   // SPEC-v0.4.md §A: only shown once we know this key can delegate — until
   // /v1/status answers, status is undefined and the entry stays hidden.
   { to: "/me/children", key: "navChildren" as const, icon: GitBranch, requiresDelegate: true },
@@ -46,7 +45,7 @@ export default function EmployeeLayout() {
       setKeyErrorCode(null);
       return res;
     } catch (e) {
-      if (e instanceof ChatApiError) {
+      if (e instanceof KeyApiError) {
         // v0.4: distinguish "a key above this sub-key was revoked/expired".
         const ancestor = e.limitScope === "ancestor" && (e.code === "KEY_REVOKED" || e.code === "KEY_EXPIRED");
         setKeyErrorCode(ancestor ? `${e.code}_ANCESTOR` : e.code);

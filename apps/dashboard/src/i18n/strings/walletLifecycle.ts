@@ -195,7 +195,7 @@ export const walletLifecycle = defineMessages(
     retiredBalance: "USDC balance",
     retiredFiles: "Files",
     retiredHint:
-      "To recover funds from a retired wallet, import its recovery phrase into MetaMask or OKX Wallet, or import the file in the retired/ folder of the server's data directory with its original password.",
+      "Funds in a retired wallet can be recovered only with something you kept: its recovery phrase or private key, imported into MetaMask or OKX Wallet (a wallet made by an older release never showed a recovery phrase), or the file in the retired/ folder of the server's data directory together with its original password. With none of these the funds cannot be recovered.",
     retiredRefresh: "Refresh balances",
     retiredLoadFailed: "Could not load the retired wallets.",
     retiredUnknown: "unknown",
@@ -410,7 +410,7 @@ export const walletLifecycle = defineMessages(
     retiredBalance: "USDC 余额",
     retiredFiles: "文件",
     retiredHint:
-      "要找回已停用钱包里的资金：把它的恢复短语导入 MetaMask 或 OKX 钱包，或者把服务器数据目录 retired/ 文件夹里的文件连同原密码一起导入。",
+      "已停用钱包里的资金，只有凭你另外保存的东西才能找回：它的恢复短语或私钥（导入 MetaMask 或 OKX 钱包；旧版本创建的钱包从未显示过恢复短语），或者服务器数据目录 retired/ 文件夹里的文件连同原密码。以上都没有就无法找回。",
     retiredRefresh: "刷新余额",
     retiredLoadFailed: "无法加载已停用的钱包。",
     retiredUnknown: "未知",

@@ -61,7 +61,6 @@ export function FundingGuide({ address, network }: { address: string; network?: 
         <div>
           <strong>{t("fundingNoGasTitle")}</strong> — {t("fundingNoGasBody")} <Term k="facilitator">facilitator</Term>.
         </div>
-        <div>{t("fundingDemoNote")}</div>
       </div>
     </div>
   );

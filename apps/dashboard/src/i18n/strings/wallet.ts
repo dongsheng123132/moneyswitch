@@ -49,7 +49,6 @@ export const walletStrings = defineMessages(
     fundingStep3: "Wait ~10–30s — the balance refreshes by itself.",
     fundingNoGasTitle: "No MON / gas needed",
     fundingNoGasBody: "x402 settlement gas is paid by the",
-    fundingDemoNote: "Running the offline demo (pnpm demo:local)? It uses a mock facilitator — you can skip funding.",
 
     networkTitle: "Network",
     networkLabel: "Network",
@@ -59,8 +58,7 @@ export const walletStrings = defineMessages(
     oneWalletHeading: "Wallet: funding and payments",
     receiveTitle: "Receive",
     receiveSentence:
-      "Anyone — including an AI buying from your toll booth — pays you at this address. It can only receive money, so it's safe to share.",
-    receiveTollboothLink: "Charge AI with a toll booth →",
+      "Send USDC to this address to fund the wallet. It can only receive money, so it's safe to share.",
     paysFromTitle: "Pays from",
     paysFromSentence: "Every MoneyKey you hand out spends from this same balance. The private key stays in the server's memory — never shown.",
     paysFromKeysLink: "Manage Money Keys →",
@@ -112,7 +110,6 @@ export const walletStrings = defineMessages(
     fundingStep3: "等待约 10–30 秒——余额会自动刷新。",
     fundingNoGasTitle: "不需要 MON / gas",
     fundingNoGasBody: "x402 结算的 gas 由",
-    fundingDemoNote: "跑离线 demo（pnpm demo:local）？用的是 mock facilitator，可以跳过充值。",
 
     networkTitle: "网络",
     networkLabel: "网络",
@@ -121,8 +118,7 @@ export const walletStrings = defineMessages(
 
     oneWalletHeading: "钱包：充值与付款来源",
     receiveTitle: "收款",
-    receiveSentence: "别人（包括买你收费站的 AI）付钱给你就用这个地址。它只能收钱，可以放心分享。",
-    receiveTollboothLink: "用收费站让 AI 付钱给你 →",
+    receiveSentence: "往这个地址转 USDC 给钱包充值。它只能收钱，可以放心分享。",
     paysFromTitle: "付款来源",
     paysFromSentence: "你发出去的 MoneyKey 都从这里扣钱；私钥只在服务器内存里，永不显示。",
     paysFromKeysLink: "管理 Money Keys →",
