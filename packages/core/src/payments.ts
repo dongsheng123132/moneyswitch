@@ -22,9 +22,6 @@ function rowToPayment(row: typeof schema.payments.$inferSelect): PaymentRow {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     kind: row.kind,
-    model: row.model,
-    promptTokens: row.promptTokens,
-    completionTokens: row.completionTokens,
     authFrom: row.authFrom,
     authNonce: row.authNonce,
     authValidBefore: row.authValidBefore,
@@ -138,27 +135,6 @@ export function recordPaymentAuthorization(
       authFrom: auth.from,
       authNonce: auth.nonce,
       authValidBefore: auth.validBefore,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(schema.payments.id, id))
-    .run();
-}
-
-/**
- * v0.2 (SPEC-v0.2 §2 step 7): fills in prompt/completion token counts on an
- * already-reserved/settled payment row, once the upstream chat completion's
- * `usage` object is known. Does not touch status/tx_hash — call after
- * performPaidFetch's own settle/fail/unknown reconciliation.
- */
-export function recordPaymentUsage(
-  db: MoneySwitchDb,
-  id: string,
-  usage: { promptTokens?: number | null; completionTokens?: number | null }
-): void {
-  db.update(schema.payments)
-    .set({
-      promptTokens: usage.promptTokens ?? null,
-      completionTokens: usage.completionTokens ?? null,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(schema.payments.id, id))

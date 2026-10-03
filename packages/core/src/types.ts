@@ -13,8 +13,6 @@ export interface MoneyKeyRow {
   expiresAt: string | null;
   createdAt: string;
   lastUsedAt: string | null;
-  /** v0.2 (SPEC-v0.2 §1): null = allowed to use all enabled channels' models. */
-  allowedModels: string[] | null;
   /** v0.4 (SPEC-v0.4 §A): parent key id; null for a root (admin-created) key. */
   parentId: string | null;
   /** v0.4: 0 for a root key, parent.depth + 1 for a child key. */
@@ -26,6 +24,7 @@ export interface MoneyKeyRow {
 }
 
 export type PaymentStatus = "reserved" | "settled" | "failed" | "unknown";
+/** "chat" only on rows written by the removed OpenAI-compatible gateway; they stay readable in the history. */
 export type PaymentKind = "fetch" | "chat";
 
 export interface PaymentRow {
@@ -44,26 +43,12 @@ export interface PaymentRow {
   approvalId: string | null;
   createdAt: string;
   updatedAt: string;
-  /** v0.2 (SPEC-v0.2 §2 step 7). */
   kind: PaymentKind;
-  model: string | null;
-  promptTokens: number | null;
-  completionTokens: number | null;
   /** v0.5: EIP-3009 authorization fields, captured right after the client signs (unknown-payment reconciliation). */
   authFrom: string | null;
   authNonce: string | null;
   authValidBefore: number | null;
   reconciledAt: string | null;
-}
-
-/** v0.2 (SPEC-v0.2 §1): a channel = an OpenAI-protocol, x402-billed upstream. */
-export interface ChannelRow {
-  id: string;
-  name: string;
-  baseUrl: string;
-  models: string[];
-  enabled: boolean;
-  createdAt: string;
 }
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "used";

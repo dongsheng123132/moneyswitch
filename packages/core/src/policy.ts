@@ -30,9 +30,6 @@ export interface PolicyInput {
   amount: bigint;
   maxPrice?: bigint;
   approvalId?: string | null;
-  /** v0.2 (SPEC-v0.2 §2 step 7): "fetch" (default) or "chat". */
-  kind?: "fetch" | "chat";
-  model?: string | null;
 }
 
 export interface PolicyResult {
@@ -169,10 +166,7 @@ export function evaluateAndReserve(
       approvalId: usedApprovalId,
       createdAt: nowIso,
       updatedAt: nowIso,
-      kind: input.kind ?? "fetch",
-      model: input.model ?? null,
-      promptTokens: null,
-      completionTokens: null,
+      kind: "fetch",
     })
     .run();
 

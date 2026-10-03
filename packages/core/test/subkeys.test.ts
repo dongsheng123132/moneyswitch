@@ -9,7 +9,7 @@ import { decideApproval, getApproval } from "../src/approval.js";
 import { usedToday, usedTotal, ownUsedToday } from "../src/ledger.js";
 import { settlePayment, failPayment } from "../src/payments.js";
 import { checkRateLimit, checkHostAllowedForChain } from "../src/gate.js";
-import { getKeyChain, effectiveAllowedModels, effectiveStatus } from "../src/chain.js";
+import { getKeyChain, effectiveStatus } from "../src/chain.js";
 import {
   createChildKey,
   createChildKeyInTransaction,
@@ -221,21 +221,6 @@ describe("v0.4 child keys — creation constraints", () => {
     expect(delegationErr(() => child(db, p.id, { allowedHosts: ["example.com"] })).field).toBe("allowed_hosts");
     expect(child(db, p.id, { allowedHosts: [] }).row.allowedHosts).toEqual([]);
     expect(child(db, p.id, {}).row.allowedHosts).toEqual(["example.com:443", "api.test"]);
-  });
-
-  it("allowed_models must be a subset of the parent's; parent null = unrestricted; omitted inherits", () => {
-    const { db } = freshDb();
-    const { row: open } = root(db);
-    expect(child(db, open.id, { allowedModels: ["anything"] }).row.allowedModels).toEqual(["anything"]);
-    expect(child(db, open.id, {}).row.allowedModels).toBeNull();
-
-    const { row: p } = root(db, { allowedModels: ["m1", "m2"] });
-    const e = delegationErr(() => child(db, p.id, { allowedModels: ["m1", "m3"] }));
-    expect(e.code).toBe("CHILD_EXCEEDS_PARENT");
-    expect(e.field).toBe("allowed_models");
-    expect(child(db, p.id, { allowedModels: ["m2"] }).row.allowedModels).toEqual(["m2"]);
-    // Omitted/null never widens a restricted parent to "all models".
-    expect(child(db, p.id, { allowedModels: null }).row.allowedModels).toEqual(["m1", "m2"]);
   });
 
   it("expires_at: later than parent's -> CHILD_EXCEEDS_PARENT; omitted inherits; invalid -> INVALID_REQUEST", () => {
@@ -535,15 +520,6 @@ describe("v0.4 child keys — policy walks the ancestor chain", () => {
     const e = msErr(() => checkHostAllowedForChain(db, new URL("https://evil.com/x"), fresh));
     expect(e.code).toBe("HOST_NOT_ALLOWED");
     expect(e.limit?.scope).toBe("ancestor");
-  });
-
-  it("effective allowed models = intersection along the chain", () => {
-    const { db } = freshDb();
-    const { row: r } = root(db, { allowedModels: ["m1", "m2"] });
-    const { row: c } = child(db, r.id, { allowedModels: ["m2"] });
-    expect(effectiveAllowedModels(getKeyChain(db, c.id))).toEqual(["m2"]);
-    db.update(schema.moneyKeys).set({ allowedModels: null }).where(eq(schema.moneyKeys.id, c.id)).run();
-    expect(effectiveAllowedModels(getKeyChain(db, c.id))).toEqual(["m1", "m2"]);
   });
 
   it("effectiveRemaining = min over the chain, floored at 0, with the binding scope", () => {

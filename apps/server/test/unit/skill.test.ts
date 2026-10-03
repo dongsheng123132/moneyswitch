@@ -316,11 +316,11 @@ describe("POST /v1/keys/:id/rotate", () => {
     expect(listAudit(t.ctx.db, 50).filter((r) => r.action === "key.rotate")).toHaveLength(0);
   });
 
-  it("works through the gateway auth too (old secret rejected on /v1/models)", async () => {
+  it("an agent route rejects the old secret and accepts the new one (GET /v1/status)", async () => {
     t = await buildTestApp();
     const k = await createKey("codex");
     const newKey = (await t.app.inject({ method: "POST", url: `/v1/keys/${k.id}/rotate`, headers: asAdmin() })).json().key as string;
-    expect((await t.app.inject({ method: "GET", url: "/v1/models", headers: asKey(k.key) })).statusCode).toBe(401);
-    expect((await t.app.inject({ method: "GET", url: "/v1/models", headers: asKey(newKey) })).statusCode).toBe(200);
+    expect((await t.app.inject({ method: "GET", url: "/v1/status", headers: asKey(k.key) })).statusCode).toBe(401);
+    expect((await t.app.inject({ method: "GET", url: "/v1/status", headers: asKey(newKey) })).statusCode).toBe(200);
   });
 });

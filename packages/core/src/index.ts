@@ -13,7 +13,6 @@ export * from "./ssrf.js";
 export * from "./gate.js";
 export * from "./payments.js";
 export * from "./admin.js";
-export * from "./channels.js";
 export * from "./setup.js";
 export * from "./reconcile.js";
 export * from "./rotate.js";

@@ -26,7 +26,6 @@ const SERVER_PORT = 16020;
 const BASE = `http://127.0.0.1:${SERVER_PORT}`;
 const SELLER = `http://127.0.0.1:${SELLER_PORT}`;
 const PAY_TO = EthersWallet.createRandom().address;
-const DEMO_MODEL = "moneyswitch-demo-chat";
 
 let tmpDir: string;
 let db: MoneySwitchDb;
@@ -111,7 +110,6 @@ beforeAll(async () => {
       DEMO_SELLER_PORT: String(SELLER_PORT),
       DEMO_SELLER_PAY_TO: PAY_TO,
       DEMO_SELLER_FACILITATOR_URL: mockFacilitator.url,
-      DEMO_LLM_UPSTREAM_KEY: "",
     },
     stdio: "pipe",
   });
@@ -257,38 +255,4 @@ describe("v0.4 child keys — end to end (SPEC-v0.4 §C)", () => {
     expect(rows.every((p) => p.status === "settled")).toBe(true);
   });
 
-  it("gateway (OpenAI chat) with a child key: subset models only; ancestor budget -> 402 with limit_scope", async () => {
-    await call("POST", "/v1/admin/channels", adminToken, {
-      name: "Demo LLM (x402)",
-      base_url: `${SELLER}/v1`,
-      models: [DEMO_MODEL],
-    });
-    const root = await adminCreateKey({ daily_budget: "0.01", allowed_models: [DEMO_MODEL] });
-    const bad = await call("POST", "/v1/keys/children", root.key, {
-      name: "x",
-      daily_budget: "0.01",
-      total_budget: "1",
-      per_request_limit: "0.01",
-      allowed_models: ["gpt-4o"],
-    });
-    expect(bad.status).toBe(400);
-    expect(bad.json.field).toBe("allowed_models");
-    const child = await createChild(root.key, { daily_budget: "0.01", per_request_limit: "0.01" });
-    const models = await call("GET", "/v1/models", child.key);
-    expect(models.json.data.map((m: any) => m.id)).toEqual([DEMO_MODEL]);
-
-    const chat = () =>
-      call("POST", "/v1/chat/completions", child.key, { model: DEMO_MODEL, messages: [{ role: "user", content: "hi" }] });
-    const ok = await chat();
-    expect(ok.status).toBe(200);
-    expect(ok.json.moneyswitch.cost).toBe("0.01");
-    // root spent up via the child; another sibling now hits the root's daily limit
-    const sibling = await createChild(root.key, { daily_budget: "0.01", per_request_limit: "0.01" });
-    const denied = await call("POST", "/v1/chat/completions", sibling.key, {
-      model: DEMO_MODEL,
-      messages: [{ role: "user", content: "hi" }],
-    });
-    expect(denied.status).toBe(402);
-    expect(denied.json.error).toMatchObject({ code: "DAILY_BUDGET_EXCEEDED", limit_scope: "ancestor" });
-  });
 });

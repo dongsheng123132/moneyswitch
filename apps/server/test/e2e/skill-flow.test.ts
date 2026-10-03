@@ -277,13 +277,13 @@ describe("the flows the skill describes", () => {
   it.skipIf(!PWSH7)("PowerShell 7: a nested [ordered] body approved by the human is accepted when a NEW process resends it", async () => {
     const k = await newKey("pwsh-approval", { approval_threshold: "0.005" });
     const skill = renderSkill({ baseUrl: BASE, key: k.key, keyName: "pwsh-approval" });
-    const chatUrl = `http://127.0.0.1:${SELLER_PORT}/v1/chat/completions`;
+    const echoUrl = `http://127.0.0.1:${SELLER_PORT}/echo`;
     const reqBlock = (approvalId?: string) =>
       [
         "$req = [ordered]@{",
-        `  url = "${chatUrl}"; method = "POST"`,
+        `  url = "${echoUrl}"; method = "POST"`,
         '  headers = [ordered]@{ "content-type" = "application/json" }',
-        '  body = [ordered]@{ model = "moneyswitch-demo-chat"; messages = @([ordered]@{ role = "user"; content = "hello" }); temperature = 0.2; max_tokens = 16; user = "e2e"; n = 1 }',
+        '  body = [ordered]@{ topic = "hello"; items = @([ordered]@{ id = 1; label = "a" }); temperature = 0.2; max_tokens = 16; user = "e2e"; n = 1 }',
         "}",
         ...(approvalId ? [`$req.approval_id = "${approvalId}"`] : []),
       ].join("\n");

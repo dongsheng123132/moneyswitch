@@ -19,7 +19,6 @@ export function rowToMoneyKey(row: typeof schema.moneyKeys.$inferSelect): MoneyK
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
-    allowedModels: row.allowedModels ?? null,
     parentId: row.parentId ?? null,
     depth: row.depth ?? 0,
     canDelegate: row.canDelegate ?? false,

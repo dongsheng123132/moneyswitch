@@ -101,17 +101,3 @@ export function effectiveStatus(chain: MoneyKeyRow[], nowMs: number = Date.now()
   }
 }
 
-/**
- * Model allow-list in effect for a key: the intersection over the chain
- * (null on a level = no restriction at that level). Child keys are already
- * created as subsets of their parent, so this normally equals the key's own
- * list; intersecting at use time is defense in depth.
- */
-export function effectiveAllowedModels(chain: MoneyKeyRow[]): string[] | null {
-  let allowed: string[] | null = null;
-  for (const k of chain) {
-    if (k.allowedModels == null) continue;
-    allowed = allowed == null ? [...k.allowedModels] : allowed.filter((m) => k.allowedModels!.includes(m));
-  }
-  return allowed;
-}

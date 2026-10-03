@@ -24,8 +24,6 @@ export interface CreateMoneyKeyInput {
   allowedHosts: string[];
   maxPaymentsPerMinute?: number;
   expiresAt?: string | null;
-  /** v0.2 (SPEC-v0.2 §1): null/omitted = allowed to use all enabled channels' models. */
-  allowedModels?: string[] | null;
   /** v0.4 (SPEC-v0.4 §A): may this (root) key create child keys? Default false. */
   canDelegate?: boolean;
 }
@@ -72,7 +70,6 @@ export function createMoneyKey(
       expiresAt: input.expiresAt ?? null,
       createdAt: now,
       lastUsedAt: null,
-      allowedModels: input.allowedModels ?? null,
       parentId: null,
       depth: 0,
       canDelegate: input.canDelegate ?? false,

@@ -23,7 +23,7 @@ export const moneyKeys = sqliteTable("money_keys", {
   expiresAt: text("expires_at"),
   createdAt: text("created_at").notNull(),
   lastUsedAt: text("last_used_at"),
-  /** v0.2 (SPEC-v0.2 §1): JSON array of allowed model ids, or NULL = all enabled channels' models. */
+  /** LEGACY (v0.2 model allow-list of the removed OpenAI-compatible gateway): kept in the table, no longer read or written. */
   allowedModels: text("allowed_models", { mode: "json" }).$type<string[] | null>(),
   /** v0.4 (SPEC-v0.4 §A): parent key id, NULL for a root key (created by the admin). */
   parentId: text("parent_id"),
@@ -35,7 +35,7 @@ export const moneyKeys = sqliteTable("money_keys", {
   createdBy: text("created_by").notNull().default("admin"),
 });
 
-/** v0.2 (SPEC-v0.2 §1): an upstream that speaks OpenAI protocol and charges via x402. */
+/** LEGACY (v0.2 model channels of the removed OpenAI-compatible gateway): the table stays, nothing reads or writes it any more. */
 export const channels = sqliteTable("channels", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -61,10 +61,13 @@ export const payments = sqliteTable("payments", {
   approvalId: text("approval_id"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-  /** v0.2 (SPEC-v0.2 §2 step 7): "fetch" (default, /v1/fetch) or "chat" (/v1/chat/completions). */
+  /** "fetch" for every payment made now; old rows of the removed gateway are "chat" and still list. */
   kind: text("kind", { enum: ["fetch", "chat"] }).notNull().default("fetch"),
+  /** LEGACY (chat rows only): no longer read or written. */
   model: text("model"),
+  /** LEGACY (chat rows only): no longer read or written. */
   promptTokens: integer("prompt_tokens"),
+  /** LEGACY (chat rows only): no longer read or written. */
   completionTokens: integer("completion_tokens"),
   /** v0.5: EIP-3009 authorization.from, captured right after the client signs it. */
   authFrom: text("auth_from"),

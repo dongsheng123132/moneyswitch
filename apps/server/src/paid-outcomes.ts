@@ -1,9 +1,7 @@
 /**
  * Human-readable explanations for the two "we paid but did not get the answer"
- * outcomes of performPaidFetch (packages/x402/src/client.ts). Shared by the
- * /v1/fetch envelope (routes/agent.ts) and the OpenAI-style gateway error
- * (routes/gateway.ts) so both tell the agent the same thing: you may have been
- * charged, and a retry would pay again.
+ * outcomes of performPaidFetch (packages/x402/src/client.ts), used by the /v1/fetch
+ * envelope (routes/agent.ts): you may have been charged, and a retry would pay again.
  */
 
 /** A payment was signed and sent, then the response was lost (deadline or transport error). */

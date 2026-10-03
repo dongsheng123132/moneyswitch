@@ -60,9 +60,6 @@ export interface PaidFetchInput {
   body?: unknown;
   maxPrice?: bigint;
   approvalId?: string | null;
-  /** v0.2 (SPEC-v0.2 §2 step 7): tagged onto the reserved payment row. */
-  kind?: "fetch" | "chat";
-  model?: string | null;
 }
 
 /**
@@ -359,8 +356,6 @@ export async function performPaidFetch(
           amount,
           maxPrice: input.maxPrice,
           approvalId: input.approvalId,
-          kind: input.kind,
-          model: input.model,
         });
         paymentId = result.paymentId;
         approvalIdUsed = result.approvalId;

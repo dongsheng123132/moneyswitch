@@ -42,7 +42,6 @@ export function keyView(
     used_total: formatMicrosToUsdc(usedTotal(db, row.id)),
     own_used_today: formatMicrosToUsdc(ownUsedToday(db, row.id)),
     own_used_total: formatMicrosToUsdc(ownUsedTotal(db, row.id)),
-    allowed_models: row.allowedModels,
     parent_id: row.parentId,
     depth: row.depth,
     can_delegate: row.canDelegate,

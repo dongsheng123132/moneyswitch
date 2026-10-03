@@ -38,7 +38,7 @@ describe("rotateMoneyKeySecret", () => {
 
   it("changes nothing but key_prefix and key_hash", () => {
     const { db } = freshDb();
-    const { row } = mk(db, { expiresAt: "2099-01-01T00:00:00.000Z", allowedModels: ["m1"], maxPaymentsPerMinute: 7 });
+    const { row } = mk(db, { expiresAt: "2099-01-01T00:00:00.000Z", maxPaymentsPerMinute: 7 });
     const res = rotateMoneyKeySecret(db, row.id)!;
     const { keyPrefix: _p1, keyHash: _h1, ...before } = row;
     const { keyPrefix: _p2, keyHash: _h2, ...after } = res.row;

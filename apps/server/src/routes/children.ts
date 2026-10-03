@@ -37,7 +37,6 @@ type Body = {
   per_request_limit?: unknown;
   approval_threshold?: unknown;
   allowed_hosts?: unknown;
-  allowed_models?: unknown;
   expires_at?: unknown;
   can_delegate?: unknown;
   max_payments_per_minute?: unknown;
@@ -60,7 +59,7 @@ function parseAmount(body: Body, field: keyof Body, required: boolean): bigint |
   }
 }
 
-function parseStringArray(body: Body, field: "allowed_hosts" | "allowed_models"): string[] | null {
+function parseStringArray(body: Body, field: "allowed_hosts"): string[] | null {
   const raw = body[field];
   if (raw === undefined || raw === null) return null;
   if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string")) {
@@ -98,7 +97,6 @@ function parseBody(body: Body): CreateChildKeyInput {
     perRequestLimit: parseAmount(body, "per_request_limit", true)!,
     approvalThreshold: parseAmount(body, "approval_threshold", false),
     allowedHosts: parseStringArray(body, "allowed_hosts"),
-    allowedModels: parseStringArray(body, "allowed_models"),
     expiresAt: (body.expires_at as string | null | undefined) ?? null,
     canDelegate: body.can_delegate === true,
     maxPaymentsPerMinute: maxPerMinute,

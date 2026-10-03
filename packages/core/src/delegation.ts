@@ -4,7 +4,7 @@ import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { microsToDbNumber } from "./money.js";
 import { generateMoneyKey, sha256Hex, keyPrefix12 } from "./moneykey.js";
 import { rowToMoneyKey } from "./keyrow.js";
-import { getKeyChain, assertChainUsable, effectiveAllowedModels } from "./chain.js";
+import { getKeyChain, assertChainUsable } from "./chain.js";
 import { usedToday, usedTotal } from "./ledger.js";
 import { revokeMoneyKey } from "./keys.js";
 import type { MoneyKeyRow } from "./types.js";
@@ -18,7 +18,7 @@ import type { MoneyKeyRow } from "./types.js";
  *   - parent (and all its ancestors) enabled and unexpired
  *   - parent.can_delegate, parent.depth < maxDepth
  *   - child per_request / daily / total <= parent's
- *   - child allowed_hosts ⊆ parent's, allowed_models ⊆ parent's
+ *   - child allowed_hosts ⊆ parent's
  *   - child expires_at <= parent's effective expiry
  *   - child approval_threshold <= parent's effective threshold (or omitted = inherit)
  *   - child max_payments_per_minute <= parent's
@@ -73,8 +73,6 @@ export interface CreateChildKeyInput {
   approvalThreshold?: bigint | null;
   /** undefined/null = inherit the parent's list. */
   allowedHosts?: string[] | null;
-  /** undefined/null = inherit the parent's list (null parent = no restriction). */
-  allowedModels?: string[] | null;
   /** undefined/null = inherit the parent's effective expiry. */
   expiresAt?: string | null;
   canDelegate?: boolean;
@@ -272,30 +270,6 @@ export function createChildKey(
     allowedHosts = input.allowedHosts.map((h) => h.trim());
   }
 
-  // allowed_models ⊆ parent's effective list (null parent = unrestricted).
-  const parentModels = effectiveAllowedModels(parentChain);
-  let allowedModels: string[] | null;
-  if (input.allowedModels == null) {
-    allowedModels = parentModels == null ? null : [...parentModels];
-  } else {
-    if (!Array.isArray(input.allowedModels) || input.allowedModels.some((m) => typeof m !== "string" || m === "")) {
-      throw new DelegationError("INVALID_REQUEST", "allowed_models must be an array of non-empty strings", {
-        field: "allowed_models",
-      });
-    }
-    if (parentModels != null) {
-      const outside = input.allowedModels.filter((m) => !parentModels.includes(m));
-      if (outside.length > 0) {
-        throw new DelegationError(
-          "CHILD_EXCEEDS_PARENT",
-          `allowed_models must be a subset of the parent key's allowed_models (not allowed: ${outside.join(", ")})`,
-          { field: "allowed_models", parentValue: parentModels }
-        );
-      }
-    }
-    allowedModels = [...input.allowedModels];
-  }
-
   // expires_at <= parent's effective expiry (null/omitted = inherit it).
   const parentExpiry = effectiveExpiresAt(parentChain);
   let expiresAt: string | null;
@@ -362,7 +336,6 @@ export function createChildKey(
       expiresAt,
       createdAt: new Date().toISOString(),
       lastUsedAt: null,
-      allowedModels,
       parentId: parent.id,
       depth: childDepth,
       canDelegate,

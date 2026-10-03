@@ -22,7 +22,6 @@ async function adminKey(over: Record<string, unknown> = {}) {
       per_request_limit: "0.5",
       approval_threshold: "0.2",
       allowed_hosts: ["example.com:443", "api.test:8443"],
-      allowed_models: ["m1", "m2"],
       max_payments_per_minute: 20,
       can_delegate: true,
       ...over,
@@ -84,7 +83,6 @@ describe("POST /v1/keys/children", () => {
     expect(c.can_delegate).toBe(false);
     expect(c.created_by).toBe(`key:${parent.id}`);
     expect(c.allowed_hosts).toEqual(["example.com:443", "api.test:8443"]); // inherited
-    expect(c.allowed_models).toEqual(["m1", "m2"]); // inherited
     expect(c.max_payments_per_minute).toBe(20); // inherited
     expect(c.approval_threshold).toBeNull(); // parent's 0.2 still applies via the chain
     const audit = t.ctx.db.select().from(schema.auditLog).all().find((a) => a.action === "key.child_create");
@@ -102,7 +100,6 @@ describe("POST /v1/keys/children", () => {
     ["per_request_limit", { per_request_limit: "0.6" }, "0.5"],
     ["approval_threshold", { approval_threshold: "0.21" }, "0.2"],
     ["allowed_hosts", { allowed_hosts: ["example.com:443", "evil.com:443"] }, ["example.com:443", "api.test:8443"]],
-    ["allowed_models", { allowed_models: ["m3"] }, ["m1", "m2"]],
     ["max_payments_per_minute", { max_payments_per_minute: 21 }, 20],
   ] as const)("%s beyond the parent -> 400 CHILD_EXCEEDS_PARENT with field + parent_value", async (field, over, parentValue) => {
     t = await buildTestApp();
@@ -261,10 +258,6 @@ describe("GET /v1/keys/children, revoke, admin views", () => {
     const gc = await get("/v1/status", a1.key);
     expect(gc.statusCode).toBe(401);
     expect(gc.json()).toMatchObject({ code: "KEY_REVOKED", limit_scope: "ancestor", limit_key_prefix: a.key_prefix });
-    // OpenAI-shaped routes carry the same scope
-    const models = await get("/v1/models", a1.key);
-    expect(models.statusCode).toBe(403);
-    expect(models.json().error).toMatchObject({ code: "KEY_REVOKED", limit_scope: "ancestor" });
     const audit = t.ctx.db.select().from(schema.auditLog).all().find((x) => x.action === "key.child_revoke");
     expect(audit?.actor).toBe(`key:${root.id}`);
 

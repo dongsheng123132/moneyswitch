@@ -90,10 +90,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         tx_hash: p.txHash,
         error_code: p.errorCode,
         created_at: p.createdAt,
-        kind: p.kind,
-        model: p.model,
-        prompt_tokens: p.promptTokens,
-        completion_tokens: p.completionTokens,
+        kind: p.kind, // "chat" only on rows written by the removed OpenAI-compatible gateway
       })),
     });
   });
