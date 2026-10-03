@@ -91,11 +91,13 @@ Write-Output ('ME|' + $me.Value)
 $index = 0
 foreach ($p in ($env:MS_ACL_PATHS -split '\|')) {
   if (-not $p) { continue }
-  $item = Get-Item -LiteralPath $p -Force
+  # Plain .NET only, no cmdlets from auto-loaded modules (Get-Item, Get-Acl): a server started from PowerShell 7 passes on
+  # PS7's PSModulePath, and Windows PowerShell 5.1 then loads the wrong Microsoft.PowerShell.Security and those cmdlets fail.
+  if ([System.IO.Directory]::Exists($p)) { $item = New-Object System.IO.DirectoryInfo($p) } else { $item = New-Object System.IO.FileInfo($p) }
   # A brand-new security object replaces the whole DACL (every explicit entry and, being protected, every inherited one).
   # It carries no owner and no audit section, so only the DACL is written: Set-Acl on a Get-Acl object would also try to
   # write the SACL and fail with "SeSecurityPrivilege not held" when applied a second time.
-  if ($item.PSIsContainer) {
+  if ($item -is [System.IO.DirectoryInfo]) {
     $acl = New-Object System.Security.AccessControl.DirectorySecurity
     $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
   } else {
@@ -109,7 +111,8 @@ foreach ($p in ($env:MS_ACL_PATHS -split '\|')) {
   }
   $item.SetAccessControl($acl)
   # Read it back from the system, as SIDs.
-  $now = Get-Acl -LiteralPath $p
+  $item.Refresh()
+  $now = $item.GetAccessControl()
   Write-Output ('PROT|' + $index + '|' + $now.AreAccessRulesProtected)
   foreach ($r in $now.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
     Write-Output ('ACE|' + $index + '|' + $r.AccessControlType + '|' + $r.IdentityReference.Value + '|' + [int]$r.FileSystemRights + '|' + $r.IsInherited)
@@ -176,8 +179,38 @@ export function evaluateAcl(readback: AclReadback | undefined, allowedSids: stri
 function shortError(e: unknown, timeoutMs: number): string {
   const err = e as NodeJS.ErrnoException & { stderr?: Buffer | string; killed?: boolean };
   if (err.killed) return `PowerShell did not answer within ${Math.round(timeoutMs / 1000) || 1} s`;
-  const text = (typeof err.stderr === "string" ? err.stderr : err.stderr?.toString("utf-8") ?? "").trim().split(/\r?\n/)[0];
+  const text = readableStderr(typeof err.stderr === "string" ? err.stderr : err.stderr?.toString("utf-8") ?? "");
   return (text || err.code || err.message || "unknown error").slice(0, 200);
+}
+
+/** PowerShell writes errors as CLIXML ("#< CLIXML" + XML) when its streams are redirected: turn the error records into plain text. */
+export function readableStderr(stderr: string): string {
+  const text = stderr.trim();
+  if (!text.startsWith("#< CLIXML")) return text.split(/\r?\n/)[0] ?? "";
+  const errors = [...text.matchAll(/<S S="Error">([\s\S]*?)<\/S>/g)]
+    .map((m) =>
+      m[1]
+        .replace(/_x([0-9A-Fa-f]{4})_/g, (_x, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&")
+    )
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return errors || "PowerShell reported an error";
+}
+
+/**
+ * The environment for powershell.exe (Windows PowerShell 5.1): ours without PSModulePath. A server started from PowerShell 7
+ * inherits PS7's module path; 5.1 then loads PS7's modules and its cmdlets fail. Without the variable, 5.1 uses its own
+ * default. Windows environment names are case-insensitive, so every spelling is dropped.
+ */
+export function powerShellEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(process.env)) if (k.toLowerCase() !== "psmodulepath") env[k] = v;
+  return { ...env, ...extra };
 }
 
 /** Runs PowerShell as a child process the event loop keeps serving around (never execFileSync: it would stop the whole server). */
@@ -204,7 +237,7 @@ async function protectWindows({ dir, file }: ProtectTargets, options: ProtectOpt
   const targets = [dir, ...(file ? [file] : [])];
   let output: string;
   try {
-    output = await runPowerShell(exe, options.script ?? POWERSHELL_SCRIPT, { ...process.env, MS_ACL_PATHS: targets.join("|") }, timeoutMs);
+    output = await runPowerShell(exe, options.script ?? POWERSHELL_SCRIPT, powerShellEnv({ MS_ACL_PATHS: targets.join("|") }), timeoutMs);
   } catch (e) {
     return { ok: false, method: "acl", detail: `could not set the ACL (PowerShell): ${shortError(e, timeoutMs)}` };
   }
