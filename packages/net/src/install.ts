@@ -6,8 +6,8 @@ import type { ProxyResolution } from "./types.js";
 /**
  * Routes each dispatched request to a direct `Agent` or a `ProxyAgent`
  * depending on the target host, so one `setGlobalDispatcher` call covers
- * every outbound fetch in the process (facilitator, viem RPC, toll booth
- * forwarding, `paid_fetch`) while localhost/private-range/no_proxy targets
+ * every outbound fetch in the process (facilitator, viem RPC, paid fetches)
+ * while localhost/private-range/no_proxy targets
  * still go direct. Chosen over undici's `EnvHttpProxyAgent` because that
  * class only ever reads HTTP_PROXY/HTTPS_PROXY/NO_PROXY from process.env —
  * it has no way to represent MONEYSWITCH_PROXY or the Windows-system-proxy

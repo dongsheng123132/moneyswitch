@@ -101,7 +101,6 @@ export function buildApp(ctx: AppContext): FastifyInstance {
     if (
       req.method === "GET" &&
       !req.url.startsWith("/v1") &&
-      !req.url.startsWith("/t/") &&
       !req.url.startsWith("/assets/") &&
       dashboardAvailable
     ) {

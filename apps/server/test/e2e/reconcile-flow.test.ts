@@ -19,7 +19,7 @@ import type { ServerConfig } from "../../src/config.js";
 
 /**
  * v0.5 (SPEC-v0.5 §"unknown 付款的链上对账"): a buyer signs an EIP-3009
- * authorization, but the seller-side toll booth's own upstream 500s AND its
+ * authorization, but the seller's own upstream 500s AND its
  * cancellation call to the facilitator also fails — so the buyer never gets
  * ANY settlement info back (client.ts's existing NO_SETTLE_HEADER path,
  * unchanged by this feature) and the payment sits at status=unknown,

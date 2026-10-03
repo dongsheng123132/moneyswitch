@@ -170,7 +170,7 @@ export const walletRetirements = sqliteTable("wallet_retirements", {
   replacedBy: text("replaced_by"),
 });
 
-/** v0.5 (SPEC-v0.5 §2): a toll booth in front of a seller's own API. */
+/** LEGACY (v0.5 seller toll booths, removed): the tables stay in the database, nothing reads or writes them any more. */
 export const tollbooths = sqliteTable("tollbooths", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

@@ -4,12 +4,9 @@ import { lookup } from "node:dns/promises";
 
 /**
  * "Does this URL point back at this very process?" — the self-port SSRF rule
- * (SPEC §6 step 2, reused by SPEC-v0.5 §2 for toll booth upstreams).
- *
- * A toll booth upstream may legitimately be a loopback / LAN service (sellers
- * often expose something running on their own machine), but it must never be
- * MoneySwitch's own port: that would let a paid (or free) toll booth route
- * reach the admin API, or loop the proxy into itself.
+ * (assertNotSsrf): a payment request must never target MoneySwitch's own port,
+ * in any spelling of the address, or an agent could reach the admin API through
+ * /v1/fetch.
  */
 
 const LOOPBACK_NAMES = new Set(["localhost", "localhost.", "0.0.0.0", "::", "::1", "[::]", "[::1]"]);

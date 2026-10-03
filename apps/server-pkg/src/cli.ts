@@ -6,8 +6,8 @@ import { parseArgs, DEFAULT_HOST, DEFAULT_PORT } from "./args.js";
 import { bundledDashboardDir, bundledMigrationsDir } from "./paths.js";
 
 // Earliest possible point: before parseArgs()/serve() make any
-// outbound call themselves (facilitator, viem RPC, toll booth forwarding,
-// paid_fetch all go through the global fetch dispatcher this installs) —
+// outbound call themselves (facilitator, viem RPC and paid fetches all go
+// through the global fetch dispatcher this installs) —
 // mirrors apps/server/src/index.ts, which this npx-installed package does
 // not import (it consumes @moneyswitch/server/start directly, not its
 // entrypoint), so the proxy install here is this package's own copy of the

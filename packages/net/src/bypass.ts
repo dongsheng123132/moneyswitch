@@ -23,9 +23,8 @@ function isLoopbackIPv6(ip: string): boolean {
 /**
  * Hosts that must always be dialed directly, regardless of any proxy
  * configuration: localhost, loopback and RFC1918/CGNAT private ranges. This
- * is what keeps the toll booth's own upstream, the local MoneySwitch server
- * itself and other LAN services reachable even when a system-wide proxy is
- * installed.
+ * is what keeps the local MoneySwitch server itself and other LAN services
+ * reachable even when a system-wide proxy is installed.
  */
 export function isAlwaysDirectHost(hostname: string): boolean {
   const h = hostname.toLowerCase();

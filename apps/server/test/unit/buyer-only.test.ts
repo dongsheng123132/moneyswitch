@@ -6,7 +6,7 @@ describe("v0.6 buyer-only surface", () => {
   beforeAll(async () => { t = await buildTestApp(); });
   afterAll(async () => { await cleanupTestApp(t); });
   it("has no seller endpoints, including for an administrator", async () => {
-    for (const url of ["/v1/admin/tollbooths", "/v1/admin/earnings", "/t/old-service/data"]) {
+    for (const url of ["/v1/admin/tollbooths", "/v1/admin/earnings"]) {
       const response = await t.app.inject({ url, headers: { authorization: `Bearer ${t.adminToken}` } });
       expect(response.statusCode).toBe(404);
     }

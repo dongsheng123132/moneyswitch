@@ -3,8 +3,7 @@ import { defineMessages } from "../index";
 /**
  * SPEC-v0.5 §1 — the "three things" mental model. The single most important
  * copy in v0.5: private key (never shown) / MoneyKey (secret, amber) /
- * receiving address (public, green). Reused by the wallet,
- * earnings and login pages.
+ * receiving address (public, green). Reused by the wallet and login pages.
  */
 export const threeThings = defineMessages(
   {

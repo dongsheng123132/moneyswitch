@@ -12,11 +12,6 @@ export interface ServerConfig {
   /** v0.4 (SPEC-v0.4 §A): MONEYSWITCH_MAX_KEY_DEPTH (default 3 = root + 3 levels of child keys). */
   maxKeyDepth?: number;
   /**
-   * v0.5 (SPEC-v0.5 §2): x402 facilitator the toll booths verify/settle with.
-   * Defaults to the active network's facilitator (MONEYSWITCH_FACILITATOR_URL).
-   */
-  facilitatorUrl?: string | null;
-  /**
    * v0.5: public base URL buyers use to reach this server (e.g.
    * https://pay.example.com), from MONEYSWITCH_PUBLIC_URL. When unset, the
    * Dashboard shows the origin it was opened from.

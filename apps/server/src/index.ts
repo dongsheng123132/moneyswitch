@@ -3,8 +3,8 @@ import { loadConfig } from "./config.js";
 import { startServer } from "./start.js";
 
 // Earliest possible point: before loadConfig()/startServer() make any
-// outbound call themselves (facilitator, viem RPC, toll booth forwarding,
-// paid_fetch all go through the global fetch dispatcher this installs).
+// outbound call themselves (facilitator, viem RPC and paid fetches all go
+// through the global fetch dispatcher this installs).
 const proxy = installOutboundProxy();
 console.log(
   proxy.url
