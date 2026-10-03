@@ -197,3 +197,22 @@ describe.skipIf(!hasShell)("deploy/check-backup.sh", { timeout: 60_000 }, () => 
     expect(usage.stderr).toContain("usage");
   });
 });
+
+// A Windows checkout (core.autocrlf=true) turned the deploy shell scripts into CRLF files, and `sh` cannot run those
+// ("\r: command not found"). .gitattributes pins them to LF in every checkout.
+describe("shell scripts stay LF (.gitattributes)", () => {
+  const deployDir = path.dirname(repoFile("deploy/check-backup.sh"));
+  const scripts = fs.readdirSync(deployDir).filter((f) => f.endsWith(".sh"));
+
+  it("the rule is there", () => {
+    const attributes = fs.readFileSync(repoFile(".gitattributes"), "utf8");
+    expect(attributes).toMatch(/^\*\.sh\s+text\s+eol=lf\s*$/m);
+  });
+
+  it("every deploy/*.sh in the working tree has LF line ends only", () => {
+    expect(scripts.length).toBeGreaterThan(0);
+    for (const f of scripts) {
+      expect(fs.readFileSync(path.join(deployDir, f), "utf8").includes("\r"), `${f} contains a CR`).toBe(false);
+    }
+  });
+});
