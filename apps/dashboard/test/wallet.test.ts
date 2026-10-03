@@ -970,3 +970,89 @@ describe("strings", () => {
     }
   });
 });
+
+// ==============================================================================================================
+// Third review round: honest recovery wording, the Wallet page heading, and the flag for retired copies
+// ==============================================================================================================
+
+describe("round 3: what the locked-wallet hints promise about the money in the old wallet", () => {
+  const keys = ["lockedRecoveryHere", "autoLockedBody", "lockedRecovery"] as const;
+
+  it("none of them says the old wallet's money 'can be recovered with its recovery phrase' (a legacy wallet never showed one)", () => {
+    for (const k of keys) {
+      assert.doesNotMatch(L.en[k], /recovered with its recovery phrase/i, `en ${k}`);
+      assert.doesNotMatch(L.zh[k], /用它的恢复短语找回/, `zh ${k}`);
+    }
+  });
+
+  it("they say it can be recovered ONLY if the phrase or private key was kept separately (or the password is remembered / the unlock file restored)", () => {
+    for (const k of keys) {
+      assert.match(L.en[k], /only if you separately kept its recovery phrase or private key/i, `en ${k}`);
+      assert.match(L.zh[k], /只有在你另外保存过它的恢复短语或私钥/, `zh ${k}`);
+    }
+    // a password wallet: "or you remember its password"
+    for (const k of ["lockedRecoveryHere", "lockedRecovery"] as const) {
+      assert.match(L.en[k], /remember its password/i, `en ${k}`);
+      assert.match(L.zh[k], /还记得它的密码/, `zh ${k}`);
+    }
+    // an auto wallet has no password: "or can restore its unlock secret file from a backup"
+    assert.match(L.en.autoLockedBody, /restore its unlock secret file from a backup/i);
+    assert.match(L.zh.autoLockedBody, /从备份里恢复它的解锁密钥文件/);
+  });
+
+  it("the locked wallet page shows the corrected text (en and zh)", () => {
+    const locked = wallet({ unlocked: false }, manualHealth);
+    const en = render(h(WalletView, { wallet: locked, meta: null, onChanged: noop }));
+    assert.ok(en.includes(esc(L.en.lockedRecovery)));
+    assert.ok(!en.includes("can be recovered with its recovery phrase"));
+    const zh = render(h(WalletView, { wallet: locked, meta: null, onChanged: noop }), "zh");
+    assert.ok(zh.includes(esc(L.zh.lockedRecovery)));
+    assert.ok(!zh.includes("可以用它的恢复短语找回"));
+  });
+});
+
+describe("round 3: the Wallet page heading no longer implies a seller side", () => {
+  const view = (w: Wallet, lang: "en" | "zh" = "en") => render(h(WalletView, { wallet: w, meta: null, onChanged: noop }), lang);
+
+  it("English: 'Wallet: funding and payments', not 'receives and pays'", () => {
+    const html = view(wallet());
+    assert.match(html, /<h2>Wallet: funding and payments<\/h2>/);
+    assert.doesNotMatch(html, /receives and pays/i);
+  });
+
+  it("Chinese: '钱包：充值与付款来源', not '收付一体'", () => {
+    const html = view(wallet(), "zh");
+    assert.match(html, /<h2>钱包：充值与付款来源<\/h2>/);
+    assert.ok(!html.includes("收付一体"));
+  });
+});
+
+describe("round 3: retired copies that still open a password wallet are flagged in the health card", () => {
+  const openers = ["wallet-unlock-0x70997970c51812dc3a010c7d01b50e0d17dc79c8.secret", "orphan-wallet-unlock-0x70997970c51812dc3a010c7d01b50e0d17dc79c8-20261003T101500.secret"];
+  const files = openers.join(", ");
+
+  it("a red row names the files and says what to do about them", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { ...manualHealth, retired_secrets_open_live_key: openers }) }));
+    assert.match(html, /data-health="retired-open"><div class="wallet-health-head"><span class="wallet-health-label">[^<]*<\/span><span class="pill pill-red">/);
+    for (const f of openers) assert.ok(html.includes(esc(f)), f);
+    assert.ok(html.includes(esc(L.en.hRetiredOpenTitle)));
+    assert.ok(html.includes(fill(L.en.hRetiredOpenBody, { files })));
+    assert.match(L.en.hRetiredOpenBody, /without (its|the) password/i);
+    assert.match(L.en.hRetiredOpenBody, /removed automatically|deleted automatically/i);
+    assert.ok(html.includes("callout-error"));
+  });
+
+  it("no row when nothing is left, or when the server does not report the list (older server)", () => {
+    for (const over of [{ retired_secrets_open_live_key: [] }, {}, { retired_secrets_open_live_key: undefined }] as Partial<Health>[]) {
+      const html = render(h(WalletHealthCard, { wallet: wallet({}, over) }));
+      assert.ok(!html.includes('data-health="retired-open"'), JSON.stringify(over));
+    }
+  });
+
+  it("Chinese", () => {
+    const html = render(h(WalletHealthCard, { wallet: wallet({}, { ...manualHealth, retired_secrets_open_live_key: openers }) }), "zh");
+    assert.ok(html.includes(L.zh.hRetiredOpenTitle));
+    assert.ok(html.includes(fill(L.zh.hRetiredOpenBody, { files })));
+    assert.ok(html.includes(L.zh.hRetiredOpen));
+  });
+});

@@ -117,6 +117,10 @@ export const walletLifecycle = defineMessages(
       "The server could not restrict the data folder and the unlock secret to its own account ({detail}). Other accounts or programs on this machine may be able to read the secret that opens this wallet. Keep only a small float in it, and fix the folder permissions.",
     hProtectNoDetail: "reason unknown",
     pillExposed: "Not protected",
+    hRetiredOpen: "Old copies in retired/",
+    hRetiredOpenTitle: "Old files still open this wallet without its password",
+    hRetiredOpenBody:
+      "These files in the retired/ folder of the server's data folder hold an unlock secret that still opens this password wallet: {files}. Anyone who can read that folder can use the wallet without the password. Unlock the wallet with its password and they are removed automatically; if they stay, delete them by hand.",
     pillOk: "OK",
     pillBroken: "Broken",
     pillAction: "Action needed",
@@ -214,11 +218,11 @@ export const walletLifecycle = defineMessages(
     lockedChoiceReplaceBody: "Replace the wallet. Its files are kept in the retired/ folder, a new wallet takes over, and your keys, budgets, approvals and history stay.",
     lockedChoiceReplaceLink: "Go to Replace wallet",
     lockedRecoveryHere:
-      "Forgot the password? Nobody can unlock this wallet for you, but you can move on: Replace wallet, right below, keeps the old files in the retired/ folder and starts a new wallet. Funds in the old wallet can be recovered with its recovery phrase.",
+      "Forgot the password? Nobody can unlock this wallet for you, but you can move on: Replace wallet, right below, keeps the old files in the retired/ folder and starts a new wallet. Money in the old wallet can be recovered only if you separately kept its recovery phrase or private key, or you remember its password.",
     autoLockedBody:
-      "This wallet has no password: the server opens it with its own unlock secret file, and that did not work at startup. Restore the file from a backup of the server's data folder and restart, or use Replace wallet (below) to start a new wallet; the old files are kept in the retired/ folder and its funds can be recovered with its recovery phrase.",
+      "This wallet has no password: the server opens it with its own unlock secret file, and that did not work at startup. Restore the file from a backup of the server's data folder and restart, or use Replace wallet (below) to start a new wallet; the old files are kept in the retired/ folder. Its funds can be recovered only if you separately kept its recovery phrase or private key, or can restore its unlock secret file from a backup.",
     lockedRecovery:
-      "Forgot the password? Nobody can unlock this wallet for you, but you can move on: Replace wallet (Danger zone below) keeps the old files in the retired/ folder and starts a new wallet. Funds in the old wallet can be recovered with its recovery phrase.",
+      "Forgot the password? Nobody can unlock this wallet for you, but you can move on: Replace wallet (Danger zone below) keeps the old files in the retired/ folder and starts a new wallet. Money in the old wallet can be recovered only if you separately kept its recovery phrase or private key, or you remember its password.",
 
     // --- Overview banners
     bannerBackupMissing: "The wallet's recovery phrase is not backed up yet. Do it before adding funds.",
@@ -333,6 +337,10 @@ export const walletLifecycle = defineMessages(
       "服务器没能把数据目录和解锁密钥限制为只有它自己的账户可访问（{detail}）。这台机器上的其他账户或程序可能读到打开这个钱包的密钥。请只放少量浮存，并修复目录权限。",
     hProtectNoDetail: "原因未知",
     pillExposed: "未保护",
+    hRetiredOpen: "retired/ 里的旧副本",
+    hRetiredOpenTitle: "旧文件仍能不凭密码打开这个钱包",
+    hRetiredOpenBody:
+      "服务器数据目录 retired/ 文件夹里的这些文件带着仍能打开这个密码钱包的解锁密钥：{files}。谁能读取那个文件夹，谁就能不凭密码动用钱包。用密码解锁钱包后它们会被自动删除；如果仍然留着，请手动删除。",
     pillOk: "正常",
     pillBroken: "已损坏",
     pillAction: "需要处理",
@@ -423,11 +431,11 @@ export const walletLifecycle = defineMessages(
     lockedChoiceReplaceBody: "更换钱包。旧文件会保留在 retired/ 文件夹，新钱包接替，你的 Key、预算、审批和历史记录都保留。",
     lockedChoiceReplaceLink: "前往更换钱包",
     lockedRecoveryHere:
-      "忘记密码了？没有人能替你解锁这个钱包，但你可以继续往前走：使用下方的“更换钱包”，旧文件会保留在 retired/ 文件夹，并开始一个新钱包。旧钱包里的资金可以用它的恢复短语找回。",
+      "忘记密码了？没有人能替你解锁这个钱包，但你可以继续往前走：使用下方的“更换钱包”，旧文件会保留在 retired/ 文件夹，并开始一个新钱包。旧钱包里的资金只有在你另外保存过它的恢复短语或私钥、或者还记得它的密码时才能找回。",
     autoLockedBody:
-      "这个钱包没有密码：服务器用自己的解锁密钥文件打开它，而这个文件在启动时没有起作用。请从服务器数据目录的备份里恢复该文件后重启，或使用下方的“更换钱包”开始一个新钱包；旧文件会保留在 retired/ 文件夹，里面的资金可用它的恢复短语找回。",
+      "这个钱包没有密码：服务器用自己的解锁密钥文件打开它，而这个文件在启动时没有起作用。请从服务器数据目录的备份里恢复该文件后重启，或使用下方的“更换钱包”开始一个新钱包；旧文件会保留在 retired/ 文件夹；里面的资金只有在你另外保存过它的恢复短语或私钥、或者能从备份里恢复它的解锁密钥文件时才能找回。",
     lockedRecovery:
-      "忘记密码了？没有人能替你解锁这个钱包，但你可以继续往前走：使用下方“危险操作”里的“更换钱包”，旧文件会保留在 retired/ 文件夹，并开始一个新钱包。旧钱包里的资金可以用它的恢复短语找回。",
+      "忘记密码了？没有人能替你解锁这个钱包，但你可以继续往前走：使用下方“危险操作”里的“更换钱包”，旧文件会保留在 retired/ 文件夹，并开始一个新钱包。旧钱包里的资金只有在你另外保存过它的恢复短语或私钥、或者还记得它的密码时才能找回。",
 
     bannerBackupMissing: "钱包的恢复短语还没有备份。充值前请先完成。",
     bannerBackupAction: "去完成备份",

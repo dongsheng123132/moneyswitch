@@ -68,6 +68,9 @@ export function WalletHealthCard({ wallet }: { wallet: WalletInfo }) {
   // 1b. who can read the unlock secret (auto-unlock wallets only; null = nothing on disk to protect)
   const protectedState = health.secret_protected ?? null;
 
+  // 1c. password wallets: leftover unlock secrets in retired/ that still open it without the password
+  const retiredOpen = health.retired_secrets_open_live_key ?? [];
+
   // 2. recovery phrase backup
   const [backupTone, backupPill, backupText]: [Tone, string, string] =
     health.backup === "confirmed"
@@ -106,6 +109,17 @@ export function WalletHealthCard({ wallet }: { wallet: WalletInfo }) {
                 {t("hProtectBad", { detail: health.secret_protection_detail ?? t("hProtectNoDetail") })}
               </Callout>
             )}
+          </li>
+        )}
+        {retiredOpen.length > 0 && (
+          <li data-health="retired-open">
+            <div className="wallet-health-head">
+              <span className="wallet-health-label">{t("hRetiredOpen")}</span>
+              <Pill tone="red">{t("pillExposed")}</Pill>
+            </div>
+            <Callout tone="error" title={t("hRetiredOpenTitle")}>
+              {t("hRetiredOpenBody", { files: retiredOpen.join(", ") })}
+            </Callout>
           </li>
         )}
         <li data-health="backup">

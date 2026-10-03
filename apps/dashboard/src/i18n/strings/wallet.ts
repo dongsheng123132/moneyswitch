@@ -56,7 +56,7 @@ export const walletStrings = defineMessages(
     chainIdLabel: "Chain ID",
     usdcContractLabel: "USDC contract",
 
-    oneWalletHeading: "One wallet — receives and pays",
+    oneWalletHeading: "Wallet: funding and payments",
     receiveTitle: "Receive",
     receiveSentence:
       "Anyone — including an AI buying from your toll booth — pays you at this address. It can only receive money, so it's safe to share.",
@@ -119,7 +119,7 @@ export const walletStrings = defineMessages(
     chainIdLabel: "链 ID",
     usdcContractLabel: "USDC 合约",
 
-    oneWalletHeading: "一个钱包，收付一体",
+    oneWalletHeading: "钱包：充值与付款来源",
     receiveTitle: "收款",
     receiveSentence: "别人（包括买你收费站的 AI）付钱给你就用这个地址。它只能收钱，可以放心分享。",
     receiveTollboothLink: "用收费站让 AI 付钱给你 →",

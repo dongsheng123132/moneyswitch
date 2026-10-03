@@ -349,6 +349,11 @@ export interface WalletHealth {
   secret_protection_detail?: string | null;
   /** Credential files that belong to no live wallet.json. wallet_file_missing = wallet.json is gone but they remain. */
   orphan_files?: { secrets: string[]; retired: number; wallet_file_missing: boolean };
+  /**
+   * Password wallets only: names of files inside retired/ that hold an unlock secret which still opens this wallet without its
+   * password (they are removed whenever the password is entered; this lists what is still there). Absent on older servers.
+   */
+  retired_secrets_open_live_key?: string[];
   backup: "confirmed" | "missing" | "not_applicable";
   /** USDC, e.g. "50". */
   float_limit: string;
