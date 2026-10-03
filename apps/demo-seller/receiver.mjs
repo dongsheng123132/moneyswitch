@@ -9,7 +9,7 @@ export const TESTNET_RECEIVER_PATH = '/x402-testnet/check';
 export const RECEIVER_PRICE = '0.01';
 
 /**
- * A standalone TESTNET seller employees use to verify their setup: one paid endpoint, 0.01 test USDC on
+ * A standalone TESTNET seller new users use to verify their setup (the ten-minute path, SPEC.md §0): one paid endpoint, 0.01 test USDC on
  * Monad testnet. No administrator tokens, payer keys or wallet files. (There is deliberately no mainnet
  * receiver any more.)
  */
