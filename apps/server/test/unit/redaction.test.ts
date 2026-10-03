@@ -1,6 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest";
+import fs from "node:fs";
 import { Writable } from "node:stream";
 import Fastify from "fastify";
+import { Wallet } from "ethers";
+import { unlockSecretPath } from "@moneyswitch/wallet";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { registerAdminRoutes } from "../../src/routes/admin.js";
 import { registerAgentRoutes } from "../../src/routes/agent.js";
@@ -67,5 +70,51 @@ describe("Log redaction", () => {
     expect(captured).not.toContain(moneyKey);
     expect(captured).not.toContain(t.adminToken);
     expect(captured).not.toContain("test-password-123");
+  });
+
+  it("recovery phrase / wallet passwords / unlock secret never appear in log output across the wallet lifecycle routes", async () => {
+    t = await buildTestApp({ walletOptions: { scrypt: { N: 2 ** 10, r: 8, p: 1 } } });
+
+    let captured = "";
+    const stream = new Writable({
+      write(chunk, _enc, cb) {
+        captured += chunk.toString();
+        cb();
+      },
+    });
+    const loggedApp = Fastify({ logger: { stream, level: "trace" } });
+    registerAdminRoutes(loggedApp, t.ctx);
+    await loggedApp.ready();
+    const headers = { authorization: `Bearer ${t.adminToken}` };
+    const call = (url: string, payload?: object) => loggedApp.inject({ method: "POST", url, headers, ...(payload ? { payload } : {}) });
+
+    const created = (await call("/v1/admin/wallet/create")).json() as { address: string; recovery_phrase: string };
+    const words = created.recovery_phrase.split(" ");
+    await call("/v1/admin/wallet/backup/confirm", { positions: [1, 12], words: [words[0], words[11]] });
+    await call("/v1/admin/wallet/reveal", { confirm_address: created.address });
+    const unlockSecret = fs.readFileSync(unlockSecretPath(t.tmpDir), "utf-8");
+    await call("/v1/admin/wallet/backup", { password: "redaction-file-password" });
+    await call("/v1/admin/wallet/auto-unlock", { enabled: false, password: "redaction-wallet-password" });
+    await call("/v1/admin/wallet/unlock", { password: "redaction-wallet-password" });
+    const replaced = (await call("/v1/admin/wallet/replace", { confirm_address: created.address })).json() as { recovery_phrase: string };
+    const imported = Wallet.createRandom();
+    await call("/v1/admin/wallet/import", { kind: "private_key", private_key: imported.privateKey });
+    await call("/v1/admin/wallet/import", { kind: "mnemonic", mnemonic: replaced.recovery_phrase });
+    await loggedApp.close();
+
+    expect(captured).toContain("/v1/admin/wallet/reveal"); // the requests really were logged
+    for (const secret of [
+      created.recovery_phrase,
+      replaced.recovery_phrase,
+      words.slice(0, 4).join(" "),
+      unlockSecret,
+      "redaction-file-password",
+      "redaction-wallet-password",
+      imported.privateKey,
+      imported.privateKey.slice(2),
+      t.adminToken,
+    ]) {
+      expect(captured).not.toContain(secret);
+    }
   });
 });

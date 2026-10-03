@@ -707,6 +707,33 @@ describe("replace wallet", () => {
   });
 });
 
+describe("a wallet.json written by the previous release", () => {
+  it("(created with a password) already carries its recovery phrase: unlock it, reveal the words, and the address is the standard-path one", { timeout: 60_000 }, async () => {
+    // exactly what the old createWallet(password) stored: ethers' HDNodeWallet.encrypt() with the default scrypt cost
+    const old = EthersWallet.createRandom();
+    fs.writeFileSync(walletFilePath(tmpDir), await old.encrypt("legacy password 1"));
+    const driver = drv();
+    expect(driver.keystoreHasRecoveryPhrase()).toBe(true);
+    expect(driver.hasUnlockSecret()).toBe(false);
+    expect(await driver.unlockOnStartup({})).toEqual({ unlocked: false, attempts: [] });
+    await driver.unlock("legacy password 1");
+    const revealed = driver.reveal();
+    expect(revealed.kind).toBe("mnemonic");
+    expect(revealed.kind === "mnemonic" && addressFromPhrase(revealed.phrase)).toBe(old.address);
+    // and it can be moved to auto-unlock without losing the phrase
+    await driver.enableAutoUnlock();
+    const restarted = drv();
+    await restarted.unlockOnStartup({});
+    expect(restarted.reveal()).toEqual(revealed);
+  });
+
+  it("(imported from a bare private key) has no phrase to back up", async () => {
+    const key = EthersWallet.createRandom();
+    fs.writeFileSync(walletFilePath(tmpDir), await new EthersWallet(key.privateKey).encrypt("legacy password 2"));
+    expect(drv().keystoreHasRecoveryPhrase()).toBe(false);
+  });
+});
+
 describe("creation stays exclusive and complete", () => {
   it("auto creation publishes the secret and the keystore exactly once, even when two creates race", async () => {
     const a = drv();
