@@ -26,6 +26,18 @@ function currentSid(): string {
 /** SDDL writes well-known SIDs as two-letter aliases. */
 const ALIASES: Record<string, string> = { SY: "S-1-5-18", BU: "S-1-5-32-545", BA: "S-1-5-32-544", AU: "S-1-5-11", WD: "S-1-1-0", LS: "S-1-5-19", NS: "S-1-5-20", IU: "S-1-5-4" };
 
+/**
+ * SDDL also writes two machine-relative accounts as aliases: LA (the built-in Administrator, RID 500 - the account GitHub's
+ * Windows runners use) and LG (Guest, RID 501). Their SID is the local machine's prefix plus the RID, which equals the
+ * running user's prefix whenever that user is a local account (the only case in which SDDL can print the alias for it).
+ */
+function machineAlias(alias: string): string | undefined {
+  const rid = alias === "LA" ? "500" : alias === "LG" ? "501" : null;
+  if (!rid) return undefined;
+  const me = currentSid();
+  return /^S-1-5-21-\d+-\d+-\d+-\d+$/.test(me) ? me.replace(/-\d+$/, `-${rid}`) : undefined;
+}
+
 /** The DACL of `target` as `icacls /save` writes it: SDDL, so every trustee is a SID or a well-known alias, never a localized name. */
 function aclOf(target: string) {
   const saved = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ms-icacls-")), "acl.txt");
@@ -35,7 +47,7 @@ function aclOf(target: string) {
     const sddl = text.split(/\r?\n/).find((l) => l.startsWith("D:"))!;
     const flags = /^D:([A-Z]*)/.exec(sddl)![1];
     const aces = [...sddl.matchAll(/\(([^)]*)\)/g)].map((m) => m[1].split(";"));
-    const trustees = aces.map((a) => ALIASES[a[5]] ?? a[5]);
+    const trustees = aces.map((a) => ALIASES[a[5]] ?? machineAlias(a[5]) ?? a[5]);
     return { sddl, protectedDacl: flags.includes("P"), types: aces.map((a) => a[0]), trustees: trustees.sort(), rights: aces.map((a) => a[2]) };
   } finally {
     fs.rmSync(path.dirname(saved), { recursive: true, force: true });
