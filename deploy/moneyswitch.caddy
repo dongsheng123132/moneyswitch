@@ -11,9 +11,6 @@ app.moneyswitch.dev {
     handle /x402-testnet/* {
         reverse_proxy 127.0.0.1:4031
     }
-    handle /x402-receive/* {
-        reverse_proxy 127.0.0.1:4021
-    }
     handle {
         reverse_proxy 127.0.0.1:4020 {
             flush_interval -1

@@ -1,6 +1,7 @@
 FROM node:22-slim
 WORKDIR /app
-ENV NODE_ENV=production RECEIVER_PORT=4021
+# Testnet only: the receiver refuses to start with any other RECEIVER_MODE.
+ENV NODE_ENV=production RECEIVER_PORT=4021 RECEIVER_MODE=testnet
 COPY receiver.cjs ./receiver.cjs
 USER node
 EXPOSE 4021
