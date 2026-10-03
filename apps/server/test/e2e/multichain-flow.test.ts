@@ -16,7 +16,6 @@ afterEach(() => {
 });
 beforeAll(async () => {
   t = await buildTestApp({ unlockWallet: true, port: 0 });
-  await t.ctx.wallet.unlock("test-password-123");
   facilitator = buildMockFacilitator();
   await facilitator.listen({ port: 0, host: "127.0.0.1" });
   const facilitatorUrl = `http://127.0.0.1:${(facilitator.server.address() as { port: number }).port}`;

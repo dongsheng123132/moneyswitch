@@ -51,7 +51,7 @@ export async function unlockWalletOnStartup(wallet: LocalWalletDriver, password:
       console.error(
         "[moneyswitch] WARNING: wallet.json is missing from the data directory, but credential files of an earlier wallet are still there " +
           `(${orphans.secrets.length} unlock secret file(s), ${orphans.retired} file(s) in retired/). ` +
-          "Is the data directory mounted from the right place? Restore wallet.json from your backup, or create/import a wallet in the Dashboard: " +
+          "Is the data directory mounted from the right place? Restore wallet.json from your backup, or create a new wallet in the Dashboard: " +
           "the existing files are kept, never overwritten."
       );
     }
@@ -93,19 +93,21 @@ export async function unlockWalletOnStartup(wallet: LocalWalletDriver, password:
         `[moneyswitch] ERROR: auto-unlock is ON for this wallet, but its unlock secret (${secretName()}) ${what[attempt.reason ?? "secret_wrong"] ?? "does not work"}, so the wallet stays LOCKED. ` +
           (aside
             ? `This wallet's secret was moved aside before (while wallet.json belonged to another wallet): ${aside.map((n) => `retired/${n}`).join(", ")} - but ${aside.length === 1 ? "it does" : "they do"} not open this wallet, so it was not moved back. ` +
-              "Restore the right file from a backup of the data directory, or use Replace wallet in the Dashboard (import your recovery phrase or private key)."
-            : "Restore that file from a backup of the data directory, or use Replace wallet in the Dashboard (import your recovery phrase or private key).")
+              "Restore the right file from a backup of the data directory, or use Replace wallet in the Dashboard (a new wallet; the old files stay in retired/)."
+            : "Restore that file from a backup of the data directory, or use Replace wallet in the Dashboard (a new wallet; the old files stay in retired/).")
       );
     }
   }
   if (!report.unlocked && report.attempts.length === 0) {
-    console.log("[moneyswitch] Wallet is locked: no unlock credential configured. Unlock it in the Dashboard (Wallet page).");
+    console.log(
+      "[moneyswitch] Wallet is locked: no unlock credential configured. Set MONEYSWITCH_WALLET_PASSWORD(_FILE) and restart, or replace the wallet in the Dashboard (Wallet page)."
+    );
   }
   const openers = wallet.retiredSecretsOpeningLiveKey;
   if (openers.length > 0) {
     console.error(
       `[moneyswitch] WARNING: ${openers.map((f) => `retired/${f}`).join(", ")} still opens this wallet without the password (it is a copy of this wallet's old unlock secret). ` +
-        "It is removed as soon as the wallet is unlocked with its password."
+        "It is removed as soon as the wallet is unlocked with its password at startup (MONEYSWITCH_WALLET_PASSWORD)."
     );
   }
   const protection = wallet.secretProtection;

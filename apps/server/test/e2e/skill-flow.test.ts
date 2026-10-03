@@ -86,9 +86,8 @@ beforeAll(async () => {
 
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-skill-e2e-"));
   const opened = openDb({ filePath: ":memory:" });
-  const wallet = new LocalWalletDriver(tmpDir);
-  await wallet.createWallet("e2e-test-password");
-  await wallet.unlock("e2e-test-password");
+  const wallet = new LocalWalletDriver(tmpDir, { protect: false });
+  await wallet.createWithPhrase(); // auto-unlock, like every wallet the server creates
   adminToken = bootstrapAdminToken(opened.db)!;
   const ctx: AppContext = {
     db: opened.db,

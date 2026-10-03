@@ -7,21 +7,13 @@ import { defaultProtector, type Protector, type SecretProtection } from "./prote
 
 export { evaluateAcl, parseAclOutput, type Protector, type ProtectTargets, type SecretProtection } from "./protect.js";
 
-export type WalletImport =
-  | { kind: "private_key"; private_key: string }
-  | { kind: "keystore"; keystore: string; source_password: string }
-  /** A BIP-39 recovery phrase of 12 or 24 English words, account index 0 (m/44'/60'/0'/0/0). */
-  | { kind: "mnemonic"; mnemonic: string };
-
-/** What a caller asks for when it creates or imports: no password = "auto", a password = "manual". */
-export type UnlockMode = "auto" | "manual";
-
 /**
  * How the keystore on disk is protected, RECORDED in wallet.json (non-secret `x-moneyswitch` field) so health
  * never has to guess it from which files happen to exist. A keystore without the field predates this release and
  * is a password keystore.
- *  - "auto":     encrypted with a random 256-bit secret kept in wallet-unlock-<address>.secret.
- *  - "password": encrypted with a password a human (or MONEYSWITCH_WALLET_PASSWORD) supplies.
+ *  - "auto":     encrypted with a random 256-bit secret kept in wallet-unlock-<address>.secret. Every wallet created now is like this.
+ *  - "password": encrypted with a password a human (or MONEYSWITCH_WALLET_PASSWORD) supplies. Only wallets made by older versions are
+ *                like this: they are unlocked at startup, but never created and never switched to any more.
  */
 export type Protection = "auto" | "password";
 
@@ -63,30 +55,7 @@ export interface CreatedWallet {
   address: string;
   /** The 12-word recovery phrase. Returned exactly once, never stored outside the encrypted keystore. */
   mnemonic: string;
-  mode: UnlockMode;
 }
-
-export interface ImportedWallet {
-  address: string;
-  mode: UnlockMode;
-  /** Always false: an import keeps only the account-0 private key, never a seed. */
-  hasRecoveryPhrase: boolean;
-  /** Password mode: retired/ secret files that opened a retired copy of this very key, removed so nothing opens it without the password. */
-  retiredSecretsRemoved?: string[];
-  /** Such files that could NOT be removed and still open the key (see LocalWalletDriver.retiredSecretsOpeningLiveKey). */
-  retiredSecretsStillOpen?: string[];
-}
-
-/** What turning auto-unlock off reports besides the address (the extra fields only when there is something to say). */
-export interface AutoUnlockOffResult {
-  address: string;
-  retiredSecretsRemoved?: string[];
-  retiredSecretsStillOpen?: string[];
-}
-
-export type RevealedSecret =
-  | { kind: "mnemonic"; phrase: string }
-  | { kind: "private_key"; privateKey: string };
 
 export interface RetiredFiles {
   /** Checksummed address of the wallet that was retired. */
@@ -106,30 +75,12 @@ export interface ReplaceHooks {
 
 export interface ReplaceResult {
   address: string;
-  mode: UnlockMode;
-  /** Only when a new wallet was created: its recovery phrase (returned once). */
-  mnemonic?: string;
-  hasRecoveryPhrase: boolean;
+  /** The new wallet's 12-word recovery phrase. Returned once. */
+  mnemonic: string;
   retired: RetiredFiles;
-  /** Password mode: retired/ secret files that opened a retired copy of the new live key (the pair just retired, when it is the same key), removed. */
-  retiredSecretsRemoved?: string[];
-  retiredSecretsStillOpen?: string[];
 }
 
-export type WalletErrorCode =
-  | "WALLET_EXISTS"
-  | "NO_WALLET"
-  | "WALLET_LOCKED"
-  | "WALLET_BUSY"
-  | "WALLET_CHANGED"
-  | "ALREADY_AUTO"
-  | "NOT_AUTO"
-  | "INVALID_IMPORT"
-  | "EXPECTED_ADDRESS_MISMATCH"
-  | "NO_RECOVERY_PHRASE"
-  | "BACKUP_NEEDS_PASSWORD"
-  | "UNLOCK_FAILED"
-  | "STORAGE_FAILED";
+export type WalletErrorCode = "WALLET_EXISTS" | "NO_WALLET" | "WALLET_BUSY" | "WALLET_CHANGED" | "STORAGE_FAILED";
 
 /** Errors the HTTP layer can map to a status code. Messages never contain a secret. */
 export class WalletError extends Error {
@@ -149,9 +100,9 @@ export interface ScryptParams {
 
 export interface LocalWalletDriverOptions {
   /**
-   * Overrides the scrypt cost of every keystore this driver writes. Leave unset in production: human passwords
-   * use ethers' default (N=2^17); the random 256-bit auto-unlock secret needs no stretching and uses N=2^14 so a
-   * restart unlocks quickly. Tests lower it to keep the suite fast.
+   * Overrides the scrypt cost of every keystore this driver writes. Leave unset in production: the random 256-bit
+   * auto-unlock secret needs no stretching and uses N=2^14 so a restart unlocks quickly. Tests lower it to keep the
+   * suite fast.
    */
   scrypt?: ScryptParams;
   /**
@@ -173,8 +124,8 @@ export interface LocalWalletDriverOptions {
   onRetiredSecretsRemoved?: (event: { files: string[]; trigger: RetiredScrubTrigger }) => void;
 }
 
-/** What made the driver look through retired/ for secrets that open the live key. */
-export type RetiredScrubTrigger = "auto_unlock_off" | "import" | "replace" | "unlock" | "startup_password";
+/** What made the driver look through retired/ for secrets that open the live key: the startup password proving a legacy password wallet reachable. */
+export type RetiredScrubTrigger = "startup_password";
 
 /** A signer plus the lease that keeps the wallet from being replaced or locked while a request is using it. */
 export interface SignerLease {
@@ -243,7 +194,7 @@ export interface EvmTypedDataSigner {
 
 type AnyWallet = Wallet | HDNodeWallet;
 
-/** One operation at a time per data directory: a toggle, an unlock and a replace must never interleave. */
+/** One operation at a time per data directory: a create, the unlock at startup and a replace must never interleave. */
 const queueTails = new Map<string, Promise<void>>();
 async function exclusive<T>(dir: string, fn: () => Promise<T>): Promise<T> {
   const key = path.resolve(dir);
@@ -313,15 +264,6 @@ function removeQuietly(file: string): void {
   } catch {
     /* already gone */
   }
-}
-
-/** The optional fields of a result that cleaned up retired/ (present only when there is something to report). */
-function scrubReport(scrub: { removed: string[]; failed: string[] } | null): { retiredSecretsRemoved?: string[]; retiredSecretsStillOpen?: string[] } {
-  if (!scrub) return {};
-  return {
-    ...(scrub.removed.length ? { retiredSecretsRemoved: scrub.removed } : {}),
-    ...(scrub.failed.length ? { retiredSecretsStillOpen: scrub.failed } : {}),
-  };
 }
 
 /** Moves a file; across file systems (EXDEV) it is copied and the original removed only after the copy exists. */
@@ -401,10 +343,6 @@ function phraseOf(wallet: AnyWallet): string | null {
   return wallet instanceof HDNodeWallet ? wallet.mnemonic?.phrase ?? null : null;
 }
 
-function normalizeWord(word: unknown): string {
-  return typeof word === "string" ? word.trim().toLowerCase() : "";
-}
-
 /** Adds the non-secret protection marker to a keystore JSON string. */
 function withMarker(json: string, protection: Protection): string {
   const data = JSON.parse(json);
@@ -429,18 +367,16 @@ interface LiveKeystore {
 
 interface Staged {
   wallet: AnyWallet;
-  mode: UnlockMode;
-  protection: Protection;
   /** The complete, already-verified keystore JSON (marker included). */
   keystoreJson: string;
-  /** The random auto-unlock secret (auto mode only). */
-  secret: string | null;
+  /** The random auto-unlock secret. */
+  secret: string;
 }
 
 /**
  * LocalWalletDriver: manages a single ethers v6 encrypted keystore file.
  * The decrypted in-memory `Wallet` (and therefore the private key and recovery phrase) only ever lives inside
- * this class's private field, never leaves the process except through reveal(), and is never logged.
+ * this class's private field, never leaves the process (the recovery phrase is returned once, by creation and replacement), and is never logged.
  */
 export class LocalWalletDriver {
   private unlockedWallet: AnyWallet | null = null;
@@ -575,107 +511,30 @@ export class LocalWalletDriver {
   }
 
   // -------------------------------------------------------------------------
-  // creation and import
+  // creation
   // -------------------------------------------------------------------------
 
   /**
-   * Creates a wallet from a fresh BIP-39 12-word phrase on m/44'/60'/0'/0/0. Without a password the keystore is
-   * encrypted with a random secret that is stored next to it (auto-unlock, the default); with a password nothing
-   * is stored and the password is needed on every start (manual). The returned phrase is the only copy outside
-   * the encrypted keystore.
+   * Creates a wallet from a fresh BIP-39 12-word phrase on m/44'/60'/0'/0/0. The keystore is encrypted with a random secret
+   * that is stored next to it (auto-unlock: the server unlocks itself after a restart). The returned phrase is the only copy
+   * outside the encrypted keystore.
    */
-  async createWithPhrase(opts: { password?: string } = {}): Promise<CreatedWallet> {
-    const mode: UnlockMode = opts.password === undefined ? "auto" : "manual";
+  async createWithPhrase(): Promise<CreatedWallet> {
     return exclusive(this.dataDir, async () => {
       if (this.hasKeystore()) throw new WalletError("WALLET_EXISTS", "Wallet already exists; use a separate data directory for another wallet");
       const wallet = Wallet.createRandom();
-      const staged = await this.stage(wallet, mode, opts.password);
-      if (staged.secret) await this.protectDirectory(); // the folder is locked down BEFORE the secret is written into it
+      const staged = await this.stage(wallet);
+      await this.protectDirectory(); // the folder is locked down BEFORE the secret is written into it
       this.publishNew(staged);
       this.adopt(staged);
-      if (staged.protection === "auto") await this.refreshProtection();
-      return { address: wallet.address, mnemonic: wallet.mnemonic!.phrase, mode };
+      await this.refreshProtection();
+      return { address: wallet.address, mnemonic: wallet.mnemonic!.phrase };
     });
-  }
-
-  /**
-   * Imports a private key, an encrypted keystore or a recovery phrase into an empty data directory. Whatever the
-   * source, ONLY the account-0 private key is kept: never the seed, never a non-default derivation path. (A phrase
-   * that also controls other accounts must not live on a hot server.) `expectedAddress` makes the import refuse
-   * when the key does not belong to the address the operator expects.
-   */
-  async importFrom(source: WalletImport, opts: { password?: string; expectedAddress?: string } = {}): Promise<ImportedWallet> {
-    const mode: UnlockMode = opts.password === undefined ? "auto" : "manual";
-    return exclusive(this.dataDir, async () => {
-      if (this.hasKeystore()) throw new WalletError("WALLET_EXISTS", "Wallet already exists; import cannot replace it");
-      const wallet = await this.parseImport(source);
-      this.assertExpectedAddress(wallet, opts.expectedAddress);
-      const staged = await this.stage(wallet, mode, opts.password);
-      if (staged.secret) await this.protectDirectory();
-      this.publishNew(staged);
-      this.adopt(staged);
-      if (staged.protection === "auto") await this.refreshProtection();
-      // Adopting a key in password mode: retired copies of that key that open without the password go.
-      const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "import") : null;
-      return { address: wallet.address, mode, hasRecoveryPhrase: false, ...scrubReport(scrub) };
-    });
-  }
-
-  /** Legacy shape kept for callers that only want a password-protected wallet: manual mode, address only. */
-  async createWallet(password: string): Promise<{ address: string }> {
-    const { address } = await this.createWithPhrase({ password });
-    return { address };
-  }
-
-  /** Legacy shape: manual mode with the given new password. */
-  async importWallet(source: WalletImport, password: string): Promise<{ address: string }> {
-    const { address } = await this.importFrom(source, { password });
-    return { address };
   }
 
   // -------------------------------------------------------------------------
   // unlocking
   // -------------------------------------------------------------------------
-
-  /**
-   * wallet.json as it is, for a password wallet. An auto wallet's file is encrypted with a secret that is never
-   * exported, so handing it out would be handing out something nothing can open: that needs a password
-   * (exportKeystoreWithPassword) instead.
-   */
-  exportKeystore(): string {
-    const live = this.readLive();
-    if (!this.hasKeystore()) throw new WalletError("NO_WALLET", "No wallet to back up");
-    if (live?.protection === "auto") {
-      throw new WalletError("BACKUP_NEEDS_PASSWORD", "This wallet is encrypted with the server's auto-unlock secret, which is never exported; export it with a password instead");
-    }
-    return fs.readFileSync(this.keystorePath, "utf-8");
-  }
-
-  /** A portable keystore of the unlocked wallet (no server marker), encrypted with `password` (the operator's choice). */
-  async exportKeystoreWithPassword(password: string): Promise<string> {
-    const wallet = this.requireUnlocked();
-    return encryptKeystoreJson(accountOf(wallet), password, this.kdfOptions("manual"));
-  }
-
-  /**
-   * Decrypts the keystore into memory with a human password. Runs under the same lock as replace and the toggles,
-   * and refuses to adopt a wallet that is no longer the one on disk (a replace or an outside edit while scrypt was
-   * running). Throws on a wrong password without leaking details.
-   */
-  async unlock(password: string): Promise<{ address: string }> {
-    return exclusive(this.dataDir, async () => {
-      if (!this.hasKeystore()) throw new WalletError("NO_WALLET", "No keystore found; create one first via POST /v1/admin/wallet/create");
-      const live = this.readLive();
-      if (!live) throw new WalletError("UNLOCK_FAILED", "Failed to unlock wallet: invalid password or corrupted keystore");
-      const wallet = await decryptWith(live.json, password);
-      if (!wallet) throw new WalletError("UNLOCK_FAILED", "Failed to unlock wallet: invalid password or corrupted keystore");
-      this.assertStillLive(wallet);
-      this.adoptUnlocked(wallet);
-      // A human credential just opened the live keystore, so a retired copy of this key that opens without it adds nothing.
-      await this.scrubRetiredOpeners(live.json, "unlock").catch(() => undefined);
-      return { address: wallet.address };
-    });
-  }
 
   /**
    * Startup unlock, in this order: the configured password (MONEYSWITCH_WALLET_PASSWORD or _FILE; empty means "not
@@ -748,14 +607,6 @@ export class LocalWalletDriver {
     });
   }
 
-  /** Forgets the unlocked key. Refuses (WALLET_BUSY) while a request holds a signer lease. */
-  lock(): void {
-    if (this.leases > 0) {
-      throw new WalletError("WALLET_BUSY", `${this.leases} payment request(s) are in flight; wait for them to finish before locking the wallet`);
-    }
-    this.setWallet(null);
-  }
-
   getAddress(): string | null {
     if (this.unlockedWallet) return this.unlockedWallet.address;
     return this.readLive()?.address ?? null;
@@ -822,100 +673,18 @@ export class LocalWalletDriver {
   }
 
   // -------------------------------------------------------------------------
-  // recovery phrase
-  // -------------------------------------------------------------------------
-
-  /**
-   * The words of a wallet generated here, or the private key of one that was imported. The only way key material
-   * leaves the driver; the HTTP layer makes it admin-only, address-confirmed, audited and no-store.
-   */
-  reveal(): RevealedSecret {
-    const wallet = this.requireUnlocked();
-    const phrase = phraseOf(wallet);
-    return phrase ? { kind: "mnemonic", phrase } : { kind: "private_key", privateKey: wallet.privateKey };
-  }
-
-  /**
-   * Checks words of the recovery phrase at 1-based positions (the dashboard asks for two random ones). Returns
-   * false on any mismatch; throws if the wallet is locked or has no phrase to check against.
-   */
-  checkRecoveryWords(positions: number[], words: string[]): boolean {
-    const wallet = this.requireUnlocked();
-    const phrase = phraseOf(wallet);
-    if (!phrase) throw new WalletError("NO_RECOVERY_PHRASE", "This wallet has no recovery phrase");
-    const list = phrase.split(" ");
-    if (positions.length === 0 || positions.length !== words.length) return false;
-    return positions.every(
-      (position, i) => Number.isInteger(position) && position >= 1 && position <= list.length && list[position - 1] === normalizeWord(words[i])
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  // auto-unlock on / off
-  // -------------------------------------------------------------------------
-
-  /**
-   * Turns auto-unlock on: re-encrypts the (already unlocked) wallet with a fresh random secret and stores the
-   * secret next to it. The new keystore is built and test-decrypted before anything on disk changes; the secret is
-   * installed first (a crash then leaves the old keystore with a stale secret, which startup moves to retired/),
-   * the keystore is swapped by rename-over, and a failure puts everything back. No copy of the old keystore stays.
-   */
-  async enableAutoUnlock(): Promise<{ address: string }> {
-    return exclusive(this.dataDir, async () => {
-      const wallet = this.requireUnlocked();
-      const live = this.readLive();
-      if (!live) throw new WalletError("NO_WALLET", "No wallet");
-      this.assertSameWallet(wallet, live);
-      if (live.protection === "auto" && (await this.secretOpens(live))) throw new WalletError("ALREADY_AUTO", "Auto-unlock is already on");
-      const staged = await this.stage(wallet, "auto");
-      await this.protectDirectory();
-      this.swapProtection(live, staged);
-      this.unlockState = { unlockedBy: "auto", attempts: [{ source: "auto", ok: true }] };
-      await this.refreshProtection();
-      return { address: wallet.address };
-    });
-  }
-
-  /**
-   * Turns auto-unlock off: re-encrypts the unlocked wallet with `newPassword`, and only once that keystore is
-   * verified and in place removes the old secret. Nothing is left on disk that opens the key without the password.
-   */
-  async disableAutoUnlock(newPassword: string): Promise<AutoUnlockOffResult> {
-    return exclusive(this.dataDir, async () => {
-      const wallet = this.requireUnlocked();
-      const live = this.readLive();
-      if (!live) throw new WalletError("NO_WALLET", "No wallet");
-      this.assertSameWallet(wallet, live);
-      if (live.protection !== "auto" && !fs.existsSync(this.secretPathFor(live.address))) throw new WalletError("NOT_AUTO", "Auto-unlock is not on");
-      const staged = await this.stage(wallet, "manual", newPassword);
-      this.swapProtection(live, staged);
-      this.unlockState = { unlockedBy: null, attempts: [] };
-      this.protectionState = null;
-      // The password keystore is verified and in place. A retired copy of this very key (a same-key replace, A -> B -> A) that opens
-      // with its old auto secret would still be a way in without the password: remove those secrets.
-      const scrub = await this.scrubRetiredOpeners(staged.keystoreJson, "auto_unlock_off");
-      return { address: wallet.address, ...scrubReport(scrub) };
-    });
-  }
-
-  // -------------------------------------------------------------------------
   // replace
   // -------------------------------------------------------------------------
 
   /**
-   * Replaces the wallet with a new one (created, or imported). The old wallet.json and its secret are COPIED into
-   * <dataDir>/retired/ (names carrying the old address and a timestamp) before anything live changes; then the new
-   * secret is installed under its own name and the new keystore is renamed over wallet.json, so wallet.json never
-   * disappears and every crash point leaves a pair that matches. Nothing is ever deleted. Works while the old
-   * wallet is locked (the lost-password case). Refuses with WALLET_BUSY while any request holds a signer lease.
+   * Replaces the wallet with a newly created one. The old wallet.json and its secret are COPIED into <dataDir>/retired/ (names
+   * carrying the old address and a timestamp) before anything live changes; then the new secret is installed under its own name
+   * and the new keystore is renamed over wallet.json, so wallet.json never disappears and every crash point leaves a pair that
+   * matches. Nothing is ever deleted. Works while the old wallet is locked (the lost-password case). Waits (at most drainTimeoutMs)
+   * for the requests in flight and refuses new ones meanwhile; WALLET_BUSY when they do not finish.
    * guard() / the swap / onSwapped() run in one synchronous stretch, so no request can start in between.
    */
-  async replaceWallet(
-    spec: { kind: "create" } | { kind: "import"; source: WalletImport },
-    opts: { password?: string; expectedAddress?: string } = {},
-    hooks: ReplaceHooks = {}
-  ): Promise<ReplaceResult> {
-    const mode: UnlockMode = opts.password === undefined ? "auto" : "manual";
+  async replaceWallet(hooks: ReplaceHooks = {}): Promise<ReplaceResult> {
     return exclusive(this.dataDir, async () => {
       const old = this.readLive();
       if (!this.hasKeystore() || !old) throw new WalletError("NO_WALLET", "No wallet to replace");
@@ -924,27 +693,17 @@ export class LocalWalletDriver {
       // the wallet closed for ever.
       try {
         await this.waitForIdle();
-        const wallet = spec.kind === "create" ? Wallet.createRandom() : await this.parseImport(spec.source);
-        if (spec.kind === "import") this.assertExpectedAddress(wallet, opts.expectedAddress);
-        const staged = await this.stage(wallet, mode, opts.password);
-        if (staged.secret) await this.protectDirectory();
+        const wallet = Wallet.createRandom();
+        const staged = await this.stage(wallet);
+        await this.protectDirectory();
         // --- synchronous from here to the end of the swap ---
         this.assertIdle();
         hooks.guard?.({ oldAddress: old.address, newAddress: wallet.address });
         const retired = this.swapForReplacement(old, staged, hooks);
         this.adopt(staged);
         this.draining = false; // the new wallet is live: payments may start again, with it
-        if (staged.protection === "auto") await this.refreshProtection();
-        // Adopting a key in password mode (including the pair this very call just retired, when it is the same key).
-        const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "replace") : null;
-        return {
-          address: wallet.address,
-          mode,
-          ...(spec.kind === "create" ? { mnemonic: phraseOf(wallet)! } : {}),
-          hasRecoveryPhrase: phraseOf(wallet) !== null,
-          retired,
-          ...scrubReport(scrub),
-        };
+        await this.refreshProtection();
+        return { address: wallet.address, mnemonic: phraseOf(wallet)!, retired };
       } finally {
         this.draining = false;
       }
@@ -984,15 +743,8 @@ export class LocalWalletDriver {
   // internals: reading
   // -------------------------------------------------------------------------
 
-  private requireUnlocked(): AnyWallet {
-    if (!this.hasKeystore()) throw new WalletError("NO_WALLET", "No wallet");
-    if (!this.unlockedWallet) throw new WalletError("WALLET_LOCKED", "The wallet is locked; unlock it first");
-    return this.unlockedWallet;
-  }
-
-  private kdfOptions(mode: UnlockMode): { scrypt?: ScryptParams } {
-    const scrypt = this.options.scrypt ?? (mode === "auto" ? AUTO_SCRYPT : undefined);
-    return scrypt ? { scrypt } : {};
+  private kdfOptions(): { scrypt: ScryptParams } {
+    return { scrypt: this.options.scrypt ?? AUTO_SCRYPT };
   }
 
   private readLive(): LiveKeystore | null {
@@ -1038,41 +790,9 @@ export class LocalWalletDriver {
     return this.readLive()?.address === wallet.address;
   }
 
-  private assertStillLive(wallet: AnyWallet): void {
-    if (!this.stillLive(wallet)) {
-      throw new WalletError("UNLOCK_FAILED", "Failed to unlock wallet: the wallet file changed while it was being unlocked");
-    }
-  }
-
-  /**
-   * Re-encrypting the unlocked key over wallet.json is only right if wallet.json IS that key's keystore. If the file was
-   * replaced behind the driver's back, doing it would silently overwrite someone else's wallet with this one.
-   */
-  private assertSameWallet(wallet: AnyWallet, live: LiveKeystore): void {
-    if (wallet.address !== live.address) {
-      throw new WalletError(
-        "WALLET_CHANGED",
-        "wallet.json is no longer the wallet that is unlocked (it was replaced outside this server); restart the server or unlock again before changing the unlock mode"
-      );
-    }
-  }
-
   private assertIdle(): void {
     if (this.leases > 0) {
       throw new WalletError("WALLET_BUSY", `${this.leases} payment request(s) are in flight; wait for them to finish, then try again`);
-    }
-  }
-
-  private assertExpectedAddress(wallet: AnyWallet, expected: string | undefined): void {
-    if (expected === undefined) return;
-    let normalized: string | null = null;
-    try {
-      normalized = getAddress(expected);
-    } catch {
-      /* not an address at all */
-    }
-    if (normalized !== wallet.address) {
-      throw new WalletError("EXPECTED_ADDRESS_MISMATCH", `That key belongs to ${wallet.address}, not to the address you expected`);
     }
   }
 
@@ -1094,9 +814,7 @@ export class LocalWalletDriver {
   /** Records the wallet that was just written as the live one. */
   private adopt(staged: Staged): void {
     this.setWallet(staged.wallet);
-    this.unlockState =
-      staged.protection === "auto" ? { unlockedBy: "auto", attempts: [{ source: "auto", ok: true }] } : { unlockedBy: null, attempts: [] };
-    if (staged.protection !== "auto") this.protectionState = null;
+    this.unlockState = { unlockedBy: "auto", attempts: [{ source: "auto", ok: true }] };
   }
 
   private makeSigner(wallet: AnyWallet, epoch: number): EvmTypedDataSigner {
@@ -1154,65 +872,22 @@ export class LocalWalletDriver {
   }
 
   // -------------------------------------------------------------------------
-  // internals: import / staging
+  // internals: staging
   // -------------------------------------------------------------------------
 
   /**
-   * Validates an import request and reduces it to the bare account-0 key (a plain Wallet). Errors never echo the
-   * input: ethers messages can contain the key.
+   * Encrypts `wallet` with a fresh random secret and PROVES the result decrypts back to the same key before anything is
+   * written: we never publish a keystore nothing can open.
    */
-  private async parseImport(source: WalletImport): Promise<Wallet> {
-    try {
-      if (source.kind === "private_key") {
-        if (typeof source.private_key !== "string" || !/^(0x)?[a-fA-F0-9]{64}$/.test(source.private_key.trim())) throw new Error();
-        return new Wallet(`0x${source.private_key.trim().replace(/^0x/, "")}`);
-      }
-      if (source.kind === "keystore") {
-        if (typeof source.keystore !== "string" || source.keystore.length > 128_000 || typeof source.source_password !== "string") throw new Error();
-        const parsed = JSON.parse(source.keystore);
-        const crypto = parsed.crypto ?? parsed.Crypto;
-        const kdf = crypto?.kdfparams;
-        if (parsed.version !== 3 || crypto?.cipher !== "aes-128-ctr") throw new Error();
-        // Bound untrusted backup KDF work before asking ethers to decrypt it.
-        if (crypto.kdf === "scrypt") {
-          if (![kdf?.n, kdf?.r, kdf?.p].every((v) => Number.isSafeInteger(v) && v > 0) || kdf.n > 1_048_576 || kdf.r > 32 || kdf.p > 16 || kdf.n * kdf.r * kdf.p > 4_194_304) throw new Error();
-        } else if (crypto.kdf === "pbkdf2") {
-          if (!Number.isSafeInteger(kdf?.c) || kdf.c < 1 || kdf.c > 2_000_000) throw new Error();
-        } else throw new Error();
-        // The keystore may carry a seed (x-ethers) on any derivation path: keep neither, only the key it signs with.
-        const opened = await Wallet.fromEncryptedJson(source.keystore, source.source_password);
-        return new Wallet(opened.privateKey);
-      }
-      if (source.kind === "mnemonic") {
-        if (typeof source.mnemonic !== "string" || source.mnemonic.length > 1_024) throw new Error();
-        const words = source.mnemonic.trim().toLowerCase().split(/\s+/);
-        if (words.length !== 12 && words.length !== 24) throw new Error();
-        // HDNodeWallet.fromPhrase checks the word list and the checksum; account 0 on m/44'/60'/0'/0/0. The phrase itself is dropped.
-        return new Wallet(HDNodeWallet.fromPhrase(words.join(" ")).privateKey);
-      }
-      throw new Error();
-    } catch {
-      // ethers errors can include the supplied private key; never propagate them.
-      throw new WalletError("INVALID_IMPORT", "Invalid wallet import or incorrect backup password");
-    }
-  }
-
-  /**
-   * Encrypts `wallet` for `mode` and PROVES the result decrypts back to the same key before anything is written:
-   * we never publish a keystore nothing can open.
-   */
-  private async stage(wallet: AnyWallet, mode: UnlockMode, password?: string): Promise<Staged> {
-    const secret = mode === "auto" ? randomBytes(32).toString("hex") : null;
-    const credential = secret ?? password;
-    if (typeof credential !== "string" || credential === "") throw new WalletError("STORAGE_FAILED", "A password is required");
-    const protection: Protection = mode === "auto" ? "auto" : "password";
-    const encrypted = await encryptKeystoreJson(accountOf(wallet), credential, this.kdfOptions(mode));
-    const keystoreJson = withMarker(encrypted, protection);
-    const check = await decryptWith(keystoreJson, credential);
+  private async stage(wallet: AnyWallet): Promise<Staged> {
+    const secret = randomBytes(32).toString("hex");
+    const encrypted = await encryptKeystoreJson(accountOf(wallet), secret, this.kdfOptions());
+    const keystoreJson = withMarker(encrypted, "auto");
+    const check = await decryptWith(keystoreJson, secret);
     if (!check || check.address !== wallet.address || check.privateKey !== wallet.privateKey) {
       throw new WalletError("STORAGE_FAILED", "Keystore verification failed");
     }
-    return { wallet, mode, protection, keystoreJson, secret };
+    return { wallet, keystoreJson, secret };
   }
 
   // -------------------------------------------------------------------------
@@ -1383,15 +1058,13 @@ export class LocalWalletDriver {
     try {
       const tempKeystore = writeTemp(this.dataDir, "wallet", staged.keystoreJson);
       temps.push(tempKeystore);
-      if (staged.secret) {
-        const target = this.secretPathFor(staged.wallet.address);
-        if (fs.existsSync(target)) this.retireFile(target, "orphan");
-        const tempSecret = writeTemp(this.dataDir, "wallet-unlock", staged.secret);
-        temps.push(tempSecret);
-        renameOver(tempSecret, target);
-        temps.splice(temps.indexOf(tempSecret), 1);
-        installed = target;
-      }
+      const target = this.secretPathFor(staged.wallet.address);
+      if (fs.existsSync(target)) this.retireFile(target, "orphan");
+      const tempSecret = writeTemp(this.dataDir, "wallet-unlock", staged.secret);
+      temps.push(tempSecret);
+      renameOver(tempSecret, target);
+      temps.splice(temps.indexOf(tempSecret), 1);
+      installed = target;
       // link is atomic and fails if another request/process created the destination.
       fs.linkSync(tempKeystore, this.keystorePath);
     } catch (e) {
@@ -1399,60 +1072,6 @@ export class LocalWalletDriver {
       if (installed && !this.hasKeystore()) removeQuietly(installed);
       if (errorCode(e) === "EEXIST") throw new WalletError("WALLET_EXISTS", "Wallet already exists; use a separate data directory for another wallet");
       throw e;
-    } finally {
-      for (const temp of temps) removeQuietly(temp);
-    }
-  }
-
-  /**
-   * Re-protects the SAME key (auto <-> password). Nothing about the old keystore stays on disk afterwards, and
-   * every step leaves a wallet.json that something the operator holds can open:
-   *   ON  (to auto):     new secret installed under the wallet's own name (a stale one is moved to retired/),
-   *                      then the new keystore renamed over wallet.json.
-   *   OFF (to password): the new keystore renamed over wallet.json, verified, and only then the old secret removed.
-   * A failure at any step restores the previous keystore (rename-over) and secret.
-   */
-  private swapProtection(live: LiveKeystore, staged: Staged): void {
-    const secretFile = this.secretPathFor(live.address);
-    const adding = staged.secret !== null;
-    const undo = new Undo();
-    const temps: string[] = [];
-    try {
-      const tempKeystore = writeTemp(this.dataDir, "wallet", staged.keystoreJson);
-      temps.push(tempKeystore);
-      let tempSecret: string | null = null;
-      if (adding) {
-        tempSecret = writeTemp(this.dataDir, "wallet-unlock", staged.secret!);
-        temps.push(tempSecret);
-        const stale = fs.existsSync(secretFile) ? this.retireFile(secretFile, "orphan") : null;
-        undo.add(() => {
-          // Only take the new secret away when wallet.json is the previous keystore again. If putting it back failed, wallet.json
-          // is still the NEW auto keystore and this secret is the only thing that can open it: removing it would strand the key.
-          if (this.readLive()?.json !== live.json) return;
-          removeQuietly(secretFile);
-          if (stale) renameOver(stale, secretFile);
-        });
-        renameOver(tempSecret, secretFile);
-        temps.splice(temps.indexOf(tempSecret), 1);
-      }
-
-      renameOver(tempKeystore, this.keystorePath);
-      temps.splice(temps.indexOf(tempKeystore), 1);
-      undo.add(() => replaceFile(this.keystorePath, live.json, "wallet"));
-
-      // What is on disk now must be what was verified in memory.
-      if (fs.readFileSync(this.keystorePath, "utf-8") !== staged.keystoreJson) {
-        throw new WalletError("STORAGE_FAILED", "Keystore write verification failed");
-      }
-
-      if (!adding && fs.existsSync(secretFile)) {
-        // The password keystore is verified and in place: the old secret opens nothing any more.
-        removeFile(secretFile);
-      }
-    } catch (e) {
-      undo.rollback();
-      if (e instanceof WalletError) throw e;
-      throw new WalletError("STORAGE_FAILED", `Could not update the wallet files: ${errorCode(e) ?? "I/O error"}`);
     } finally {
       for (const temp of temps) removeQuietly(temp);
     }
@@ -1495,22 +1114,20 @@ export class LocalWalletDriver {
       // 2. + 3. the new files in place
       const tempKeystore = writeTemp(this.dataDir, "wallet", staged.keystoreJson);
       temps.push(tempKeystore);
-      if (staged.secret) {
-        const newSecretFile = this.secretPathFor(staged.wallet.address);
-        const tempSecret = writeTemp(this.dataDir, "wallet-unlock", staged.secret);
-        temps.push(tempSecret);
-        const displaced = fs.existsSync(newSecretFile) ? this.retireFile(newSecretFile, "orphan") : null;
-        undo.add(() => {
-          // Only take the new secret away when wallet.json is the old keystore again (compared by content: a replacement by the SAME key
-          // has the same address). If restoring it failed too, wallet.json is the NEW keystore, its key was never delivered to anyone,
-          // and this secret is the only thing that can still open it.
-          if (this.readLive()?.json !== old.json) return;
-          removeQuietly(newSecretFile);
-          if (displaced) renameOver(displaced, newSecretFile);
-        });
-        renameOver(tempSecret, newSecretFile);
-        temps.splice(temps.indexOf(tempSecret), 1);
-      }
+      const newSecretFile = this.secretPathFor(staged.wallet.address);
+      const tempSecret = writeTemp(this.dataDir, "wallet-unlock", staged.secret);
+      temps.push(tempSecret);
+      const displaced = fs.existsSync(newSecretFile) ? this.retireFile(newSecretFile, "orphan") : null;
+      undo.add(() => {
+        // Only take the new secret away when wallet.json is the old keystore again (compared by content). If restoring it failed
+        // too, wallet.json is the NEW keystore, its key was never delivered to anyone, and this secret is the only thing that can
+        // still open it.
+        if (this.readLive()?.json !== old.json) return;
+        removeQuietly(newSecretFile);
+        if (displaced) renameOver(displaced, newSecretFile);
+      });
+      renameOver(tempSecret, newSecretFile);
+      temps.splice(temps.indexOf(tempSecret), 1);
       renameOver(tempKeystore, this.keystorePath);
       temps.splice(temps.indexOf(tempKeystore), 1);
       undo.add(() => replaceFile(this.keystorePath, old.json, "wallet"));
@@ -1523,8 +1140,9 @@ export class LocalWalletDriver {
         throw new HookFailure(hookError);
       }
 
-      // 5. the old live secret has a verified copy in retired/; with a new secret of the same name it was already replaced
-      if (hadOldSecret && !(sameAddress && staged.secret)) removeQuietly(oldSecretFile);
+      // 5. the old live secret has a verified copy in retired/ (a freshly generated key never has the old address; if it did, the
+      //    file just installed under that name must not be removed)
+      if (hadOldSecret && !sameAddress) removeQuietly(oldSecretFile);
       return retired;
     } catch (e) {
       undo.rollback();

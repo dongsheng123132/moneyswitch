@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
-import { Wallet as EthersWallet } from "ethers";
+import { Wallet as EthersWallet, type HDNodeWallet } from "ethers";
 
 /**
  * The reason this feature exists: a restart must not lock the wallet. These tests run the REAL server
@@ -135,8 +135,7 @@ describe("a restart does not lock the wallet", () => {
     expect(created.headers.get("cache-control")).toBe("no-store");
     const { address, recovery_phrase: phrase } = created.json as { address: string; recovery_phrase: string };
     expect(phrase.split(" ")).toHaveLength(12);
-    const words = phrase.split(" ");
-    const confirmed = await api(first, token, "POST", "/v1/admin/wallet/backup/confirm", { positions: [3, 10], words: [words[2], words[9]] });
+    const confirmed = await api(first, token, "POST", "/v1/admin/wallet/backup/confirm"); // "I wrote the words down"
     expect(confirmed.status).toBe(200);
     const before = (await api(first, token, "GET", "/v1/admin/wallet")).json;
     expect(before).toMatchObject({ address, unlocked: true, has_keystore: true });
@@ -155,12 +154,14 @@ describe("a restart does not lock the wallet", () => {
       const second = await boot(dataDir, { MONEYSWITCH_WALLET_PASSWORD: "", MONEYSWITCH_WALLET_PASSWORD_FILE: emptyFile });
       expect(second.adminToken, "the admin token is only ever printed on the first boot").toBeNull();
       const after = (await api(second, token, "GET", "/v1/admin/wallet")).json;
-      expect(after).toMatchObject({ address, unlocked: true, has_keystore: true, auto_unlock_configured: true });
+      expect(after).toMatchObject({ address, unlocked: true, has_keystore: true });
       expect(after.health).toMatchObject({ protection: "auto", unlock_mode: "auto", auto_unlock_ok: true, backup: "confirmed", secret_protected: true });
-      // really unlocked: the encrypted keystore opened, and the phrase inside it is intact
-      const reveal = await api(second, token, "POST", "/v1/admin/wallet/reveal", { confirm_address: address });
-      expect(reveal.status).toBe(200);
-      expect(reveal.json.recovery_phrase).toBe(phrase);
+      // really unlocked: the encrypted keystore opened, the secret on disk opens it, and the phrase inside it is intact
+      const keystore = fs.readFileSync(path.join(dataDir, "wallet.json"), "utf-8");
+      const onDisk = fs.readFileSync(path.join(dataDir, secretFile), "utf-8").trim();
+      expect(((await EthersWallet.fromEncryptedJson(keystore, onDisk)) as HDNodeWallet).mnemonic?.phrase).toBe(phrase);
+      // ... and the phrase cannot be shown again: there is no route for it
+      expect((await api(second, token, "POST", "/v1/admin/wallet/reveal", { confirm_address: address })).status).toBe(404);
       // what the operator can read in the process output says what happened, and nothing secret
       const log = second.output();
       expect(log).toContain(`Wallet unlocked automatically (unlock secret ${secretFile})`);
@@ -177,7 +178,7 @@ describe("a restart does not lock the wallet", () => {
     }
   });
 
-  it("a broken secret is visible: the wallet stays locked, health says auto-unlock is broken, the log says why, and the password route still works for a manual wallet", async () => {
+  it("a broken secret is visible: the wallet stays locked, health says auto-unlock is broken, and the log says why", async () => {
     const dataDir = newDataDir();
     const first = await boot(dataDir);
     const token = first.adminToken!;
@@ -196,26 +197,6 @@ describe("a restart does not lock the wallet", () => {
     });
     expect(second.output()).toContain("does not open wallet.json");
     expect(second.output()).not.toContain("abab");
-  });
-
-  it("turn auto-unlock off with a password -> restart -> locked until the password is given; turn it on again -> restart -> unlocked", async () => {
-    const dataDir = newDataDir();
-    const first = await boot(dataDir);
-    const token = first.adminToken!;
-    const created = (await api(first, token, "POST", "/v1/admin/wallet/create", {})).json as { address: string };
-    expect((await api(first, token, "POST", "/v1/admin/wallet/auto-unlock", { enabled: false, password: "a long manual password" })).status).toBe(200);
-    expect(fs.readdirSync(dataDir).filter((f) => f.startsWith("wallet-unlock"))).toEqual([]);
-    await first.stop();
-
-    const second = await boot(dataDir);
-    expect((await api(second, token, "GET", "/v1/admin/wallet")).json).toMatchObject({ address: created.address, unlocked: false, health: { unlock_mode: "manual", auto_unlock_ok: null } });
-    expect((await api(second, token, "POST", "/v1/admin/wallet/unlock", { password: "wrong password!" })).status).toBe(400);
-    expect((await api(second, token, "POST", "/v1/admin/wallet/unlock", { password: "a long manual password" })).status).toBe(200);
-    expect((await api(second, token, "POST", "/v1/admin/wallet/auto-unlock", { enabled: true })).status).toBe(200);
-    await second.stop();
-
-    const third = await boot(dataDir);
-    expect((await api(third, token, "GET", "/v1/admin/wallet")).json).toMatchObject({ address: created.address, unlocked: true, health: { unlock_mode: "auto", auto_unlock_ok: true } });
   });
 
   it(
@@ -257,18 +238,15 @@ describe("a restart does not lock the wallet", () => {
         expect(locked).toMatchObject({ address: legacy.address, unlocked: false, has_keystore: true, has_recovery_phrase: true });
         expect(locked.health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [], backup: "missing" });
 
-        // the dead end the operator was in: no password to unlock with, a phrase that cannot be shown while locked, so a backup that
-        // can never be confirmed (and a dashboard that therefore shows no address)
-        expect((await api(second, token, "POST", "/v1/admin/wallet/reveal", { confirm_address: legacy.address })).status).toBe(409);
-        expect((await api(second, token, "POST", "/v1/admin/wallet/backup/confirm", { positions: [1, 2], words: ["a", "b"] })).status).toBe(409);
-        expect((await api(second, token, "POST", "/v1/admin/wallet/unlock", { password: "a wrong guess" })).status).toBe(400);
+        // the dead end the operator was in: no password to unlock with, and (now) no form that asks for one: replacing is the way out
+        expect((await api(second, token, "POST", "/v1/admin/wallet/reveal", { confirm_address: legacy.address })).status).toBe(404);
+        expect((await api(second, token, "POST", "/v1/admin/wallet/unlock", { password: "a wrong guess" })).status).toBe(404);
 
         // --- replace it: the address is all that is asked for; the old file is only MOVED, nothing is decrypted
         const replaced = await api(second, token, "POST", "/v1/admin/wallet/replace", { confirm_address: legacy.address, reason: "lost_password" });
         expect(replaced.status).toBe(200);
-        const next = replaced.json as { address: string; unlock_mode: string; recovery_phrase: string; retired: { address: string; reason: string; keystore_file: string } };
+        const next = replaced.json as { address: string; recovery_phrase: string; retired: { address: string; reason: string; keystore_file: string } };
         expect(next.address).not.toBe(legacy.address);
-        expect(next.unlock_mode).toBe("auto");
         expect(next.recovery_phrase.split(" ")).toHaveLength(12);
         expect(next.retired).toMatchObject({ address: legacy.address, reason: "lost_password" });
 
@@ -276,7 +254,7 @@ describe("a restart does not lock the wallet", () => {
         const now = (await api(second, token, "GET", "/v1/admin/wallet")).json;
         expect(now).toMatchObject({ address: next.address, unlocked: true });
         expect(now.health).toMatchObject({ protection: "auto", unlock_mode: "auto", auto_unlock_ok: true, backup: "missing", secret_protected: true });
-        expect(JSON.stringify(now.health.retired_wallets)).toContain(legacy.address);
+        expect(JSON.stringify(now.retired_wallets)).toContain(legacy.address);
 
         // the old file is in retired/ byte for byte, and it is still the genuine article: the lost password would open it
         const kept = fs.readFileSync(path.join(dataDir, "retired", next.retired.keystore_file), "utf-8");
@@ -290,8 +268,7 @@ describe("a restart does not lock the wallet", () => {
         expect(keys.keys.map((k) => k.id)).toEqual([key.id]);
         const usage = (await api(second, token, "GET", "/v1/admin/usage")).json as { payments: Array<{ id: string; status: string }> };
         expect(Object.fromEntries(usage.payments.map((p) => [p.id, p.status]))).toEqual({ "hist-settled": "settled", "hist-unknown": "unknown" });
-        const retired = (await api(second, token, "GET", "/v1/admin/wallet/retired")).json;
-        expect(retired.retired_wallets[0]).toMatchObject({ address: legacy.address, has_secret_file: false, replaced_by: next.address });
+        expect(now.retired_wallets[0]).toMatchObject({ address: legacy.address, has_secret_file: false, replaced_by: next.address });
 
         // nothing secret in the process output: not the lost password, the new phrase, or the token
         for (const hidden of [lostPassword, next.recovery_phrase, token]) expect(second.output()).not.toContain(hidden);
@@ -323,11 +300,10 @@ describe("a restart does not lock the wallet", () => {
     const second = await boot(dataDir);
     const info = (await api(second, token, "GET", "/v1/admin/wallet")).json;
     expect(info).toMatchObject({ address: next.address, unlocked: true });
-    expect(info.health.retired_wallets).toEqual([expect.objectContaining({ address: old.address, reason: "lost_password" })]);
+    expect(info.retired_wallets).toEqual([expect.objectContaining({ address: old.address, reason: "lost_password", has_secret_file: true })]);
     expect(fs.existsSync(path.join(dataDir, "retired", next.retired.keystore_file))).toBe(true);
     const keys = (await api(second, token, "GET", "/v1/keys")).json as { keys: Array<{ id: string }> };
     expect(keys.keys.map((k) => k.id)).toEqual([key.id]);
-    const retired = (await api(second, token, "GET", "/v1/admin/wallet/retired")).json;
-    expect(retired.retired_wallets[0]).toMatchObject({ address: old.address, usdc_balance: null, has_secret_file: true });
+    expect(info.retired_wallets[0].balances).toEqual({ "eip155:10143": null }); // (the RPC is a closed port: unknown, not zero)
   });
 });

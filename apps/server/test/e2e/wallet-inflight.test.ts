@@ -133,7 +133,6 @@ describe("a payment in flight keeps the wallet from being replaced - for a bound
     expect(fs.readFileSync(walletFilePath(tmpDir), "utf-8")).toBe(keystoreBefore);
     expect(fs.readdirSync(tmpDir).sort()).toEqual(filesBefore);
     expect(wallet.getAddress()).toBe(address);
-    expect(() => wallet.lock()).toThrow(/in flight/);
     expect(wallet.isUnlocked()).toBe(true);
 
     const { body } = await inFlight;

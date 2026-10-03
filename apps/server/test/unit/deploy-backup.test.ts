@@ -11,6 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
+import { writeLegacyPasswordWallet } from "../legacy-wallet.js";
 
 const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false } as const;
 const repoFile = (rel: string) => fileURLToPath(new URL(`../../../../${rel}`, import.meta.url));
@@ -74,7 +75,7 @@ describe.skipIf(!hasShell)("deploy/check-backup.sh", { timeout: 60_000 }, () => 
       const dir = path.join(work, name);
       fs.mkdirSync(dir);
       const driver = new LocalWalletDriver(dir, FAST);
-      const created = password ? await driver.createWallet(password) : await driver.createWithPhrase();
+      const created = password ? await writeLegacyPasswordWallet(dir, password) : await driver.createWithPhrase();
       fs.writeFileSync(path.join(dir, "moneyswitch.db"), "not a real database");
       fs.mkdirSync(path.join(dir, "retired"));
       fs.writeFileSync(path.join(dir, "retired", "wallet-old.json"), "{}");

@@ -1,18 +1,20 @@
-// Third review round of the wallet lifecycle (minor findings, each reproduced by fault injection):
-//   #1 auto-unlock OFF / adopting a password key must not leave retired/ copies that still open the live key
-//   #6 a replace (or ON) that fails twice must not remove the new secret while wallet.json is still the new keystore
+// Third review round of the wallet lifecycle (minor findings, each reproduced by fault injection), as far as they apply to the
+// reduced driver (create, replace, startup unlock):
+//   #1 a retired secret that still opens a legacy password wallet is flagged, and removed only once the startup password proves it
+//   #6 a replace that fails twice must not remove the new secret while wallet.json is still the new keystore
 //   #8 an unlock secret moved aside while wallet.json belonged to another key is restored when the right wallet.json is back
+//   #2 a replace drains the requests in flight instead of being starved by them
 // Written against the defects first: they fail on the implementation the findings were made against.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Wallet as EthersWallet } from "ethers";
+import { Wallet as EthersWallet, HDNodeWallet } from "ethers";
 import { LocalWalletDriver } from "../src/index.js";
+import { writeLegacyPasswordWallet } from "./legacy.js";
 
 // Cheap scrypt, no OS-level ACL work (that is exercised in protect.*.test.ts), and a short drain so a refused replace answers at once.
 const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false, drainTimeoutMs: 40 } as const;
-const PASSWORD = "original password 1";
 const NEW_PASSWORD = "brand new password 2";
 
 let tmpDir: string;
@@ -98,7 +100,7 @@ describe("#6: a double failure never leaves wallet.json = the new key with its s
     const oldSecret = read(path.join(dir, secretFilesOf(dir)[0]));
     breakRestoringWalletJson(dir);
     const boom = Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" });
-    const error = await driver.replaceWallet({ kind: "create" }, {}, { onSwapped: () => { throw boom; } }).then(() => null, (e) => e);
+    const error = await driver.replaceWallet({ onSwapped: () => { throw boom; } }).then(() => null, (e) => e);
     vi.restoreAllMocks();
     expect(error).toBe(boom);
 
@@ -113,45 +115,13 @@ describe("#6: a double failure never leaves wallet.json = the new key with its s
     expect(everything.some((x) => x.text.trim() === oldSecret.trim()), "old secret").toBe(true);
   });
 
-  it("replace with the SAME key: the same double failure keeps the new secret (the address alone cannot tell the keystores apart)", async () => {
-    const dir = mkdir("double-replace-same");
-    const driver = drv(dir);
-    const key = EthersWallet.createRandom().privateKey;
-    const imported = await driver.importFrom({ kind: "private_key", private_key: key });
-    breakRestoringWalletJson(dir);
-    const boom = new Error("database is locked");
-    const error = await driver
-      .replaceWallet({ kind: "import", source: { kind: "private_key", private_key: key } }, {}, { onSwapped: () => { throw boom; } })
-      .then(() => null, (e) => e);
-    vi.restoreAllMocks();
-    expect(error).toBe(boom);
-    const restarted = drv(dir);
-    expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
-    expect(restarted.getAddress()).toBe(imported.address);
-  });
-
-  it("turning auto-unlock ON: the same double failure keeps the new secret too (wallet.json is then the new auto keystore)", async () => {
-    const dir = mkdir("double-on");
-    const driver = drv(dir);
-    await driver.createWithPhrase({ password: PASSWORD });
-    breakRestoringWalletJson(dir, { failFirstReadAfterSwap: true });
-    const error = await driver.enableAutoUnlock().then(() => null, (e) => e);
-    vi.restoreAllMocks();
-    expect(error).toMatchObject({ code: "STORAGE_FAILED" });
-
-    const live = JSON.parse(read(path.join(dir, "wallet.json")));
-    expect(live["x-moneyswitch"]?.protection, "the restore failed, so wallet.json is the new auto keystore").toBe("auto");
-    const restarted = drv(dir);
-    expect((await restarted.unlockOnStartup({})).unlocked, "an auto keystore without its secret can never be opened").toBe(true);
-  });
-
   it("a rollback that DOES work still removes the new secret (the ordinary failure path is unchanged)", async () => {
     const dir = mkdir("single-failure");
     const driver = drv(dir);
     const created = await driver.createWithPhrase();
     const before = read(path.join(dir, "wallet.json"));
     const boom = new Error("database is locked");
-    await expect(driver.replaceWallet({ kind: "create" }, {}, { onSwapped: () => { throw boom; } })).rejects.toBe(boom);
+    await expect(driver.replaceWallet({ onSwapped: () => { throw boom; } })).rejects.toBe(boom);
     expect(read(path.join(dir, "wallet.json"))).toBe(before);
     expect(secretFilesOf(dir)).toEqual([`wallet-unlock-${created.address.toLowerCase()}.secret`]);
     expect(fs.existsSync(path.join(dir, "retired"))).toBe(false);
@@ -289,221 +259,91 @@ async function openersOfLiveKey(dir: string): Promise<string[]> {
 }
 const retiredFiles = (dir: string, ext: string) => walk(dir).filter((f) => f.startsWith("retired/") && f.endsWith(ext));
 
-describe("#1: turning auto-unlock OFF leaves nothing in retired/ that opens the key without the password", () => {
-  const A = EthersWallet.createRandom().privateKey;
-  const importA = { kind: "import", source: { kind: "private_key", private_key: A } } as const;
-
-  it("a same-key replace, then OFF: the retired auto pair of that very key is no longer a way in", async () => {
-    const dir = mkdir("same-key-off");
-    const driver = drv(dir);
-    const first = await driver.importFrom({ kind: "private_key", private_key: A });
-    const replaced = await driver.replaceWallet(importA);
-    expect(replaced.address).toBe(first.address);
-    expect(replaced.retired.secretFile).toBeTruthy();
-    expect(await openersOfLiveKey(dir), "setup: the retired pair really opens the (auto) live key").not.toEqual([]);
-
-    // (a same-key replace leaves two copies of the old secret in retired/: the verified copy, and the original that the new secret displaced)
-    const secretsBefore = retiredFiles(dir, ".secret").map((f) => f.replace("retired/", "")).sort();
-    expect(secretsBefore).toContain(replaced.retired.secretFile);
-    const off = await driver.disableAutoUnlock(NEW_PASSWORD);
-    expect([...(off.retiredSecretsRemoved ?? [])].sort()).toEqual(secretsBefore);
-    expect(off.retiredSecretsStillOpen ?? []).toEqual([]);
-    expect(await openersOfLiveKey(dir), "nothing on disk opens the live key without the password").toEqual([]);
-    // the retired KEYSTORE stays as the record (without its secret it opens nothing); the password still works
-    expect(retiredFiles(dir, ".json")).toHaveLength(1);
-    expect(retiredFiles(dir, ".secret")).toEqual([]);
-    await expect(drv(dir).unlock(NEW_PASSWORD)).resolves.toEqual({ address: first.address });
-    expect(driver.retiredSecretsOpeningLiveKey).toEqual([]);
+describe("#1: a retired secret that opens a legacy password wallet is flagged, and removed once the startup password proves the wallet reachable", () => {
+  const events: Array<{ files: string[]; trigger: string }> = [];
+  const hooked = (dir: string) => new LocalWalletDriver(dir, { ...FAST, onRetiredSecretsRemoved: (e: { files: string[]; trigger: string }) => events.push(e) } as never);
+  beforeEach(() => {
+    events.length = 0;
   });
 
-  it("A -> B -> A, then OFF: the old pair of A is gone, B's retired pair is untouched", async () => {
-    const dir = mkdir("aba-off");
-    const driver = drv(dir);
-    const first = await driver.importFrom({ kind: "private_key", private_key: A });
-    const toB = await driver.replaceWallet({ kind: "create" });
-    const backToA = await driver.replaceWallet(importA);
-    expect(backToA.address).toBe(first.address);
-    const bKeystoreFile = retiredFiles(dir, ".json").find((f) => f.includes(toB.address.toLowerCase()))!;
-    const bSecretFile = retiredFiles(dir, ".secret").find((f) => f.includes(toB.address.toLowerCase()))!;
-    expect(bKeystoreFile && bSecretFile).toBeTruthy();
-
-    await driver.disableAutoUnlock(NEW_PASSWORD);
-    expect(await openersOfLiveKey(dir)).toEqual([]);
-    // B is another key: its retired pair still opens it (deleting it would destroy the only way to recover B)
-    expect(await opens(read(path.join(dir, bKeystoreFile)), read(path.join(dir, bSecretFile)).trim())).toBe(toB.address);
-  });
-
-  it("the live folder is never touched by the clean-up (only retired/)", async () => {
-    const dir = mkdir("only-retired");
-    const driver = drv(dir);
-    await driver.importFrom({ kind: "private_key", private_key: A });
-    await driver.replaceWallet(importA);
-    await driver.disableAutoUnlock(NEW_PASSWORD);
-    expect(fs.readdirSync(dir).filter((f) => f !== "retired")).toEqual(["wallet.json"]);
-  });
-});
-
-describe("#1: adopting a key in password mode removes the retired copies that still open it", () => {
-  const A = EthersWallet.createRandom().privateKey;
-
-  it("replace: back to A (A -> B -> A) in password mode", async () => {
-    const dir = mkdir("adopt-replace");
-    const driver = drv(dir);
-    const first = await driver.importFrom({ kind: "private_key", private_key: A });
-    await driver.replaceWallet({ kind: "create" });
-    const back = await driver.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: A } }, { password: NEW_PASSWORD });
-    expect(back.address).toBe(first.address);
-    expect(back.mode).toBe("manual");
-    expect(back.retiredSecretsRemoved).toHaveLength(1);
-    expect(await openersOfLiveKey(dir)).toEqual([]);
-  });
-
-  it("replace with the SAME key in password mode: the pair retired by this very call is not left behind", async () => {
-    const dir = mkdir("adopt-same");
-    const driver = drv(dir);
-    await driver.importFrom({ kind: "private_key", private_key: A });
-    const result = await driver.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: A } }, { password: NEW_PASSWORD });
-    expect(result.retiredSecretsRemoved).toEqual([result.retired.secretFile]);
-    expect(await openersOfLiveKey(dir)).toEqual([]);
-  });
-
-  it("import into a folder whose wallet.json is gone but whose retired/ still holds that key's old pair", async () => {
-    const dir = mkdir("adopt-import");
-    const driver = drv(dir);
-    await driver.importFrom({ kind: "private_key", private_key: A });
-    await driver.replaceWallet({ kind: "create" });
-    fs.rmSync(path.join(dir, "wallet.json")); // the operator lost wallet.json and imports the key again, this time with a password
-    const again = drv(dir);
-    const imported = await again.importFrom({ kind: "private_key", private_key: A }, { password: NEW_PASSWORD });
-    expect(imported.retiredSecretsRemoved).toHaveLength(1);
-    expect(await openersOfLiveKey(dir)).toEqual([]);
-  });
-
-  it("a brand-new random key has no retired copies, so a password create changes nothing there", async () => {
-    const dir = mkdir("create-password");
-    const driver = drv(dir);
-    await driver.importFrom({ kind: "private_key", private_key: A });
-    await driver.replaceWallet({ kind: "create" });
-    const before = walk(dir).filter((f) => f.startsWith("retired/"));
-    const created = await driver.replaceWallet({ kind: "create" }, { password: NEW_PASSWORD });
-    expect(created.retiredSecretsRemoved).toBeUndefined();
-    expect(before.every((f) => fs.existsSync(path.join(dir, f)))).toBe(true);
-  });
-});
-
-describe("#1: when a retired secret cannot be removed, it is flagged, and removed as soon as the password is used", () => {
-  const A = EthersWallet.createRandom().privateKey;
-
-  async function aRetiredPairOpensTheKey(name: string) {
+  /**
+   * A legacy password wallet whose key was once an auto wallet: the retired pair of that very key (keystore + secret) still opens it
+   * without the password. (It came about when the old import feature put the key back with a password; built by hand here.)
+   */
+  async function aRetiredPairOpensTheLegacyKey(name: string) {
     const dir = mkdir(name);
     const driver = drv(dir);
-    await driver.importFrom({ kind: "private_key", private_key: A });
-    const replaced = await driver.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: A } });
-    return { dir, driver, retiredSecret: replaced.retired.secretFile! };
-  }
-  /** Removing that one retired secret fails (a scanner holds it, a permission problem); everything else works. */
-  function undeletable(retiredSecret: string) {
-    const realUnlink = fs.unlinkSync;
-    vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
-      // (exactly that file: the displaced original is kept as "orphan-" + the same name, and on a fast file system both carry the same stamp)
-      if (path.basename(String(file)) === retiredSecret) throw Object.assign(new Error("access denied"), { code: "EPERM" });
-      return realUnlink(file);
-    }) as never);
+    const first = await driver.createWithPhrase();
+    const replaced = await driver.replaceWallet(); // the pair of `first` is now in retired/
+    fs.rmSync(path.join(dir, "wallet.json"));
+    for (const secret of secretFilesOf(dir)) fs.rmSync(path.join(dir, secret));
+    await writeLegacyPasswordWallet(dir, NEW_PASSWORD, { wallet: HDNodeWallet.fromPhrase(first.mnemonic) });
+    return { dir, first, retiredSecret: replaced.retired.secretFile! };
   }
 
-  it("OFF with an undeletable retired secret still succeeds, reports it, and health can flag it", async () => {
-    const { dir, driver, retiredSecret } = await aRetiredPairOpensTheKey("flag");
-    undeletable(retiredSecret);
-    const off = await driver.disableAutoUnlock(NEW_PASSWORD);
-    vi.restoreAllMocks();
-    expect(off.address).toBeTruthy(); // the password is in place; the leftover is a warning, not a failure
-    expect(off.retiredSecretsStillOpen).toEqual([retiredSecret]);
-    expect(driver.retiredSecretsOpeningLiveKey).toEqual([retiredSecret]);
-    expect(await openersOfLiveKey(dir)).not.toEqual([]);
-
-    // a restart finds it again and keeps flagging it (it deletes nothing without a password proving the wallet is reachable)
-    const restarted = drv(dir);
-    await restarted.unlockOnStartup({});
+  it("a locked legacy wallet is never cleaned up without its password (the retired pair may be the only way in): the secret is only flagged", async () => {
+    const { dir, retiredSecret } = await aRetiredPairOpensTheLegacyKey("locked");
+    expect(await openersOfLiveKey(dir), "setup: the retired pair really opens the live key").not.toEqual([]);
+    const before = walk(dir);
+    const restarted = hooked(dir);
+    await restarted.unlockOnStartup({ password: "not the password at all" });
     expect(restarted.isUnlocked()).toBe(false);
+    expect(walk(dir)).toEqual(before);
     expect(restarted.retiredSecretsOpeningLiveKey).toEqual([retiredSecret]);
-    expect(fs.existsSync(path.join(dir, "retired", retiredSecret))).toBe(true);
-
-    // using the password proves the live keystore is reachable: now the leftover goes
-    await restarted.unlock(NEW_PASSWORD);
-    expect(restarted.retiredSecretsOpeningLiveKey).toEqual([]);
-    expect(await openersOfLiveKey(dir)).toEqual([]);
+    expect(events).toEqual([]);
   });
 
-  it("the startup password (env_or_file) proves it too", async () => {
-    const { dir, driver, retiredSecret } = await aRetiredPairOpensTheKey("env-proves");
-    undeletable(retiredSecret);
-    await driver.disableAutoUnlock(NEW_PASSWORD);
-    vi.restoreAllMocks();
-    const restarted = drv(dir);
+  it("the startup password proves the wallet reachable: the secret that opened it is removed and reported once to the audit hook (file names only)", async () => {
+    const { dir, retiredSecret } = await aRetiredPairOpensTheLegacyKey("startup-password");
+    const restarted = hooked(dir);
     const report = await restarted.unlockOnStartup({ password: NEW_PASSWORD });
     expect(report.unlocked).toBe(true);
     expect(restarted.retiredSecretsOpeningLiveKey).toEqual([]);
-    expect(await openersOfLiveKey(dir)).toEqual([]);
+    expect(await openersOfLiveKey(dir), "nothing on disk opens the live key without the password").toEqual([]);
+    expect(events).toEqual([{ files: [retiredSecret], trigger: "startup_password" }]);
+    // the retired KEYSTORE stays as the record (without its secret it opens nothing); only the secret that opened the live key went
+    expect(retiredFiles(dir, ".json")).toHaveLength(1);
+    expect(retiredFiles(dir, ".secret")).toEqual([]);
   });
 
-  it("a locked password wallet is never cleaned up without its password (the retired pair may be the only way in)", async () => {
-    const { dir, driver, retiredSecret } = await aRetiredPairOpensTheKey("locked");
-    undeletable(retiredSecret);
-    await driver.disableAutoUnlock(NEW_PASSWORD);
+  it("a retired secret that cannot be removed does not stop the unlock: it stays flagged", async () => {
+    const { dir, retiredSecret } = await aRetiredPairOpensTheLegacyKey("undeletable");
+    const realUnlink = fs.unlinkSync;
+    vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
+      if (path.basename(String(file)) === retiredSecret) throw Object.assign(new Error("access denied"), { code: "EPERM" });
+      return realUnlink(file);
+    }) as never);
+    const restarted = hooked(dir);
+    const report = await restarted.unlockOnStartup({ password: NEW_PASSWORD });
     vi.restoreAllMocks();
-    const before = walk(dir);
-    const restarted = drv(dir);
-    await restarted.unlockOnStartup({ password: "not the password at all" });
-    await expect(restarted.unlock("still not the password")).rejects.toThrow();
-    expect(walk(dir)).toEqual(before);
+    expect(report.unlocked).toBe(true); // the password is in place; the leftover is a warning, not a failure
     expect(restarted.retiredSecretsOpeningLiveKey).toEqual([retiredSecret]);
-  });
-
-  it("an auto-unlock wallet has nothing to flag (the live secret is on the same disk anyway)", async () => {
-    const { dir } = await aRetiredPairOpensTheKey("auto-live");
-    const restarted = drv(dir);
-    expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
-    expect(restarted.retiredSecretsOpeningLiveKey).toEqual([]);
-  });
-});
-
-describe("#1: every deletion from retired/ is reported to the audit hook (file names only)", () => {
-  const A = EthersWallet.createRandom().privateKey;
-
-  it("OFF, a password unlock and a password replace each report what they removed and why", async () => {
-    const events: Array<{ files: string[]; trigger: string }> = [];
-    const hooked = (dir: string) => new LocalWalletDriver(dir, { ...FAST, onRetiredSecretsRemoved: (e: { files: string[]; trigger: string }) => events.push(e) } as never);
-
-    const offDir = mkdir("audit-off");
-    const d1 = hooked(offDir);
-    await d1.importFrom({ kind: "private_key", private_key: A });
-    await d1.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: A } });
-    const off = await d1.disableAutoUnlock(NEW_PASSWORD);
-    expect(events).toEqual([{ files: off.retiredSecretsRemoved, trigger: "auto_unlock_off" }]);
-
-    events.length = 0;
-    const replaceDir = mkdir("audit-replace");
-    const d2 = hooked(replaceDir);
-    await d2.importFrom({ kind: "private_key", private_key: A });
-    await d2.replaceWallet({ kind: "create" });
-    const back = await d2.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: A } }, { password: NEW_PASSWORD });
-    expect(events).toEqual([{ files: back.retiredSecretsRemoved, trigger: "replace" }]);
-
-    // nothing to remove -> nothing reported
-    events.length = 0;
-    const plain = hooked(mkdir("audit-none"));
-    await plain.createWithPhrase();
-    await plain.disableAutoUnlock(NEW_PASSWORD);
+    expect(fs.existsSync(path.join(dir, "retired", retiredSecret))).toBe(true);
     expect(events).toEqual([]);
   });
 
   it("a hook that throws does not undo the clean-up", async () => {
-    const dir = mkdir("audit-throws");
+    const { dir } = await aRetiredPairOpensTheLegacyKey("hook-throws");
     const d = new LocalWalletDriver(dir, { ...FAST, onRetiredSecretsRemoved: () => { throw new Error("audit table is gone"); } } as never);
-    await d.importFrom({ kind: "private_key", private_key: A });
-    await d.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: A } });
-    await d.disableAutoUnlock(NEW_PASSWORD);
+    expect((await d.unlockOnStartup({ password: NEW_PASSWORD })).unlocked).toBe(true);
     expect(await openersOfLiveKey(dir)).toEqual([]);
+  });
+
+  it("nothing to remove: nothing is reported", async () => {
+    const dir = mkdir("audit-none");
+    await writeLegacyPasswordWallet(dir, NEW_PASSWORD);
+    expect((await hooked(dir).unlockOnStartup({ password: NEW_PASSWORD })).unlocked).toBe(true);
+    expect(events).toEqual([]);
+  });
+
+  it("an auto-unlock wallet has nothing to flag (the live secret is on the same disk anyway)", async () => {
+    const dir = mkdir("auto-live");
+    const driver = drv(dir);
+    await driver.createWithPhrase();
+    await driver.replaceWallet();
+    const restarted = drv(dir);
+    expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
+    expect(restarted.retiredSecretsOpeningLiveKey).toEqual([]);
   });
 });
 
@@ -521,7 +361,7 @@ describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses 
     const created = await driver.createWithPhrase();
     const lease = driver.leaseSigner()!;
     let finished = false;
-    const replacing = driver.replaceWallet({ kind: "create" }).then((r) => {
+    const replacing = driver.replaceWallet().then((r) => {
       finished = true;
       return r;
     });
@@ -542,7 +382,7 @@ describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses 
     const driver = drainingDriver(dir, 5_000);
     await driver.createWithPhrase();
     const first = driver.leaseSigner()!;
-    const replacing = driver.replaceWallet({ kind: "create" });
+    const replacing = driver.replaceWallet();
     await sleep(100);
     for (let i = 0; i < 3; i++) {
       let refused: unknown = null;
@@ -570,7 +410,7 @@ describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses 
     const keystore = read(path.join(dir, "wallet.json"));
     const lease = driver.leaseSigner()!;
     const started = Date.now();
-    const error = await driver.replaceWallet({ kind: "create" }).then(() => null, (e) => e);
+    const error = await driver.replaceWallet().then(() => null, (e) => e);
     const elapsed = Date.now() - started;
     expect(error).toMatchObject({ code: "WALLET_BUSY" });
     expect(elapsed).toBeGreaterThanOrEqual(120);
@@ -582,7 +422,7 @@ describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses 
     expect(another.signer.address).toBe(created.address);
     another.release();
     lease.release();
-    await expect(driver.replaceWallet({ kind: "create" })).resolves.toBeTruthy();
+    await expect(driver.replaceWallet()).resolves.toBeTruthy();
   });
 
   it("with nothing in flight it is as immediate as before", async () => {
@@ -590,7 +430,7 @@ describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses 
     const driver = drainingDriver(dir, 60_000);
     await driver.createWithPhrase();
     const started = Date.now();
-    await driver.replaceWallet({ kind: "create" });
+    await driver.replaceWallet();
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
@@ -599,7 +439,7 @@ describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses 
     const driver = drainingDriver(dir, 5_000);
     await driver.createWithPhrase();
     const lease = driver.leaseSigner()!;
-    const replacing = driver.replaceWallet({ kind: "create" }, {}, { guard: () => { throw new Error("vetoed by the caller"); } });
+    const replacing = driver.replaceWallet({ guard: () => { throw new Error("vetoed by the caller"); } });
     await sleep(60);
     lease.release();
     await expect(replacing).rejects.toThrow("vetoed by the caller");
@@ -608,24 +448,13 @@ describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses 
     next!.release();
   });
 
-  it("lock() is still refused at once while a lease is open (it does not wait)", async () => {
-    const dir = mkdir("drain-lock");
-    const driver = drainingDriver(dir, 5_000);
-    await driver.createWithPhrase();
-    const lease = driver.leaseSigner()!;
-    expect(() => driver.lock()).toThrow(/in flight/);
-    lease.release();
-    driver.lock();
-    expect(driver.leaseSigner()).toBeNull();
-  });
-
   it("a second replace queued behind a waiting one waits its turn and still works", async () => {
     const dir = mkdir("drain-two");
     const driver = drainingDriver(dir, 5_000);
     await driver.createWithPhrase();
     const lease = driver.leaseSigner()!;
-    const one = driver.replaceWallet({ kind: "create" });
-    const two = driver.replaceWallet({ kind: "create" });
+    const one = driver.replaceWallet();
+    const two = driver.replaceWallet();
     await sleep(80);
     lease.release();
     const [a, b] = await Promise.all([one, two]);

@@ -21,9 +21,10 @@ export async function buildTestApp(
 ): Promise<TestCtx> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-server-test-"));
   const { db, sqlite } = openDb({ filePath: ":memory:" });
-  const wallet = new LocalWalletDriver(tmpDir, opts.walletOptions);
+  // (no OS-level ACL work unless a test asks for it: on Windows that starts PowerShell)
+  const wallet = new LocalWalletDriver(tmpDir, { protect: false, ...opts.walletOptions });
   if (opts.unlockWallet) {
-    await wallet.createWallet("test-password-123");
+    await wallet.createWithPhrase(); // auto-unlock, like every wallet the server creates
   }
   const adminToken = bootstrapAdminToken(db)!;
   const config: ServerConfig = {

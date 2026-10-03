@@ -1,19 +1,18 @@
-// Server side of the security review of the wallet lifecycle: m6 (health follows the RECORDED mode and names the reason
-// each unlock source failed), M1 (orphan credentials are reported), M2 (imports keep only the key), M3 (the protection
-// of the secret is reported), m7 (expected_address), M4 (startup sweep of stale reservations) and M5 (leases).
+// Server side of the security review of the wallet lifecycle, as far as it applies to the reduced surface: m6 (health follows the
+// RECORDED mode and names the reason each unlock source failed), M1 (orphan credentials are reported), M3 (the protection of the
+// secret is reported), M4 (startup sweep of stale reservations) and M5 (leases).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Wallet, HDNodeWallet, encryptKeystoreJson } from "ethers";
+import { Wallet } from "ethers";
 import { LocalWalletDriver, unlockSecretPath, walletFilePath, type Protector } from "@moneyswitch/wallet";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
+import { writeLegacyPasswordWallet } from "../legacy-wallet.js";
 import { buildContext, unlockWalletOnStartup } from "../../src/context.js";
 
 // Cheap scrypt and no OS-level ACL work (that is exercised for real in packages/wallet and in the e2e suite).
 const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false, drainTimeoutMs: 40 } as const; // (a replace that finds a request in flight waits this long, then answers WALLET_BUSY; production: 60 s)
-const HARDHAT_PHRASE = "test test test test test test test test test test test junk";
-const HARDHAT_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 process.env.LOG_LEVEL = "silent";
 
@@ -56,7 +55,7 @@ async function createAuto() {
 // ---------------------------------------------------------------------------------------------------------------
 
 describe("m6: health follows the mode recorded in wallet.json and names the reason each unlock source failed", () => {
-  it("(a) an auto wallet whose secret went missing is still AUTO: locked, secret_missing, and /backup explains instead of shrugging", async () => {
+  it("(a) an auto wallet whose secret went missing is still AUTO: locked, secret_missing", async () => {
     quiet();
     const created = await createAuto();
     fs.rmSync(secretFile(created.address));
@@ -69,9 +68,6 @@ describe("m6: health follows the mode recorded in wallet.json and names the reas
       auto_unlock_ok: false,
       unlock_sources: [{ source: "auto", ok: false, reason: "secret_missing" }],
     });
-    const plain = await post("/v1/admin/wallet/backup");
-    expect(plain.statusCode).toBe(409);
-    expect(plain.json().error).toBe("BACKUP_NEEDS_PASSWORD");
   });
 
   it("(b) a stale env password and a wrong secret are two separate findings; the secret is not blamed on the env var (nor the env var on the secret)", async () => {
@@ -101,34 +97,27 @@ describe("m6: health follows the mode recorded in wallet.json and names the reas
     expect(lines.join("\n")).not.toMatch(/stale-env-password|abab/);
   });
 
-  it("(c) a manual wallet created next to a leftover secret is MANUAL: not 'auto broken', and /backup hands out wallet.json", async () => {
+  it("(c) a legacy password wallet next to a leftover secret is PASSWORD: not 'auto broken', and the leftover is kept out of the way", async () => {
     quiet();
     const stray = Wallet.createRandom().address;
     fs.writeFileSync(unlockSecretPath(t.tmpDir, stray), "12".repeat(32));
-    const created = await post("/v1/admin/wallet/create", { password: "manual-pass-1" });
-    expect(created.statusCode).toBe(200);
-    const info = await walletInfo();
-    expect(info.health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [] });
-    expect(info.auto_unlock_configured).toBe(false);
-    const backup = await post("/v1/admin/wallet/backup");
-    expect(backup.statusCode).toBe(200);
-    expect((await Wallet.fromEncryptedJson(backup.json().keystore, "manual-pass-1")).address).toBe(created.json().address);
-
+    const legacy = await writeLegacyPasswordWallet(t.tmpDir, "manual-pass-1");
     await restart(); // no secret is tried, nothing is "broken"
-    const again = await walletInfo();
-    expect(again.unlocked).toBe(false);
-    expect(again.health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [] });
+    const info = await walletInfo();
+    expect(info.address).toBe(legacy.address);
+    expect(info.unlocked).toBe(false);
+    expect(info.health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [] });
+    expect(fs.existsSync(unlockSecretPath(t.tmpDir, stray))).toBe(false);
+    expect(fs.readdirSync(path.join(t.tmpDir, "retired"))).toHaveLength(1);
   });
 
-  it("(c') a key imported as a manual wallet while ITS OLD secret is still lying around is manual too; startup then moves the old secret to retired/", async () => {
+  it("(c') a legacy password wallet while ITS OLD secret is still lying around is password too; startup moves the old secret to retired/", async () => {
     quiet();
     const key = Wallet.createRandom();
     fs.writeFileSync(unlockSecretPath(t.tmpDir, key.address), "34".repeat(32));
-    expect((await post("/v1/admin/wallet/import", { kind: "private_key", private_key: key.privateKey, password: "manual-pass-1" })).statusCode).toBe(200);
-    expect((await walletInfo()).health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null });
-    expect((await post("/v1/admin/wallet/backup")).statusCode).toBe(200);
-
+    await writeLegacyPasswordWallet(t.tmpDir, "manual-pass-1", { wallet: key });
     await restart();
+    expect((await walletInfo()).health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null });
     expect(fs.existsSync(secretFile(key.address))).toBe(false);
     const retired = fs.readdirSync(path.join(t.tmpDir, "retired"));
     expect(retired).toHaveLength(1);
@@ -241,48 +230,6 @@ describe("M1: credentials without a wallet.json are reported, not hidden behind 
 });
 
 // ---------------------------------------------------------------------------------------------------------------
-// M2
-// ---------------------------------------------------------------------------------------------------------------
-
-describe("M2: an imported wallet keeps only its account-0 private key", () => {
-  it("a recovery phrase import stores no phrase: reveal returns the private key, there is nothing to back up, and the audit log is clean", async () => {
-    expect((await post("/v1/admin/wallet/import", { kind: "mnemonic", mnemonic: HARDHAT_PHRASE })).statusCode).toBe(200);
-    const info = await walletInfo();
-    expect(info.has_recovery_phrase).toBe(false);
-    expect(info.health.backup).toBe("not_applicable");
-    const revealed = await post("/v1/admin/wallet/reveal", { confirm_address: HARDHAT_ADDRESS });
-    expect(revealed.json()).toEqual({ address: HARDHAT_ADDRESS, kind: "private_key", private_key: HDNodeWallet.fromPhrase(HARDHAT_PHRASE).privateKey });
-    expect(revealed.body).not.toContain("junk");
-    const on = fs.readFileSync(walletFilePath(t.tmpDir), "utf-8");
-    expect(JSON.parse(on)["x-ethers"]?.mnemonicCiphertext).toBeUndefined();
-    // and it cannot be "confirmed"
-    expect((await post("/v1/admin/wallet/backup/confirm", { positions: [1, 2], words: ["test", "test"] })).json().error).toBe("NO_RECOVERY_PHRASE");
-  });
-
-  it("a keystore that carries a phrase on a non-default path is imported as the bare key it signs with", async () => {
-    const hd = HDNodeWallet.fromPhrase(HARDHAT_PHRASE, undefined, "m/44'/60'/0'/0/5");
-    const source = await encryptKeystoreJson(
-      { address: hd.address, privateKey: hd.privateKey, mnemonic: { path: "m/44'/60'/0'/0/5", locale: "en", entropy: hd.mnemonic!.entropy } },
-      "source-pass-1",
-      FAST
-    );
-    expect((await post("/v1/admin/wallet/import", { kind: "keystore", keystore: source, source_password: "source-pass-1" })).statusCode).toBe(200);
-    expect((await walletInfo()).address).toBe(hd.address);
-    const revealed = await post("/v1/admin/wallet/reveal", { confirm_address: hd.address });
-    expect(revealed.json()).toEqual({ address: hd.address, kind: "private_key", private_key: hd.privateKey });
-  });
-
-  it("replacing with an imported phrase keeps only the key too", async () => {
-    quiet();
-    const old = await createAuto();
-    expect((await post("/v1/admin/wallet/replace", { confirm_address: old.address, kind: "mnemonic", mnemonic: HARDHAT_PHRASE })).statusCode).toBe(200);
-    const revealed = await post("/v1/admin/wallet/reveal", { confirm_address: HARDHAT_ADDRESS });
-    expect(revealed.json().kind).toBe("private_key");
-    expect((await walletInfo()).has_recovery_phrase).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------------------------------------------
 // M3
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -313,58 +260,12 @@ describe("M3: the protection of the data directory and the unlock secret is veri
     expect((await walletInfo()).health).toMatchObject({ secret_protected: true, secret_protection_detail: null });
   });
 
-  it("a password wallet has no secret on disk, so there is nothing to report (null, not a false alarm)", async () => {
+  it("a legacy password wallet has no secret on disk, so there is nothing to report (null, not a false alarm)", async () => {
     quiet();
+    await writeLegacyPasswordWallet(t.tmpDir, "manual-pass-1");
     t.ctx.wallet = new LocalWalletDriver(t.tmpDir, { ...FAST, protect: failing } as never);
-    await post("/v1/admin/wallet/create", { password: "manual-pass-1" });
+    await unlockWalletOnStartup(t.ctx.wallet, "manual-pass-1");
     expect((await walletInfo()).health).toMatchObject({ secret_protected: null, secret_protection_detail: null });
-  });
-});
-
-// ---------------------------------------------------------------------------------------------------------------
-// m7
-// ---------------------------------------------------------------------------------------------------------------
-
-describe("m7: expected_address makes import and replace refuse a key that belongs to another address", () => {
-  it("import: a match (any letter case) is accepted", async () => {
-    const res = await post("/v1/admin/wallet/import", { kind: "mnemonic", mnemonic: HARDHAT_PHRASE, expected_address: HARDHAT_ADDRESS.toLowerCase() });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().address).toBe(HARDHAT_ADDRESS);
-  });
-
-  it("import: a mismatch is refused with EXPECTED_ADDRESS_MISMATCH and creates nothing", async () => {
-    const other = Wallet.createRandom().address;
-    const res = await post("/v1/admin/wallet/import", { kind: "mnemonic", mnemonic: HARDHAT_PHRASE, expected_address: other });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe("EXPECTED_ADDRESS_MISMATCH");
-    expect(res.body).not.toContain("junk");
-    expect(t.ctx.wallet.hasKeystore()).toBe(false);
-    expect(fs.readdirSync(t.tmpDir)).toEqual([]);
-  });
-
-  it("import: expected_address must be a string", async () => {
-    const res = await post("/v1/admin/wallet/import", { kind: "mnemonic", mnemonic: HARDHAT_PHRASE, expected_address: 12345 });
-    expect(res.statusCode).toBe(400);
-    expect(t.ctx.wallet.hasKeystore()).toBe(false);
-  });
-
-  it("replace: a mismatch is refused before any file is touched", async () => {
-    quiet();
-    const old = await createAuto();
-    const before = fs.readFileSync(walletFilePath(t.tmpDir), "utf-8");
-    const files = fs.readdirSync(t.tmpDir).sort();
-    const res = await post("/v1/admin/wallet/replace", {
-      confirm_address: old.address,
-      kind: "mnemonic",
-      mnemonic: HARDHAT_PHRASE,
-      expected_address: Wallet.createRandom().address,
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe("EXPECTED_ADDRESS_MISMATCH");
-    expect(fs.readFileSync(walletFilePath(t.tmpDir), "utf-8")).toBe(before);
-    expect(fs.readdirSync(t.tmpDir).sort()).toEqual(files);
-    const ok = await post("/v1/admin/wallet/replace", { confirm_address: old.address, kind: "mnemonic", mnemonic: HARDHAT_PHRASE, expected_address: HARDHAT_ADDRESS });
-    expect(ok.statusCode).toBe(200);
   });
 });
 

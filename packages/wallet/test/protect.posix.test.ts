@@ -46,7 +46,7 @@ describe.skipIf(process.platform === "win32")("POSIX: 0700 data directory, 0600 
     const dir = path.join(root, "retired");
     const driver = new LocalWalletDriver(dir, FAST_SCRYPT);
     await driver.createWithPhrase();
-    await driver.replaceWallet({ kind: "create" });
+    await driver.replaceWallet();
     expect(mode(path.join(dir, "retired"))).toBe(0o700);
     for (const f of fs.readdirSync(path.join(dir, "retired"))) expect(mode(path.join(dir, "retired", f)) & 0o077, f).toBe(0);
   });

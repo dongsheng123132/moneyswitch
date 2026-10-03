@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach } from "vitest";
 import fs from "node:fs";
 import { Writable } from "node:stream";
 import Fastify from "fastify";
-import { Wallet } from "ethers";
 import { unlockSecretPath } from "@moneyswitch/wallet";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { registerAdminRoutes } from "../../src/routes/admin.js";
@@ -60,9 +59,9 @@ describe("Log redaction", () => {
     });
     await loggedApp.inject({
       method: "POST",
-      url: "/v1/admin/wallet/unlock",
+      url: "/v1/admin/wallet/create",
       headers: { authorization: `Bearer ${t.adminToken}` },
-      payload: { password: "test-password-123" },
+      payload: { password: "test-password-123" }, // refused (no password wallets), but it must not be logged either
     });
 
     await loggedApp.close();
@@ -90,30 +89,14 @@ describe("Log redaction", () => {
 
     const created = (await call("/v1/admin/wallet/create")).json() as { address: string; recovery_phrase: string };
     const words = created.recovery_phrase.split(" ");
-    await call("/v1/admin/wallet/backup/confirm", { positions: [1, 12], words: [words[0], words[11]] });
-    await call("/v1/admin/wallet/reveal", { confirm_address: created.address });
+    await call("/v1/admin/wallet/backup/confirm");
     const unlockSecret = fs.readFileSync(unlockSecretPath(t.tmpDir, created.address), "utf-8");
-    await call("/v1/admin/wallet/backup", { password: "redaction-file-password" });
-    await call("/v1/admin/wallet/auto-unlock", { enabled: false, password: "redaction-wallet-password" });
-    await call("/v1/admin/wallet/unlock", { password: "redaction-wallet-password" });
+    await call("/v1/admin/wallet/create", { password: "redaction-wallet-password" }); // refused, and still never logged
     const replaced = (await call("/v1/admin/wallet/replace", { confirm_address: created.address })).json() as { recovery_phrase: string };
-    const imported = Wallet.createRandom();
-    await call("/v1/admin/wallet/import", { kind: "private_key", private_key: imported.privateKey });
-    await call("/v1/admin/wallet/import", { kind: "mnemonic", mnemonic: replaced.recovery_phrase });
     await loggedApp.close();
 
-    expect(captured).toContain("/v1/admin/wallet/reveal"); // the requests really were logged
-    for (const secret of [
-      created.recovery_phrase,
-      replaced.recovery_phrase,
-      words.slice(0, 4).join(" "),
-      unlockSecret,
-      "redaction-file-password",
-      "redaction-wallet-password",
-      imported.privateKey,
-      imported.privateKey.slice(2),
-      t.adminToken,
-    ]) {
+    expect(captured).toContain("/v1/admin/wallet/replace"); // the requests really were logged
+    for (const secret of [created.recovery_phrase, replaced.recovery_phrase, words.slice(0, 4).join(" "), unlockSecret, "redaction-wallet-password", t.adminToken]) {
       expect(captured).not.toContain(secret);
     }
   });

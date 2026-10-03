@@ -1,10 +1,12 @@
-// Server side of the third review round: startup log lines (#8), retired copies of the live key (#1), draining replace (#2).
+// Server side of the third review round, as far as it applies to the reduced surface: startup log lines (#8) and retired copies of the
+// key of a legacy password wallet (#1).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { Wallet } from "ethers";
+import { HDNodeWallet } from "ethers";
 import { LocalWalletDriver, unlockSecretPath, walletFilePath } from "@moneyswitch/wallet";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
+import { writeLegacyPasswordWallet } from "../legacy-wallet.js";
 import { buildContext, unlockWalletOnStartup } from "../../src/context.js";
 
 // Cheap scrypt, no OS-level ACL work, and a short drain so a refused replace answers at once.
@@ -108,118 +110,100 @@ describe("#8: startup says what happened to a secret that was moved to retired/"
 // #1
 // ---------------------------------------------------------------------------------------------------------------
 
-describe("#1: the routes report what the driver removed from retired/, and health flags what it could not", () => {
-  const key = Wallet.createRandom();
-  async function sameKeyReplaced() {
-    expect((await post("/v1/admin/wallet/import", { kind: "private_key", private_key: key.privateKey })).statusCode).toBe(200);
-    const replaced = await post("/v1/admin/wallet/replace", { confirm_address: key.address, kind: "private_key", private_key: key.privateKey });
-    expect(replaced.statusCode).toBe(200);
-    return replaced.json();
+describe("#1: a retired secret that opens a legacy password wallet is flagged in health and in the startup log, and removed once the startup password proves the wallet reachable", () => {
+  /**
+   * The legacy password wallet whose key was once an auto wallet: the retired pair of that very key still opens it without the
+   * password. (It came about when the old import feature put the key back with a password; built by hand here.)
+   */
+  async function legacyWalletWithAnOpenerInRetired() {
+    const first = await t.ctx.wallet.createWithPhrase();
+    const replaced = await t.ctx.wallet.replaceWallet(); // the pair of \`first\` is now in retired/
+    fs.rmSync(path.join(t.tmpDir, "wallet.json"));
+    for (const f of fs.readdirSync(t.tmpDir)) if (/^wallet-unlock-0x[0-9a-f]{40}\.secret$/.test(f)) fs.rmSync(path.join(t.tmpDir, f));
+    await writeLegacyPasswordWallet(t.tmpDir, "legacy-pass-1", { wallet: HDNodeWallet.fromPhrase(first.mnemonic) });
+    return { first, retiredSecret: replaced.retired.secretFile! };
   }
-  const retiredSecretFiles = () => fs.readdirSync(path.join(t.tmpDir, "retired")).filter((f) => f.endsWith(".secret"));
+  const retiredNames = () => fs.readdirSync(path.join(t.tmpDir, "retired")).sort();
 
-  it("OFF: the response names the removed files, /retired no longer claims a secret file, health flags nothing", async () => {
-    await sameKeyReplaced();
-    const before = (await get("/v1/admin/wallet/retired")).json();
-    expect(before.retired_wallets[0].has_secret_file).toBe(true);
-    const names = retiredSecretFiles();
-    expect(names.length).toBeGreaterThan(0);
-
-    const off = await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
-    expect(off.statusCode).toBe(200);
-    expect(off.json()).toMatchObject({ address: key.address, unlock_mode: "manual", auto_unlock_ok: null });
-    expect([...off.json().retired_secrets_removed].sort()).toEqual([...names].sort());
-    expect(off.json().retired_secrets_still_open).toBeUndefined();
-    expect(retiredSecretFiles()).toEqual([]);
-    expect((await get("/v1/admin/wallet/retired")).json().retired_wallets[0].has_secret_file).toBe(false);
-    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([]);
-  });
-
-  it("OFF in the ordinary case answers exactly what it always did (no new keys)", async () => {
-    await post("/v1/admin/wallet/create", {});
-    const off = await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
-    expect(Object.keys(off.json()).sort()).toEqual(["address", "auto_unlock_ok", "unlock_mode"]);
-  });
-
-  it("import with a password: the response names what it removed", async () => {
-    await sameKeyReplaced();
-    await post("/v1/admin/wallet/replace", { confirm_address: key.address });
-    fs.rmSync(path.join(t.tmpDir, "wallet.json")); // wallet.json lost; the key is imported again, this time protected by a password
-    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
-    const imported = await post("/v1/admin/wallet/import", { kind: "private_key", private_key: key.privateKey, password: "manual-pass-1" });
-    expect(imported.statusCode).toBe(200);
-    expect(imported.json().address).toBe(key.address);
-    expect(imported.json().retired_secrets_removed.length).toBeGreaterThan(0);
-  });
-
-  it("replace back to the same key in password mode: the response names what it removed", async () => {
-    await sameKeyReplaced();
-    const back = await post("/v1/admin/wallet/replace", { confirm_address: key.address, kind: "private_key", private_key: key.privateKey, password: "manual-pass-1" });
-    expect(back.statusCode).toBe(200);
-    expect(back.json().retired_secrets_removed.length).toBeGreaterThan(0);
-    expect(retiredSecretFiles()).toEqual([]);
-  });
-
-  it("a retired secret that cannot be removed is flagged in health (with its name) until the password is used", async () => {
-    await sameKeyReplaced();
-    const stuck = retiredSecretFiles()[0];
-    const realUnlink = fs.unlinkSync;
-    vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
-      if (String(file).endsWith(stuck)) throw Object.assign(new Error("access denied"), { code: "EPERM" });
-      return realUnlink(file);
-    }) as never);
-    const off = await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
-    vi.restoreAllMocks();
-    expect(off.statusCode).toBe(200); // the password is in place; this is a warning, not a failure
-    expect(off.json().retired_secrets_still_open).toEqual([stuck]);
-    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([stuck]);
-
-    // after a restart the wallet is locked: flagged, never cleaned up without the password
+  it("while the wallet is locked it is only flagged (health, startup log): nothing is deleted without the password", async () => {
+    const { retiredSecret } = await legacyWalletWithAnOpenerInRetired();
+    const before = retiredNames();
     const lines = captureLogs();
     t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
-    await unlockWalletOnStartup(t.ctx.wallet, null);
-    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([stuck]);
-    expect(lines.join("\n")).toContain(stuck);
-    expect(fs.existsSync(path.join(t.tmpDir, "retired", stuck))).toBe(true);
-
-    expect((await post("/v1/admin/wallet/unlock", { password: "second-pass-2" })).statusCode).toBe(200);
-    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([]);
-    expect(fs.existsSync(path.join(t.tmpDir, "retired", stuck))).toBe(false);
-  });
-
-  it("the startup log says it plainly when a locked password wallet can be opened from retired/", async () => {
-    await sameKeyReplaced();
-    const stuck = retiredSecretFiles()[0];
-    const realUnlink = fs.unlinkSync;
-    vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
-      if (String(file).endsWith(stuck)) throw Object.assign(new Error("access denied"), { code: "EPERM" });
-      return realUnlink(file);
-    }) as never);
-    await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
-    vi.restoreAllMocks();
-    const lines = captureLogs();
-    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
-    await unlockWalletOnStartup(t.ctx.wallet, null);
+    await unlockWalletOnStartup(t.ctx.wallet, "not-the-password");
+    const info = await walletInfo();
+    expect(info.unlocked).toBe(false);
+    expect(info.health.retired_secrets_open_live_key).toEqual([retiredSecret]);
     expect(lines.join("\n")).toMatch(/retired\/.*still opens this wallet without the password/i);
+    expect(lines.join("\n")).toContain(retiredSecret);
+    expect(retiredNames()).toEqual(before);
+  });
+
+  it("the startup password proves it reachable: that secret goes and health flags nothing", async () => {
+    const { first, retiredSecret } = await legacyWalletWithAnOpenerInRetired();
+    captureLogs();
+    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
+    await unlockWalletOnStartup(t.ctx.wallet, "legacy-pass-1");
+    const info = await walletInfo();
+    expect(info).toMatchObject({ address: first.address, unlocked: true });
+    expect(info.health.retired_secrets_open_live_key).toEqual([]);
+    expect(retiredNames()).not.toContain(retiredSecret);
+  });
+
+  it("a retired secret that cannot be removed is flagged in health (with its name) even though the wallet unlocked", async () => {
+    const { retiredSecret } = await legacyWalletWithAnOpenerInRetired();
+    const realUnlink = fs.unlinkSync;
+    vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
+      if (String(file).endsWith(retiredSecret)) throw Object.assign(new Error("access denied"), { code: "EPERM" });
+      return realUnlink(file);
+    }) as never);
+    captureLogs();
+    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
+    await unlockWalletOnStartup(t.ctx.wallet, "legacy-pass-1");
+    vi.restoreAllMocks();
+    const info = await walletInfo();
+    expect(info.unlocked).toBe(true); // the password is in place; the leftover is a warning, not a failure
+    expect(info.health.retired_secrets_open_live_key).toEqual([retiredSecret]);
+    expect(retiredNames()).toContain(retiredSecret);
+  });
+
+  it("an auto-unlock wallet has nothing to flag (the live secret is on the same disk anyway)", async () => {
+    await t.ctx.wallet.createWithPhrase();
+    await t.ctx.wallet.replaceWallet();
+    captureLogs();
+    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
+    await unlockWalletOnStartup(t.ctx.wallet, null);
+    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([]);
   });
 });
 
 describe("#1: buildContext audits every deletion from retired/", () => {
-  it("the audit row names the files and what triggered it, never a secret", async () => {
+  it("the audit row names the files and what triggered it (the startup password), never a secret", async () => {
     const dir = fs.mkdtempSync(path.join(t.tmpDir, "ctx-"));
-    const config = { port: 18557, host: "127.0.0.1", dataDir: dir, dbFilePath: path.join(dir, "db.sqlite"), walletPassword: null };
+    const config = { port: 18557, host: "127.0.0.1", dataDir: dir, dbFilePath: path.join(dir, "db.sqlite"), walletPassword: null as string | null };
     captureLogs();
-    const ctx = await buildContext(config, { walletOptions: FAST });
+    const first = await buildContext(config, { walletOptions: FAST });
+    let removed: string[];
     try {
-      const key = Wallet.createRandom().privateKey;
-      await ctx.wallet.importFrom({ kind: "private_key", private_key: key });
-      await ctx.wallet.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: key } });
-      const secretText = fs.readdirSync(path.join(dir, "retired")).filter((f) => f.endsWith(".secret")).map((f) => fs.readFileSync(path.join(dir, "retired", f), "utf-8").trim());
-      const off = await ctx.wallet.disableAutoUnlock("second-pass-2");
+      const created = await first.wallet.createWithPhrase();
+      const replaced = await first.wallet.replaceWallet();
+      // the live wallet becomes a legacy password wallet holding the key whose retired pair still opens it
+      fs.rmSync(path.join(dir, "wallet.json"));
+      for (const f of fs.readdirSync(dir)) if (/^wallet-unlock-0x[0-9a-f]{40}\.secret$/.test(f)) fs.rmSync(path.join(dir, f));
+      await writeLegacyPasswordWallet(dir, "legacy-pass-1", { wallet: HDNodeWallet.fromPhrase(created.mnemonic) });
+      removed = [replaced.retired.secretFile!];
+    } finally {
+      first.sqlite.close();
+    }
+    const secretText = removed.map((f) => fs.readFileSync(path.join(dir, "retired", f), "utf-8").trim());
+
+    config.walletPassword = "legacy-pass-1";
+    const ctx = await buildContext(config, { walletOptions: FAST }); // the restart: the startup password proves the wallet reachable
+    try {
       const rows = ctx.sqlite.prepare("SELECT actor, action, detail FROM audit_log WHERE action = 'wallet.retired_secrets_removed'").all() as Array<{ actor: string; action: string; detail: string }>;
       expect(rows).toHaveLength(1);
       expect(rows[0].actor).toBe("system");
-      expect(JSON.parse(rows[0].detail)).toEqual({ files: off.retiredSecretsRemoved, trigger: "auto_unlock_off" });
+      expect(JSON.parse(rows[0].detail)).toEqual({ files: removed, trigger: "startup_password" });
       for (const secret of secretText) expect(rows[0].detail).not.toContain(secret);
     } finally {
       ctx.sqlite.close();

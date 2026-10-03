@@ -124,9 +124,8 @@ beforeAll(async () => {
   const opened = openDb({ filePath: ":memory:" });
   db = opened.db;
   sqlite = opened.sqlite;
-  const wallet = new LocalWalletDriver(tmpDir);
-  await wallet.createWallet("subkeys-e2e-password");
-  await wallet.unlock("subkeys-e2e-password");
+  const wallet = new LocalWalletDriver(tmpDir, { protect: false });
+  await wallet.createWithPhrase(); // auto-unlock, like every wallet the server creates
   adminToken = bootstrapAdminToken(db)!;
   const config: ServerConfig = {
     port: SERVER_PORT,

@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { LocalWalletDriver } from "../src/index.js";
 import { defaultProtector } from "../src/protect.js";
+import { writeLegacyPasswordWallet } from "./legacy.js";
 
 // Starting PowerShell and icacls takes seconds on a loaded machine (the five tests below each start several processes).
 vi.setConfig({ testTimeout: 90_000 });
@@ -117,9 +118,11 @@ describe.skipIf(process.platform !== "win32")("Windows: the data directory and t
     expect(restarted.secretProtection).toMatchObject({ ok: false });
   });
 
-  it("password mode writes no secret, so there is nothing to protect and nothing is reported", async () => {
-    const driver = new LocalWalletDriver(path.join(root, "pw"), FAST_SCRYPT);
-    await driver.createWithPhrase({ password: "a password to test with" });
+  it("a legacy password wallet writes no secret, so there is nothing to protect and nothing is reported", async () => {
+    const dir = path.join(root, "pw");
+    await writeLegacyPasswordWallet(dir, "a password to test with");
+    const driver = new LocalWalletDriver(dir, FAST_SCRYPT);
+    expect((await driver.unlockOnStartup({ password: "a password to test with" })).unlocked).toBe(true);
     expect(driver.secretProtection).toBeNull();
   });
 

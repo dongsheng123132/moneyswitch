@@ -4,11 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { LocalWalletDriver } from "../src/index.js";
 import { Wallet as EthersWallet } from "ethers";
-
-// These tests use the production scrypt cost (N=2^17) on purpose; under a loaded CI machine a few of them take seconds.
-vi.setConfig({ testTimeout: 60_000 });
+import { writeLegacyPasswordWallet } from "./legacy.js";
 
 let tmpDir: string;
+
+// No OS-level ACL work here (that is exercised for real in protect.win32.test.ts / protect.posix.test.ts).
+const drv = (dir = tmpDir) => new LocalWalletDriver(dir, { protect: false });
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-wallet-test-"));
@@ -21,8 +22,8 @@ afterEach(() => {
 
 describe("LocalWalletDriver", () => {
   it("reads balances through the shared fetch transport and rejects RPC errors as unknown", async () => {
-    const driver = new LocalWalletDriver(tmpDir);
-    const { address } = await driver.createWallet("balance-test-password");
+    const driver = drv();
+    const { address } = await driver.createWithPhrase();
     const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x" + (520000n).toString(16).padStart(64, "0") })));
     vi.stubGlobal("fetch", request);
     expect(await driver.getUsdcBalance("https://rpc.example.test", address)).toBe(520000n);
@@ -33,85 +34,54 @@ describe("LocalWalletDriver", () => {
     request.mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: -1 } })));
     await expect(driver.getUsdcBalance("https://rpc.example.test", address)).rejects.toThrow("Invalid USDC balance");
   });
-  it("imports a private key, backs it up, and restores the same address with a new password", async () => {
-    const original = EthersWallet.createRandom();
-    const driver = new LocalWalletDriver(tmpDir);
-    await driver.importWallet({ kind: "private_key", private_key: original.privateKey }, "first-password");
-    const backup = driver.exportKeystore();
-    expect(backup).not.toContain(original.privateKey.slice(2));
-    driver.lock();
-    expect(driver.exportKeystore()).toBe(backup);
-    const restored = new LocalWalletDriver(path.join(tmpDir, "restored"));
-    await restored.importWallet({ kind: "keystore", keystore: backup, source_password: "first-password" }, "new-password");
-    expect(restored.getAddress()).toBe(original.address);
-    restored.lock();
-    await expect(restored.unlock("first-password")).rejects.toThrow();
-    await expect(restored.unlock("new-password")).resolves.toEqual({ address: original.address });
+
+  it("concurrent creates publish only one complete wallet: the keystore and its own unlock secret, nothing else", async () => {
+    const a = drv();
+    const b = drv();
+    const results = await Promise.allSettled([a.createWithPhrase(), b.createWithPhrase()]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const winner = results.find((r) => r.status === "fulfilled") as PromiseFulfilledResult<{ address: string }>;
+    expect(fs.readdirSync(tmpDir).sort()).toEqual([`wallet-unlock-${winner.value.address.toLowerCase()}.secret`, "wallet.json"]);
+    const restarted = drv();
+    expect((await restarted.unlockOnStartup({})).unlocked).toBe(true);
+    expect(restarted.getAddress()).toBe(winner.value.address);
   });
 
-  it("failed imports create no wallet and cannot overwrite an existing wallet", async () => {
-    const driver = new LocalWalletDriver(tmpDir);
-    const badKey = "SECRET-invalid-private-key";
-    await expect(driver.importWallet({ kind: "private_key", private_key: badKey }, "new-password")).rejects.toThrow("Invalid wallet import");
+  it("creates a wallet that a restarted process unlocks by itself, and that can sign", async () => {
+    const driver = drv();
     expect(driver.hasKeystore()).toBe(false);
-    const { address } = await driver.createWallet("original-password");
-    const backup = driver.exportKeystore();
-    const restored = new LocalWalletDriver(path.join(tmpDir, "bad-restore"));
-    await expect(restored.importWallet({ kind: "keystore", keystore: backup, source_password: "wrong-password" }, "new-password")).rejects.toThrow("Invalid wallet import");
-    expect(restored.hasKeystore()).toBe(false);
-    await expect(driver.importWallet({ kind: "private_key", private_key: EthersWallet.createRandom().privateKey }, "new-password")).rejects.toThrow("already exists");
-    expect(driver.getAddress()).toBe(address);
-    expect(driver.exportKeystore()).toBe(backup);
-  });
-
-  it("concurrent creates publish only one complete wallet", async () => {
-    const a = new LocalWalletDriver(tmpDir);
-    const b = new LocalWalletDriver(tmpDir);
-    const results = await Promise.allSettled([a.createWallet("race-password"), b.createWallet("race-password")]);
-    expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
-    const winner = results.find(r => r.status === "fulfilled") as PromiseFulfilledResult<{ address: string }>;
-    const restored = new LocalWalletDriver(tmpDir);
-    expect(await restored.unlock("race-password")).toEqual(winner.value);
-    expect(fs.readdirSync(tmpDir)).toEqual(["wallet.json"]);
-  });
-
-  it("rejects backups with unbounded KDF work before decryption", async () => {
-    const driver = new LocalWalletDriver(tmpDir);
-    const backup = JSON.stringify({ version: 3, crypto: { cipher: "aes-128-ctr", kdf: "scrypt", kdfparams: { n: 2 ** 30, p: 1, r: 8 } } });
-    await expect(driver.importWallet({ kind: "keystore", keystore: backup, source_password: "password" }, "new-password")).rejects.toThrow("Invalid wallet import");
-    expect(driver.hasKeystore()).toBe(false);
-  });
-
-  it("creates a keystore, locks by default state, unlocks with correct password", async () => {
-    const driver = new LocalWalletDriver(tmpDir);
-    expect(driver.hasKeystore()).toBe(false);
-    const { address } = await driver.createWallet("correct horse battery staple");
+    const { address } = await driver.createWithPhrase();
     expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(fs.existsSync(driver.keystorePath)).toBe(true);
 
-    // Fresh driver instance simulating process restart: locked until unlocked.
-    const driver2 = new LocalWalletDriver(tmpDir);
+    // Fresh driver instance simulating a process restart: locked until the startup unlock ran.
+    const driver2 = drv();
     expect(driver2.isUnlocked()).toBe(false);
     expect(driver2.leaseSigner()).toBeNull();
-    const unlocked = await driver2.unlock("correct horse battery staple");
-    expect(unlocked.address).toBe(address);
+    expect((await driver2.unlockOnStartup({})).unlocked).toBe(true);
     expect(driver2.isUnlocked()).toBe(true);
     const lease = driver2.leaseSigner();
     expect(lease?.signer.address).toBe(address);
     lease?.release();
   });
 
-  it("rejects unlocking with the wrong password", async () => {
-    const driver = new LocalWalletDriver(tmpDir);
-    await driver.createWallet("right-password");
-    const driver2 = new LocalWalletDriver(tmpDir);
-    await expect(driver2.unlock("wrong-password")).rejects.toThrow();
+  it("a legacy password wallet stays locked without its password, and the startup password opens it", async () => {
+    const legacy = await writeLegacyPasswordWallet(tmpDir, "right-password");
+    const wrong = drv();
+    expect(wrong.protection()).toBe("password");
+    expect(await wrong.unlockOnStartup({ password: "wrong-password" })).toEqual({ unlocked: false, attempts: [{ source: "env_or_file", ok: false, reason: "env_wrong" }] });
+    expect(wrong.isUnlocked()).toBe(false);
+    expect(wrong.leaseSigner()).toBeNull();
+
+    const right = drv();
+    expect((await right.unlockOnStartup({ password: "right-password" })).unlocked).toBe(true);
+    expect(right.getAddress()).toBe(legacy.address);
   });
 
   it("signTypedData produces a valid signature recoverable to the wallet address", async () => {
     const { verifyTypedData } = await import("ethers");
-    const driver = new LocalWalletDriver(tmpDir);
-    const { address } = await driver.createWallet("pw");
+    const driver = drv();
+    const { address } = await driver.createWithPhrase();
     const lease = driver.leaseSigner()!;
     const signer = lease.signer;
     const domain = { name: "USDC", version: "2", chainId: 10143, verifyingContract: "0x534b2f3A21130d7a60830c2Df862319e593943A3" };
