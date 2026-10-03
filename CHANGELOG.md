@@ -19,18 +19,19 @@ phrase. Full model: [`docs/wallet-setup.md`](docs/wallet-setup.md) and
 
 - **Auto-unlock is the default.** Creating or importing a wallet without a
   password encrypts the keystore with a random 256-bit secret stored in
-  `<data dir>/wallet-unlock.secret` (mode 0600 where the OS supports it, written
+  `<data dir>/wallet-unlock-<address>.secret` (named after its wallet, written
   atomically, never returned by an API, never logged). Startup unlock order:
   `MONEYSWITCH_WALLET_PASSWORD` / `_FILE` if non-empty (an empty variable, an
   empty or blank file or an unreadable file is "not configured" and logged: the
   placeholder file older Docker deployments mount is harmless), else
-  `wallet-unlock.secret`, else locked. A source that exists but fails is logged
-  without any credential, shown in the new health block and as an Overview
-  banner, and the next source is still tried. Passing a `password` to create /
+  the wallet's own unlock secret, else locked. A source that exists but fails is logged
+  without any credential (each source with its own reason), shown in the new health
+  block and as an Overview banner, and the next source is still tried. Passing a `password` to create /
   import keeps the old password mode (no secret file).
   **Honest trade-off:** whoever can read the data folder (backups and disk
   snapshots included) can spend the wallet. Keep the float small, run team
-  servers on a separate machine, treat `/data` backups as private keys.
+  servers on a separate machine, treat `/data` backups as private keys. An
+  existing wallet keeps its mode: nothing is migrated to auto-unlock by itself.
 - **Recovery phrase.** New wallets are made from a BIP-39 12-word phrase on
   `m/44'/60'/0'/0/0`, so MetaMask / OKX show the same address (tested against an
   independent BIP-32/44 derivation and published vectors). The phrase is returned
@@ -42,17 +43,22 @@ phrase. Full model: [`docs/wallet-setup.md`](docs/wallet-setup.md) and
   `confirm_address` echoes the current address exactly, with an audit row that
   never contains the secret. `POST /v1/admin/wallet/import` accepts a new
   `kind: "mnemonic"` (12 or 24 words, account 0). The Dashboard hides the
-  deposit address, QR code and funding steps until the backup is confirmed.
+  deposit address, QR code and funding steps (and the address chip in the top bar)
+  until the backup is confirmed.
 - **Turn auto-unlock on / off** (`POST /v1/admin/wallet/auto-unlock`). On needs
   an unlocked wallet and re-encrypts it with a fresh secret; off needs a new
   password (8+ characters) and removes the secret file. Crash-safe: the new
   keystore is built and test-decrypted before anything on disk changes, the old
-  one is kept as `wallet.json.bak-<timestamp>`, the secret is installed before
-  the swap (or removed after it), and a failure part-way restores every file.
+  one is NOT kept (no `wallet.json.bak-*`: a retired credential must not keep
+  opening the key), the new keystore is renamed over `wallet.json`, the secret is
+  installed before the swap (or removed after it), and a failure part-way renames
+  the previous files back over.
 - **Replace wallet** (`POST /v1/admin/wallet/replace`, for a lost password or a
   suspected leak). Needs `confirm_address`; refused with `409 WALLET_BUSY` while
-  any payment is `reserved`. The old `wallet.json` (and secret) are moved, never
-  deleted, to `<data dir>/retired/wallet-<address>-<timestamp>.json`; the
+  any request holds the wallet's signer. The old `wallet.json` (and secret) are
+  copied, verified, kept (never deleted) in
+  `<data dir>/retired/wallet-<address>-<timestamp>.json`, and the new files are
+  renamed over the live names, so `wallet.json` is never absent; the
   retirement is recorded in the new `wallet_retirements` table and in the audit
   log. MoneyKeys, budgets, approvals, payment history and notification settings
   are untouched, and reconciliation of old `unknown` payments keeps working (it
@@ -82,12 +88,49 @@ phrase. Full model: [`docs/wallet-setup.md`](docs/wallet-setup.md) and
   (`/x402-testnet/check`), which employees use to verify their setup, stays;
   `RECEIVER_MODE=mainnet` is refused.
 - **Schema:** additive migration `0007_wallet_lifecycle` (`wallet_meta.backup_confirmed_at`
-  and `origin`, new table `wallet_retirements`); an old image can still open the
-  upgraded database.
+  and `origin`, new table `wallet_retirements`). An old image can still open the
+  upgraded database, and `deploy/upgrade-us.sh` relies on that when it rolls back:
+  the migration runner records applied files by name and ignores names it does not
+  know, and the old image never reads or writes the new columns or table (tested in
+  `packages/core/test/wallet.test.ts`). It cannot open a wallet that was switched to
+  auto-unlock afterwards, so the upgrade itself never converts one.
+- **Security review fixes** (all reproduced as failing tests first):
+  - *The unlock secret belongs to its wallet* and nothing is ever unlinked for another key:
+    `wallet-unlock-<address>.secret`; a same-named file and every orphan is moved to
+    `retired/`; replace copies first and renames the new files over the live names;
+    crash-point sweeps over every file-system call of create, replace and both toggles
+    always leave a `wallet.json` something can open; renames and deletes are retried on
+    Windows (EPERM/EBUSY/EACCES). Health reports "wallet.json missing but credential
+    files present" and the Dashboard asks for an explicit yes instead of silently
+    offering Create.
+  - *Imports keep only the account-0 private key* (never the phrase, a seed or a
+    non-default path); `reveal` returns the key; only generated wallets have a phrase.
+    Every import screen warns: never import anything that also controls other funds, the
+    wallet must be a dedicated small float. Optional `expected_address` refuses a key that
+    belongs to another address.
+  - *The data folder and the secret are protected for real*: a protected DACL with only the
+    current user's SID and SYSTEM on Windows (verified against real `icacls`), 0700/0600 on
+    POSIX; if it cannot be applied or verified the server still runs, with
+    `health.secret_protected=false`, a red row and an Overview banner.
+  - *Payments cannot be stranded or signed by the wrong wallet.* Before serving, payments a
+    dead process left `reserved` become `unknown` (signed, the chain decides) or `failed`
+    (nothing signed, budget released). Requests lease the signer; replace and lock refuse
+    with `WALLET_BUSY` while one is open (no more database rows), and a signer whose wallet
+    changed refuses to sign (`WALLET_LOCKED`, charged `no`, reservation released).
+  - *The mode is recorded in `wallet.json`* (non-secret marker) and health, banner and
+    `/backup` follow it: an auto keystore with a missing secret is "auto, secret_missing",
+    a stale env password is not blamed for a wrong secret, a manual wallet created next to a
+    leftover secret is manual. A locked auto wallet no longer gets a password form.
+  - `unlock()` runs inside the same per-directory lock as replace and verifies the address it
+    adopts; the toggles refuse when `wallet.json` is no longer the unlocked wallet.
+  - The header chip shows no address while the backup is unconfirmed; the in-memory fresh
+    phrase is stored with its address and shown only for that wallet.
+  - `apps/demo-seller`'s `receiver.test.mjs` now runs in `pnpm test`.
 - Tests: driver unit tests for every path above (including injected I/O failures
-  at each step of the toggles and the replacement), route tests, an end-to-end test
-  that kills the server process and starts it again on the same data directory with
-  no password, and Dashboard render tests.
+  at each step of the toggles and the replacement, and process-death sweeps), route tests,
+  a real-`icacls` ACL test, an end-to-end test that kills the server process and starts it
+  again on the same data directory with no password, an end-to-end test of a paid fetch in
+  flight while a replace is attempted, and Dashboard render tests.
 
 ## Unreleased
 

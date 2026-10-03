@@ -87,20 +87,38 @@ recovered (see the end of this file if you lose it). The setup link works
 once, expires after 30 minutes and does not survive a restart; its security
 reasoning is in [`docs/ux-audit.md`](ux-audit.md#安全相关改动与威胁分析).
 
-## 5. Create a wallet and unlock it
+## 5. Create a wallet
 
 ```bash
 curl -X POST http://127.0.0.1:4020/v1/admin/wallet/create \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"password":"a strong password"}'
-
-curl -X POST http://127.0.0.1:4020/v1/admin/wallet/unlock \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"password":"a strong password"}'
+  -d '{}'
 ```
 
-Or set `MONEYSWITCH_WALLET_PASSWORD` (or `_FILE`) before starting the
-server to auto-unlock on boot.
+There is no password to choose: the server keeps a random unlock secret next to
+the wallet file and opens the wallet by itself after every restart, and it
+restricts that data folder to its own account (the Dashboard's wallet page shows
+whether that worked). **Anyone who can read the data folder can spend the
+wallet** — see [`wallet-setup.md`](wallet-setup.md) for what that means and
+[`security.md`](security.md). The response carries the address and a 12-word
+`recovery_phrase`, **shown exactly once**: write it down on paper (it is your
+backup — importing it into MetaMask or OKX Wallet shows the same address), then
+prove you did by sending two of the words:
+
+```bash
+curl -X POST http://127.0.0.1:4020/v1/admin/wallet/backup/confirm \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"positions":[3,9],"words":["<word 3>","<word 9>"]}'
+```
+
+(The Dashboard does all of this for you and hides the wallet's address until the
+check passes.) Prefer a password instead? Send `{"password":"a strong password"}`
+to `create`; the wallet then stays locked after every restart until you unlock
+it with `POST /v1/admin/wallet/unlock` (or set `MONEYSWITCH_WALLET_PASSWORD`, or
+`_FILE`, before starting the server — the older way). To bring an existing
+wallet instead, `POST /v1/admin/wallet/import` — but only ever a **dedicated
+small-float wallet**, never a phrase or key that also controls other funds; the
+server stores just that one account's private key.
 
 The wallet is brand new and has 0 USDC until you fund it (see
 `docs/security.md` — never fund it with more than you're prepared to lose

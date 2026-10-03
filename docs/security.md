@@ -142,8 +142,11 @@ does not:
   never echoed back by any other API response.
 - The wallet private key only ever exists decrypted in-process memory
   (inside `LocalWalletDriver`), for as long as the wallet is unlocked. It is
-  never written to disk unencrypted, never logged, and never returned by
-  any API response.
+  never written to disk unencrypted and never logged. The only response that
+  carries it (or a generated wallet's recovery phrase) is the administrator's
+  explicit, address-confirmed `POST /v1/admin/wallet/reveal` (and the one-time
+  create/replace response for a new phrase): `Cache-Control: no-store`, and the
+  audit log records that it happened, never what.
 - The keystore encryption password (`MONEYSWITCH_WALLET_PASSWORD[_FILE]`
   or the `POST /v1/admin/wallet/unlock` body) is never logged.
 - Push-notification webhook URLs, tokens and the Feishu signing secret
@@ -157,6 +160,55 @@ does not:
   `redact()` helper additionally truncates any string that looks like a
   full `mk_live_`/`ms_admin_` secret before it reaches the audit log.
 
+## The wallet and its unlock secret
+
+The full model is in [wallet-setup.md](wallet-setup.md). What matters for security:
+
+- **Auto-unlock (the default) trades secrecy for availability.** `wallet.json` is
+  encrypted with a random 256-bit secret kept next to it in the data folder
+  (`wallet-unlock-<address>.secret`) so the server can restart without a human.
+  Whoever can read that folder, including a backup or snapshot of it, can spend the
+  wallet. Password mode stores nothing, and the wallet stays locked after a restart
+  until someone types the password.
+- **The folder is locked down to the server's own account, and that is verified.**
+  A file mode alone proves nothing on Windows (a file just inherits the folder's
+  ACL, which normally lets other local accounts read it), so on Windows the data
+  folder and the secret get a *protected* ACL (inheritance removed) with exactly
+  two allow entries, the current user's SID and SYSTEM, set with PowerShell using
+  SIDs (never localized account names) and read back. On Linux/macOS the folder is
+  `0700` and the secret `0600`. Both are re-applied and re-checked at every start.
+  It does not protect against the same OS user (see the threat model above).
+- **If it cannot be applied or verified, the server still runs, loudly.**
+  `health.secret_protected` is `false` (with the reason), the Wallet page shows a red
+  row and the Overview a red banner, and a warning is logged at startup. Keep only a
+  tiny float in such a wallet.
+- **The mode is recorded, not guessed.** `wallet.json` carries a non-secret
+  `x-moneyswitch` marker saying whether it is protected by the auto secret or a
+  password. Health, the unlock order and `/backup` follow the marker, never which
+  files happen to be lying around. A secret is named after its wallet, so one key's
+  secret can never be mistaken for, or overwrite, another's.
+- **Nothing that could open a key is ever deleted by accident or left behind by
+  accident.** Replacing a wallet copies its files into `retired/` first (verified
+  byte for byte), then renames the new files over the live names, so `wallet.json`
+  is never absent; a crash at any step leaves a pair that opens. A secret that
+  belongs to no live wallet is moved to `retired/`, never unlinked. Turning
+  auto-unlock off leaves **no** copy of the old keystore (no `.bak`): afterwards
+  nothing on disk opens the key without the new password.
+  `retired/` holds the credentials of old wallets and is as sensitive as the live ones.
+- **Imports keep only the key.** Importing a recovery phrase, a private key or a
+  keystore stores the private key of that one account, never the phrase, a seed
+  or a non-default derivation path. Even so, never import anything that also controls
+  other funds: the key sits on this server's disk. Use the optional
+  `expected_address` to refuse a key that is not the one you meant.
+- **A payment in flight pins the wallet.** A request takes a lease on the signer just
+  before it can sign and releases it when it finishes; replacing or locking the wallet
+  is refused (`409 WALLET_BUSY`) while any lease is open, and a signer whose wallet was
+  replaced or locked after the request started refuses to sign (nothing is signed,
+  nothing is charged).
+- **A crash cannot strand budget.** Payments left `reserved` by a process that died
+  are resolved before the next start serves anything: `unknown` if an authorization
+  had been signed (the chain decides), `failed` if not (the budget is released).
+
 ## Do NOT
 
 - Do not run MoneySwitch's wallet with more USDC than you are prepared to
@@ -167,7 +219,8 @@ does not:
 - Do not give a seller your MoneyKey, and never put a MoneyKey, admin token
   or private key into a receiving-address (pay-to) field. To get paid you
   only ever share your public `0x…` receiving address.
-- Do not import an existing/high-value private key into MoneySwitch — v0.1
-  only ever generates a brand-new random wallet (`POST
-  /v1/admin/wallet/create`); there is intentionally no "import private key"
-  endpoint.
+- Do not import a recovery phrase or private key that also controls other
+  funds, or a high-value one. MoneySwitch keeps the key on its own disk; the
+  wallet it uses must be a dedicated small-float wallet made for AI payments
+  (`POST /v1/admin/wallet/create` generates one for you). Importing is meant for
+  restoring that same dedicated wallet on a new server.
