@@ -1,4 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Each test starts the real server two or three times; on Windows every start and wallet creation also runs PowerShell to set
+// and read back the ACL. That takes ~15 s per test on a desktop and more than the suite's 30 s default on GitHub's
+// windows-latest runner (CI run 37161992876), so these tests get a longer budget. A real hang still fails, just later.
+vi.setConfig({ testTimeout: 120_000 });
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
