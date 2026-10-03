@@ -1,41 +1,5 @@
 /* Employee view only (src/EmployeeLayout.tsx, src/pages/employee/*). */
 
-.action-cards {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-
-.action-card {
-  flex: 1 1 220px;
-  display: block;
-  padding: 14px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-2);
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.action-card:hover,
-.action-card:focus-visible {
-  border-color: var(--accent);
-  background: var(--panel);
-}
-
-.action-card-title {
-  font-weight: 650;
-  font-size: 13.5px;
-  margin-bottom: 4px;
-}
-
-.action-card-body {
-  font-size: 12.5px;
-  color: var(--text-faint);
-}
-
 .connect-section {
   margin-bottom: 16px;
 }
@@ -44,12 +8,6 @@
   font-size: 12.5px;
   color: var(--text-faint);
   margin-bottom: 10px;
-}
-
-.connect-subhead {
-  font-weight: 600;
-  font-size: 12.5px;
-  margin: 12px 0 6px;
 }
 
 .key-broken-shell {

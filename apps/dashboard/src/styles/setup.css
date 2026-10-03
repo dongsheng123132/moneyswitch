@@ -205,27 +205,6 @@
   font-size: 12.5px;
   margin: 8px 0 14px;
 }
-.setup-list {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.setup-list li {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  border: 1px solid var(--panel-border-soft);
-  border-radius: var(--radius-sm);
-  background: var(--panel-2);
-  font-size: 12.5px;
-}
-.setup-list-name {
-  font-weight: 600;
-}
 .sentence {
   font-size: 15px;
   line-height: 2.3;

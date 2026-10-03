@@ -44,7 +44,7 @@ export const threeThings = defineMessages(
     secretNoticeBody:
       "Whoever has this key can spend your money within its limits. Don't send it to sellers — to get paid, share your receiving address (0x…) instead.",
 
-    // pay-to input
+    // key-input guard title
     guardBlockedTitle: "Blocked — that was a secret",
 
     // key inputs

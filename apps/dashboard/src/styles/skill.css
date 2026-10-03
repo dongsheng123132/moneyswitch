@@ -138,16 +138,6 @@
   line-height: 1.6;
 }
 
-.skill-tabs-sep {
-  align-self: center;
-  margin: 0 6px 0 12px;
-  padding-left: 12px;
-  border-left: 1px solid var(--panel-border);
-  font-size: 11.5px;
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-
 /* The row action text is long ("Reset secret and copy skill"): wrap it so the keys table keeps fitting its card. */
 .keys-row-actions .btn {
   white-space: normal;
