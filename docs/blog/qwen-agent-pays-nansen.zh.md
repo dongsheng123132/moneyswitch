@@ -86,4 +86,4 @@ Qwen 的判断是：*「几乎全是稳定币和包装资产，谈不上『热�
 
 Qwen 3.8 Max 展示了另一半：给它预算和价目表，一个能干的模型花起钱来像分析师，而不是像一个死循环。
 
-**试一试：** `npx moneyswitch demo`（离线演示）· 代码：https://github.com/dongsheng123132/moneyswitch · Agent：`apps/qwen-agent` · 操作手册：`docs/nansen-mainnet.md`
+**试一试：** 自托管 `npx moneyswitch-server` · 代码：https://github.com/dongsheng123132/moneyswitch · Agent：`apps/qwen-agent` · 操作手册：`docs/nansen-mainnet.md`

@@ -25,7 +25,7 @@ import { NOTIFY_CHANNELS, type NotifyChannelId, type NotifyConfig, type NotifyEv
  *    and, inside a lane, sends run with bounded concurrency.
  *
  * Guarantees:
- *  - never on the request path: nothing here is awaited by /v1/fetch or the gateway;
+ *  - never on the request path: nothing here is awaited by /v1/fetch;
  *  - survives restarts: the state is in the database;
  *  - at most one message per approval and channel, even with several loops on
  *    the same database: an attempt is claimed with a compare-and-swap on

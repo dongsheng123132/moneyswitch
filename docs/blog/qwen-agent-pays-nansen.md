@@ -86,4 +86,4 @@ Paid APIs for agents are coming — x402 makes the payment part simple. The hard
 
 Qwen 3.8 Max showed the other half: given a budget and a price list, a capable model spends like an analyst, not like a loop.
 
-**Try it:** `npx moneyswitch demo` (offline) · code: https://github.com/dongsheng123132/moneyswitch · agent: `apps/qwen-agent` · runbook: `docs/nansen-mainnet.md`
+**Try it:** self-host with `npx moneyswitch-server` · code: https://github.com/dongsheng123132/moneyswitch · agent: `apps/qwen-agent` · runbook: `docs/nansen-mainnet.md`

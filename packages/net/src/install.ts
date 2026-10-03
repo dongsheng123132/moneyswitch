@@ -100,7 +100,7 @@ function closeInstalledDispatcher(): Promise<void> {
  * while the loop is otherwise idle (`beforeExit`, not a signal handler:
  * `process.exit()` from a SIGINT/SIGTERM handler skips `beforeExit`
  * entirely, but this codebase's own SIGINT/SIGTERM handlers — apps/server-
- * pkg's cli.ts `stop()`, apps/cli's sell.ts/demo.ts — already own their
+ * pkg's cli.ts `stop()` — already own their
  * graceful shutdown + exit code, and racing a second, competing close
  * against those risks the same kind of double-close instead of fixing it),
  * gives those handles a chance to finish an orderly libuv close before
