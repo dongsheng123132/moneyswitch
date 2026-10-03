@@ -126,6 +126,16 @@ phrase. Full model: [`docs/wallet-setup.md`](docs/wallet-setup.md) and
   - The header chip shows no address while the backup is unconfirmed; the in-memory fresh
     phrase is stored with its address and shown only for that wallet.
   - `apps/demo-seller`'s `receiver.test.mjs` now runs in `pnpm test`.
+  - *A locked wallet whose password is lost can always be replaced.* Replace only moves files, so it
+    works on a locked wallet (end-to-end test: a keystore written by the previous release, server started
+    with no credential, replace, new wallet open, old file in `retired/`, keys and history intact). The
+    Replace dialog now always names the current wallet, read-only, as the one that will be retired
+    ("do not send money to it"), so it can be typed even though the deposit address stays hidden
+    everywhere else while the backup is unconfirmed (header chip, receive card). The dialog is reachable
+    from the Wallet page and from the setup guide; the backup screen of a locked wallet offers "unlock
+    with the password" or "replace the wallet" instead of a "Show my recovery phrase" that cannot work.
+  - `LocalWalletDriver.getSigner()` is gone: `leaseSigner()` is the only way to get a signer, so a future
+    route cannot sign without being counted by replace and lock.
 - Tests: driver unit tests for every path above (including injected I/O failures
   at each step of the toggles and the replacement, and process-death sweeps), route tests,
   a real-`icacls` ACL test, an end-to-end test that kills the server process and starts it

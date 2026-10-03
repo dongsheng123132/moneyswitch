@@ -46,8 +46,11 @@ The setup guide and the Wallet page offer the same options:
 
 1. **Create wallet (recommended).** One click, no password field. The 12 words are shown with a warning; you type
    two of them (positions chosen at random) to prove you wrote them down. Until that check passes the wallet's address
-   is shown **nowhere**: not on the Wallet page, not in the setup guide, not in the chip at the top right (which then
-   says *Finish the wallet backup*), and there is no QR code or funding steps. A banner on the Overview reminds you.
+   is shown **in no deposit or copy place**: not on the Wallet page's receive card, not in the setup guide, not in the chip
+   at the top right (which then says *Finish the wallet backup*), and there is no QR code or funding steps. A banner on
+   the Overview reminds you. (The one exception is the *Replace wallet* dialog, which names the current wallet read-only,
+   labelled "this wallet will be retired: do not send money to it", because that address must be typed to confirm a
+   replacement. See *Replace wallet* below.)
    If you reload the page before finishing, *Show my recovery phrase* shows the words again with one click.
 2. **Import** an existing wallet instead (only into an empty instance), with this in mind:
 
@@ -140,6 +143,21 @@ password**.
 
 Use it when the password is lost, when auto-unlock is broken beyond repair, or when you suspect the key leaked.
 
+**It works on a locked wallet and never needs a password**: it only moves files, it does not decrypt anything. That matters
+for the case it exists for. A wallet made by the previous release with a password is locked after a restart; if the password
+is gone, its recovery phrase cannot be shown (it is inside the encrypted file), so its backup can never be confirmed, so the
+Dashboard hides its address (nobody should fund an unbacked wallet), and replacing it asks for that address. The way out is
+built in:
+
+- The **Replace dialog always shows the current address**, read-only, labelled as the wallet that will be retired ("do not send
+  money to it"), whatever the wallet's backup or lock state. Type it to confirm. It has no copy button, no QR code and no
+  funding steps; the receive card and the header chip still hide the address while the backup is missing.
+- It is reachable from the **Wallet page** (the Danger zone opens by itself for a locked wallet) and from the **setup guide**
+  (under the unlock form: *Lost the password? Replace this wallet*).
+- The **backup screen of a locked wallet** does not offer *Show my recovery phrase* (impossible while locked). It offers the
+  two honest choices: unlock with the password (a link to the unlock form), or replace the wallet. For an auto-unlock wallet,
+  which has no password, the first choice is restoring its unlock secret file.
+
 `POST /v1/admin/wallet/replace` with `confirm_address` (the current address, exactly) plus the body of *create* or
 *import* (with the same optional `expected_address`):
 
@@ -229,7 +247,7 @@ credentials of the old wallets and is as sensitive as the live ones.
 
 | Situation | What to do |
 | --- | --- |
-| Lost the password of a password-mode wallet | You cannot open it. *Replace wallet*. Recover the old funds with the recovery phrase if you wrote it down, or with the file in `retired/` and the password if it turns up |
+| Lost the password of a password-mode wallet (locked, perhaps never backed up) | You cannot open it, and you do not need to: *Replace wallet* works on a locked wallet and shows you the address to type (Wallet page → Danger zone, or the setup guide). Recover the old funds with the recovery phrase if you wrote it down, or with the file in `retired/` and the password if it turns up |
 | The Overview says auto-unlock is broken (`secret_missing`, `secret_wrong`, ...) | The Wallet page names the reason. Restore the secret file from a backup of the data folder, or if the wallet is open use *Repair*; otherwise *Replace wallet* |
 | `wallet.json` is missing but the Dashboard shows credential files | The data folder is probably mounted from the wrong place. Fix that first; do not create a new wallet over it unless you mean to |
 | The Overview says the unlock secret is not protected | Fix the folder permissions (or move the data folder to a local disk the server's account owns), restart, and check that the warning is gone. Meanwhile keep only a tiny float |
