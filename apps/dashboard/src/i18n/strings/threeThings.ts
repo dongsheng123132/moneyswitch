@@ -9,14 +9,14 @@ import { defineMessages } from "../index";
 export const threeThings = defineMessages(
   {
     title: "The three things in MoneySwitch",
-    subtitle: "Two of them are secrets. One is meant to be shared. Mixing them up is the one mistake that can cost you money.",
+    subtitle: "Two of them are secrets. One is meant to be shared. Keep payment access separate from wallet recovery credentials.",
     openButton: "What are the three things?",
 
     pkName: "Private key",
     pkMetaphor: "The key to the safe",
     pkWho: "Give it to: nobody",
     pkBody:
-      "It controls the wallet itself. MoneySwitch keeps it only in the server's memory (encrypted on disk) and never shows it anywhere — not in this console, not to agents. You never need to copy it.",
+      "It controls the wallet. With the local wallet option, MoneySwitch encrypts it on disk and uses it in server memory to sign. Agents receive a limited MoneyKey. Keep the encrypted backup and password separately; protect any startup unlock credential as well.",
 
     mkName: "MoneyKey (mk_live_…)",
     mkMetaphor: "A capped company card for an employee",
@@ -73,18 +73,18 @@ export const threeThings = defineMessages(
     key_LOOKS_LIKE_ADDRESS:
       "That is a public 0x… receiving address, not a key. A MoneyKey starts with mk_live_ (the admin token with ms_admin_). The 0x address is what you give to people who pay you.",
     key_LOOKS_LIKE_PRIVATE_KEY:
-      "That looks like a wallet private key. MoneySwitch never asks for it — don't paste it anywhere. We cleared the field.",
-    key_LOOKS_LIKE_MNEMONIC: "That looks like a wallet recovery phrase. MoneySwitch never asks for it — don't paste it anywhere. We cleared the field.",
+      "That looks like a wallet private key. This field accepts a MoneyKey, not a private key. Use the dedicated wallet import page only when restoring your own wallet. We cleared the field.",
+    key_LOOKS_LIKE_MNEMONIC: "That looks like a wallet recovery phrase. This field accepts a MoneyKey, not a recovery phrase. We cleared the field.",
   },
   {
     title: "MoneySwitch 里的三样东西",
-    subtitle: "两样是秘密，一样是拿来分享的。把它们搞混，是唯一会让你丢钱的错误。",
+    subtitle: "两样是秘密，一样是拿来分享的。请分清付款权限与钱包恢复凭据。",
     openButton: "三样东西分别是什么？",
 
     pkName: "私钥",
     pkMetaphor: "保险柜钥匙",
     pkWho: "给谁：谁都不给",
-    pkBody: "它控制钱包本身。MoneySwitch 只把它放在服务器内存里（磁盘上是加密的），任何地方都不会显示——控制台里没有，Agent 也拿不到。你永远不需要复制它。",
+    pkBody: "它控制钱包本身。内置钱包在磁盘上加密保存，解锁后在服务器内存里签名；Agent 使用受限的 MoneyKey。请分别保存加密备份与密码；如配置自动解锁，也要保护服务器上的解锁凭据。",
 
     mkName: "MoneyKey（mk_live_…）",
     mkMetaphor: "给员工的限额副卡",
@@ -129,7 +129,7 @@ export const threeThings = defineMessages(
 
     keyGuardAddressTitle: "这是地址，不是 Key",
     key_LOOKS_LIKE_ADDRESS: "这是公开的 0x… 收款地址，不是 Key。MoneyKey 以 mk_live_ 开头（管理员口令以 ms_admin_ 开头）。0x 地址是给付钱给你的人用的。",
-    key_LOOKS_LIKE_PRIVATE_KEY: "这看起来是钱包私钥。MoneySwitch 从来不需要它——任何地方都不要粘贴。已为你清空输入框。",
-    key_LOOKS_LIKE_MNEMONIC: "这看起来是钱包助记词。MoneySwitch 从来不需要它——任何地方都不要粘贴。已为你清空输入框。",
+    key_LOOKS_LIKE_PRIVATE_KEY: "这看起来是钱包私钥。这里填写 MoneyKey，不接收私钥。仅在恢复自己的钱包时使用专门的钱包导入入口。已为你清空输入框。",
+    key_LOOKS_LIKE_MNEMONIC: "这看起来是钱包助记词。这里填写 MoneyKey，不接收助记词。已为你清空输入框。",
   }
 );

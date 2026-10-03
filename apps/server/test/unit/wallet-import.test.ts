@@ -51,3 +51,16 @@ describe("wallet import and backup", () => {
     expect((await t.app.inject({ method: "POST", url: "/v1/admin/wallet/backup", headers })).statusCode).toBe(404);
   });
 });
+
+
+it("reports auto-unlock configuration to administrators without exposing the credential", async () => {
+  t = await buildTestApp();
+  const url = "/v1/admin/wallet";
+  const headers = { authorization: `Bearer ${t.adminToken}` };
+  expect((await t.app.inject({ url })).statusCode).toBe(403);
+  expect((await t.app.inject({ url, headers })).json().auto_unlock_configured).toBe(false);
+  t.ctx.config.walletPassword = "private-startup-credential";
+  const res = await t.app.inject({ url, headers });
+  expect(res.json().auto_unlock_configured).toBe(true);
+  expect(res.body).not.toContain(t.ctx.config.walletPassword);
+});

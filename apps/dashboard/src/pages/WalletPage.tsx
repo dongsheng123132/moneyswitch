@@ -101,6 +101,9 @@ export default function WalletPage() {
       {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
 
       {!wallet.unlocked && <div className="card" style={{ marginBottom: 16 }}><WalletAccess wallet={wallet} onChanged={refresh} /></div>}
+      <Callout tone="info" title={t(wallet.auto_unlock_configured ? "autoUnlockTitle" : "manualUnlockTitle")}>
+        {t(wallet.auto_unlock_configured ? "autoUnlockBody" : "manualUnlockBody")}
+      </Callout>
       <WalletBackup />
 
       <div className="wallet-columns-heading">

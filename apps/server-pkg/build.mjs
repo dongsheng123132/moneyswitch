@@ -9,7 +9,7 @@
 // Workspace packages are consumed through their built dist/ (run the root
 // `pnpm build` first — it builds this package last).
 import { build } from "esbuild";
-import { rmSync, mkdirSync, cpSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { rmSync, mkdirSync, cpSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -52,6 +52,8 @@ await build({
 });
 
 cpSync(dashboardSrc, path.join(__dirname, "dashboard"), { recursive: true });
+const dashboardIndex = path.join(__dirname, "dashboard", "index.html");
+writeFileSync(dashboardIndex, readFileSync(dashboardIndex, "utf8").replace(/\r+\n/g, "\n"));
 mkdirSync(path.join(__dirname, "migrations"), { recursive: true });
 for (const f of readdirSync(migrationsSrc).filter((f) => f.endsWith(".sql"))) {
   cpSync(path.join(migrationsSrc, f), path.join(__dirname, "migrations", f));

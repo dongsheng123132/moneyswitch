@@ -3,6 +3,10 @@ import { defineMessages } from "../index";
 /** Wallet page copy (docs/ux-audit.md A-3, A-4). */
 export const walletStrings = defineMessages(
   {
+    autoUnlockTitle: "Startup auto-unlock is configured",
+    autoUnlockBody: "The deployment holds an unlock credential. An unlocked wallet is not a backup: keep the encrypted backup and password separately. Protect the server and its secret files; anyone with both can control the wallet.",
+    manualUnlockTitle: "Manual unlock after restart",
+    manualUnlockBody: "Keep the encrypted backup and wallet password separately. A backup still needs its password; the admin token cannot replace it.",
     createTitle: "No wallet yet",
     createIntro: "MoneySwitch signs every x402 payment from a server-side wallet. Create one to get started.",
     fieldPassword: "Keystore password",
@@ -62,6 +66,10 @@ export const walletStrings = defineMessages(
     paysFromKeysLink: "Manage Money Keys →",
   },
   {
+    autoUnlockTitle: "已配置启动时自动解锁",
+    autoUnlockBody: "部署环境保存了解锁凭据。已解锁不代表已备份：请分别保存加密备份与钱包密码。拿到两者的人可以控制钱包，因此服务器和凭据文件都需要保护。",
+    manualUnlockTitle: "重启后需要手动解锁",
+    manualUnlockBody: "请分别保存加密备份与钱包密码。下载备份仍需原密码，管理员 Token 不能替代钱包密码。",
     createTitle: "还没有钱包",
     createIntro: "MoneySwitch 用服务器端的钱包对每笔 x402 付款签名，先创建一个。",
     fieldPassword: "钱包密码",

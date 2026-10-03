@@ -3,7 +3,13 @@ app.moneyswitch.dev {
     header {
         X-Content-Type-Options nosniff
         Referrer-Policy same-origin
+        X-Frame-Options DENY
+        Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+        Strict-Transport-Security "max-age=15552000"
         -Server
+    }
+    handle /x402-testnet/* {
+        reverse_proxy 127.0.0.1:4031
     }
     handle /x402-receive/* {
         reverse_proxy 127.0.0.1:4021

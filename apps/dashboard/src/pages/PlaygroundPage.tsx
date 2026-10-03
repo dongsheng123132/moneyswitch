@@ -21,7 +21,7 @@ export default function PlaygroundPage() {
   const [apiKey, setApiKey] = useState<string>(() => sessionStorage.getItem(PLAYGROUND_KEY_STORAGE) ?? "");
   const [refreshTick, setRefreshTick] = useState(0);
   // SPEC-v0.5.md §3: /playground?mode=fetch&url=<url>&method=<GET|POST> deep-links into the paid-request tab.
-  const [tab, setTab] = useState<"chat" | "fetch">(() => (searchParams.get("mode") === "fetch" ? "fetch" : "chat"));
+  const [tab, setTab] = useState<"chat" | "fetch">(() => (searchParams.get("mode") === "chat" ? "chat" : "fetch"));
   const prefillUrl = searchParams.get("url") ?? undefined;
   const prefillMethod = searchParams.get("method") ?? undefined;
 

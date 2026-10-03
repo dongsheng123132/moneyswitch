@@ -64,6 +64,8 @@ export const playgroundStrings = defineMessages(
     goToKeys: "Go to Money Keys",
 
     // --- SPEC-v0.5.md §3: Paid request (x402) tab ---
+    employeeWalletLocked: "Ask your administrator to unlock the payment wallet. No payment was made.",
+    employeeKeyInUse: "Using your signed-in MoneyKey. Budget is a spending limit, not wallet balance.",
     tabChat: "Chat",
     tabFetch: "Paid request (x402)",
     fetchIntro: "Pay a URL directly with x402 — this uses the same Money Key as the Chat tab.",
@@ -95,7 +97,7 @@ export const playgroundStrings = defineMessages(
     fetchApprovalContinue: "Approved — try again",
     fetchResponseBodyTitle: "Response body",
     fetchResponseBodyTruncated: "(truncated at 20,000 characters)",
-    fetchErr_HOST_NOT_ALLOWED: "This key's allowed hosts don't include {host}. Add it on the Money Keys page.",
+    fetchErr_HOST_NOT_ALLOWED: "This key does not allow {host}. Ask the administrator to issue a key that allows this host.",
     fetchErr_SSRF_BLOCKED: "That address can't be reached for security reasons (it points at MoneySwitch itself, or a blocked network range).",
     fetchErr_MAX_PRICE_EXCEEDED: "The price is higher than the maximum you allowed for this request.",
     fetchErr_UNSUPPORTED_PAYMENT: "That resource asked for a payment method MoneySwitch doesn't support.",
@@ -159,6 +161,8 @@ export const playgroundStrings = defineMessages(
     emptyKeyBody: "Key 只会在创建时显示一次。去「Money Keys」新建一把，点「在 Playground 里试试」，就会带着 Key 跳回这里。",
     goToKeys: "去 Money Keys",
 
+    employeeWalletLocked: "请联系管理员解锁付款钱包。本次未付款。",
+    employeeKeyInUse: "使用当前登录的 MoneyKey。额度是允许花费的上限，不等于钱包余额。",
     tabChat: "对话",
     tabFetch: "付费请求（x402）",
     fetchIntro: "直接用 x402 为一个网址付款 —— 和「对话」标签用的是同一把 Money Key。",
@@ -190,7 +194,7 @@ export const playgroundStrings = defineMessages(
     fetchApprovalContinue: "已批准 —— 再试一次",
     fetchResponseBodyTitle: "响应内容",
     fetchResponseBodyTruncated: "（超过 2 万字符，已截断）",
-    fetchErr_HOST_NOT_ALLOWED: "这把 Key 的允许域名里没有这个地址（{host}）。去 Money Keys 给它加上。",
+    fetchErr_HOST_NOT_ALLOWED: "这把 Key 未授权访问 {host}。请管理员重新签发一把允许该域名的 Key。",
     fetchErr_SSRF_BLOCKED: "出于安全原因无法访问这个地址（它指向 MoneySwitch 自身，或者是被禁止的网络范围）。",
     fetchErr_MAX_PRICE_EXCEEDED: "价格超过了这次请求允许的最高价。",
     fetchErr_UNSUPPORTED_PAYMENT: "这个资源要求的付款方式 MoneySwitch 不支持。",

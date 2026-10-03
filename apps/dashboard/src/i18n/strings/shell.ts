@@ -5,7 +5,7 @@ export const shellStrings = defineMessages(
   {
     brandSub: "API keys for money",
     nav_overview: "Overview",
-    nav_playground: "Playground",
+    nav_playground: "Payment test",
     nav_keys: "Money Keys",
     nav_channels: "Channels",
     nav_usage: "Usage",
@@ -51,7 +51,7 @@ export const shellStrings = defineMessages(
   {
     brandSub: "花钱的 API Key",
     nav_overview: "总览",
-    nav_playground: "Playground",
+    nav_playground: "付款测试",
     nav_keys: "Money Keys",
     nav_channels: "渠道",
     nav_usage: "用量流水",

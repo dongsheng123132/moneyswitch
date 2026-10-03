@@ -333,6 +333,7 @@ export interface WalletInfo {
   address: string | null;
   unlocked: boolean;
   has_keystore: boolean;
+  auto_unlock_configured?: boolean;
   usdc_balance: string | null;
   network: string;
   /** Offline demo: usdc_balance is simulated, not read from the chain. */

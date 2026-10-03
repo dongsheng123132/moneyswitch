@@ -64,7 +64,8 @@ function prettyBody(body: string | null): string {
 
 export interface PaidFetchPanelProps {
   apiKey: string;
-  onApiKeyChange: (v: string) => void;
+  onApiKeyChange?: (v: string) => void;
+  audience?: "admin" | "employee";
   initialUrl?: string;
   initialMethod?: string;
   /** Key status card shown on the right (same as the chat tab). */
@@ -73,7 +74,7 @@ export interface PaidFetchPanelProps {
   onDone?: () => void;
 }
 
-export default function PaidFetchPanel({ apiKey, onApiKeyChange, initialUrl, initialMethod, rightPanel, onDone }: PaidFetchPanelProps) {
+export default function PaidFetchPanel({ apiKey, onApiKeyChange, initialUrl, initialMethod, rightPanel, onDone, audience = "admin" }: PaidFetchPanelProps) {
   const t = useT(playgroundStrings);
   const guard = useKeyInputGuard();
   const [showKey, setShowKey] = useState(false);
@@ -145,7 +146,7 @@ export default function PaidFetchPanel({ apiKey, onApiKeyChange, initialUrl, ini
             {t("fetchIntro")}
           </p>
 
-          <SecretNotice compact>
+          {audience === "employee" ? <p className="field-hint">{t("employeeKeyInUse")}</p> : <SecretNotice compact>
             <div className="field" style={{ marginBottom: 0 }}>
               <label>{t("fetchKeyLabel")}</label>
               <div className="input-with-action">
@@ -154,7 +155,7 @@ export default function PaidFetchPanel({ apiKey, onApiKeyChange, initialUrl, ini
                   type={showKey ? "text" : "password"}
                   placeholder={t("keyPlaceholder")}
                   value={apiKey}
-                  onChange={(e) => onApiKeyChange(guard.filter(e.target.value))}
+                  onChange={(e) => onApiKeyChange?.(guard.filter(e.target.value))}
                   aria-label={t("fetchKeyLabel")}
                 />
                 <button
@@ -168,16 +169,16 @@ export default function PaidFetchPanel({ apiKey, onApiKeyChange, initialUrl, ini
               </div>
               {guard.message}
             </div>
-          </SecretNotice>
+          </SecretNotice>}
 
           <div className="field">
-            <label>{t("fetchUrlLabel")}</label>
-            <input className="mono" value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("fetchUrlPlaceholder")} />
+            <label htmlFor="paid-fetch-url">{t("fetchUrlLabel")}</label>
+            <input id="paid-fetch-url" className="mono" value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t("fetchUrlPlaceholder")} />
           </div>
 
           <div className="field">
-            <label>{t("fetchMethodLabel")}</label>
-            <select value={method} onChange={(e) => setMethod(e.target.value as Method)}>
+            <label htmlFor="paid-fetch-method">{t("fetchMethodLabel")}</label>
+            <select id="paid-fetch-method" value={method} onChange={(e) => setMethod(e.target.value as Method)}>
               {METHODS.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -205,7 +206,7 @@ export default function PaidFetchPanel({ apiKey, onApiKeyChange, initialUrl, ini
 
           {formError && <div className="error-banner">{formError}</div>}
 
-          <button type="submit" className="btn" disabled={sending}>
+          <button type="submit" data-action-id="payment.fetch" className="btn" disabled={sending}>
             {sending ? (
               <>
                 <Loader2 size={14} className="spin" /> {t("fetchSubmitting")}
@@ -223,6 +224,7 @@ export default function PaidFetchPanel({ apiKey, onApiKeyChange, initialUrl, ini
           thrownError={thrownError}
           onContinueApproval={continueWithApproval}
           resending={sending}
+          audience={audience}
         />
       </div>
 
@@ -247,6 +249,7 @@ function PaidFetchResult({
   thrownError,
   onContinueApproval,
   resending,
+  audience,
 }: {
   t: PgStrings;
   url: string;
@@ -254,6 +257,7 @@ function PaidFetchResult({
   thrownError: ApiError | null;
   onContinueApproval: (approvalId: string) => void;
   resending: boolean;
+  audience: "admin" | "employee";
 }) {
   const bodyPretty = useMemo(() => prettyBody(result?.body ?? null), [result?.body]);
   const truncated = (result?.body?.length ?? 0) > RESPONSE_BODY_CAP;
@@ -267,7 +271,7 @@ function PaidFetchResult({
         <h3>{t("fetchResultTitle")}</h3>
       </div>
 
-      {thrownError && <ThrownErrorBanner err={thrownError} t={t} />}
+      {thrownError && <ThrownErrorBanner err={thrownError} t={t} audience={audience} />}
 
       {result && (
         <div>
@@ -348,7 +352,7 @@ function PaidFetchResult({
               <div className="callout-body">
                 <div className="callout-text">{t("fetchApprovalRequired", { id: result.approval_id })}</div>
                 <div className="pg-approval-actions">
-                  <Link to="/approvals" className="btn small secondary">
+                  <Link to={audience === "employee" ? "/me/history" : "/approvals"} className="btn small secondary">
                     {t("fetchApprovalGoApprovals")}
                     <ExternalLink size={12} />
                   </Link>
@@ -359,7 +363,7 @@ function PaidFetchResult({
               </div>
             </div>
           )}
-          {outcome === "error" && <FetchErrorCallout t={t} code={result.code} />}
+          {outcome === "error" && <FetchErrorCallout t={t} code={result.code} audience={audience} />}
 
           <div className="stat-sub" style={{ marginTop: 10 }}>
             {t("fetchRemainingToday", { amount: formatUsdc(result.remaining_today, { maxDecimals: 4 }) })}
@@ -378,19 +382,19 @@ function PaidFetchResult({
   );
 }
 
-function FetchErrorCallout({ t, code }: { t: PgStrings; code: string | null }) {
+function FetchErrorCallout({ t, code, audience }: { t: PgStrings; code: string | null; audience: "admin" | "employee" }) {
   const upper = (code || "").toUpperCase();
   if (upper === "WALLET_LOCKED") {
     return (
       <div className="callout callout-error" role="alert">
         <div className="callout-body">
-          <div className="callout-text">{t("fetchErr_WALLET_LOCKED")}</div>
-          <div className="pg-approval-actions">
+          <div className="callout-text">{t(audience === "employee" ? "employeeWalletLocked" : "fetchErr_WALLET_LOCKED")}</div>
+          {audience === "admin" && <div className="pg-approval-actions">
             <Link to="/wallet" className="btn small secondary">
               {t("walletPageLink")}
               <ExternalLink size={12} />
             </Link>
-          </div>
+          </div>}
         </div>
       </div>
     );
@@ -404,7 +408,7 @@ function FetchErrorCallout({ t, code }: { t: PgStrings; code: string | null }) {
   );
 }
 
-function ThrownErrorBanner({ err, t }: { err: ApiError; t: PgStrings }) {
+function ThrownErrorBanner({ err, t, audience }: { err: ApiError; t: PgStrings; audience: "admin" | "employee" }) {
   const upper = (err.code || "").toUpperCase();
   if (upper === "KEY_INVALID") {
     const isAddress = (err.reason || "").toUpperCase() === "LOOKS_LIKE_ADDRESS";
@@ -420,13 +424,13 @@ function ThrownErrorBanner({ err, t }: { err: ApiError; t: PgStrings }) {
     return (
       <div className="callout callout-error" role="alert">
         <div className="callout-body">
-          <div className="callout-text">{t("fetchErr_WALLET_LOCKED")}</div>
-          <div className="pg-approval-actions">
+          <div className="callout-text">{t(audience === "employee" ? "employeeWalletLocked" : "fetchErr_WALLET_LOCKED")}</div>
+          {audience === "admin" && <div className="pg-approval-actions">
             <Link to="/wallet" className="btn small secondary">
               {t("walletPageLink")}
               <ExternalLink size={12} />
             </Link>
-          </div>
+          </div>}
         </div>
       </div>
     );

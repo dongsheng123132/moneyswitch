@@ -273,3 +273,23 @@ describe("Employee portal: sub-key created", () => {
     assert.ok(html.includes(fill(en.skill.badUrl, { url: "http://moneyswitch_srv:4020" })));
   });
 });
+
+
+describe("Payment test entry", () => {
+  it("opens direct x402 requests by default for administrators", async () => {
+    const Page = (await import("../src/pages/PlaygroundPage.tsx")).default;
+    const html = render(h(Page));
+    assert.ok(html.includes('id="paid-fetch-url"'));
+    assert.ok(html.includes('data-action-id="payment.fetch"'));
+  });
+  it("lets employees test x402 without re-entering or exposing their key", async () => {
+    store.set("moneyswitch_employee_key", KEY);
+    const Page = (await import("../src/pages/employee/EmployeePlaygroundPage.tsx")).default;
+    const html = render(h(Page));
+    assert.ok(html.includes('id="paid-fetch-url"'));
+    assert.ok(html.includes('data-action-id="payment.fetch"'));
+    assert.ok(!html.includes(KEY));
+    assert.ok(!html.includes('href="/wallet"'));
+    assert.ok(html.includes("spending limit, not wallet balance"));
+  });
+});

@@ -386,6 +386,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       address,
       unlocked: ctx.wallet.isUnlocked(),
       has_keystore: ctx.wallet.hasKeystore(),
+      auto_unlock_configured: Boolean(ctx.config.walletPassword),
       usdc_balance: balance,
       network: network.caip2,
       simulated: Boolean(ctx.config.demo),

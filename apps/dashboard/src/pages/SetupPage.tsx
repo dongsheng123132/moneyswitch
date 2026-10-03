@@ -200,7 +200,7 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
   useEffect(() => {
     if (!loaded || autoPicked.current) return;
     autoPicked.current = true;
-    setActive(STEPS.find((s) => !done[s] && !skipped.has(s)) ?? "connect");
+    setActive(STEPS.find((s) => s !== "channel" && !done[s] && !skipped.has(s)) ?? "connect");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
@@ -210,7 +210,7 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
   }
   function goNext(from: StepId) {
     const idx = STEPS.indexOf(from);
-    const next = STEPS.slice(idx + 1).find((s) => !done[s]) ?? STEPS[Math.min(idx + 1, STEPS.length - 1)];
+    const next = STEPS.slice(idx + 1).find((s) => s !== "channel" && !done[s]) ?? STEPS[Math.min(idx + 1, STEPS.length - 1)];
     setActive(next);
   }
   function skip(step: StepId) {
@@ -224,7 +224,7 @@ function Wizard({ claimedToken, onFinish }: { claimedToken: string | null; onFin
     onFinish();
   }
 
-  const allDone = STEPS.every((s) => done[s]);
+  const allDone = STEPS.every((s) => s === "channel" || done[s]);
   const current = active ?? "admin";
 
   const stepTitle: Record<StepId, string> = {

@@ -62,8 +62,8 @@ export const overviewStrings = defineMessages(
     recentActivityTitle: "Recent activity",
     activitySentence: "{agent} paid {amount} USDC · {target}",
     emptyActivityTitle: "No payments yet",
-    emptyActivityBody: "Try the Playground to make your first paid call.",
-    emptyActivityAction: "Open Playground",
+    emptyActivityBody: "Try Payment test to make your first paid call.",
+    emptyActivityAction: "Open Payment test",
 
     // SPEC-v0.4.md §A: "today by agent" aggregates by root key; used_today on
     // a root already includes its sub-keys' spend, so it is shown as-is.
@@ -130,8 +130,8 @@ export const overviewStrings = defineMessages(
     recentActivityTitle: "最近动态",
     activitySentence: "{agent} 向 {target} 支付了 {amount} USDC",
     emptyActivityTitle: "还没有付款记录",
-    emptyActivityBody: "去 Playground 试试第一次付费调用。",
-    emptyActivityAction: "打开 Playground",
+    emptyActivityBody: "去「付款测试」试试第一次付费调用。",
+    emptyActivityAction: "打开付款测试",
 
     showSubKeys: "展开 {n} 把子 Key",
     hideSubKeys: "收起子 Key",
