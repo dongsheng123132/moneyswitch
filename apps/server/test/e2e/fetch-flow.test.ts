@@ -18,7 +18,7 @@ import { eq } from "drizzle-orm";
 
 /**
  * T2 (SPEC §9): fully offline end-to-end. Chain:
- *   MCP-shaped HTTP call -> server /v1/fetch -> demo-seller (402) ->
+ *   agent HTTP call (POST /v1/fetch) -> server -> demo-seller (402) ->
  *   x402 client signs -> mock-facilitator verifies (real viem signature
  *   check) / settles (fake 0xmock tx) -> 200 -> usage +amount.
  */
@@ -143,7 +143,7 @@ async function createKey(overrides: Record<string, unknown> = {}) {
   return res.json().key as string;
 }
 
-describe("T2 offline e2e: MCP-shaped call -> server -> demo-seller -> mock-facilitator", () => {
+describe("T2 offline e2e: agent call -> server -> demo-seller -> mock-facilitator", () => {
   it("GET /free costs nothing and returns 200", async () => {
     const key = await createKey();
     const res = await app.inject({
