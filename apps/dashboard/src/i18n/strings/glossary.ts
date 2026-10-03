@@ -17,8 +17,6 @@ export const glossary = defineMessages(
       "Hosts (host:port) this key may pay through POST /v1/fetch. Empty = nothing allowed.",
     rateLimit: "Maximum number of payments per minute, to stop a looping agent from draining the budget.",
     expiresAt: "After this date the key stops working. Empty = never expires.",
-    canDelegate:
-      "This key's holder may create their own sub-keys (child MoneyKeys). A sub-key can never exceed its parent's limits, and revoking the parent disables every sub-key beneath it.",
     subtreeUsage:
       "\"Today\" / \"Total used\" here include this key's own spending PLUS everything its sub-keys have spent — that is what counts against this key's own budget.",
     ancestorRevoked: "This key itself is still enabled, but a parent key above it was revoked — so it stops working too, immediately.",
@@ -34,7 +32,6 @@ export const glossary = defineMessages(
       "这把 Key 通过 POST /v1/fetch 能付款给哪些地址（host:port）。留空 = 全部拒绝。",
     rateLimit: "每分钟最多付款几次，防止 Agent 死循环把额度刷光。",
     expiresAt: "过了这个日期 Key 自动失效。留空 = 永不过期。",
-    canDelegate: "这把 Key 的持有人可以再往下切子 Key。子 Key 的额度永远不能超过这把 Key；这把 Key 一旦被撤销，它所有的子 Key 也会立即失效。",
     subtreeUsage: "这里的「今日」「累计已用」= 这把 Key 自己的花费 + 它所有子 Key 的花费之和 —— 这才是真正会计入这把 Key 额度的数字。",
     ancestorRevoked: "这把 Key 本身没有被撤销，但它的上级 Key 被撤销了，所以它也立刻不能用了。",
     ancestorExpired: "这把 Key 本身没有过期，但它的上级 Key 过期了，所以它也不能用了。",

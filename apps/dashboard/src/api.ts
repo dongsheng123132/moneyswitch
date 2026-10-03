@@ -60,7 +60,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // ---------------------------------------------------------------------------
 
 // A key's status accounts for cascading revoke / expiry down an ancestor chain: a key can be enabled and unexpired yet unusable
-// because a parent was revoked or expired (child keys exist only through the agent API; the page just shows them).
+// because a parent was revoked or expired (child keys exist only through the agent API; the page lists them like any other key and has no UI for them).
 export type MoneyKeyStatus = "active" | "revoked" | "expired" | "ancestor_revoked" | "ancestor_expired";
 
 export interface MoneyKeyRow {
@@ -101,8 +101,6 @@ export interface CreateMoneyKeyInput {
   allowed_hosts: string[];
   max_payments_per_minute?: number;
   expires_at?: string | null;
-  // Lets the key's holder create sub-keys of its own through the agent API (POST /v1/keys/children). Defaults to false server-side.
-  can_delegate?: boolean;
 }
 
 export interface CreateMoneyKeyResponse extends Omit<MoneyKeyRow, "key_prefix" | "used_today" | "used_total" | "last_used_at" | "created_at"> {

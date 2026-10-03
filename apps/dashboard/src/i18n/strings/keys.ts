@@ -30,15 +30,6 @@ export const keysStrings = defineMessages(
     revokeConfirmTextWithChildren: "Revoke? The agent will be refused immediately, and its {n} sub-key(s) will stop working too. This can't be undone.",
     revokeSuccessText: "Key revoked — the agent will be refused on its next request.",
 
-    // Child keys / tree (SPEC-v0.4.md §A)
-    canDelegatePill: "Can delegate",
-    createdByParent: "sub-key",
-    expandRow: "Expand",
-    collapseRow: "Collapse",
-    childrenCount: "{n} sub-keys",
-    canDelegateFieldLabel: "Allow the employee to create sub-keys",
-    canDelegateFieldHint: "Sub-keys can never exceed this key's limits, and revoking this key disables all its sub-keys.",
-
     // Empty states
     emptyNoKeysTitle: "No Money Keys yet",
     emptyNoKeysBody: "Create one to let an agent spend USDC on your behalf, with limits you control.",
@@ -124,14 +115,6 @@ export const keysStrings = defineMessages(
     revokeConfirmText: "确认撤销？Agent 会立即被拒绝访问，且不可恢复。",
     revokeConfirmTextWithChildren: "确认撤销？Agent 会立即被拒绝访问，它的 {n} 把子 Key 也会一并失效，且不可恢复。",
     revokeSuccessText: "已撤销 —— Agent 下一次请求就会被拒绝。",
-
-    canDelegatePill: "可再分配",
-    createdByParent: "子 Key",
-    expandRow: "展开",
-    collapseRow: "收起",
-    childrenCount: "{n} 把子 Key",
-    canDelegateFieldLabel: "允许员工再分配（可切子 Key）",
-    canDelegateFieldHint: "子 Key 永远不会超过这把 Key 的额度；这把 Key 被撤销时，它的所有子 Key 也会一并失效。",
 
     emptyNoKeysTitle: "还没有 Money Key",
     emptyNoKeysBody: "新建一把，让 Agent 用你设定的额度花 USDC。",

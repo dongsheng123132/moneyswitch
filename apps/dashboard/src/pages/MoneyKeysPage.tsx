@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, KeyRound, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, KeyRound } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listKeys, createKey, revokeKey, rotateKey, ApiError, MoneyKeyRow } from "../api";
+import { listKeys, createKey, revokeKey, rotateKey, ApiError } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
 import Avatar from "../components/Avatar";
 import Pill from "../components/Pill";
@@ -37,7 +37,6 @@ interface FormState {
   allowed_hosts: string;
   max_payments_per_minute: string;
   expires_at: string; // yyyy-mm-dd from <input type="date">
-  can_delegate: boolean;
   /** Ticked by default where the test payment is on offer (a testnet): adds the test receiver's host to the allowed hosts. */
   allow_test_endpoint: boolean;
 }
@@ -52,44 +51,8 @@ function emptyForm(hosts: string): FormState {
     allowed_hosts: hosts,
     max_payments_per_minute: "10",
     expires_at: "",
-    can_delegate: false,
     allow_test_endpoint: true,
   };
-}
-
-/** SPEC-v0.4.md §A: build the parent/child tree client-side from the flat GET /v1/keys rows
- * (keeps a single polling source instead of also polling GET /v1/admin/keys/tree). Children
- * are ordered oldest-first, matching the server's tree endpoint. */
-function buildKeyTree(rows: MoneyKeyRow[]): Map<string | null, MoneyKeyRow[]> {
-  const byParent = new Map<string | null, MoneyKeyRow[]>();
-  for (const row of rows) {
-    const parent = row.parent_id ?? null;
-    const list = byParent.get(parent);
-    if (list) list.push(row);
-    else byParent.set(parent, [row]);
-  }
-  for (const list of byParent.values()) {
-    list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }
-  return byParent;
-}
-
-interface FlatTreeRow {
-  row: MoneyKeyRow;
-  depth: number;
-}
-
-/** Depth-first flatten, skipping subtrees whose row id is in `collapsed`. */
-function flattenTree(byParent: Map<string | null, MoneyKeyRow[]>, collapsed: Set<string>): FlatTreeRow[] {
-  const out: FlatTreeRow[] = [];
-  function walk(parent: string | null, depth: number) {
-    for (const row of byParent.get(parent) ?? []) {
-      out.push({ row, depth });
-      if (!collapsed.has(row.id)) walk(row.id, depth + 1);
-    }
-  }
-  walk(null, 0);
-  return out;
 }
 
 const PRESETS: Array<{ key: keyof typeof keysStrings.en; patch: Partial<FormState> }> = [
@@ -105,6 +68,24 @@ function isPositiveDecimal(v: string): boolean {
 function isNonNegativeDecimalOrEmpty(v: string): boolean {
   if (!v.trim()) return true;
   return DECIMAL_RE.test(v.trim()) && parseFloat(v) >= 0;
+}
+
+/** What the Keys page shows before the first key exists: one button, the thing the owner does next (SPEC.md §2: first use is login, create the wallet, issue a key). */
+export function NoKeysYet({ onCreate }: { onCreate: () => void }) {
+  const t = useT(keysStrings);
+  return (
+    <EmptyState
+      icon={<KeyRound size={28} />}
+      title={t("emptyNoKeysTitle")}
+      action={
+        <button type="button" className="btn small" onClick={onCreate}>
+          {t("actionCreateFirst")}
+        </button>
+      }
+    >
+      {t("emptyNoKeysBody")}
+    </EmptyState>
+  );
 }
 
 export default function MoneyKeysPage() {
@@ -132,21 +113,6 @@ export default function MoneyKeysPage() {
   const [rotateTarget, setRotateTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
-  // SPEC-v0.4.md §A: tree rows default expanded; ids in this set are collapsed.
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
-
-  const treeByParent = useMemo(() => buildKeyTree(keys ?? []), [keys]);
-  const flatRows = useMemo(() => flattenTree(treeByParent, collapsedIds), [treeByParent, collapsedIds]);
-
-  function toggleCollapsed(id: string) {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   useEffect(() => {
     if (!revokeSuccess) return;
     const timer = setTimeout(() => setRevokeSuccess(null), 4000);
@@ -207,7 +173,6 @@ export default function MoneyKeysPage() {
         allowed_hosts: withTestHost(form.allowed_hosts.split(","), testAvailable && form.allow_test_endpoint),
         max_payments_per_minute: form.max_payments_per_minute ? Number(form.max_payments_per_minute) : undefined,
         expires_at: expiresIso,
-        can_delegate: form.can_delegate,
       });
       setHandoff(handoffFromCreated(res));
       refresh();
@@ -275,17 +240,7 @@ export default function MoneyKeysPage() {
         {loading && !keys ? (
           <SkeletonTable rows={4} cols={9} />
         ) : !keys || keys.length === 0 ? (
-          <EmptyState
-            icon={<KeyRound size={28} />}
-            title={t("emptyNoKeysTitle")}
-            action={
-              <button type="button" className="btn small" onClick={openCreate}>
-                {t("actionCreateFirst")}
-              </button>
-            }
-          >
-            {t("emptyNoKeysBody")}
-          </EmptyState>
+          <NoKeysYet onCreate={openCreate} />
         ) : (
           <table>
             <thead>
@@ -310,49 +265,21 @@ export default function MoneyKeysPage() {
               </tr>
             </thead>
             <tbody>
-              {flatRows.map(({ row: k, depth }) => {
+              {keys.map((k) => {
                 const usedMicros = toMicros(k.used_today);
                 const dMicros = toMicros(k.daily_budget);
                 const r = ratioMicros(usedMicros, dMicros);
-                // SPEC-v0.4.md §A: status now comes straight from the server
-                // (active/revoked/expired/ancestor_revoked/ancestor_expired) —
-                // it already accounts for cascading ancestor revoke/expiry.
+                // The server's status already accounts for a parent that was revoked or expired
+                // (active / revoked / expired / ancestor_revoked / ancestor_expired).
                 const status = k.status;
                 const statusTone = status === "active" ? "green" : status === "expired" || status === "ancestor_expired" ? "yellow" : "red";
                 const isAncestorDisabled = status === "ancestor_revoked" || status === "ancestor_expired";
-                const hasChildren = k.children_count > 0;
-                const collapsed = collapsedIds.has(k.id);
                 return (
                   <tr key={k.id}>
                     <td>
-                      <div className="agent-row keys-tree-row" style={{ paddingLeft: depth * 20 }}>
-                        {depth > 0 && <span className="keys-tree-connector" aria-hidden="true" />}
-                        {hasChildren ? (
-                          <button
-                            type="button"
-                            className="keys-tree-toggle"
-                            onClick={() => toggleCollapsed(k.id)}
-                            aria-label={collapsed ? t("expandRow") : t("collapseRow")}
-                            aria-expanded={!collapsed}
-                          >
-                            {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                          </button>
-                        ) : (
-                          <span className="keys-tree-toggle-spacer" />
-                        )}
+                      <div className="agent-row">
                         <Avatar name={k.name} size={24} />
-                        <div>
-                          <div className="agent-row" style={{ gap: 6 }}>
-                            <span className="agent-name">{k.name}</span>
-                            {k.can_delegate && (
-                              <Term k="canDelegate">
-                                <Pill tone="blue">{t("canDelegatePill")}</Pill>
-                              </Term>
-                            )}
-                          </div>
-                          {k.created_by.startsWith("key:") && <div className="keys-created-by">{t("createdByParent")}</div>}
-                          {hasChildren && <div className="keys-created-by">{t("childrenCount", { n: k.children_count })}</div>}
-                        </div>
+                        <span className="agent-name">{k.name}</span>
                       </div>
                     </td>
                     <td className="mono">{k.key_prefix}••••</td>
@@ -430,18 +357,6 @@ export default function MoneyKeysPage() {
               allowTest={form.allow_test_endpoint}
               onAllowTestChange={(allow_test_endpoint) => setForm({ ...form, allow_test_endpoint })}
             />
-
-            <label className="keys-can-delegate-toggle">
-              <input
-                type="checkbox"
-                checked={form.can_delegate}
-                onChange={(e) => setForm({ ...form, can_delegate: e.target.checked })}
-              />
-              <span>{t("canDelegateFieldLabel")}</span>
-            </label>
-            <div className="field-hint" style={{ marginTop: -6, marginBottom: 12 }}>
-              {t("canDelegateFieldHint")}
-            </div>
 
             <div className="sentence-form">
               {t("sentencePart1")}

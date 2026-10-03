@@ -41,7 +41,7 @@ const INVENTORY: Array<[method: string, path: string, who: Who, purpose: string]
   ["POST", "/v1/keys", "admin", "Keys: issue"],
   ["POST", "/v1/keys/:id/rotate", "admin", "Keys: reset the secret and get the new skill paragraph"],
   ["POST", "/v1/keys/:id/revoke", "admin", "Keys: revoke"],
-  ["GET", "/v1/admin/keys/tree", "admin", "child-key tree (back end kept, shown read-only on the Keys page)"],
+  ["GET", "/v1/admin/keys/tree", "admin", "the child-key tree (back end kept, no UI)"],
   ["GET", "/v1/approvals", "admin", "Approvals: the list"],
   ["POST", "/v1/approvals/:id/approve", "admin", "Approvals: approve (needs the administrator login)"],
   ["POST", "/v1/approvals/:id/deny", "admin", "Approvals: deny"],

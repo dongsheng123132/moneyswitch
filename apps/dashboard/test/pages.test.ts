@@ -28,6 +28,7 @@ const BASE = "https://pay.example.com";
 const BAD_ORIGINS = ["http://moneyswitch_srv:4020", "http://example.com.:4020"];
 
 let MoneyKeysPage: typeof import("../src/pages/MoneyKeysPage.tsx").default;
+let NoKeysYet: typeof import("../src/pages/MoneyKeysPage.tsx").NoKeysYet;
 let LoginPage: typeof import("../src/pages/LoginPage.tsx").default;
 let ApprovalsModule: typeof import("../src/pages/ApprovalsPage.tsx");
 let BillsModule: typeof import("../src/pages/BillsPage.tsx");
@@ -48,7 +49,7 @@ let en: {
 let zhShell: (typeof import("../src/i18n/strings/shell.ts"))["shellStrings"]["zh"];
 
 before(async () => {
-  MoneyKeysPage = (await import("../src/pages/MoneyKeysPage.tsx")).default;
+  ({ default: MoneyKeysPage, NoKeysYet } = await import("../src/pages/MoneyKeysPage.tsx"));
   LoginPage = (await import("../src/pages/LoginPage.tsx")).default;
   ApprovalsModule = await import("../src/pages/ApprovalsPage.tsx");
   BillsModule = await import("../src/pages/BillsPage.tsx");
@@ -139,6 +140,21 @@ describe("Money Keys page", () => {
   it("renders with the normal address", () => {
     const html = render(h(MoneyKeysPage));
     assert.ok(html.includes(en.keys.createKeyBtn));
+  });
+
+  it("with no key yet it says so and offers 'Create your first key' (in both languages)", () => {
+    const html = render(h(NoKeysYet, { onCreate() {} }));
+    assert.ok(html.includes(en.keys.actionCreateFirst), "the button");
+    assert.ok(html.includes(en.keys.emptyNoKeysTitle));
+    assert.equal(en.keys.actionCreateFirst, "Create your first key");
+    const zh = render(h(NoKeysYet, { onCreate() {} }), "zh");
+    assert.ok(zh.includes("新建第一把 Key"));
+  });
+
+  it("there is no UI for child keys (SPEC.md §8): no 'allow sub-keys' option in the form, no tree, no sub-key labels", () => {
+    const page = fs.readFileSync(path.join(here, "../src/pages/MoneyKeysPage.tsx"), "utf8");
+    assert.ok(!/can_delegate|collapsedIds|keys-tree|sub-key|canDelegate/i.test(page), "the Keys page source mentions no delegation or tree");
+    assert.ok(!Object.keys(en.keys).some((k) => /delegate|createdByParent|childrenCount|expandRow|collapseRow/i.test(k)), "and the strings have none either");
   });
 });
 
