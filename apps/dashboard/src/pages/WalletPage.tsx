@@ -341,11 +341,11 @@ function ReplaceCard({ wallet, onReplaced }: { wallet: WalletInfo; onReplaced: (
     setError(null);
     try {
       const replaced = await replaceWallet(confirm.trim(), reason);
-      // The page learns about the new wallet BEFORE the words are put on screen: showing them for an address that is not the current
-      // one yet would make the page drop them as belonging to another wallet.
-      await onReplaced();
+      // The words exist nowhere else: put them away before anything else can go wrong. They are shown as soon as the page shows the
+      // new wallet (the refresh below), and held, never dropped, until then.
       freshPhrase.set(replaced.address, replaced.recovery_phrase);
       setConfirm("");
+      await onReplaced();
     } catch (err) {
       const code = err instanceof ApiError ? err.error : null;
       setError(

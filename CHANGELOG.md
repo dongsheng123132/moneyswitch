@@ -39,6 +39,11 @@ database is still **additive only**: no migration was added or removed, no table
   database in place and checks that the bundled migrations are byte-identical to the source ones.
 - **Removed: the Windows launchers** (`scripts/start-local.ps1`, `install-local-shortcut.ps1`, `local-server.mjs`,
   `docs/local-desktop.md`) and the routes only they used (`POST /v1/admin/local-link`, `POST /v1/local/claim`).
+- **The 12 words cannot be lost to a late poll.** The Dashboard polled the wallet every 3 seconds without caring in which order the answers
+  came back, and cleared a phrase whose address differed from the wallet on screen: a poll made before "Replace wallet" and answering after
+  the new words were shown wiped them, and nothing can show them again. Now `usePolling` applies answers in the order the requests were made
+  (a late older answer is dropped), and the phrase is cleared in exactly two places, the acknowledgement and signing out; for another wallet it is
+  only hidden. The replace flow puts the new words away before it reloads the page.
 - **Links never come from the request.** `approve_url`, the base of `/skill.md`, `public_base` in `/v1/admin/meta` and the first-run sign-in link
   are `MONEYSWITCH_PUBLIC_URL`, else the address the server listens on (`http://127.0.0.1:4020` by default), through one function
   (`apps/server/src/public-base.ts`). Before, the first three used the request's `Host`, so a forged `Host: phish.example` produced

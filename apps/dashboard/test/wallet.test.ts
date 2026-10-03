@@ -4,10 +4,16 @@
 // defaults, structure and the calls the buttons make are.
 import { describe, it, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { StaticRouter } from "react-router-dom/server";
 import type { WalletHealth, WalletInfo } from "../src/api.ts";
+import { Poller } from "../src/usePolling.ts";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
 
 const store = new Map<string, string>();
 const fakeStorage = {
@@ -25,6 +31,7 @@ const BASE_SEPOLIA = "eip155:84532";
 
 let WalletPage: typeof import("../src/pages/WalletPage.tsx");
 let freshPhrase: typeof import("../src/freshPhrase.ts").freshPhrase;
+let visibleFreshPhrase: typeof import("../src/freshPhrase.ts").visibleFreshPhrase;
 let api: typeof import("../src/api.ts");
 let LangProvider: typeof import("../src/i18n/index.tsx").LangProvider;
 let en: (typeof import("../src/i18n/strings/wallet.ts"))["walletStrings"]["en"];
@@ -32,7 +39,7 @@ let zh: (typeof import("../src/i18n/strings/wallet.ts"))["walletStrings"]["zh"];
 
 before(async () => {
   WalletPage = await import("../src/pages/WalletPage.tsx");
-  freshPhrase = (await import("../src/freshPhrase.ts")).freshPhrase;
+  ({ freshPhrase, visibleFreshPhrase } = await import("../src/freshPhrase.ts"));
   api = await import("../src/api.ts");
   LangProvider = (await import("../src/i18n/index.tsx")).LangProvider;
   en = (await import("../src/i18n/strings/wallet.ts")).walletStrings.en;
@@ -398,6 +405,65 @@ describe("acknowledging the words names the wallet they belong to", () => {
     assert.match(en.phraseAckStale, /replaced/i);
     assert.match(en.phraseAckStale, /nothing was recorded/i);
     assert.ok(zh.phraseAckStale.length > 10, "and in Chinese");
+  });
+});
+
+describe("the words are never lost to a mismatch: hidden for another wallet, kept until acknowledged or signed out", () => {
+  const entry = { address: ADDRESS, phrase: PHRASE };
+
+  it("visibleFreshPhrase: shown for the wallet they belong to (any letter case), for 'no wallet known yet', hidden for another wallet", () => {
+    assert.equal(visibleFreshPhrase(entry, ADDRESS), entry);
+    assert.equal(visibleFreshPhrase(entry, ADDRESS.toLowerCase()), entry);
+    assert.equal(visibleFreshPhrase(entry, null), entry);
+    assert.equal(visibleFreshPhrase(entry, OTHER_ADDRESS), null);
+    assert.equal(visibleFreshPhrase(null, ADDRESS), null);
+  });
+
+  it("a page that shows another wallet for a moment does not drop the words: they come back when the page catches up", () => {
+    freshPhrase.set(ADDRESS, PHRASE);
+    const stale = view(wallet({ address: OTHER_ADDRESS, health: { backup: "missing" }, backup_confirmed_at: null })); // a poll answered with the old wallet
+    assert.ok(!stale.includes('data-testid="phrase-card"'), "not shown for the other wallet");
+    assert.equal(freshPhrase.getFor(ADDRESS), PHRASE, "but still held");
+    const caughtUp = view(wallet({ health: { backup: "missing" }, backup_confirmed_at: null }));
+    assert.ok(caughtUp.includes('data-testid="phrase-card"'), "and shown as soon as the page shows the wallet they belong to");
+  });
+
+  it("THE RACE, end to end: a poll made before the replace answers late, after the new words were put on screen - the words survive", async () => {
+    const OLD = wallet({ address: OTHER_ADDRESS, health: { backup: "confirmed" } });
+    const NEW = wallet({ health: { backup: "missing" }, backup_confirmed_at: null });
+    const answers: Array<(w: WalletInfo) => void> = [];
+    const poller = new Poller<WalletInfo>(() => new Promise<WalletInfo>((resolve) => answers.push(resolve)), () => undefined);
+
+    const preSwap = poller.run(); // the page's own 3-second poll, in flight when "Replace wallet" is clicked
+    // ReplaceCard: the replace answered with the new wallet and its words; the page puts the words away and refreshes
+    freshPhrase.set(ADDRESS, PHRASE);
+    const refresh = poller.run();
+    answers[1]!(NEW);
+    await refresh;
+    // the old poll finally answers - with the wallet as it was before the swap
+    answers[0]!(OLD);
+    await preSwap;
+
+    const shown = poller.state.data!;
+    assert.equal(shown.address, ADDRESS, "the page shows the new wallet, not the one that was replaced");
+    assert.equal(visibleFreshPhrase(freshPhrase.get(), shown.address)?.phrase, PHRASE, "and the new words are still there to be shown");
+    assert.ok(view(shown).includes('data-testid="phrase-card"'));
+  });
+
+  it("freshPhrase.clear() is called from exactly two places: the acknowledgement and signing out - never because the addresses differ", () => {
+    const src = path.join(here, "../src");
+    const callers: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.(ts|tsx)$/.test(e.name) && /freshPhrase\.clear\(\)/.test(fs.readFileSync(p, "utf8"))) callers.push(path.relative(src, p).replace(/\\/g, "/"));
+      }
+    };
+    walk(src);
+    assert.deepEqual(callers.sort(), ["auth.tsx", "pages/WalletPage.tsx"]);
+    const page = fs.readFileSync(path.join(src, "pages/WalletPage.tsx"), "utf8");
+    assert.equal(page.split("freshPhrase.clear()").length - 1, 1, "in the page: only inside acknowledgeWords");
   });
 });
 
