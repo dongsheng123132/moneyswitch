@@ -117,6 +117,14 @@ wallet whose secret works, and a wrong secret is never blamed on the environment
 Before the server serves a request it also tidies up after a crash: stale temporary files are removed, and unlock secrets
 that belong to no live wallet are moved to `retired/`.
 
+That tidying can be wrong for a while: if `wallet.json` temporarily belongs to another key (a wrong mount, a restore of
+the wrong file), the secret of the right wallet is "an orphan" and is moved to
+`retired/orphan-wallet-unlock-<address>-<timestamp>.secret`. When the right `wallet.json` is back, the wallet would
+otherwise stay locked (`secret_missing`). So at startup, for an auto-unlock wallet whose secret file is missing, the
+orphans of **its own address** in `retired/` are tried (newest first) and the first one that really opens the live
+keystore is **moved back**; the log says so. One that does not open it is left alone. If nothing fits, the log of the
+still-locked wallet names the exact `retired/` files that were put aside, instead of only saying "restore from a backup".
+
 A locked **auto-unlock** wallet has no password to type: the Dashboard shows the reason and the way out (restore the
 secret file from a backup of the data folder, or *Replace wallet*) instead of a password form.
 
@@ -138,6 +146,21 @@ deleted first); the secret is installed before the swap or removed after it; a f
 back by renaming them over again. Operations on one data folder never overlap. At no point is there a keystore that
 nothing can open, and afterwards, when auto-unlock is turned off, **nothing on the server opens the key without the new
 password**.
+
+That last sentence needs one more rule, because `retired/` can hold an older copy of the *same* key. Replace a wallet by
+another and then replace it back (A to B to A) and `retired/` contains a copy of A together with A's old unlock secret:
+turn auto-unlock off with a password and that secret would still open the copy, i.e. open A without the password. So when
+the live key is in **password mode** and the password has just proved the live keystore reachable (auto-unlock turned
+off, a manual import or replace, the password entered at *Unlock*, or the startup password), every `.secret` in
+`retired/` that opens a retired copy of the live key is **removed**. This is the one place MoneySwitch deletes a
+credential: only inside `retired/`, only a secret that opens a copy of the key that is live right now, only after the
+password has proved it reachable (a *locked* password wallet is never cleaned up, because a retired pair may be the only
+way in), at most 100 decrypt attempts per look. Each removal is written to the audit log
+(`wallet.retired_secrets_removed`: the file names and what triggered it: `auto_unlock_off`, `import`, `replace`,
+`unlock` or `startup_password`) and returned in the response (`retired_secrets_removed`). A file that could not be removed,
+or one found while the wallet is still locked, is returned as `retired_secrets_still_open`, listed in
+`health.retired_secrets_open_live_key`, logged as a warning at startup and shown as a red row on the Wallet page until it
+is gone. For an auto-unlock wallet nothing is removed: its own secret opens it anyway.
 
 ## Replace wallet
 
@@ -161,12 +184,17 @@ built in:
 `POST /v1/admin/wallet/replace` with `confirm_address` (the current address, exactly) plus the body of *create* or
 *import* (with the same optional `expected_address`):
 
-- Refused with **409 `WALLET_BUSY`** while any request holds the wallet's signer, i.e. while a `/v1/fetch` or chat
-  payment is in flight (a few seconds to a few minutes). This is an in-process counter, not a database query: a request
-  takes a lease just before it can sign and gives it back when it finishes, however it ends. Locking the wallet is
-  refused the same way. As a second line of defence a signer checks, when it is asked to sign, that the wallet it came
-  from is still the live one; if the wallet was replaced after the request started, **nothing is signed**, the
-  reservation is released and the caller gets `WALLET_LOCKED` with `charged: "no"`.
+- **It waits for the payments in flight, refuses new ones meanwhile, and gives up after 60 s with 409 `WALLET_BUSY`.**
+  A request takes a lease on the signer only when a payment is about to be created (after the unpaid probe, after the
+  seller asked for money) and gives it back when the call ends, however it ends; a free resource, or a 402 that is never
+  paid, holds nothing. While a replace is waiting, **no new lease is handed out**: a request that reaches the point of
+  paying meanwhile is answered `WALLET_BUSY` with `charged: "no"` (`/v1/fetch`: `status: "error"`; the OpenAI-compatible
+  gateway: HTTP 503), with nothing reserved or signed, and can simply be retried a moment later. So steady traffic cannot
+  starve a replace. It waits up to 60 s for the leases that are already open; if payments are still in flight after
+  that, it answers **409 `WALLET_BUSY`** and changes nothing. The count is in-process, not a database query. Locking
+  the wallet is still refused at once, without waiting. As a second line of defence a signer checks, when it is asked to
+  sign, that the wallet it came from is still the live one; if the wallet was replaced after the request started,
+  **nothing is signed**, the reservation is released and the caller gets `WALLET_LOCKED` with `charged: "no"`.
 - The old `wallet.json` (and its secret, if there is one) are first **copied** into `<data folder>/retired/`, under names
   containing the old address and a timestamp, and compared; only then are the new files renamed *over* the live names, so
   `wallet.json` is never absent, not even for an instant. Nothing is ever deleted. The retirement (address, time, reason,
@@ -175,8 +203,10 @@ built in:
 - MoneyKeys, budgets, approvals, payment history and notification settings are untouched. On-chain reconciliation of
   older unknown payments keeps working: it uses the sender address stored on each payment, not the current wallet.
 - Funds in the old wallet stay at the old address. The Wallet page lists every retired wallet with its **live USDC
-  balance**. To recover them, import the old recovery phrase into MetaMask/OKX, or import the file from `retired/` with
-  its original password.
+  balance**. They can be recovered **only if** you separately kept the old wallet's recovery phrase or private key (import
+  it into MetaMask/OKX), or you remember its password (import the file from `retired/` with it). A wallet made by an
+  older release never showed a recovery phrase, so it has none to fall back on; an auto-unlock wallet has no password,
+  but its `retired/` copy is kept together with its unlock secret file.
 
 ## Payments interrupted by a restart
 
@@ -189,6 +219,13 @@ requests**, every payment still `reserved` from an earlier run is resolved:
 - nothing had been signed: it becomes `failed` (`RESTARTED_BEFORE_SIGNING`) and the budget is released.
 
 Both are written to the audit log (`payment.startup_sweep.*`).
+
+The sweep reads "no `auth_*`" as "nothing was signed", which is only true because MoneySwitch pays **with EIP-3009
+only** (`transferWithAuthorization`), the payload that carries the authorization's `from`, `nonce` and `validBefore`. A
+seller whose requirement says `extra.assetTransferMethod: "permit2"` would be signed by `@x402/evm` as a Permit2
+authorization, which has none of those, so a requirement is accepted only when `assetTransferMethod` is absent or exactly
+`"eip3009"`. Anything else is refused before anything is reserved or signed: `status: "denied"`, `code:
+"UNSUPPORTED_PAYMENT"`, `charged: "no"`. A seller that offers both is paid with its EIP-3009 option.
 
 ## Health
 
@@ -203,6 +240,7 @@ Both are written to the audit log (`payment.startup_sweep.*`).
 | `secret_file_present` | auto wallets: does the secret file exist *now* (`false` = the next restart leaves the wallet locked) |
 | `secret_protected` | `true` / `false` (red warning) / `null` (no secret on disk to protect); `secret_protection_detail` says why not |
 | `orphan_files` | `{ secrets, retired, wallet_file_missing }`: credential files that belong to no live wallet |
+| `retired_secrets_open_live_key` | password wallets: names of files in `retired/` whose unlock secret still opens the live wallet without its password (empty = none; they are removed when the password is entered) |
 | `backup` | `confirmed`, `missing`, or `not_applicable` (no phrase to confirm, or the offline demo) |
 | `float_limit` | `MONEYSWITCH_WALLET_FLOAT_LIMIT` in USDC (default `50`) |
 | `over_float_limit` | per enabled chain where the balance is known: is it above the limit |
@@ -240,18 +278,28 @@ PBKDF2; malformed input and excessive KDF work are rejected. Errors never echo w
 | `retired/` | everything that was replaced or left over, never deleted: `wallet-<address>-<timestamp>.json`, `wallet-unlock-<address>-<timestamp>.secret`, and `orphan-wallet-unlock-<address>-<timestamp>.secret` for a secret that belonged to no live wallet |
 
 There is no `wallet.json.bak-*`: turning auto-unlock on or off leaves no copy of the previous keystore, because a retired
-credential must not keep opening the key. Treat every file here as a private key; the `retired/` folder holds the
-credentials of the old wallets and is as sensitive as the live ones.
+credential must not keep opening the key (and a secret in `retired/` that still opens the live key is removed, see above).
+Treat every file here as a private key; the `retired/` folder holds the credentials of the old wallets and is as sensitive
+as the live ones.
+
+**Back this folder up as the account that owns it, and check the archive.** The folder is `0700` and its files `0600`,
+owned by the server's `node` account; the container runs with `cap_drop: ALL`, so **root there cannot read it**: a `tar`
+run with `--user root` prints "Permission denied" and still writes an archive, one that lacks `wallet.json` and the unlock
+secret. Use the command in `deploy/README.zh-CN.md` (`--user node`, or tar the volume from the host as root like
+`deploy/upgrade-us.sh`) and then run `sh deploy/check-backup.sh <archive.tgz>`. It only lists the archive (nothing is
+extracted, no secret is printed) and exits 1 unless `wallet.json` is inside and, for an auto-unlock wallet, the
+`wallet-unlock-<address>.secret` of **that** address (a password wallet has none; its password is what you must keep).
 
 ## If something goes wrong
 
 | Situation | What to do |
 | --- | --- |
-| Lost the password of a password-mode wallet (locked, perhaps never backed up) | You cannot open it, and you do not need to: *Replace wallet* works on a locked wallet and shows you the address to type (Wallet page → Danger zone, or the setup guide). Recover the old funds with the recovery phrase if you wrote it down, or with the file in `retired/` and the password if it turns up |
+| Lost the password of a password-mode wallet (locked, perhaps never backed up) | You cannot open it, and you do not need to: *Replace wallet* works on a locked wallet and shows you the address to type (Wallet page → Danger zone, or the setup guide). Recover the old funds with the recovery phrase or private key if you separately kept one, or with the file in `retired/` and the password if it turns up |
 | The Overview says auto-unlock is broken (`secret_missing`, `secret_wrong`, ...) | The Wallet page names the reason. Restore the secret file from a backup of the data folder, or if the wallet is open use *Repair*; otherwise *Replace wallet* |
 | `wallet.json` is missing but the Dashboard shows credential files | The data folder is probably mounted from the wrong place. Fix that first; do not create a new wallet over it unless you mean to |
 | The Overview says the unlock secret is not protected | Fix the folder permissions (or move the data folder to a local disk the server's account owns), restart, and check that the warning is gone. Meanwhile keep only a tiny float |
-| `409 WALLET_BUSY` on replace | A payment is in flight. Wait a few seconds to a few minutes and try again |
+| `409 WALLET_BUSY` on replace | Payments were still in flight after the replace had waited 60 s (and it refused new ones meanwhile). Nothing was changed; try again |
+| `WALLET_BUSY` on a payment (`/v1/fetch`: `status: "error"`, `charged: "no"`; gateway: HTTP 503) | A wallet replacement is waiting for the payments in flight; nothing was signed or charged. Retry once after a moment |
 | The server (or its disk) is gone | Create a new instance, import the **recovery phrase** (or private key). The address and funds come back |
 | You think the key leaked | Move the funds out with a wallet app using the phrase, then *Replace wallet* with reason *Suspected leak* |
 | You never confirmed the backup | Wallet page → *Finish the backup first* → *Show my recovery phrase*, write the words down, answer two |

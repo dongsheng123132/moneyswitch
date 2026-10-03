@@ -136,6 +136,41 @@ phrase. Full model: [`docs/wallet-setup.md`](docs/wallet-setup.md) and
     with the password" or "replace the wallet" instead of a "Show my recovery phrase" that cannot work.
   - `LocalWalletDriver.getSigner()` is gone: `leaseSigner()` is the only way to get a signer, so a future
     route cannot sign without being counted by replace and lock.
+- **Third review round** (eight more findings, found by fault injection; each reproduced as a failing test first):
+  - *"Nothing opens the key without the new password" is true after turning auto-unlock off.* A secret left in
+    `retired/` by an earlier replace of the same key (A to B to A) still opened a retired copy of it. Whenever a
+    password-mode key has just been proved reachable by its password (auto-unlock off, a manual import or replace,
+    *Unlock*, the startup password), every `retired/` secret that opens a retired copy of the live key is removed: the
+    only place a credential is deleted, only inside `retired/`, audited as `wallet.retired_secrets_removed` and returned
+    as `retired_secrets_removed`. A locked password wallet is never cleaned up (a retired pair may be the only way in);
+    what is left is flagged in `health.retired_secrets_open_live_key`, a startup warning and a red row on the Wallet page.
+  - *A replace cannot be starved.* A request takes its signer lease when a payment is about to be created (after the
+    unpaid probe), not at its start, so free resources and unpaid 402s hold nothing. While a replace waits, new leases are
+    refused (new error code `WALLET_BUSY`, `charged: "no"`, nothing reserved or signed; HTTP 503 on the gateway) and it
+    waits up to 60 s for the open ones before answering `409 WALLET_BUSY`. Locking is still refused at once.
+  - *The Windows ACL check reads SIDs.* Only SYSTEM's SDDL alias was understood, so a server running as Local Service,
+    Network Service or the built-in Administrator was told its own correctly protected folder was "not protected". The
+    ACL is now read back as SIDs and judged against exactly the current account and SYSTEM.
+  - *The ACL tool no longer blocks the event loop.* PowerShell runs through an async `execFile` with the same timeout;
+    requests are served while it runs, and a PowerShell that never answers is cut off and reported as not protected.
+  - *The documented backup actually contains the wallet.* `docker compose run --user root tar` cannot read the 0700 data
+    folder under `cap_drop: ALL` and silently wrote an archive without `wallet.json` and the unlock secret. The command
+    now runs as `node`, and the new `deploy/check-backup.sh` lists an archive and fails unless `wallet.json` (and, for
+    an auto-unlock wallet, the secret of the same address) is inside.
+  - *A replace that fails twice never strands the new secret.* If the database hook throws AND putting `wallet.json`
+    back fails, the undo removes the new secret only when the live keystore is the old one again.
+  - *Only EIP-3009 payments are signed.* The startup sweep reads "no `auth_*`" as "never signed", but `@x402/evm` signs a
+    Permit2 authorization (no `authorization` in the payload) for `extra.assetTransferMethod: "permit2"`. Such a
+    requirement, and any method other than absent or `"eip3009"`, is refused with `UNSUPPORTED_PAYMENT` and
+    `charged: "no"` before anything is reserved or signed; a seller offering both is paid with EIP-3009. An offer that
+    our own policy empties is now reported as `UNSUPPORTED_PAYMENT` (it used to surface as `UPSTREAM_ERROR`).
+  - *A secret tidied away while `wallet.json` belonged to another key comes back.* At startup an auto-unlock wallet
+    whose secret is missing tries the orphans of its own address in `retired/` and moves the one that opens it back
+    (logged); otherwise the log names the exact `retired/` files instead of "restore from a backup".
+  - Copy: the locked-wallet hints no longer promise that the old wallet's money "can be recovered with its recovery
+    phrase" (a legacy wallet never showed one): only if you separately kept the phrase or private key, or remember the
+    password. The Wallet page heading "One wallet - receives and pays" (一个钱包，收付一体) implied a seller side that
+    no longer exists and is now "Wallet: funding and payments" (钱包：充值与付款来源).
 - Tests: driver unit tests for every path above (including injected I/O failures
   at each step of the toggles and the replacement, and process-death sweeps), route tests,
   a real-`icacls` ACL test, an end-to-end test that kills the server process and starts it

@@ -192,22 +192,44 @@ The full model is in [wallet-setup.md](wallet-setup.md). What matters for securi
   byte for byte), then renames the new files over the live names, so `wallet.json`
   is never absent; a crash at any step leaves a pair that opens. A secret that
   belongs to no live wallet is moved to `retired/`, never unlinked. Turning
-  auto-unlock off leaves **no** copy of the old keystore (no `.bak`): afterwards
-  nothing on disk opens the key without the new password.
+  auto-unlock off leaves **no** copy of the old keystore (no `.bak`). One exception to
+  "never deleted", on purpose: an unlock secret in `retired/` that still opens a retired copy
+  of the key that is live right now (the key was replaced out and back in) is removed once the
+  password has proved the live keystore reachable, so that afterwards nothing on disk opens the
+  key without the new password. It is the only place a credential is deleted, only inside
+  `retired/`, and every removal is written to the audit log
+  (`wallet.retired_secrets_removed`). Whatever could not be removed, or was found while the
+  wallet is locked (a retired pair may be the only way in, so a locked wallet is never cleaned
+  up), is listed in `health.retired_secrets_open_live_key` and shown as a red row.
   `retired/` holds the credentials of old wallets and is as sensitive as the live ones.
 - **Imports keep only the key.** Importing a recovery phrase, a private key or a
   keystore stores the private key of that one account, never the phrase, a seed
   or a non-default derivation path. Even so, never import anything that also controls
   other funds: the key sits on this server's disk. Use the optional
   `expected_address` to refuse a key that is not the one you meant.
-- **A payment in flight pins the wallet.** A request takes a lease on the signer just
-  before it can sign and releases it when it finishes; replacing or locking the wallet
-  is refused (`409 WALLET_BUSY`) while any lease is open, and a signer whose wallet was
-  replaced or locked after the request started refuses to sign (nothing is signed,
-  nothing is charged).
+- **A payment in flight pins the wallet, but cannot starve a replace.** A request takes a
+  lease on the signer only when a payment is about to be created (a free resource or an
+  unpaid 402 holds nothing) and releases it when the call ends. Locking the wallet is refused
+  at once while a lease is open. A replace waits up to 60 s for the open leases while
+  **refusing new ones** (`WALLET_BUSY`, `charged: "no"`, nothing reserved or signed), so
+  steady traffic cannot keep it waiting for ever; if payments are still in flight after
+  that it answers `409 WALLET_BUSY` and changes nothing. A signer whose wallet was replaced
+  or locked after the request started refuses to sign (nothing is signed, nothing is
+  charged).
 - **A crash cannot strand budget.** Payments left `reserved` by a process that died
   are resolved before the next start serves anything: `unknown` if an authorization
   had been signed (the chain decides), `failed` if not (the budget is released).
+- **Only EIP-3009 payments are signed.** That sweep reads "no `auth_*` recorded" as "never
+  signed". `@x402/evm` signs a Permit2 authorization, which carries no `authorization`
+  (from / nonce / validBefore), for a requirement with `extra.assetTransferMethod:
+  "permit2"`, so such a requirement (and any method other than absent or `"eip3009"`) is
+  refused before anything is reserved or signed: `UNSUPPORTED_PAYMENT`, `charged: "no"`.
+- **Back up `/data` as its owner and check the archive.** The folder is `0700`, owned by the
+  server's `node` account, and the container drops all capabilities, so root cannot read it:
+  a `tar` run as root writes an archive without `wallet.json` and the unlock secret. Use
+  `--user node` (see `deploy/README.zh-CN.md`) and `sh deploy/check-backup.sh <archive>`,
+  which lists the archive and fails unless the wallet (and, for auto-unlock, the secret of
+  the same address) is inside. A backup of `/data` is as sensitive as the key itself.
 
 ## Do NOT
 
