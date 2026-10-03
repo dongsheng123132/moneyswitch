@@ -10,6 +10,7 @@ import {
   getStatus,
   ChatApiError,
 } from "./api";
+import { freshPhrase } from "./freshPhrase";
 
 interface AuthState {
   token: string | null; // admin token (ms_admin_…)
@@ -82,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    freshPhrase.clear(); // a just-created wallet's recovery phrase must not outlive the session
     clearToken();
     clearEmployeeKey();
     setTokenState(null);
