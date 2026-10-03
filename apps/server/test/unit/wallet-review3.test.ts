@@ -5,7 +5,7 @@ import path from "node:path";
 import { Wallet } from "ethers";
 import { LocalWalletDriver, unlockSecretPath, walletFilePath } from "@moneyswitch/wallet";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
-import { unlockWalletOnStartup } from "../../src/context.js";
+import { buildContext, unlockWalletOnStartup } from "../../src/context.js";
 
 // Cheap scrypt, no OS-level ACL work, and a short drain so a refused replace answers at once.
 const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false, drainTimeoutMs: 40 } as const;
@@ -101,5 +101,128 @@ describe("#8: startup says what happened to a secret that was moved to retired/"
     expect(lines.join("\n")).toMatch(/is missing/);
     expect(lines.join("\n")).toMatch(/backup of the data directory/i);
     expect(lines.join("\n")).not.toContain("retired/orphan");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// #1
+// ---------------------------------------------------------------------------------------------------------------
+
+describe("#1: the routes report what the driver removed from retired/, and health flags what it could not", () => {
+  const key = Wallet.createRandom();
+  async function sameKeyReplaced() {
+    expect((await post("/v1/admin/wallet/import", { kind: "private_key", private_key: key.privateKey })).statusCode).toBe(200);
+    const replaced = await post("/v1/admin/wallet/replace", { confirm_address: key.address, kind: "private_key", private_key: key.privateKey });
+    expect(replaced.statusCode).toBe(200);
+    return replaced.json();
+  }
+  const retiredSecretFiles = () => fs.readdirSync(path.join(t.tmpDir, "retired")).filter((f) => f.endsWith(".secret"));
+
+  it("OFF: the response names the removed files, /retired no longer claims a secret file, health flags nothing", async () => {
+    await sameKeyReplaced();
+    const before = (await get("/v1/admin/wallet/retired")).json();
+    expect(before.retired_wallets[0].has_secret_file).toBe(true);
+    const names = retiredSecretFiles();
+    expect(names.length).toBeGreaterThan(0);
+
+    const off = await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
+    expect(off.statusCode).toBe(200);
+    expect(off.json()).toMatchObject({ address: key.address, unlock_mode: "manual", auto_unlock_ok: null });
+    expect([...off.json().retired_secrets_removed].sort()).toEqual([...names].sort());
+    expect(off.json().retired_secrets_still_open).toBeUndefined();
+    expect(retiredSecretFiles()).toEqual([]);
+    expect((await get("/v1/admin/wallet/retired")).json().retired_wallets[0].has_secret_file).toBe(false);
+    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([]);
+  });
+
+  it("OFF in the ordinary case answers exactly what it always did (no new keys)", async () => {
+    await post("/v1/admin/wallet/create", {});
+    const off = await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
+    expect(Object.keys(off.json()).sort()).toEqual(["address", "auto_unlock_ok", "unlock_mode"]);
+  });
+
+  it("import with a password: the response names what it removed", async () => {
+    await sameKeyReplaced();
+    await post("/v1/admin/wallet/replace", { confirm_address: key.address });
+    fs.rmSync(path.join(t.tmpDir, "wallet.json")); // wallet.json lost; the key is imported again, this time protected by a password
+    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
+    const imported = await post("/v1/admin/wallet/import", { kind: "private_key", private_key: key.privateKey, password: "manual-pass-1" });
+    expect(imported.statusCode).toBe(200);
+    expect(imported.json().address).toBe(key.address);
+    expect(imported.json().retired_secrets_removed.length).toBeGreaterThan(0);
+  });
+
+  it("replace back to the same key in password mode: the response names what it removed", async () => {
+    await sameKeyReplaced();
+    const back = await post("/v1/admin/wallet/replace", { confirm_address: key.address, kind: "private_key", private_key: key.privateKey, password: "manual-pass-1" });
+    expect(back.statusCode).toBe(200);
+    expect(back.json().retired_secrets_removed.length).toBeGreaterThan(0);
+    expect(retiredSecretFiles()).toEqual([]);
+  });
+
+  it("a retired secret that cannot be removed is flagged in health (with its name) until the password is used", async () => {
+    await sameKeyReplaced();
+    const stuck = retiredSecretFiles()[0];
+    const realUnlink = fs.unlinkSync;
+    vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
+      if (String(file).endsWith(stuck)) throw Object.assign(new Error("access denied"), { code: "EPERM" });
+      return realUnlink(file);
+    }) as never);
+    const off = await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
+    vi.restoreAllMocks();
+    expect(off.statusCode).toBe(200); // the password is in place; this is a warning, not a failure
+    expect(off.json().retired_secrets_still_open).toEqual([stuck]);
+    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([stuck]);
+
+    // after a restart the wallet is locked: flagged, never cleaned up without the password
+    const lines = captureLogs();
+    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
+    await unlockWalletOnStartup(t.ctx.wallet, null);
+    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([stuck]);
+    expect(lines.join("\n")).toContain(stuck);
+    expect(fs.existsSync(path.join(t.tmpDir, "retired", stuck))).toBe(true);
+
+    expect((await post("/v1/admin/wallet/unlock", { password: "second-pass-2" })).statusCode).toBe(200);
+    expect((await walletInfo()).health.retired_secrets_open_live_key).toEqual([]);
+    expect(fs.existsSync(path.join(t.tmpDir, "retired", stuck))).toBe(false);
+  });
+
+  it("the startup log says it plainly when a locked password wallet can be opened from retired/", async () => {
+    await sameKeyReplaced();
+    const stuck = retiredSecretFiles()[0];
+    const realUnlink = fs.unlinkSync;
+    vi.spyOn(fs, "unlinkSync").mockImplementation(((file: fs.PathLike) => {
+      if (String(file).endsWith(stuck)) throw Object.assign(new Error("access denied"), { code: "EPERM" });
+      return realUnlink(file);
+    }) as never);
+    await post("/v1/admin/wallet/auto-unlock", { enabled: false, password: "second-pass-2" });
+    vi.restoreAllMocks();
+    const lines = captureLogs();
+    t.ctx.wallet = new LocalWalletDriver(t.tmpDir, FAST as never);
+    await unlockWalletOnStartup(t.ctx.wallet, null);
+    expect(lines.join("\n")).toMatch(/retired\/.*still opens this wallet without the password/i);
+  });
+});
+
+describe("#1: buildContext audits every deletion from retired/", () => {
+  it("the audit row names the files and what triggered it, never a secret", async () => {
+    const dir = fs.mkdtempSync(path.join(t.tmpDir, "ctx-"));
+    const config = { port: 18557, host: "127.0.0.1", dataDir: dir, dbFilePath: path.join(dir, "db.sqlite"), walletPassword: null };
+    captureLogs();
+    const ctx = await buildContext(config, { walletOptions: FAST });
+    try {
+      const key = Wallet.createRandom().privateKey;
+      await ctx.wallet.importFrom({ kind: "private_key", private_key: key });
+      await ctx.wallet.replaceWallet({ kind: "import", source: { kind: "private_key", private_key: key } });
+      const secretText = fs.readdirSync(path.join(dir, "retired")).filter((f) => f.endsWith(".secret")).map((f) => fs.readFileSync(path.join(dir, "retired", f), "utf-8").trim());
+      const off = await ctx.wallet.disableAutoUnlock("second-pass-2");
+      const rows = ctx.sqlite.prepare("SELECT actor, action, detail FROM audit_log WHERE action = 'wallet.retired_secrets_removed'").all() as Array<{ actor: string; action: string; detail: string }>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].actor).toBe("system");
+      expect(JSON.parse(rows[0].detail)).toEqual({ files: off.retiredSecretsRemoved, trigger: "auto_unlock_off" });
+      for (const secret of secretText) expect(rows[0].detail).not.toContain(secret);
+    } finally {
+      ctx.sqlite.close();
+    }
   });
 });

@@ -1,8 +1,8 @@
 import path from "node:path";
 import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
-import { LocalWalletDriver } from "@moneyswitch/wallet";
-import { bootstrapAdminToken, SetupTokenStore, sweepStaleReservations, type AuthorizationReader } from "@moneyswitch/core";
+import { LocalWalletDriver, type LocalWalletDriverOptions } from "@moneyswitch/wallet";
+import { bootstrapAdminToken, SetupTokenStore, sweepStaleReservations, writeAudit, type AuthorizationReader } from "@moneyswitch/core";
 import { createMultiNetworkAuthorizationReader } from "@moneyswitch/x402";
 import type { ServerConfig } from "./config.js";
 import type { NotifyRuntimeOptions } from "./notify/types.js";
@@ -54,6 +54,8 @@ export interface BuildContextOptions {
    * no extra way to obtain them.
    */
   onFirstRun?: (secrets: FirstRunSecrets) => void;
+  /** Test seam: options for the wallet driver (cheap scrypt, no OS-level ACL work, a short drain). Leave unset in production. */
+  walletOptions?: LocalWalletDriverOptions;
 }
 
 /**
@@ -122,6 +124,13 @@ export async function unlockWalletOnStartup(wallet: LocalWalletDriver, password:
   if (!report.unlocked && report.attempts.length === 0) {
     console.log("[moneyswitch] Wallet is locked: no unlock credential configured. Unlock it in the Dashboard (Wallet page).");
   }
+  const openers = wallet.retiredSecretsOpeningLiveKey;
+  if (openers.length > 0) {
+    console.error(
+      `[moneyswitch] WARNING: ${openers.map((f) => `retired/${f}`).join(", ")} still opens this wallet without the password (it is a copy of this wallet's old unlock secret). ` +
+        "It is removed as soon as the wallet is unlocked with its password."
+    );
+  }
   const protection = wallet.secretProtection;
   if (protection && !protection.ok) {
     console.error(
@@ -143,7 +152,11 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
         `${swept.toFailed.length} had nothing signed and were released, ${swept.toUnknown.length} were kept as unknown until the chain is checked.`
     );
   }
-  const wallet = new LocalWalletDriver(config.dataDir);
+  const wallet = new LocalWalletDriver(config.dataDir, {
+    ...opts.walletOptions,
+    // Credentials are only ever deleted from retired/, only when they merely open a copy of the live key, and every time it is written down.
+    onRetiredSecretsRemoved: ({ files, trigger }) => writeAudit(db, "system", "wallet.retired_secrets_removed", { files, trigger }),
+  });
 
   const setup = new SetupTokenStore();
   const setupBase = config.publicUrl?.replace(/\/+$/, "") || `http://${browsableHost(config.host)}:${config.port}`;

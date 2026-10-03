@@ -181,6 +181,7 @@ describe("health", () => {
       auto_unlock_ok: null,
       unlock_sources: [],
       secret_file_present: null,
+      retired_secrets_open_live_key: [],
       secret_protected: null,
       secret_protection_detail: null,
       orphan_files: { secrets: [], retired: 0, wallet_file_missing: false },

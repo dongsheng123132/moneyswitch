@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   confirmWalletBackup,
@@ -37,6 +39,11 @@ export interface WalletHealth {
   unlock_sources: Array<{ source: "env_or_file" | "auto"; ok: boolean; reason?: string }>;
   /** Auto wallets only: does the unlock secret file exist right now? (false = the next restart will leave the wallet locked.) */
   secret_file_present: boolean | null;
+  /**
+   * Password-mode wallets: retired/ unlock secrets that still open a retired copy of the live key, i.e. a way in WITHOUT the password
+   * (they are removed once the password has proved the wallet reachable; this lists what could not be removed yet). Empty = none.
+   */
+  retired_secrets_open_live_key: string[];
   /** false = the data directory / unlock secret could not be restricted to this user (red warning); null = nothing to protect. */
   secret_protected: boolean | null;
   secret_protection_detail: string | null;
@@ -192,6 +199,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       auto_unlock_ok: unlockMode === "manual" || unlockMode === "none" ? null : status.ok,
       unlock_sources: status.attempts.map((a) => ({ source: a.source, ok: a.ok, ...(a.reason ? { reason: a.reason } : {}) })),
       secret_file_present: protection === "auto" ? ctx.wallet.hasUnlockSecret() : null,
+      retired_secrets_open_live_key: ctx.wallet.retiredSecretsOpeningLiveKey,
       secret_protected: secretProtection ? secretProtection.ok : null,
       secret_protection_detail: secretProtection && !secretProtection.ok ? secretProtection.detail ?? "the protection could not be verified" : null,
       orphan_files: {
@@ -262,7 +270,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       // The operator brought the credential, so there is nothing for them to write down.
       recordWalletOrigin(ctx.db, imported.address, "imported", { backupConfirmed: true });
       writeAudit(ctx.db, "admin", "wallet.import", { address: imported.address, kind: source.kind, unlock_mode: imported.mode });
-      return reply.send({ address: imported.address });
+      return reply.send({ address: imported.address, ...retiredCleanup(imported) });
     } catch (e) {
       if (e instanceof WalletError && e.code === "EXPECTED_ADDRESS_MISMATCH") {
         return reply.status(400).send({ error: e.code, message: e.message });
@@ -370,9 +378,10 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       return reply.status(400).send({ error: `password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     }
     try {
-      const { address } = body.enabled ? await ctx.wallet.enableAutoUnlock() : await ctx.wallet.disableAutoUnlock(body.password as string);
+      const changed = body.enabled ? await ctx.wallet.enableAutoUnlock() : await ctx.wallet.disableAutoUnlock(body.password as string);
+      const { address } = changed;
       writeAudit(ctx.db, "admin", body.enabled ? "wallet.auto_unlock.enable" : "wallet.auto_unlock.disable", { address });
-      return reply.send({ address, unlock_mode: body.enabled ? "auto" : "manual", auto_unlock_ok: body.enabled ? true : null });
+      return reply.send({ address, unlock_mode: body.enabled ? "auto" : "manual", auto_unlock_ok: body.enabled ? true : null, ...retiredCleanup(changed) });
     } catch (e) {
       return sendWalletError(reply, e);
     }
@@ -445,6 +454,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
           reason,
           keystore_file: result.retired.keystoreFile,
         },
+        ...retiredCleanup(result),
       });
     } catch (e) {
       if (e instanceof WalletError && e.code === "INVALID_IMPORT") {
@@ -474,13 +484,25 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
           retired_at: r.retiredAt,
           reason: r.reason,
           keystore_file: r.keystoreFile,
-          has_secret_file: r.secretFile !== null,
+          // (a file that was deleted because it only opened a copy of the live key no longer counts)
+          has_secret_file: r.secretFile !== null && fs.existsSync(path.join(ctx.wallet.retiredDir, r.secretFile)),
           replaced_by: r.replacedBy,
           usdc_balance: balance === null ? null : formatMicrosToUsdc(balance),
         };
       }),
     });
   });
+}
+
+/**
+ * The extra fields of a response that cleaned up retired/ (present only when there is something to say): file names of retired unlock
+ * secrets that only opened a copy of the live key and were removed, and any that could not be removed and still do.
+ */
+function retiredCleanup(result: { address?: string; retiredSecretsRemoved?: string[]; retiredSecretsStillOpen?: string[] }) {
+  return {
+    ...(result.retiredSecretsRemoved?.length ? { retired_secrets_removed: result.retiredSecretsRemoved } : {}),
+    ...(result.retiredSecretsStillOpen?.length ? { retired_secrets_still_open: result.retiredSecretsStillOpen } : {}),
+  };
 }
 
 /** Maps a driver error to an HTTP status. The messages never contain a secret. */

@@ -71,6 +71,17 @@ export interface ImportedWallet {
   mode: UnlockMode;
   /** Always false: an import keeps only the account-0 private key, never a seed. */
   hasRecoveryPhrase: boolean;
+  /** Password mode: retired/ secret files that opened a retired copy of this very key, removed so nothing opens it without the password. */
+  retiredSecretsRemoved?: string[];
+  /** Such files that could NOT be removed and still open the key (see LocalWalletDriver.retiredSecretsOpeningLiveKey). */
+  retiredSecretsStillOpen?: string[];
+}
+
+/** What turning auto-unlock off reports besides the address (the extra fields only when there is something to say). */
+export interface AutoUnlockOffResult {
+  address: string;
+  retiredSecretsRemoved?: string[];
+  retiredSecretsStillOpen?: string[];
 }
 
 export type RevealedSecret =
@@ -100,6 +111,9 @@ export interface ReplaceResult {
   mnemonic?: string;
   hasRecoveryPhrase: boolean;
   retired: RetiredFiles;
+  /** Password mode: retired/ secret files that opened a retired copy of the new live key (the pair just retired, when it is the same key), removed. */
+  retiredSecretsRemoved?: string[];
+  retiredSecretsStillOpen?: string[];
 }
 
 export type WalletErrorCode =
@@ -147,7 +161,15 @@ export interface LocalWalletDriverOptions {
   protect?: false | Protector;
   /** Test seam: the PowerShell executable used on Windows. */
   powershellPath?: string;
+  /**
+   * Called when credentials were DELETED from retired/ because they only opened a copy of the live key (see
+   * retiredSecretsOpeningLiveKey), so the server can write an audit row. File names only, never contents.
+   */
+  onRetiredSecretsRemoved?: (event: { files: string[]; trigger: RetiredScrubTrigger }) => void;
 }
+
+/** What made the driver look through retired/ for secrets that open the live key. */
+export type RetiredScrubTrigger = "auto_unlock_off" | "import" | "replace" | "unlock" | "startup_password";
 
 /** A signer plus the lease that keeps the wallet from being replaced or locked while a request is using it. */
 export interface SignerLease {
@@ -183,6 +205,8 @@ export function retiredDirPath(dataDir = defaultDataDir()): string {
 export const DERIVATION_PATH = "m/44'/60'/0'/0/0";
 
 const AUTO_SCRYPT: ScryptParams = { N: 2 ** 14, r: 8, p: 1 };
+/** Upper bound on the decrypt attempts of one look through retired/ for secrets that open the live key. */
+const MAX_RETIRED_SCAN_ATTEMPTS = 100;
 const MARKER_KEY = "x-moneyswitch";
 const SECRET_NAME = /^wallet-unlock-(0x[0-9a-f]{40})\.secret$/;
 const TEMP_NAME = /^\.wallet(-unlock)?-[0-9a-f-]{36}\.tmp$/;
@@ -284,6 +308,15 @@ function removeQuietly(file: string): void {
   } catch {
     /* already gone */
   }
+}
+
+/** The optional fields of a result that cleaned up retired/ (present only when there is something to report). */
+function scrubReport(scrub: { removed: string[]; failed: string[] } | null): { retiredSecretsRemoved?: string[]; retiredSecretsStillOpen?: string[] } {
+  if (!scrub) return {};
+  return {
+    ...(scrub.removed.length ? { retiredSecretsRemoved: scrub.removed } : {}),
+    ...(scrub.failed.length ? { retiredSecretsStillOpen: scrub.failed } : {}),
+  };
 }
 
 /** Moves a file; across file systems (EXDEV) it is copied and the original removed only after the copy exists. */
@@ -415,6 +448,8 @@ export class LocalWalletDriver {
   private readonly protector: Protector | null;
   private unlockState: { unlockedBy: UnlockSource | null; attempts: UnlockAttempt[] } = { unlockedBy: null, attempts: [] };
   private protectionState: SecretProtection | null = null;
+  /** retired/ secret files that opened a retired copy of the live (password-mode) key at the last look: they are a way in without the password. */
+  private retiredOpeners: string[] = [];
 
   constructor(dataDir = defaultDataDir(), options: LocalWalletDriverOptions = {}) {
     this.dataDir = dataDir;
@@ -481,6 +516,15 @@ export class LocalWalletDriver {
       ok: unlockedBy ? true : attempts.length ? false : null,
       attempts: attempts.map((a) => ({ ...a })),
     };
+  }
+
+  /**
+   * Password-mode wallets: names (inside retired/) of unlock secrets that still open a retired copy of the live key, i.e. let anyone
+   * who can read the folder in without the password. They are removed whenever the password has just proved the live keystore
+   * reachable; this lists what could not be (or has not been, because the wallet is still locked). Empty for an auto-unlock wallet.
+   */
+  get retiredSecretsOpeningLiveKey(): string[] {
+    return [...this.retiredOpeners];
   }
 
   /** Result of the last check of the data directory + secret protection (ACL / modes); null = not applicable or not checked. */
@@ -555,7 +599,9 @@ export class LocalWalletDriver {
       const staged = await this.stage(wallet, mode, opts.password);
       this.publishNew(staged);
       this.adopt(staged);
-      return { address: wallet.address, mode, hasRecoveryPhrase: false };
+      // Adopting a key in password mode: retired copies of that key that open without the password go.
+      const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "import") : null;
+      return { address: wallet.address, mode, hasRecoveryPhrase: false, ...scrubReport(scrub) };
     });
   }
 
@@ -609,6 +655,8 @@ export class LocalWalletDriver {
       if (!wallet) throw new WalletError("UNLOCK_FAILED", "Failed to unlock wallet: invalid password or corrupted keystore");
       this.assertStillLive(wallet);
       this.adoptUnlocked(wallet);
+      // A human credential just opened the live keystore, so a retired copy of this key that opens without it adds nothing.
+      await this.scrubRetiredOpeners(live.json, "unlock").catch(() => undefined);
       return { address: wallet.address };
     });
   }
@@ -650,6 +698,7 @@ export class LocalWalletDriver {
         const wallet = await decryptWith(live.json, configured);
         if (wallet && this.stillLive(wallet)) {
           attempts.push({ source: "env_or_file", ok: true });
+          await this.scrubRetiredOpeners(live.json, "startup_password").catch(() => undefined); // the password just proved the live keystore reachable
           return finish(wallet, "env_or_file");
         }
         attempts.push({ source: "env_or_file", ok: false, reason: "env_wrong" });
@@ -676,6 +725,9 @@ export class LocalWalletDriver {
           attempts.push({ source: "auto", ok: false, reason: secret.reason });
         }
       }
+      // Still locked. A password wallet is not cleaned up without its password (a retired pair may be the only way in), but it is
+      // flagged when one of them opens it.
+      this.retiredOpeners = live.protection === "password" ? await this.findRetiredOpeners(live).catch(() => []) : [];
       return finish(null, null);
     });
   }
@@ -775,7 +827,7 @@ export class LocalWalletDriver {
    * Turns auto-unlock off: re-encrypts the unlocked wallet with `newPassword`, and only once that keystore is
    * verified and in place removes the old secret. Nothing is left on disk that opens the key without the password.
    */
-  async disableAutoUnlock(newPassword: string): Promise<{ address: string }> {
+  async disableAutoUnlock(newPassword: string): Promise<AutoUnlockOffResult> {
     return exclusive(this.dataDir, async () => {
       const wallet = this.requireUnlocked();
       const live = this.readLive();
@@ -786,7 +838,10 @@ export class LocalWalletDriver {
       this.swapProtection(live, staged);
       this.unlockState = { unlockedBy: null, attempts: [] };
       this.protectionState = null;
-      return { address: wallet.address };
+      // The password keystore is verified and in place. A retired copy of this very key (a same-key replace, A -> B -> A) that opens
+      // with its old auto secret would still be a way in without the password: remove those secrets.
+      const scrub = await this.scrubRetiredOpeners(staged.keystoreJson, "auto_unlock_off");
+      return { address: wallet.address, ...scrubReport(scrub) };
     });
   }
 
@@ -820,12 +875,15 @@ export class LocalWalletDriver {
       hooks.guard?.({ oldAddress: old.address, newAddress: wallet.address });
       const retired = this.swapForReplacement(old, staged, hooks);
       this.adopt(staged);
+      // Adopting a key in password mode (including the pair this very call just retired, when it is the same key).
+      const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "replace") : null;
       return {
         address: wallet.address,
         mode,
         ...(spec.kind === "create" ? { mnemonic: phraseOf(wallet)! } : {}),
         hasRecoveryPhrase: phraseOf(wallet) !== null,
         retired,
+        ...scrubReport(scrub),
       };
     });
   }
@@ -1093,6 +1151,77 @@ export class LocalWalletDriver {
   // -------------------------------------------------------------------------
   // internals: files
   // -------------------------------------------------------------------------
+
+  /** Retired secrets (names inside retired/) that open a retired AUTO keystore of the live key. Read-only; bounded work. */
+  private async findRetiredOpeners(live: LiveKeystore): Promise<string[]> {
+    let names: string[];
+    try {
+      names = fs.readdirSync(this.retiredDir);
+    } catch {
+      return [];
+    }
+    // Only keystores of this very key that were protected by an auto secret can be opened by one (a password keystore cannot).
+    const keystores: string[] = [];
+    for (const name of names.filter((n) => n.endsWith(".json"))) {
+      try {
+        const text = fs.readFileSync(path.join(this.retiredDir, name), "utf-8");
+        const parsed = JSON.parse(text);
+        const raw = String(parsed.address ?? "");
+        if (parsed?.[MARKER_KEY]?.protection === "auto" && getAddress(raw.startsWith("0x") ? raw : `0x${raw}`) === live.address) keystores.push(text);
+      } catch {
+        /* not a keystore of ours */
+      }
+    }
+    if (keystores.length === 0) return [];
+    const openers: string[] = [];
+    let attempts = 0;
+    for (const name of names.filter((n) => n.endsWith(".secret")).sort()) {
+      const secret = this.readSecret(path.join(this.retiredDir, name));
+      if (!secret.ok) continue;
+      for (const text of keystores) {
+        if (++attempts > MAX_RETIRED_SCAN_ATTEMPTS) return openers;
+        const wallet = await decryptWith(text, secret.secret);
+        if (wallet && wallet.address === live.address) {
+          openers.push(name);
+          break;
+        }
+      }
+    }
+    return openers;
+  }
+
+  /**
+   * Removes the retired secrets that open a retired copy of the live key. Only for a password-mode live keystore that the caller has
+   * just proved reachable (`verifiedJson` is exactly what wallet.json holds): a retired copy of the live key adds nothing, and
+   * leaving its auto secret behind would make "no password needed" true again. This is the one place a credential is deleted, and
+   * only inside retired/. Whatever cannot be removed is remembered (retiredSecretsOpeningLiveKey) for the health card.
+   */
+  private async scrubRetiredOpeners(verifiedJson: string, trigger: RetiredScrubTrigger): Promise<{ removed: string[]; failed: string[] }> {
+    const live = this.readLive();
+    if (!live || live.protection !== "password" || live.json !== verifiedJson) {
+      this.retiredOpeners = [];
+      return { removed: [], failed: [] };
+    }
+    const removed: string[] = [];
+    const failed: string[] = [];
+    for (const name of await this.findRetiredOpeners(live)) {
+      try {
+        removeFile(path.join(this.retiredDir, name));
+        removed.push(name);
+      } catch {
+        failed.push(name);
+      }
+    }
+    this.retiredOpeners = failed;
+    if (removed.length > 0) {
+      try {
+        this.options.onRetiredSecretsRemoved?.({ files: removed, trigger });
+      } catch {
+        /* an audit hook must never undo the clean-up */
+      }
+    }
+    return { removed, failed };
+  }
 
   /** Moves a credential that belongs to no live keystore into retired/ (never deletes it). Returns the new path. */
   private retireFile(file: string, kind: "orphan"): string {
