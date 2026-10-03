@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
-import { writeAudit } from "@moneyswitch/core";
+import { writeAudit, SetupTokenStore } from "@moneyswitch/core";
 import { getActiveNetwork, getEnabledNetworks, isMainnet, isMainnetNetwork } from "@moneyswitch/x402";
 import { getInstalledOutboundProxy, hostPortOf } from "@moneyswitch/net";
 import type { AppContext } from "../context.js";
@@ -35,6 +35,24 @@ const FAUCET_URL = "https://faucet.circle.com/";
  */
 export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
+  const localLinks = new SetupTokenStore({ ttlMs: 60_000 });
+
+  // Desktop launchers prove ownership with the existing admin credential.
+  // Being on loopback alone is never enough to log in.
+  app.post("/v1/admin/local-link", { preHandler: adminGuard }, async (req, reply) => {
+    reply.header("cache-control", "no-store");
+    if (ctx.config.host !== "127.0.0.1" && ctx.config.host !== "::1") return reply.status(404).send({ error: "LOCAL_ONLY" });
+    const admin = /^Bearer\s+(.+)$/.exec(req.headers.authorization ?? "")![1];
+    return reply.send({ path: `/local#${localLinks.issue(admin)}`, expires_in_seconds: 60 });
+  });
+
+  app.post("/v1/local/claim", async (req, reply) => {
+    reply.header("cache-control", "no-store");
+    const result = localLinks.claim((req.body as { local_token?: unknown } | null)?.local_token);
+    if (!result.ok) return reply.status(result.reason === "SETUP_INVALID" ? 403 : 410).send({ error: result.reason });
+    writeAudit(ctx.db, "admin", "local.login", {});
+    return reply.send({ admin_token: result.adminToken });
+  });
 
   app.get("/v1/setup/status", async (_req, reply) => {
     // `demo` only tells the Dashboard to render the "DEMO · simulated

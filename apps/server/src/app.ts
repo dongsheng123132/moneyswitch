@@ -36,6 +36,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
           'req.body.keystore',
           'req.body.source_password',
           'req.body.setup_token',
+          'req.body.local_token',
           'req.body["mk_live_"]',
         ],
         censor: "[REDACTED]",
