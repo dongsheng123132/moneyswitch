@@ -93,11 +93,7 @@ export const approvals = sqliteTable("approvals", {
   expiresAt: text("expires_at").notNull(),
   decidedAt: text("decided_at"),
   createdAt: text("created_at").notNull(),
-  /**
-   * Push-notification outbox: set once the outbox is done with this approval
-   * and at least one channel received it (NULL = still being delivered, given
-   * up on, or deliberately not announced). Per-channel state: approval_notify_deliveries.
-   */
+  /** LEGACY (push notifications, removed): no longer read or written; the column stays. */
   notifiedAt: text("notified_at"),
   /** Superseded by approval_notify_deliveries (migration 0006); no longer written, kept so 0005 databases stay valid. */
   notifyAttempts: integer("notify_attempts").notNull().default(0),
@@ -105,10 +101,7 @@ export const approvals = sqliteTable("approvals", {
   notifyAttemptAt: text("notify_attempt_at"),
 });
 
-/**
- * Push-notification outbox, one row per (approval, channel): attempts and
- * back-off, delivery time, or why nothing is sent (duplicate / rate_limited).
- */
+/** LEGACY (push-notification outbox, removed): the table stays in the database, nothing reads or writes it any more. */
 export const approvalNotifyDeliveries = sqliteTable(
   "approval_notify_deliveries",
   {
@@ -124,7 +117,7 @@ export const approvalNotifyDeliveries = sqliteTable(
   (t) => [primaryKey({ columns: [t.approvalId, t.channel] })]
 );
 
-/** Admin-editable push-notification channel settings (key/value; env vars override at read time). */
+/** LEGACY (push-notification channel settings, removed): the table stays in the database, nothing reads or writes it any more. */
 export const notifySettings = sqliteTable("notify_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),

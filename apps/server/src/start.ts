@@ -3,7 +3,6 @@ import type { ServerConfig } from "./config.js";
 import { buildContext, type AppContext, type BuildContextOptions } from "./context.js";
 import { buildApp } from "./app.js";
 import { startReconcileLoop } from "./reconcileJob.js";
-import { DEFAULT_NOTIFY_INTERVAL_MS, startNotifyLoop } from "./notify/outbox.js";
 import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork } from "@moneyswitch/x402";
 
 export { loadConfig, type ServerConfig } from "./config.js";
@@ -13,7 +12,7 @@ export interface RunningServer {
   app: FastifyInstance;
   ctx: AppContext;
   url: string;
-  /** Stops the reconcile and notification loops, closes the HTTP server and the SQLite handle. */
+  /** Stops the reconcile loop, closes the HTTP server and the SQLite handle. */
   close: () => Promise<void>;
 }
 
@@ -46,16 +45,12 @@ export async function startServer(config: ServerConfig, opts: BuildContextOption
     throw err;
   }
   const reconcile = startReconcileLoop(ctx, config.reconcileIntervalMs ?? 60_000);
-  // Approval push notifications: a decoupled outbox loop, never on the payment path.
-  const notify = startNotifyLoop(ctx, config.notifyIntervalMs ?? DEFAULT_NOTIFY_INTERVAL_MS);
   return {
     app,
     ctx,
     url: `http://${config.host.includes(":") ? `[${config.host}]` : config.host}:${config.port}`,
     close: async () => {
       reconcile.stop();
-      // Waits for an in-flight send to be aborted before the SQLite handle goes away.
-      await notify.stop();
       await app.close();
       try {
         ctx.sqlite.close();

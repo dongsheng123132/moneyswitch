@@ -61,12 +61,6 @@
   audit log records that it happened, never what.
 - The keystore encryption password (`MONEYSWITCH_WALLET_PASSWORD[_FILE]`
   or the `POST /v1/admin/wallet/unlock` body) is never logged.
-- Push-notification webhook URLs, tokens and the Feishu signing secret
-  (`docs/notifications.md`) are secrets: the admin API only returns them
-  masked, they are never logged or written to the audit log, and error text
-  returned by `POST /v1/admin/notify/test` is scrubbed of them. They are
-  stored as plain text in the server's SQLite file; use the
-  `MONEYSWITCH_NOTIFY_*` environment variables to keep them out of it.
 - Fastify's request logger redacts the `Authorization` header and known
   password fields (see `apps/server/src/app.ts`); `packages/core`'s
   `redact()` helper additionally truncates any string that looks like a

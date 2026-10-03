@@ -5,8 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { openDb } from "@moneyswitch/db";
-import type { AppContext } from "../../src/context.js";
-import { createApprovalOutbox } from "../../src/notify/outbox.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(here, "..", "..", "..", "..", "packages", "db", "migrations");
@@ -35,9 +33,21 @@ function buildBaseCommitDb(file: string) {
   return old;
 }
 
-describe("migration 0005_approval_notify on a database created by the base commit", () => {
-  it("upgrades in place: old approvals survive untouched, new columns default, a still-pending one gets notified once", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-notify-mig-"));
+function removeQuietly(dir: string) {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // WAL files may be briefly locked on Windows
+  }
+}
+
+/**
+ * Migrations 0005 / 0006 added the push-notification tables and columns. The notification feature is gone (SPEC.md §3), but the
+ * database is additive-only: the migrations stay, so an older database must still upgrade in place and lose nothing.
+ */
+describe("migrations 0005 / 0006 (unused push-notification tables) on older databases", () => {
+  it("a database created by the base commit upgrades in place: old approvals survive untouched, the new columns default", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-mig-"));
     const file = path.join(dir, "old.sqlite");
     try {
       const old = buildBaseCommitDb(file);
@@ -60,14 +70,14 @@ describe("migration 0005_approval_notify on a database created by the base commi
       insertApproval.run("ap-used", "used", iso(now - 3_600_000), iso(now - 3_500_000), iso(now - 4_000_000));
       old.close();
 
-      const { db, sqlite } = openDb({ filePath: file });
+      const { sqlite } = openDb({ filePath: file });
       try {
         const applied = (sqlite.prepare(`SELECT name FROM __migrations ORDER BY name`).all() as { name: string }[]).map((r) => r.name);
         expect(applied).toContain("0005_approval_notify.sql");
         expect(applied).toContain("0006_approval_notify_deliveries.sql");
         expect(sqlite.prepare(`SELECT count(*) AS n FROM approval_notify_deliveries`).get()).toEqual({ n: 0 });
 
-        const cols = (sqlite.prepare(`PRAGMA table_info(approvals)`).all() as { name: string; notnull: number; dflt_value: string | null }[]);
+        const cols = sqlite.prepare(`PRAGMA table_info(approvals)`).all() as { name: string; notnull: number; dflt_value: string | null }[];
         expect(cols.find((c) => c.name === "notified_at")).toMatchObject({ notnull: 0 });
         expect(cols.find((c) => c.name === "notify_attempts")).toMatchObject({ notnull: 1, dflt_value: "0" });
         expect(cols.find((c) => c.name === "notify_attempt_at")).toMatchObject({ notnull: 0 });
@@ -82,34 +92,6 @@ describe("migration 0005_approval_notify on a database created by the base commi
           { id: "ap-stale-pending", status: "pending", amount: 150000, url: "https://api.example.com/old?x=1", notified_at: null, notify_attempts: 0, notify_attempt_at: null },
           { id: "ap-used", status: "used", amount: 150000, url: "https://api.example.com/old?x=1", notified_at: null, notify_attempts: 0, notify_attempt_at: null },
         ]);
-
-        // The upgraded database works with the outbox: only the genuinely pending, unexpired approval is announced.
-        const sent: string[] = [];
-        const ctx: AppContext = {
-          db,
-          sqlite,
-          wallet: {} as never,
-          config: { port: 0, host: "127.0.0.1", dataDir: ".", dbFilePath: file, walletPassword: null },
-          notify: {
-            env: { MONEYSWITCH_NOTIFY_WEBHOOK_URL: "http://hook.test/x" },
-            log: { info: () => undefined, warn: () => undefined },
-            fetch: (async (_u: string, init: RequestInit) => {
-              sent.push(JSON.parse(String(init.body)).approval.id);
-              return new Response("", { status: 200 });
-            }) as unknown as typeof fetch,
-          },
-        };
-        const outbox = createApprovalOutbox(ctx);
-        await outbox.tick();
-        await outbox.tick();
-        expect(sent).toEqual(["ap-pending"]);
-        expect(sqlite.prepare(`SELECT notified_at FROM approvals WHERE id = 'ap-pending'`).get()).toEqual({
-          notified_at: expect.any(String),
-        });
-        // per-channel state exists only for the approval the outbox actually looked at
-        expect(sqlite.prepare(`SELECT approval_id, channel, kind, attempts, skipped FROM approval_notify_deliveries`).all()).toEqual([
-          { approval_id: "ap-pending", channel: "webhook", kind: "approval", attempts: 1, skipped: null },
-        ]);
       } finally {
         sqlite.close();
       }
@@ -120,19 +102,15 @@ describe("migration 0005_approval_notify on a database created by the base commi
       expect(again.sqlite.prepare(`SELECT count(*) AS n FROM approvals`).get()).toEqual({ n: 4 });
       again.sqlite.close();
     } finally {
-      try {
-        fs.rmSync(dir, { recursive: true, force: true });
-      } catch {
-        // WAL files may be briefly locked on Windows
-      }
+      removeQuietly(dir);
     }
   });
 
-  it("0006 upgrades a database that already ran 0005 (first version of the outbox) in place", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-notify-mig6-"));
+  it("0006 upgrades a database that already ran 0005 in place and loses nothing", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-mig6-"));
     const file = path.join(dir, "v5.sqlite");
     try {
-      // a database as the first outbox version leaves it: migrations 0000..0005, one approval already announced, one mid-retry
+      // a database as the first outbox version left it: migrations 0000..0005, one approval already announced, one mid-retry
       const old = new Database(file);
       old.pragma("journal_mode = WAL");
       old.exec(`CREATE TABLE IF NOT EXISTS __migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`);
@@ -160,7 +138,7 @@ describe("migration 0005_approval_notify on a database created by the base commi
       insertApproval.run("ap-unannounced", "https://api.example.com/b", iso(now + 5 * 60_000), iso(now - 60_000), null, 2, iso(now - 50_000));
       old.close();
 
-      const { db, sqlite } = openDb({ filePath: file });
+      const { sqlite } = openDb({ filePath: file });
       try {
         const applied = (sqlite.prepare(`SELECT name FROM __migrations ORDER BY name`).all() as { name: string }[]).map((r) => r.name);
         // 0005 stays recorded, 0006 is applied right after it (later migrations may follow)
@@ -172,36 +150,11 @@ describe("migration 0005_approval_notify on a database created by the base commi
           { id: "ap-announced", announced: 1, notify_attempts: 1 },
           { id: "ap-unannounced", announced: 0, notify_attempts: 2 },
         ]);
-
-        const sent: string[] = [];
-        const ctx: AppContext = {
-          db,
-          sqlite,
-          wallet: {} as never,
-          config: { port: 0, host: "127.0.0.1", dataDir: ".", dbFilePath: file, walletPassword: null },
-          notify: {
-            env: { MONEYSWITCH_NOTIFY_WEBHOOK_URL: "http://hook.test/x" },
-            log: { info: () => undefined, warn: () => undefined },
-            fetch: (async (_u: string, init: RequestInit) => {
-              sent.push(JSON.parse(String(init.body)).approval.id);
-              return new Response("", { status: 200 });
-            }) as unknown as typeof fetch,
-          },
-        };
-        const outbox = createApprovalOutbox(ctx);
-        await outbox.tick();
-        await outbox.tick();
-        // the one the first version had not announced is announced (once); the announced one is left alone
-        expect(sent).toEqual(["ap-unannounced"]);
       } finally {
         sqlite.close();
       }
     } finally {
-      try {
-        fs.rmSync(dir, { recursive: true, force: true });
-      } catch {
-        // WAL files may be briefly locked on Windows
-      }
+      removeQuietly(dir);
     }
   });
 

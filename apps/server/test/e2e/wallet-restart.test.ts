@@ -72,7 +72,6 @@ async function boot(dataDir: string, extraEnv: Record<string, string> = {}): Pro
       MONEYSWITCH_PORT: String(port),
       MONEYSWITCH_HOST: "127.0.0.1",
       MONEYSWITCH_RECONCILE_INTERVAL_MS: "0",
-      MONEYSWITCH_NOTIFY_INTERVAL_MS: "0",
       MONEYSWITCH_PROXY: "off",
       MONEYSWITCH_TESTNET_RPC_URL: "http://127.0.0.1:1", // closed port: balance reads fail fast, nothing leaves the machine
       LOG_LEVEL: "warn",

@@ -25,7 +25,7 @@ async function start() {
     env: { ...process.env, MONEYSWITCH_NETWORKS: 'eip155:10143,eip155:84532', MONEYSWITCH_DEFAULT_NETWORK: 'eip155:10143',
       MONEYSWITCH_PUBLIC_URL: base, MONEYSWITCH_TESTNET_RPC_URL: 'http://127.0.0.1:1',
       MONEYSWITCH_WALLET_PASSWORD: '', MONEYSWITCH_WALLET_PASSWORD_FILE: '',
-      MONEYSWITCH_NOTIFY_INTERVAL_MS: '0', MONEYSWITCH_RECONCILE_INTERVAL_MS: '0' },
+      MONEYSWITCH_RECONCILE_INTERVAL_MS: '0' },
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   });
   proc.stdout.on('data', (chunk) => { output += chunk; });

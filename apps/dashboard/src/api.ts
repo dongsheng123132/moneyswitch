@@ -220,60 +220,6 @@ export async function denyApproval(id: string): Promise<{ id: string; status: st
 }
 
 // ---------------------------------------------------------------------------
-// Approval push notifications (Feishu / WeCom / Telegram / generic webhook)
-// ---------------------------------------------------------------------------
-
-export type NotifyChannelId = "feishu" | "wecom" | "telegram" | "webhook";
-
-export interface NotifyFieldView {
-  set: boolean;
-  /** Masked secret (never the full value), or null. */
-  masked: string | null;
-  /** Plain value, only for non-secret fields (Telegram chat id). */
-  value?: string | null;
-  /** "env" = supplied by a MONEYSWITCH_NOTIFY_* variable on the server (read-only here). */
-  source: "env" | "db" | null;
-}
-
-export interface NotifySettingsView {
-  channels: {
-    feishu: { configured: boolean; webhook: NotifyFieldView; secret: NotifyFieldView };
-    wecom: { configured: boolean; webhook: NotifyFieldView };
-    telegram: { configured: boolean; bot_token: NotifyFieldView; chat_id: NotifyFieldView };
-    webhook: { configured: boolean; url: NotifyFieldView };
-  };
-  /** The link put into messages ({MONEYSWITCH_PUBLIC_URL}/approvals), or null when no public URL is configured. */
-  approve_url: string | null;
-}
-
-/** Only the fields you send are changed; "" clears one. */
-export interface NotifyPatch {
-  feishu?: { webhook?: string; secret?: string };
-  wecom?: { webhook?: string };
-  telegram?: { bot_token?: string; chat_id?: string };
-  webhook?: { url?: string };
-}
-
-export interface NotifyTestResult {
-  channel: NotifyChannelId;
-  ok: boolean;
-  error?: string;
-}
-
-export async function getNotifySettings(): Promise<NotifySettingsView> {
-  return request<NotifySettingsView>("/v1/admin/notify");
-}
-
-export async function putNotifySettings(patch: NotifyPatch): Promise<NotifySettingsView> {
-  return request<NotifySettingsView>("/v1/admin/notify", { method: "PUT", body: JSON.stringify(patch) });
-}
-
-export async function testNotify(): Promise<NotifyTestResult[]> {
-  const res = await request<{ results: NotifyTestResult[] }>("/v1/admin/notify/test", { method: "POST" });
-  return res.results;
-}
-
-// ---------------------------------------------------------------------------
 // Usage / payments
 // ---------------------------------------------------------------------------
 
