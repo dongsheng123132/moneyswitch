@@ -5,6 +5,8 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import Database from "better-sqlite3";
+import { Wallet as EthersWallet } from "ethers";
 
 /**
  * The reason this feature exists: a restart must not lock the wallet. These tests run the REAL server
@@ -216,6 +218,94 @@ describe("a restart does not lock the wallet", () => {
     const third = await boot(dataDir);
     expect((await api(third, token, "GET", "/v1/admin/wallet")).json).toMatchObject({ address: created.address, unlocked: true, health: { unlock_mode: "auto", auto_unlock_ok: true } });
   });
+
+  it(
+    "a legacy password wallet whose password is LOST (locked, backup never confirmed) can be replaced: nothing is decrypted, the old file is kept, the new wallet opens by itself, keys and history stay",
+    { timeout: 180_000 },
+    async () => {
+      const dataDir = newDataDir();
+
+      // --- the instance as it was: a fresh data dir with an agent key (this boot only creates the database)
+      const first = await boot(dataDir);
+      const token = first.adminToken!;
+      const key = (
+        await api(first, token, "POST", "/v1/keys", { name: "agent", total_budget: "5", daily_budget: "1", per_request_limit: "0.5", allowed_hosts: ["api.example.com:443"] })
+      ).json as { id: string };
+      await first.stop();
+
+      // --- what the PREVIOUS release left behind: ethers' own password keystore (HDNodeWallet.encrypt: recovery phrase inside, no
+      // MoneySwitch marker, no unlock secret), a password that nobody will ever pass again, and payment history
+      const lostPassword = "the password nobody remembers any more";
+      const legacy = EthersWallet.createRandom();
+      const legacyKeystore = await legacy.encrypt(lostPassword);
+      fs.writeFileSync(path.join(dataDir, "wallet.json"), legacyKeystore);
+      const sqlite = new Database(path.join(dataDir, "moneyswitch.sqlite"));
+      const insert = sqlite.prepare(
+        "INSERT INTO payments (id, key_id, url, host, method, network, asset, pay_to, amount, status, created_at, updated_at, kind, auth_from, auth_nonce, auth_valid_before) " +
+          "VALUES (?, ?, 'https://api.example.com/x', 'api.example.com:443', 'GET', 'eip155:10143', '0xa', '0xb', 10000, ?, ?, ?, 'fetch', ?, ?, ?)"
+      );
+      const stamp = "2026-09-01T00:00:00.000Z";
+      insert.run("hist-settled", key.id, "settled", stamp, stamp, null, null, null);
+      insert.run("hist-unknown", key.id, "unknown", stamp, stamp, legacy.address, "0x" + "11".repeat(32), 1_000);
+      sqlite.close();
+
+      // --- the restart, exactly like the US testnet instance: an EMPTY password file, no unlock secret, no credential at all
+      const emptyFile = path.join(dataDir, "..", "ms-empty-password-" + path.basename(dataDir));
+      fs.writeFileSync(emptyFile, "");
+      try {
+        const second = await boot(dataDir, { MONEYSWITCH_WALLET_PASSWORD: "", MONEYSWITCH_WALLET_PASSWORD_FILE: emptyFile });
+        const locked = (await api(second, token, "GET", "/v1/admin/wallet")).json;
+        expect(locked).toMatchObject({ address: legacy.address, unlocked: false, has_keystore: true, has_recovery_phrase: true });
+        expect(locked.health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [], backup: "missing" });
+
+        // the dead end the operator was in: no password to unlock with, a phrase that cannot be shown while locked, so a backup that
+        // can never be confirmed (and a dashboard that therefore shows no address)
+        expect((await api(second, token, "POST", "/v1/admin/wallet/reveal", { confirm_address: legacy.address })).status).toBe(409);
+        expect((await api(second, token, "POST", "/v1/admin/wallet/backup/confirm", { positions: [1, 2], words: ["a", "b"] })).status).toBe(409);
+        expect((await api(second, token, "POST", "/v1/admin/wallet/unlock", { password: "a wrong guess" })).status).toBe(400);
+
+        // --- replace it: the address is all that is asked for; the old file is only MOVED, nothing is decrypted
+        const replaced = await api(second, token, "POST", "/v1/admin/wallet/replace", { confirm_address: legacy.address, reason: "lost_password" });
+        expect(replaced.status).toBe(200);
+        const next = replaced.json as { address: string; unlock_mode: string; recovery_phrase: string; retired: { address: string; reason: string; keystore_file: string } };
+        expect(next.address).not.toBe(legacy.address);
+        expect(next.unlock_mode).toBe("auto");
+        expect(next.recovery_phrase.split(" ")).toHaveLength(12);
+        expect(next.retired).toMatchObject({ address: legacy.address, reason: "lost_password" });
+
+        // the new wallet is open right away, protected, and waiting for its own backup check
+        const now = (await api(second, token, "GET", "/v1/admin/wallet")).json;
+        expect(now).toMatchObject({ address: next.address, unlocked: true });
+        expect(now.health).toMatchObject({ protection: "auto", unlock_mode: "auto", auto_unlock_ok: true, backup: "missing", secret_protected: true });
+        expect(JSON.stringify(now.health.retired_wallets)).toContain(legacy.address);
+
+        // the old file is in retired/ byte for byte, and it is still the genuine article: the lost password would open it
+        const kept = fs.readFileSync(path.join(dataDir, "retired", next.retired.keystore_file), "utf-8");
+        expect(kept).toBe(legacyKeystore);
+        expect(JSON.parse(fs.readFileSync(path.join(dataDir, "wallet.json"), "utf-8")).address.toLowerCase().replace("0x", "")).toBe(next.address.toLowerCase().replace("0x", ""));
+        expect((await EthersWallet.fromEncryptedJson(kept, lostPassword)).address).toBe(legacy.address);
+        expect(fs.readdirSync(dataDir).filter((f) => f.startsWith("wallet-unlock-"))).toEqual(["wallet-unlock-" + next.address.toLowerCase() + ".secret"]);
+
+        // keys, budgets and history are exactly as they were; old unknown payments still point at the old sender for reconcile
+        const keys = (await api(second, token, "GET", "/v1/keys")).json as { keys: Array<{ id: string }> };
+        expect(keys.keys.map((k) => k.id)).toEqual([key.id]);
+        const usage = (await api(second, token, "GET", "/v1/admin/usage")).json as { payments: Array<{ id: string; status: string }> };
+        expect(Object.fromEntries(usage.payments.map((p) => [p.id, p.status]))).toEqual({ "hist-settled": "settled", "hist-unknown": "unknown" });
+        const retired = (await api(second, token, "GET", "/v1/admin/wallet/retired")).json;
+        expect(retired.retired_wallets[0]).toMatchObject({ address: legacy.address, has_secret_file: false, replaced_by: next.address });
+
+        // nothing secret in the process output: not the lost password, the new phrase, or the token
+        for (const hidden of [lostPassword, next.recovery_phrase, token]) expect(second.output()).not.toContain(hidden);
+        await second.stop();
+
+        // --- and after another restart the new wallet is open again without any credential
+        const third = await boot(dataDir);
+        expect((await api(third, token, "GET", "/v1/admin/wallet")).json).toMatchObject({ address: next.address, unlocked: true, health: { protection: "auto", unlock_mode: "auto" } });
+      } finally {
+        fs.rmSync(emptyFile, { force: true });
+      }
+    }
+  );
 
   it("replace -> restart: the new wallet comes back unlocked on its own, the old files stay in retired/, keys and history are still there", async () => {
     const dataDir = newDataDir();
