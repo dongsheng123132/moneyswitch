@@ -662,18 +662,13 @@ export class LocalWalletDriver {
   }
 
   /**
-   * A signer bound to the wallet that is unlocked RIGHT NOW. It checks at signTypedData time that this is still the
-   * wallet in use and throws WALLET_CHANGED (before anything is signed) if it was replaced or locked since. It holds
-   * no lease: use leaseSigner() for a request that must keep the wallet from being replaced under it.
-   */
-  getSigner(): EvmTypedDataSigner | null {
-    const wallet = this.unlockedWallet;
-    return wallet ? this.makeSigner(wallet, this.epoch) : null;
-  }
-
-  /**
-   * getSigner() plus an in-flight lease: replace and lock refuse with WALLET_BUSY while any lease is open. Take it
-   * before the first byte of a payment request goes out and release it in a `finally` when the request is over.
+   * THE way to get a signer: a signer for the wallet that is unlocked right now, plus an in-flight lease. Replace and
+   * lock refuse with WALLET_BUSY while any lease is open. Take it before the first byte of a payment request goes out
+   * and release it in a `finally` when the request is over.
+   *
+   * There is deliberately no lease-free variant (an earlier getSigner() was one): a route that took a signer without a
+   * lease would silently opt out of the WALLET_BUSY protection. The signer also checks at signTypedData time that its
+   * wallet is still the one in use, and throws WALLET_CHANGED before signing if it was replaced or locked since.
    */
   leaseSigner(): SignerLease | null {
     const wallet = this.unlockedWallet;

@@ -445,28 +445,45 @@ describe("M5: a signer obtained before a replace cannot sign after it", () => {
     message: { n: 1n },
   };
 
-  it("with the guard bypassed (a plain signer, no lease), the stale signer refuses to sign after replace", async () => {
+  it("with the guard bypassed (a signer that outlived its lease), the stale signer refuses to sign after replace", async () => {
     const old = await autoWallet("m5-stale");
-    const signer = old.driver.getSigner()!;
+    // The lease is given back at once, so nothing stops the replace below: the "guard bypassed" situation the epoch check exists for.
+    const lease = old.driver.leaseSigner()!;
+    const signer = lease.signer;
+    lease.release();
     await expect(signer.signTypedData(typed)).resolves.toMatch(/^0x/); // fine while current
     await old.driver.replaceWallet({ kind: "create" });
     const e = await signer.signTypedData(typed).then(() => null, (err) => err);
     expect(e, "the retired key must not sign any more").toBeInstanceOf(WalletError);
     expect((e as WalletError).code).toBe("WALLET_CHANGED");
     // a fresh signer signs with the NEW wallet
-    const fresh = old.driver.getSigner()!;
+    const freshLease = old.driver.leaseSigner()!;
+    const fresh = freshLease.signer;
     expect(fresh.address).toBe(old.driver.getAddress());
     expect(fresh.address).not.toBe(old.address);
     await expect(fresh.signTypedData(typed)).resolves.toMatch(/^0x/);
+    freshLease.release();
   });
 
   it("a stale signer also refuses after lock()", async () => {
     const old = await autoWallet("m5-lock");
-    const signer = old.driver.getSigner()!;
+    const lease = old.driver.leaseSigner()!;
+    const signer = lease.signer;
+    lease.release();
     old.driver.lock();
     const e = await signer.signTypedData(typed).then(() => null, (err) => err);
     expect((e as WalletError)?.code).toBe("WALLET_CHANGED");
-    expect(old.driver.getSigner()).toBeNull();
+    expect(old.driver.leaseSigner()).toBeNull();
+  });
+
+  it("there is no way to take a signer without a lease: the driver has no getSigner(), only leaseSigner()", () => {
+    // A route that wants to sign has to go through leaseSigner(), so replace and lock can always see it. (getSigner() used to hand
+    // out an unleased signer; a future route using it would have silently opted out of the WALLET_BUSY protection.)
+    expect("getSigner" in LocalWalletDriver.prototype).toBe(false);
+    expect(typeof LocalWalletDriver.prototype.leaseSigner).toBe("function");
+    // (makeSigner is the driver's private factory; leaseSigner is the only member that hands a signer out)
+    const handingOutASigner = Object.getOwnPropertyNames(LocalWalletDriver.prototype).filter((name) => /signer/i.test(name) && name !== "leaseSigner" && name !== "makeSigner");
+    expect(handingOutASigner).toEqual([]);
   });
 
   it("an open lease makes replace refuse with WALLET_BUSY (nothing touched); releasing it lets replace through", async () => {
@@ -540,7 +557,11 @@ describe("LATENT: unlock() runs under the same lock as replace and verifies the 
     expect(slow.getAddress()).toBe(newAddress);
     expect(drv(dir).getAddress()).toBe(newAddress);
     expect(outcome).toBeTruthy();
-    if (slow.isUnlocked()) expect(slow.getSigner()!.address).toBe(newAddress);
+    if (slow.isUnlocked()) {
+      const lease = slow.leaseSigner()!;
+      expect(lease.signer.address).toBe(newAddress);
+      lease.release();
+    }
   });
 
   it("unlock() refuses a keystore that changed on disk while it was being decrypted", async () => {

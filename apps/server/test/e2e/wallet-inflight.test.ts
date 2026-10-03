@@ -156,7 +156,9 @@ describe("a payment in flight keeps the wallet from being replaced", () => {
 describe("a signer that outlived its wallet refuses to sign", () => {
   it("charged no, the reservation is released, the seller never sees a payment, and the next request signs with the new wallet", async () => {
     const key = await createKey();
-    const stale = wallet.getSigner()!;
+    const staleLease = wallet.leaseSigner()!;
+    const stale = staleLease.signer;
+    staleLease.release(); // given back at once: the replace below is allowed, and the signer outlives its wallet
     const oldAddress = wallet.getAddress()!;
     // no lease is open here, so the replace is allowed: this is the "guard bypassed" situation the epoch check exists for
     const replaced = await adminPost("/v1/admin/wallet/replace", { confirm_address: oldAddress });
@@ -210,7 +212,9 @@ describe("the OpenAI-compatible gateway holds the lease too", () => {
 
     // 2. a stale signer (replaced after it was taken) refuses to sign: 503, nothing paid, reservation released
     seller.reset();
-    const stale = wallet.getSigner()!;
+    const staleLease = wallet.leaseSigner()!;
+    const stale = staleLease.signer;
+    staleLease.release();
     expect((await adminPost("/v1/admin/wallet/replace", { confirm_address: wallet.getAddress() })).statusCode).toBe(200);
     vi.spyOn(wallet, "leaseSigner").mockReturnValue({ signer: stale, release: () => undefined });
     const refused = await chat(key);

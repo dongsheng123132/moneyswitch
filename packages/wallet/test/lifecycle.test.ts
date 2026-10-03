@@ -208,7 +208,8 @@ describe("auto-unlock secret", () => {
     expect(restarted.getAddress()).toBe(created.address);
     expect(restarted.unlockStatus).toEqual({ source: "auto", ok: true, attempts: [{ source: "auto", ok: true }] });
     // and it can really sign
-    const sig = await restarted.getSigner()!.signTypedData({
+    const lease = restarted.leaseSigner()!;
+    const sig = await lease.signer.signTypedData({
       domain: { name: "USDC", version: "2", chainId: 10143, verifyingContract: "0x534b2f3A21130d7a60830c2Df862319e593943A3" },
       types: { Ping: [{ name: "n", type: "uint256" }] },
       primaryType: "Ping",
@@ -272,7 +273,7 @@ describe("auto-unlock secret", () => {
     expect(report).toEqual({ unlocked: false, attempts });
     expect(JSON.stringify(report)).not.toContain("abab");
     expect(restarted.isUnlocked()).toBe(false);
-    expect(restarted.getSigner()).toBeNull();
+    expect(restarted.leaseSigner()).toBeNull();
     expect(restarted.unlockStatus).toEqual({ source: "auto", ok: false, attempts });
   });
 

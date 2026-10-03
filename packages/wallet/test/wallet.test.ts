@@ -92,11 +92,13 @@ describe("LocalWalletDriver", () => {
     // Fresh driver instance simulating process restart: locked until unlocked.
     const driver2 = new LocalWalletDriver(tmpDir);
     expect(driver2.isUnlocked()).toBe(false);
-    expect(driver2.getSigner()).toBeNull();
+    expect(driver2.leaseSigner()).toBeNull();
     const unlocked = await driver2.unlock("correct horse battery staple");
     expect(unlocked.address).toBe(address);
     expect(driver2.isUnlocked()).toBe(true);
-    expect(driver2.getSigner()?.address).toBe(address);
+    const lease = driver2.leaseSigner();
+    expect(lease?.signer.address).toBe(address);
+    lease?.release();
   });
 
   it("rejects unlocking with the wrong password", async () => {
@@ -110,7 +112,8 @@ describe("LocalWalletDriver", () => {
     const { verifyTypedData } = await import("ethers");
     const driver = new LocalWalletDriver(tmpDir);
     const { address } = await driver.createWallet("pw");
-    const signer = driver.getSigner()!;
+    const lease = driver.leaseSigner()!;
+    const signer = lease.signer;
     const domain = { name: "USDC", version: "2", chainId: 10143, verifyingContract: "0x534b2f3A21130d7a60830c2Df862319e593943A3" };
     const types = {
       TransferWithAuthorization: [
@@ -131,6 +134,7 @@ describe("LocalWalletDriver", () => {
       nonce: "0x" + "11".repeat(32),
     };
     const sig = await signer.signTypedData({ domain, types, primaryType: "TransferWithAuthorization", message });
+    lease.release();
     const recovered = verifyTypedData(domain, types, message, sig);
     expect(recovered.toLowerCase()).toBe(address.toLowerCase());
   });
