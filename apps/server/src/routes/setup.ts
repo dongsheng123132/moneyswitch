@@ -54,9 +54,9 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       // Circle's faucet only mints testnet USDC — pointing it at mainnet would be misleading.
       faucet_url: isMainnet() ? null : FAUCET_URL,
       wallet_password_from_env: Boolean(ctx.config.walletPassword),
-      // The base URL the skill is written for (MONEYSWITCH_PUBLIC_URL, else the origin of this request).
+      // The base URL the skill is written for (MONEYSWITCH_PUBLIC_URL, else the address the server listens on: never the request's Host).
       wallet_address: ctx.wallet.getAddress(),
-      public_base: publicBase(ctx, req),
+      public_base: publicBase(ctx),
       public_base_from_env: Boolean(ctx.config.publicUrl),
       // Read-only: host:port + source only, never credentials (see
       // packages/net's redactProxyUrl/hostPortOf and the README "behind a

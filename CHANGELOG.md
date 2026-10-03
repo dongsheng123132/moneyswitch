@@ -15,7 +15,7 @@ database is still **additive only**: no migration was added or removed, no table
   everything that only they used. Pages 13 to 5; `apps/dashboard/src` from 13,935 to 6,504 lines (ts + tsx + css). The agent API (`/v1/fetch`,
   `/v1/status`, `/v1/history`, `GET /v1/approvals/:id`) and the child-key back end and routes are unchanged (no UI for child keys).
 - **Approval link (SPEC §3).** The `approval_required` envelope of `POST /v1/fetch` now carries `approve_url`
-  (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, else the origin of the request). The link has no token; approving needs the administrator
+  (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, else the address the server itself listens on, never the request's Host). The link has no token; approving needs the administrator
   login (a visit without a session goes to `/login` and comes back to the same approval). The Approvals page marks and scrolls to the
   linked request. The skill (`/skill.md`, every per-key skill, `skills/moneyswitch-pay/SKILL.md`) tells the AI to give the link to a
   person, poll `GET /v1/approvals/:id` every 15 seconds and resend with the `approval_id`.
@@ -39,6 +39,11 @@ database is still **additive only**: no migration was added or removed, no table
   database in place and checks that the bundled migrations are byte-identical to the source ones.
 - **Removed: the Windows launchers** (`scripts/start-local.ps1`, `install-local-shortcut.ps1`, `local-server.mjs`,
   `docs/local-desktop.md`) and the routes only they used (`POST /v1/admin/local-link`, `POST /v1/local/claim`).
+- **Links never come from the request.** `approve_url`, the base of `/skill.md`, `public_base` in `/v1/admin/meta` and the first-run sign-in link
+  are `MONEYSWITCH_PUBLIC_URL`, else the address the server listens on (`http://127.0.0.1:4020` by default), through one function
+  (`apps/server/src/public-base.ts`). Before, the first three used the request's `Host`, so a forged `Host: phish.example` produced
+  `http://phish.example/approvals?id=…`, a link the skill tells the AI to forward to the administrator. Without `MONEYSWITCH_PUBLIC_URL` a
+  server behind a proxy now names its own listen address: set it (the Docker compose file does).
 - **Admin-token reset on Docker and npm (SPEC §2).** `moneyswitch-server reset-admin-token [--data-dir <dir>]` replaces a lost administrator
   token: run on the server itself, as the user that runs the service (the Docker image: `docker compose exec server node /app/dist/cli.js
   reset-admin-token`). It uses the data directory the server uses, the old token stops working at once and the running server needs no restart,

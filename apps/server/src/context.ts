@@ -5,6 +5,7 @@ import { LocalWalletDriver, type LocalWalletDriverOptions } from "@moneyswitch/w
 import { bootstrapAdminToken, SetupTokenStore, sweepStaleReservations, writeAudit, type AuthorizationReader } from "@moneyswitch/core";
 import { createMultiNetworkAuthorizationReader } from "@moneyswitch/x402";
 import type { ServerConfig } from "./config.js";
+import { publicBaseUrl } from "./public-base.js";
 
 export interface AppContext {
   db: MoneySwitchDb;
@@ -22,12 +23,6 @@ export interface AppContext {
    * touches a real RPC endpoint. Left undefined, reconcile is a no-op.
    */
   chainReader?: AuthorizationReader;
-}
-
-/** Host to put in the printed setup link: a wildcard bind address is not browsable, use loopback instead. */
-function browsableHost(host: string): string {
-  if (host === "0.0.0.0" || host === "::" || host === "") return "127.0.0.1";
-  return host.includes(":") ? `[${host}]` : host;
 }
 
 export interface BuildContextOptions {
@@ -138,7 +133,7 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
   });
 
   const setup = new SetupTokenStore();
-  const setupBase = config.publicUrl?.replace(/\/+$/, "") || `http://${browsableHost(config.host)}:${config.port}`;
+  const setupBase = publicBaseUrl(config); // the same rule as every other link: MONEYSWITCH_PUBLIC_URL, else the address the server listens on
   const freshAdminToken = bootstrapAdminToken(db);
   if (freshAdminToken) {
     // Only place this ever gets printed. Never logged again, never stored

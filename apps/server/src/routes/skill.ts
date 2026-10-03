@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { rotateMoneyKeySecret, writeAudit, MoneySwitchError } from "@moneyswitch/core";
 import { renderSkill, normalizeBaseUrl } from "@moneyswitch/skill";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
+import { bindOrigin } from "../public-base.js";
 
 /**
  * "One paste gives an AI agent payment ability" - the server side.
@@ -15,13 +16,12 @@ import { requireAdmin } from "../auth.js";
  */
 
 /**
- * Base URL that goes into the public skill: MONEYSWITCH_PUBLIC_URL when it is
- * set (and sane), else the origin the request came in on. The Host header is
- * attacker-controlled, so it is only used when it forms a plain http(s)
- * origin; otherwise the skill is rendered server-agnostic (env vars only).
+ * Base URL that goes into the public skill: MONEYSWITCH_PUBLIC_URL when it is set (and sane), else the address the server itself
+ * listens on. Never the request's Host header (the sender chooses it, and an AI would follow whatever address the skill names); when
+ * neither forms a plain http(s) origin the skill is rendered server-agnostic (env vars only).
  */
-export function skillBaseUrl(ctx: AppContext, req: FastifyRequest): string | null {
-  const candidates = [ctx.config.publicUrl, `${req.protocol}://${req.host}`];
+export function skillBaseUrl(ctx: AppContext): string | null {
+  const candidates = [ctx.config.publicUrl, bindOrigin(ctx.config)];
   for (const c of candidates) {
     if (!c) continue;
     try {
@@ -36,13 +36,13 @@ export function skillBaseUrl(ctx: AppContext, req: FastifyRequest): string | nul
 export function registerSkillRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
 
-  app.get("/skill.md", async (req, reply) => {
+  app.get("/skill.md", async (_req, reply) => {
     return reply
       .header("content-type", "text/markdown; charset=utf-8")
-      // The body depends on MONEYSWITCH_PUBLIC_URL or the Host header: never let an intermediary cache one origin's copy for another.
+      // The body depends on MONEYSWITCH_PUBLIC_URL, which an operator can change: do not let an intermediary keep an old copy.
       .header("cache-control", "no-cache")
       .header("x-content-type-options", "nosniff")
-      .send(renderSkill({ baseUrl: skillBaseUrl(ctx, req) }));
+      .send(renderSkill({ baseUrl: skillBaseUrl(ctx) }));
   });
 
   // Only a hash of a key is stored, so a lost secret cannot be shown again.

@@ -14,6 +14,7 @@ The product and its safety floor are in [SPEC.md](../SPEC.md) (§0, §3, §4, §
 ## Approvals
 
 - The approval link (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`) **carries no token and no secret**. Opening it without a session goes to the login and comes back to the same approval afterwards. Approving or denying is an administrator-only API call (`POST /v1/approvals/:id/approve|deny`); a MoneyKey, including the one that asked, gets 403, so an AI that holds the link cannot approve it.
+- The link's base is `MONEYSWITCH_PUBLIC_URL`, else the address the server itself listens on. It is never taken from the request (`Host`, `X-Forwarded-*`): those are chosen by the sender, and a forwarded link that could be steered to another site would be a phishing path for the administrator token. The same rule builds the base of `/skill.md`, `public_base` in `/v1/admin/meta` and the first-run sign-in link. Set `MONEYSWITCH_PUBLIC_URL` behind a proxy.
 - An approval expires after 10 minutes. Approving makes the next request with that `approval_id` payable once; the AI repeats the request unchanged.
 - There is no push channel: the AI hands the link to a person and polls `GET /v1/approvals/:id` every 15 seconds.
 

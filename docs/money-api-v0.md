@@ -134,7 +134,7 @@ communicated in the `status`/`code` fields, not the HTTP status code):
 |---|---|
 | `ok` | Request succeeded (payment made if the resource was priced; `payment` is `null` for free resources). |
 | `denied` | Policy rejected the request before any payment attempt; see `code`. |
-| `approval_required` | Price is between the approval threshold and the per-request limit; `approval_id` and `approve_url` (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, or the request's own origin when that is not set) are set. Give the link to a person: it carries no token, and approving needs the administrator login. Poll `GET /v1/approvals/:id` about every 15 s, then retry the same request with that `approval_id` once approved. |
+| `approval_required` | Price is between the approval threshold and the per-request limit; `approval_id` and `approve_url` (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, or the address the server itself listens on when that is not set; never the request's Host header) are set. Give the link to a person: it carries no token, and approving needs the administrator login. Poll `GET /v1/approvals/:id` about every 15 s, then retry the same request with that `approval_id` once approved. |
 | `payment_failed` | Payment was attempted and definitively failed (signature/facilitator rejection); any reservation was released. |
 | `error` | An unexpected error (e.g. upstream unreachable, wallet locked). |
 
@@ -266,7 +266,7 @@ support it.
 
 | Endpoint | Auth | |
 |---|---|---|
-| `GET /skill.md` | none | The generic skill (never contains a key), `text/markdown; charset=utf-8`. Base URL = `MONEYSWITCH_PUBLIC_URL` when set, else the request origin (only if it forms a plain http(s) origin, otherwise the skill is server-agnostic and reads `MONEY_API_BASE` / `MONEY_API_KEY`). |
+| `GET /skill.md` | none | The generic skill (never contains a key), `text/markdown; charset=utf-8`. Base URL = `MONEYSWITCH_PUBLIC_URL` when set, else the address the server itself listens on (never the request's Host header; if neither forms a plain http(s) origin the skill is server-agnostic and reads `MONEY_API_BASE` / `MONEY_API_KEY`). |
 | `GET /v1/approvals/:id` | MoneyKey | After `/v1/fetch` answered `approval_required`: the key's own approval, `{ "id", "status": "pending"\|"approved"\|"denied"\|"expired"\|"used", "amount", "currency": "USDC", "url", "method", "expires_at" }`. Another key's id and unknown ids both answer `404 { "status": "error", "code": "APPROVAL_NOT_FOUND" }`. Poll about every 15 s; an approval lives 10 minutes. |
 | `POST /v1/keys/:id/rotate` | admin | Only a hash of a key is stored, so a lost secret cannot be shown again. This issues a new secret for the same key id: budgets, usage history, approvals, child keys and settings are kept, the old secret stops working immediately (a request that authenticated with it just before and is still waiting for the seller is refused with `KEY_INVALID` before anything is reserved or signed), an audit row `key.rotate` (key prefixes only) is written. Returns `{ id, key, name, key_prefix, parent_id, depth }`; `key` (the new plaintext) is shown only here. `404` unknown id, `409 KEY_REVOKED` for a revoked key (rotating never revives a key). |
 

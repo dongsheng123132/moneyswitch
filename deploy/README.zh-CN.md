@@ -21,7 +21,7 @@ docker compose ps
 curl --fail http://127.0.0.1:4020/healthz
 ```
 
-修改 `.env`：`MONEYSWITCH_PUBLIC_URL` 必须是大家实际访问的 HTTPS 地址（审批链接 `{MONEYSWITCH_PUBLIC_URL}/approvals?id=…` 和给 AI 的技能说明都用它），再设端口和允许付款的链。把 `deploy/moneyswitch.caddy` 的域名和端口替换为实际值，装进自己的 Caddy 配置：先 `caddy validate`，再 reload；80/443 对外，4020 只监听本机。反向代理必须保留 Authorization 头，付款请求不要自动重试。
+修改 `.env`：`MONEYSWITCH_PUBLIC_URL` 必须是大家实际访问的 HTTPS 地址（审批链接 `{MONEYSWITCH_PUBLIC_URL}/approvals?id=…` 和给 AI 的技能说明都用它；不设时链接指向服务自己的监听地址，永远不取请求头里的 `Host`，所以反向代理后面必须设），再设端口和允许付款的链。把 `deploy/moneyswitch.caddy` 的域名和端口替换为实际值，装进自己的 Caddy 配置：先 `caddy validate`，再 reload；80/443 对外，4020 只监听本机。反向代理必须保留 Authorization 头，付款请求不要自动重试。
 
 首次启动会打印管理员令牌和一条 30 分钟有效的一次性登录链接。只在私有终端看 `docker compose logs server`，用 HTTPS 地址打开链接：自动登录，停在「钱包」页。日志里有首次管理员凭据，不要公开。以后登录输入管理员令牌。
 

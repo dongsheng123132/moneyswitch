@@ -16,7 +16,7 @@ pnpm build
 node apps/server-pkg/dist/cli.js --data-dir ./data
 ```
 
-首次启动会打印管理员令牌和一条一次性登录链接（30 分钟内有效，只能用一次）。打开链接：自动登录并停在「钱包」页。请把 `MONEYSWITCH_PUBLIC_URL` 设成大家访问这台服务的地址，审批链接和技能说明都用它。管理员令牌丢了：在服务器本机、用运行服务的系统用户执行 `moneyswitch-server reset-admin-token`（Docker：`docker compose exec server node /app/dist/cli.js reset-admin-token`；源码：`pnpm admin:reset-token -- --data-dir <目录>`），详见 [docs/security.md](docs/security.md)。
+首次启动会打印管理员令牌和一条一次性登录链接（30 分钟内有效，只能用一次）。打开链接：自动登录并停在「钱包」页。请把 `MONEYSWITCH_PUBLIC_URL` 设成大家访问这台服务的地址，审批链接和技能说明都用它（不设就是服务自己的监听地址，默认 `http://127.0.0.1:4020`，永远不取请求里的 `Host`）。管理员令牌丢了：在服务器本机、用运行服务的系统用户执行 `moneyswitch-server reset-admin-token`（Docker：`docker compose exec server node /app/dist/cli.js reset-admin-token`；源码：`pnpm admin:reset-token -- --data-dir <目录>`），详见 [docs/security.md](docs/security.md)。
 
 后台只有 4 个页面加登录：
 
