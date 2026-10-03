@@ -6,7 +6,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"no unit tests in demo-seller (covered by server test:e2e)\" && exit 0",
+    "test": "node --test receiver.test.mjs",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js"
   },
