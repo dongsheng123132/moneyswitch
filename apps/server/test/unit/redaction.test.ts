@@ -89,7 +89,7 @@ describe("Log redaction", () => {
 
     const created = (await call("/v1/admin/wallet/create")).json() as { address: string; recovery_phrase: string };
     const words = created.recovery_phrase.split(" ");
-    await call("/v1/admin/wallet/backup/confirm");
+    await call("/v1/admin/wallet/backup/confirm", { address: created.address });
     const unlockSecret = fs.readFileSync(unlockSecretPath(t.tmpDir, created.address), "utf-8");
     await call("/v1/admin/wallet/create", { password: "redaction-wallet-password" }); // refused, and still never logged
     const replaced = (await call("/v1/admin/wallet/replace", { confirm_address: created.address })).json() as { recovery_phrase: string };

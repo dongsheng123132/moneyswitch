@@ -39,7 +39,7 @@ If `wallet.json` is missing but credential files of an earlier wallet are still 
 
 - Standard BIP-39 (English), derivation path `m/44'/60'/0'/0/0`. The tests derive the address from the words with an independent BIP-32/BIP-44 implementation, so the address in MetaMask or OKX is the address MoneySwitch shows.
 - It is returned **once**, by `POST /v1/admin/wallet/create` (and by `replace`): administrator only, `Cache-Control: no-store`. It is stored only inside the encrypted keystore, never in the database, the audit log or any log, and **no route shows it again**. The Dashboard keeps a just-created phrase in memory only, with the address it belongs to.
-- "I wrote them down" is `POST /v1/admin/wallet/backup/confirm` (no body); it records `backup_confirmed_at`.
+- "I wrote them down" is `POST /v1/admin/wallet/backup/confirm` with `address`, the wallet whose words were written down; it records `backup_confirmed_at`. If that is not the current wallet any more (it was replaced between showing the words and the click, in another tab or by another administrator) the answer is `409 WALLET_CHANGED` and nothing is recorded, so the new wallet, whose words nobody has seen, can never be marked as backed up by a click meant for the old one. No address: `400 ADDRESS_REQUIRED`.
 
 ## What happens at startup
 
@@ -114,7 +114,7 @@ Four routes, administrator only (a MoneyKey gets 403). Responses that carry a se
 | --- | --- | --- |
 | Status and health | `GET /v1/admin/wallet` | none |
 | Create | `POST /v1/admin/wallet/create` | none. Returns `recovery_phrase` once. Asking for a password or an import is refused (`400 UNSUPPORTED`) |
-| "I wrote the words down" | `POST /v1/admin/wallet/backup/confirm` | none |
+| "I wrote the words down" | `POST /v1/admin/wallet/backup/confirm` | `address` (the wallet whose words were written down; 409 if it is not the current one) |
 | Replace | `POST /v1/admin/wallet/replace` | `confirm_address`, optional `reason`. Returns the new `recovery_phrase` once |
 
 ## Files in the data folder

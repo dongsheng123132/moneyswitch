@@ -78,7 +78,7 @@ try {
   const files = await fs.readdir(dataDir);
   check('the unlock file is named after the wallet address', files.some((f) => /^wallet-unlock-0x[0-9a-fA-F]{40}\.secret$/.test(f) && f.toLowerCase() === `wallet-unlock-${created.body.address.toLowerCase()}.secret`));
   check('the unlock file is readable by this user only', wallet.body.health.secret_protected === true);
-  check('writing the words down is recorded', (await api('/v1/admin/wallet/backup/confirm', 'POST', {})).body.confirmed === true);
+  check('writing the words down is recorded, for that wallet and no other', (await api('/v1/admin/wallet/backup/confirm', 'POST', { address: '0x' + '11'.repeat(20) })).status === 409 && (await api('/v1/admin/wallet/backup/confirm', 'POST', {})).status === 400 && (await api('/v1/admin/wallet/backup/confirm', 'POST', { address: created.body.address })).body.confirmed === true);
 
   const created2 = await api('/v1/keys', 'POST', { name: 'acceptance-only', total_budget: '0.10', daily_budget: '0.05', per_request_limit: '0.01', allowed_hosts: ['app.moneyswitch.dev:443'] });
   check('limited MoneyKey works', created2.status === 200 && (await api('/v1/status', 'GET', undefined, created2.body.key)).status === 200);

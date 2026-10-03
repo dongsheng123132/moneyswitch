@@ -28,6 +28,8 @@ export const walletStrings = defineMessages(
     phraseDone: "Done",
     phraseSaving: "Saving…",
     phraseAckFailed: "Could not record it: {message}. The words are still on screen: try again.",
+    phraseAckStale:
+      "These words belong to a wallet that has been replaced since they were shown, so they cannot be confirmed. Nothing was recorded. Reload the page: it shows the current wallet.",
 
     // --- status ---------------------------------------------------------------
     addressTitle: "Wallet address",
@@ -127,6 +129,7 @@ export const walletStrings = defineMessages(
     phraseDone: "完成",
     phraseSaving: "保存中…",
     phraseAckFailed: "没能记录下来：{message}。这些词还在屏幕上，请再试一次。",
+    phraseAckStale: "这些词属于一个在它们显示之后已被更换的钱包，所以无法确认，也没有记录任何东西。请刷新页面：那里显示的是当前的钱包。",
 
     // --- status ---------------------------------------------------------------
     addressTitle: "钱包地址",

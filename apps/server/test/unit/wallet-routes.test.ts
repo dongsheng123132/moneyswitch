@@ -142,7 +142,7 @@ describe("create", () => {
     expect(HDNodeWallet.fromPhrase(body.recovery_phrase).address).toBe(body.address);
     expect(fs.readdirSync(t.tmpDir).sort()).toEqual([secretName(body.address), "wallet.json"]);
     // the secret and the phrase are in no later response
-    const later = [await walletInfo(), (await post("/v1/admin/wallet/backup/confirm")).json()];
+    const later = [await walletInfo(), (await post("/v1/admin/wallet/backup/confirm", { address: body.address })).json()];
     for (const r of later) {
       expect(JSON.stringify(r)).not.toContain(secretOnDisk());
       expect(JSON.stringify(r)).not.toContain(body.recovery_phrase);
@@ -344,7 +344,8 @@ describe("health", () => {
 });
 
 describe("backup acknowledgement ('I wrote the words down')", () => {
-  const acknowledge = () => post("/v1/admin/wallet/backup/confirm");
+  /** The acknowledgement names the wallet whose words were written down; by default the one that is current. */
+  const acknowledge = async (address?: string) => post("/v1/admin/wallet/backup/confirm", { address: address ?? (await walletInfo()).address });
 
   it("records backup_confirmed_at and flips health.backup to confirmed; no word is asked for, and a second click keeps the first time", async () => {
     await createAuto();
@@ -361,8 +362,53 @@ describe("backup acknowledgement ('I wrote the words down')", () => {
     expect(again.json().backup_confirmed_at).toBe(res.json().backup_confirmed_at);
   });
 
+  it("is tied to a wallet: it must say whose words were written down (no address: 400, nothing recorded)", async () => {
+    await createAuto();
+    for (const payload of [{}, { address: "" }, { address: 5 }, { address: null }]) {
+      const res = await post("/v1/admin/wallet/backup/confirm", payload);
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json().error).toBe("ADDRESS_REQUIRED");
+    }
+    expect((await walletInfo()).health.backup).toBe("missing");
+  });
+
+  it("a replace that lands between showing the words and the click cannot mark the NEW wallet as backed up: 409, nothing recorded", async () => {
+    const first = await createAuto(); // the words on screen belong to this wallet
+    const replaced = await post("/v1/admin/wallet/replace", { confirm_address: first.address });
+    expect(replaced.statusCode).toBe(200);
+    const second = replaced.json() as { address: string };
+    expect(second.address).not.toBe(first.address);
+
+    const stale = await acknowledge(first.address); // the click for the old words, after the swap
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error).toBe("WALLET_CHANGED");
+    const info = await walletInfo();
+    expect(info.address).toBe(second.address);
+    expect(info.health.backup).toBe("missing");
+    expect(info.backup_confirmed_at).toBeNull();
+    expect(auditRows().map((r) => r.action)).not.toContain("wallet.backup.confirm");
+
+    // the words of the wallet that IS current can still be acknowledged
+    expect((await acknowledge(second.address)).statusCode).toBe(200);
+    expect((await walletInfo()).health.backup).toBe("confirmed");
+  });
+
+  it("an address that was never this server's wallet is refused the same way", async () => {
+    await createAuto();
+    const res = await acknowledge(HARDHAT_ADDRESS);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("WALLET_CHANGED");
+    expect((await walletInfo()).health.backup).toBe("missing");
+  });
+
+  it("the address is compared without regard to letter case (checksummed or lower-case)", async () => {
+    const created = await createAuto();
+    expect((await acknowledge(created.address.toLowerCase())).statusCode).toBe(200);
+    expect((await acknowledge(created.address)).statusCode).toBe(200);
+  });
+
   it("needs a wallet that has a recovery phrase", async () => {
-    expect((await acknowledge()).statusCode).toBe(404);
+    expect((await post("/v1/admin/wallet/backup/confirm", { address: HARDHAT_ADDRESS })).statusCode).toBe(404);
     // an older wallet made from a bare private key has nothing to write down
     const key = Wallet.createRandom();
     await writeLegacyPasswordWallet(t.tmpDir, "legacy-pass-1", { wallet: new Wallet(key.privateKey) });
@@ -627,7 +673,7 @@ describe("secrets never reach the log, the audit trail or an unintended response
     const unlockSecret = secretOnDisk();
     await restart();
     await keep("status", call("GET", "/v1/admin/wallet"));
-    await keep("confirm", call("POST", "/v1/admin/wallet/backup/confirm"));
+    await keep("confirm", call("POST", "/v1/admin/wallet/backup/confirm", { address: created.address }));
     const replaced = await keep("replace", call("POST", "/v1/admin/wallet/replace", { confirm_address: created.address, reason: "lost_password" }));
     await keep("status-after", call("GET", "/v1/admin/wallet"));
     await app.close();

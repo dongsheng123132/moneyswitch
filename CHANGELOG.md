@@ -25,7 +25,7 @@ database is still **additive only**: no migration was added or removed, no table
   Never offered on a mainnet default, and only when the key may pay that host and Monad testnet is enabled (the only chain the receiver
   accepts).
 - **Wallet surface (SPEC §1, §5).** Routes: `GET /v1/admin/wallet` (status, balance per chain, replaced wallets), `POST …/create`
-  (no password, no import: it refuses both), `POST …/backup/confirm` (now a plain acknowledgement; the two-word quiz is gone) and
+  (no password, no import: it refuses both), `POST …/backup/confirm` (now a plain acknowledgement that names the wallet whose words were written down, `409 WALLET_CHANGED` if that is not the current one; the two-word quiz is gone) and
   `POST …/replace`. Removed: `import`, `backup` (download), `unlock`, `reveal`, `auto-unlock`, `GET …/retired`. A wallet made by an
   older version with a password is unlocked only at startup by `MONEYSWITCH_WALLET_PASSWORD` or `_FILE`; a lost password means replacing
   the wallet. Every safety internal stays and keeps its tests: the address-named unlock file, ACL / 0700 / 0600 and the check that it

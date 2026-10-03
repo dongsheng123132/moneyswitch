@@ -11,7 +11,8 @@ import { useEffect, useSyncExternalStore } from "react";
  *
  * It is remembered TOGETHER WITH THE ADDRESS it belongs to, and only ever shown for that wallet: if the
  * wallet that is current is another one (replaced from another tab, or by the server), the old phrase must
- * not turn up in that wallet's backup flow.
+ * not turn up in that wallet's backup flow. The address also travels with the acknowledgement, so the server
+ * can refuse it when the wallet was replaced between the words being shown and the click.
  */
 export interface FreshPhraseEntry {
   address: string;
@@ -47,13 +48,13 @@ export const freshPhrase = {
 };
 
 /**
- * The fresh phrase for the wallet that is current.
+ * The fresh phrase (with the address it belongs to) for the wallet that is current.
  *  - `currentAddress` = that wallet's address: the phrase is returned only when it was handed out for THIS address, and a
  *    phrase that belongs to another wallet is dropped.
  *  - `null` = no wallet is known yet (the set-up screen right after "Create", before the next poll): the creation
  *    response is the authority, the phrase is returned as it is.
  */
-export function useFreshPhrase(currentAddress: string | null): string | null {
+export function useFreshPhrase(currentAddress: string | null): FreshPhraseEntry | null {
   // (This is a client-only app; the server snapshot is the same memory value, which also lets render tests see it.)
   const current = useSyncExternalStore(freshPhrase.subscribe, freshPhrase.get, freshPhrase.get);
   const stale = current !== null && currentAddress !== null && !sameAddress(current.address, currentAddress);
@@ -61,5 +62,5 @@ export function useFreshPhrase(currentAddress: string | null): string | null {
     if (stale) freshPhrase.clear();
   }, [stale]);
   if (current === null || stale) return null;
-  return current.phrase;
+  return current;
 }

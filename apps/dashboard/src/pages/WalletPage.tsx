@@ -15,6 +15,22 @@ import "../styles/wallet.css";
 
 const FAUCET_FALLBACK = "https://faucet.circle.com/";
 
+/**
+ * "I wrote them down": the acknowledgement names the wallet whose words are on screen, never just "the current wallet" - a replace can
+ * land between showing the words and the click, and the new wallet's words have not been seen by anyone. When the server refuses (409
+ * WALLET_CHANGED) nothing is cleared or reloaded, so the words stay where they are.
+ */
+export async function acknowledgeWords(address: string, onChanged: () => Promise<void> | void): Promise<void> {
+  await confirmBackup(address);
+  freshPhrase.clear();
+  await onChanged();
+}
+
+/** Which sentence says why the acknowledgement failed: the wallet was replaced since the words were shown, or any other failure. */
+export function ackFailureKey(e: unknown): "phraseAckStale" | "phraseAckFailed" {
+  return e instanceof ApiError && e.error === "WALLET_CHANGED" ? "phraseAckStale" : "phraseAckFailed";
+}
+
 /** Why a wallet that exists is locked right now, as the key of the sentence that says it (null = it is not locked). */
 export function lockedReason(wallet: Pick<WalletInfo, "has_keystore" | "unlocked" | "health">): keyof typeof walletStrings.en | null {
   if (!wallet.has_keystore || wallet.unlocked) return null;
@@ -53,7 +69,8 @@ export function PhraseCard({ phrase, onAcknowledge }: { phrase: string; onAcknow
     try {
       await onAcknowledge();
     } catch (e) {
-      setError(t("phraseAckFailed", { message: e instanceof Error ? e.message : "request_failed" }));
+      const key = ackFailureKey(e);
+      setError(key === "phraseAckStale" ? t(key) : t(key, { message: e instanceof Error ? e.message : "request_failed" }));
       setBusy(false);
     }
   }
@@ -400,18 +417,13 @@ export function WalletView({
 }) {
   const tc = useT(common);
   // Without a wallet the creation response is the authority; with one, the words are only shown for that very wallet.
-  const phrase = useFreshPhrase(wallet.has_keystore ? wallet.address : null);
-
-  async function acknowledged() {
-    await confirmBackup();
-    freshPhrase.clear();
-    await onChanged();
-  }
+  const fresh = useFreshPhrase(wallet.has_keystore ? wallet.address : null);
+  const phrase = fresh?.phrase ?? null;
 
   return (
     <div className="wallet-page">
       {error && <Callout tone="error">{tc("requestFailed", { message: error })}</Callout>}
-      {phrase && <PhraseCard phrase={phrase} onAcknowledge={acknowledged} />}
+      {fresh && <PhraseCard phrase={fresh.phrase} onAcknowledge={() => acknowledgeWords(fresh.address, onChanged)} />}
       {!phrase && !wallet.has_keystore && <CreateCard wallet={wallet} onCreated={onChanged} />}
       {wallet.has_keystore && (
         <>

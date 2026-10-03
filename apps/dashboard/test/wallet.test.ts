@@ -28,6 +28,7 @@ let freshPhrase: typeof import("../src/freshPhrase.ts").freshPhrase;
 let api: typeof import("../src/api.ts");
 let LangProvider: typeof import("../src/i18n/index.tsx").LangProvider;
 let en: (typeof import("../src/i18n/strings/wallet.ts"))["walletStrings"]["en"];
+let zh: (typeof import("../src/i18n/strings/wallet.ts"))["walletStrings"]["zh"];
 
 before(async () => {
   WalletPage = await import("../src/pages/WalletPage.tsx");
@@ -35,6 +36,7 @@ before(async () => {
   api = await import("../src/api.ts");
   LangProvider = (await import("../src/i18n/index.tsx")).LangProvider;
   en = (await import("../src/i18n/strings/wallet.ts")).walletStrings.en;
+  zh = (await import("../src/i18n/strings/wallet.ts")).walletStrings.zh;
 });
 
 beforeEach(() => {
@@ -318,17 +320,17 @@ describe("what the buttons call (api.ts)", () => {
     }) as typeof fetch;
   });
 
-  it("create, 'I wrote it down' and replace are three authenticated POSTs; create and the acknowledgement carry no body", async () => {
+  it("create, 'I wrote it down' and replace are three authenticated POSTs; the acknowledgement names the wallet whose words were written down", async () => {
     try {
       await api.createWallet();
-      await api.confirmBackup();
+      await api.confirmBackup(ADDRESS);
       await api.replaceWallet(ADDRESS, "lost_password");
     } finally {
       globalThis.fetch = real;
     }
     assert.deepEqual(calls, [
       { url: "/v1/admin/wallet/create", method: "POST", body: undefined, auth: "Bearer ms_admin_testtoken" },
-      { url: "/v1/admin/wallet/backup/confirm", method: "POST", body: undefined, auth: "Bearer ms_admin_testtoken" },
+      { url: "/v1/admin/wallet/backup/confirm", method: "POST", body: { address: ADDRESS }, auth: "Bearer ms_admin_testtoken" },
       { url: "/v1/admin/wallet/replace", method: "POST", body: { confirm_address: ADDRESS, reason: "lost_password" }, auth: "Bearer ms_admin_testtoken" },
     ]);
   });
@@ -339,6 +341,63 @@ describe("what the buttons call (api.ts)", () => {
       assert.equal((api as Record<string, unknown>)[name], undefined, name);
     }
     for (const name of ["getWallet", "createWallet", "confirmBackup", "replaceWallet"]) assert.equal(typeof (api as Record<string, unknown>)[name], "function", name);
+  });
+});
+
+describe("acknowledging the words names the wallet they belong to", () => {
+  const real = globalThis.fetch;
+  const calls: Array<{ url: string; body?: unknown }> = [];
+  const respond = (status: number, body: unknown) => {
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: init?.body === undefined ? undefined : JSON.parse(String(init.body)) });
+      return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+  };
+  beforeEach(() => {
+    calls.length = 0;
+    store.set("moneyswitch_admin_token", "ms_admin_testtoken");
+  });
+
+  it("sends the address of the words on screen, then forgets the words and reloads the page state", async () => {
+    respond(200, { confirmed: true, backup_confirmed_at: "2026-10-04T12:00:00.000Z" });
+    freshPhrase.set(ADDRESS, PHRASE);
+    let reloads = 0;
+    try {
+      await WalletPage.acknowledgeWords(ADDRESS, () => void reloads++);
+    } finally {
+      globalThis.fetch = real;
+    }
+    assert.deepEqual(calls, [{ url: "/v1/admin/wallet/backup/confirm", body: { address: ADDRESS } }]);
+    assert.equal(freshPhrase.get(), null, "acknowledged: the words are gone");
+    assert.equal(reloads, 1);
+  });
+
+  it("when the server says the wallet was replaced meanwhile (409 WALLET_CHANGED), nothing is cleared and nothing is reloaded: the words stay for the person to copy", async () => {
+    respond(409, { error: "WALLET_CHANGED", message: "The wallet was replaced after these words were shown" });
+    freshPhrase.set(ADDRESS, PHRASE);
+    let reloads = 0;
+    let caught: unknown = null;
+    try {
+      await WalletPage.acknowledgeWords(ADDRESS, () => void reloads++);
+    } catch (e) {
+      caught = e;
+    } finally {
+      globalThis.fetch = real;
+    }
+    assert.ok(caught instanceof api.ApiError);
+    assert.equal((caught as InstanceType<typeof api.ApiError>).error, "WALLET_CHANGED");
+    assert.equal(freshPhrase.getFor(ADDRESS), PHRASE);
+    assert.equal(reloads, 0);
+  });
+
+  it("says in plain words that the words belong to a replaced wallet (and nothing was recorded), instead of a generic failure", () => {
+    const stale = new api.ApiError(409, "x", null, "WALLET_CHANGED");
+    assert.equal(WalletPage.ackFailureKey(stale), "phraseAckStale");
+    assert.equal(WalletPage.ackFailureKey(new api.ApiError(500, "boom")), "phraseAckFailed");
+    assert.equal(WalletPage.ackFailureKey(new Error("offline")), "phraseAckFailed");
+    assert.match(en.phraseAckStale, /replaced/i);
+    assert.match(en.phraseAckStale, /nothing was recorded/i);
+    assert.ok(zh.phraseAckStale.length > 10, "and in Chinese");
   });
 });
 

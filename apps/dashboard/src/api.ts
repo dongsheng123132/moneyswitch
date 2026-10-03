@@ -292,9 +292,12 @@ export async function createWallet(): Promise<CreatedWallet> {
   return request("/v1/admin/wallet/create", { method: "POST" });
 }
 
-/** "I wrote the 12 words down": records the acknowledgement. */
-export async function confirmBackup(): Promise<{ confirmed: boolean; backup_confirmed_at: string }> {
-  return request("/v1/admin/wallet/backup/confirm", { method: "POST" });
+/**
+ * "I wrote the 12 words down": records the acknowledgement for the wallet whose words were on screen. The server answers 409
+ * WALLET_CHANGED when that is no longer the current wallet (it was replaced meanwhile), and records nothing.
+ */
+export async function confirmBackup(address: string): Promise<{ confirmed: boolean; backup_confirmed_at: string }> {
+  return request("/v1/admin/wallet/backup/confirm", { method: "POST", body: JSON.stringify({ address }) });
 }
 
 export type ReplaceReason = "replaced" | "lost_password" | "suspected_leak";

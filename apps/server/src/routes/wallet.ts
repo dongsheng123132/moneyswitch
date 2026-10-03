@@ -275,10 +275,23 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
 
   // --- "I wrote the words down" ---------------------------------------------------
 
-  app.post("/v1/admin/wallet/backup/confirm", { preHandler: adminGuard }, async (_req, reply) => {
+  // The acknowledgement names the wallet whose words were written down. A replace can land between the moment the words are shown and
+  // the click (another tab, another administrator): without the address that click would mark the NEW wallet, whose words nobody has
+  // seen, as backed up.
+  app.post("/v1/admin/wallet/backup/confirm", { preHandler: adminGuard }, async (req, reply) => {
     reply.header("Cache-Control", "no-store");
     const address = ctx.wallet.getAddress();
     if (!ctx.wallet.hasKeystore() || !address) return reply.status(404).send({ error: "NO_WALLET" });
+    const named = ((req.body ?? {}) as Body).address;
+    if (typeof named !== "string" || named.trim() === "") {
+      return reply.status(400).send({ error: "ADDRESS_REQUIRED", message: "Say which wallet's words were written down: send its address." });
+    }
+    if (named.trim().toLowerCase() !== address.toLowerCase()) {
+      return reply.status(409).send({
+        error: "WALLET_CHANGED",
+        message: "The wallet was replaced after these words were shown: they belong to another wallet, so nothing was confirmed.",
+      });
+    }
     if (!ctx.wallet.keystoreHasRecoveryPhrase()) return reply.status(409).send({ error: "NO_RECOVERY_PHRASE" });
     const confirmedAt = confirmWalletBackup(ctx.db, address);
     writeAudit(ctx.db, "admin", "wallet.backup.confirm", { address });

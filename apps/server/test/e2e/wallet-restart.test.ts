@@ -135,7 +135,7 @@ describe("a restart does not lock the wallet", () => {
     expect(created.headers.get("cache-control")).toBe("no-store");
     const { address, recovery_phrase: phrase } = created.json as { address: string; recovery_phrase: string };
     expect(phrase.split(" ")).toHaveLength(12);
-    const confirmed = await api(first, token, "POST", "/v1/admin/wallet/backup/confirm"); // "I wrote the words down"
+    const confirmed = await api(first, token, "POST", "/v1/admin/wallet/backup/confirm", { address }); // "I wrote the words down" (for this wallet)
     expect(confirmed.status).toBe(200);
     const before = (await api(first, token, "GET", "/v1/admin/wallet")).json;
     expect(before).toMatchObject({ address, unlocked: true, has_keystore: true });
