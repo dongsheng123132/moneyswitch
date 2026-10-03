@@ -17,7 +17,7 @@ export interface TestCtx {
 }
 
 export async function buildTestApp(
-  opts: { unlockWallet?: boolean; port?: number; walletOptions?: LocalWalletDriverOptions } = {}
+  opts: { unlockWallet?: boolean; port?: number; walletOptions?: LocalWalletDriverOptions; config?: Partial<ServerConfig> } = {}
 ): Promise<TestCtx> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-server-test-"));
   const { db, sqlite } = openDb({ filePath: ":memory:" });
@@ -33,6 +33,7 @@ export async function buildTestApp(
     dataDir: tmpDir,
     dbFilePath: ":memory:",
     walletPassword: null,
+    ...opts.config,
   };
   const ctx: AppContext = { db, sqlite: sqlite as Database.Database, wallet, config };
   const app = buildApp(ctx);
