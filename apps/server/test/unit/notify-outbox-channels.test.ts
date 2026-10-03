@@ -66,6 +66,7 @@ function multiNet() {
     return new Response("", { status: 200 });
   }) as unknown as typeof fetch;
   return {
+    t0,
     calls,
     lines,
     log,
@@ -181,12 +182,15 @@ describe("outbox: channels do not hold each other up", () => {
     const key = keyFor(ctx);
     const ids = [4, 3, 2, 1].map((age) => approvalOn(ctx, key.id, `https://api.example.com/p${age}`, age * 1000).id);
 
+    const tickStartedAt = Date.now();
     await createApprovalOutbox(ctx).tick();
 
     const hooks = net.to("hook.test");
     expect(hooks.map((c) => c.body.approval.id)).toEqual(ids);
-    // Serial delivery made each approval wait for the previous Telegram timeout (arrivals at +0, +300, +600, +900 ms).
-    expect(Math.max(...hooks.map((c) => c.at))).toBeLessThan(200);
+    // Serial delivery made each approval wait for the previous Telegram timeout (arrivals at +0, +300, +600, +900 ms after the tick
+    // began). Measured from the start of the tick: the time since the test began includes opening the database and grows with
+    // machine load (this assertion failed at 280 and 507 ms on a busy machine).
+    expect(Math.max(...hooks.map((c) => net.t0 + c.at)) - tickStartedAt).toBeLessThan(250);
     expect(net.lines.filter((l) => l.includes("Telegram delivery failed"))).toHaveLength(4);
   });
 
