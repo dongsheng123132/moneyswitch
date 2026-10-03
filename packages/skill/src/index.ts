@@ -14,3 +14,12 @@ export {
   type SkillAgent,
 } from "./agents.js";
 export { normalizeBaseUrl, isValidBaseUrl } from "./validate.js";
+export {
+  TEST_PAYMENT_URL,
+  TEST_PAYMENT_HOST,
+  TEST_PAYMENT_NETWORK,
+  TEST_PAYMENT_PRICE,
+  allowsTestPayment,
+  offersTestPayment,
+  type TestPaymentOffer,
+} from "./testpay.js";

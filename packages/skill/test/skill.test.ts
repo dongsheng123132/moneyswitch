@@ -14,6 +14,10 @@ import {
   guessAgentFromName,
   isSkillAgent,
   normalizeBaseUrl,
+  TEST_PAYMENT_HOST,
+  TEST_PAYMENT_URL,
+  allowsTestPayment,
+  offersTestPayment,
   type AgentInfo,
   type SkillAgent,
 } from "../src/index.js";
@@ -126,8 +130,12 @@ describe("renderSkill: content contract", () => {
     expect(row).toContain("/v1/history");
   });
 
-  it("approval_required: poll GET /v1/approvals/{id} about every 15 s, ~10 min TTL, resend the same request plus approval_id", () => {
+  it("approval_required: send approve_url to the human, poll GET /v1/approvals/{id} about every 15 s, ~10 min TTL, resend the same request plus approval_id; the AI cannot and must not approve", () => {
     const row = text.split("\n").find((l) => l.startsWith("| `approval_required`"))!;
+    expect(text).toContain("`approve_url`, `remaining_today`");
+    expect(row).toContain("Send `approve_url` to the user");
+    expect(row).toContain("administrator login");
+    expect(row).toContain("must not try");
     expect(row).toContain("/v1/approvals/{approval_id}");
     expect(row).toContain("every 15 seconds");
     expect(row).toContain("10 minutes");
@@ -328,6 +336,59 @@ describe("renderInstallPrompt", () => {
   it("validates its inputs like renderSkill", () => {
     expect(() => renderInstallPrompt({ ...base, key: 'x"y', agent: "codex" })).toThrow(/invalid key/);
     expect(() => renderInstallPrompt({ ...base, baseUrl: "javascript:1", agent: "codex" })).toThrow(/invalid baseUrl/);
+  });
+
+  describe("the test payment of the ten-minute path", () => {
+    const hosts = ["api.example.com:443", TEST_PAYMENT_HOST];
+
+    it("on a testnet, for a key that may pay the test host: after the status call, ONE test payment to the test endpoint, then its tx_hash is reported", () => {
+      const head = headOf(renderInstallPrompt({ ...base, agent: "codex", testPayment: { allowedHosts: hosts, testnet: true } }));
+      expect(head).toContain(`GET ${BASE}/v1/status`);
+      expect(head).toContain(`POST ${BASE}/v1/fetch`);
+      expect(head).toContain(TEST_PAYMENT_URL);
+      expect(head).toContain('"max_price":"0.01"');
+      expect(head).toMatch(/ONE test payment/);
+      expect(head).toMatch(/tx_hash/);
+      expect(head).toMatch(/never retry it/);
+      // the status call comes first, then the payment
+      expect(head.indexOf("/v1/status")).toBeLessThan(head.indexOf(TEST_PAYMENT_URL));
+      expect(head).not.toContain("do not make a payment during installation");
+      expect(head).not.toContain(KEY);
+    });
+
+    it("the skill inside is exactly the same: the test payment lives in the instruction, not in the skill", () => {
+      const withTest = renderInstallPrompt({ ...base, agent: "codex", testPayment: { allowedHosts: hosts, testnet: true } });
+      const without = renderInstallPrompt({ ...base, agent: "codex" });
+      const inner = (p: string) => p.slice(p.indexOf(SKILL_BEGIN_MARKER), p.indexOf(SKILL_END_MARKER));
+      expect(inner(withTest)).toBe(inner(without));
+      expect(inner(withTest)).not.toContain(TEST_PAYMENT_URL);
+    });
+
+    it.each([
+      ["a key that may not pay the test host", { allowedHosts: ["api.example.com:443"], testnet: true }],
+      ["a key with no hosts at all", { allowedHosts: [], testnet: true }],
+      ["the test host on another port", { allowedHosts: ["app.moneyswitch.dev:8443"], testnet: true }],
+      ["mainnet, even for a key that may pay the test host", { allowedHosts: hosts, testnet: false }],
+      ["no offer at all", null],
+    ])("%s: the prompt is the old one (status only, no payment during installation)", (_label, offer) => {
+      const head = headOf(renderInstallPrompt({ ...base, agent: "codex", testPayment: offer }));
+      expect(head).toContain("do not make a payment during installation");
+      expect(head).not.toContain(TEST_PAYMENT_URL);
+      expect(head).not.toMatch(/test payment/i);
+      expect(head).toBe(headOf(renderInstallPrompt({ ...base, agent: "codex" })));
+    });
+
+    it("the host is matched like the server's gate matches it: host:port or the bare host name, in any letter case", () => {
+      expect(allowsTestPayment([TEST_PAYMENT_HOST])).toBe(true);
+      expect(allowsTestPayment(["APP.MoneySwitch.dev:443"])).toBe(true);
+      expect(allowsTestPayment(["  app.moneyswitch.dev "])).toBe(true);
+      expect(allowsTestPayment(["app.moneyswitch.dev:80", "moneyswitch.dev:443", "evil-app.moneyswitch.dev:443"])).toBe(false);
+      expect(allowsTestPayment([])).toBe(false);
+      expect(allowsTestPayment(undefined)).toBe(false);
+      expect(offersTestPayment({ allowedHosts: [TEST_PAYMENT_HOST], testnet: true })).toBe(true);
+      expect(offersTestPayment({ allowedHosts: [TEST_PAYMENT_HOST], testnet: false })).toBe(false);
+      expect(offersTestPayment(undefined)).toBe(false);
+    });
   });
 });
 

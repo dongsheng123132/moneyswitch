@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -36,6 +36,7 @@ let sqlite: Database.Database;
 let wallet: LocalWalletDriver;
 let app: ReturnType<typeof buildApp>;
 let adminToken: string;
+let config: ServerConfig;
 let mockFacilitator: Awaited<ReturnType<typeof startMockFacilitator>>;
 let sellerProc: ChildProcess;
 let redirectServer: http.Server;
@@ -83,7 +84,7 @@ beforeAll(async () => {
   await wallet.createWithPhrase(); // auto-unlock, like every wallet the server creates
   adminToken = bootstrapAdminToken(db)!;
 
-  const config: ServerConfig = {
+  config = {
     port: SERVER_PORT,
     host: "127.0.0.1",
     dataDir: tmpDir,
@@ -283,6 +284,97 @@ describe("T2 offline e2e: agent call -> server -> demo-seller -> mock-facilitato
     const secondBody = second.json();
     expect(secondBody.status).toBe("ok");
     expect(secondBody.payment.amount).toBe("0.15");
+  });
+});
+
+describe("the approval link (SPEC.md §3)", () => {
+  const DEEP = () => `http://127.0.0.1:${SELLER_PORT}/deep-report`;
+  const ask = (key: string, extra: Record<string, unknown> = {}) =>
+    app.inject({ method: "POST", url: "/v1/fetch", headers: { authorization: `Bearer ${key}` }, payload: { url: DEEP(), ...extra } });
+
+  afterEach(() => {
+    config.publicUrl = null;
+  });
+
+  it("approval_required carries approve_url = {base}/approvals?id=<id>; the link holds no token, key or secret", async () => {
+    const key = await createKey({ approval_threshold: "0.10", per_request_limit: "1" });
+    const first = (await ask(key)).json();
+    expect(first.status).toBe("approval_required");
+    expect(first.charged).toBe("no");
+    const url = new URL(first.approve_url);
+    expect(url.pathname).toBe("/approvals");
+    expect([...url.searchParams.keys()]).toEqual(["id"]);
+    expect(url.searchParams.get("id")).toBe(first.approval_id);
+    expect(url.username + url.password + url.hash).toBe("");
+    // the request origin is used when no public URL is configured
+    expect(first.approve_url).toMatch(/^http:\/\/[^/]+\/approvals\?id=/);
+    for (const secret of [key, adminToken]) expect(first.approve_url).not.toContain(secret);
+    expect(first.approve_url).not.toMatch(/mk_live_|ms_admin_|ms_setup_|token|secret|password/i);
+  });
+
+  it("MONEYSWITCH_PUBLIC_URL decides the base of the link", async () => {
+    config.publicUrl = "https://pay.example.com";
+    const key = await createKey({ approval_threshold: "0.10", per_request_limit: "1" });
+    const first = (await ask(key)).json();
+    expect(first.approve_url).toBe(`https://pay.example.com/approvals?id=${first.approval_id}`);
+  });
+
+  it("only the other statuses stay link-free", async () => {
+    const key = await createKey();
+    const ok = (await app.inject({ method: "POST", url: "/v1/fetch", headers: { authorization: `Bearer ${key}` }, payload: { url: `http://127.0.0.1:${SELLER_PORT}/free` } })).json();
+    expect(ok.status).toBe("ok");
+    expect(ok).not.toHaveProperty("approve_url");
+    const denied = (await app.inject({ method: "POST", url: "/v1/fetch", headers: { authorization: `Bearer ${key}` }, payload: { url: `http://127.0.0.1:${SELLER_PORT}/greedy` } })).json();
+    expect(denied.status).toBe("denied");
+    expect(denied).not.toHaveProperty("approve_url");
+  });
+
+  it("holding the link (and the agent's own key) approves nothing: approving needs the administrator", async () => {
+    const key = await createKey({ approval_threshold: "0.10", per_request_limit: "1" });
+    const first = (await ask(key)).json();
+    const id = first.approval_id as string;
+    const attempts: Array<Record<string, string>> = [{}, { authorization: "Bearer not-a-token" }, { authorization: `Bearer ${key}` }];
+    for (const headers of attempts) {
+      const approve = await app.inject({ method: "POST", url: `/v1/approvals/${id}/approve`, headers });
+      expect(approve.statusCode, JSON.stringify(headers).slice(0, 40)).toBe(403);
+      const deny = await app.inject({ method: "POST", url: `/v1/approvals/${id}/deny`, headers });
+      expect(deny.statusCode).toBe(403);
+    }
+    // opening the link itself changes nothing (it is a page; the server never reads the id from it)
+    await app.inject({ method: "GET", url: new URL(first.approve_url).pathname + new URL(first.approve_url).search });
+    const poll = await app.inject({ method: "GET", url: `/v1/approvals/${id}`, headers: { authorization: `Bearer ${key}` } });
+    expect(poll.json()).toMatchObject({ id, status: "pending" });
+    // and a resend without a decision is still not allowed to pay
+    const resend = (await ask(key, { approval_id: id })).json();
+    expect(resend.status).not.toBe("ok");
+    expect(resend.charged).toBe("no");
+  });
+
+  it("approving through the admin API the Approvals page uses lets the resend through exactly once", async () => {
+    const key = await createKey({ approval_threshold: "0.10", per_request_limit: "1" });
+    const first = (await ask(key)).json();
+    const id = first.approval_id as string;
+    const admin = { authorization: `Bearer ${adminToken}` };
+
+    // the page opens the link, shows the pending list, and highlights this one
+    const list = (await app.inject({ method: "GET", url: "/v1/approvals?status=pending", headers: admin })).json() as { approvals: Array<{ id: string; status: string; url: string }> };
+    expect(list.approvals.map((a) => a.id)).toContain(id);
+    expect(list.approvals.find((a) => a.id === id)).toMatchObject({ status: "pending", url: DEEP() });
+
+    const approve = await app.inject({ method: "POST", url: `/v1/approvals/${id}/approve`, headers: admin });
+    expect(approve.statusCode).toBe(200);
+    // the agent's poll sees it
+    const poll = await app.inject({ method: "GET", url: `/v1/approvals/${id}`, headers: { authorization: `Bearer ${key}` } });
+    expect(poll.json().status).toBe("approved");
+
+    const paid = (await ask(key, { approval_id: id })).json();
+    expect(paid.status).toBe("ok");
+    expect(paid.charged).toBe("yes");
+    expect(paid.payment.amount).toBe("0.15");
+    // the approval is used up: sending it again does not pay a second time
+    const again = (await ask(key, { approval_id: id })).json();
+    expect(again.status).not.toBe("ok");
+    expect(again.charged).toBe("no");
   });
 });
 

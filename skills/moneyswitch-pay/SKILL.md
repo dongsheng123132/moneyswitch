@@ -69,13 +69,13 @@ In PowerShell build every object you send (the request, and a nested `headers` o
 
 ## Read the result
 
-Read `status`, `code`, `charged`, `payment` (`amount`, `tx_hash`, `network`), `http_status`, `body`, `approval_id`, `remaining_today`, `remaining_total`. `charged`: `yes` = confirmed payment, `no` = no charge, `maybe` = outcome unknown. Missing `charged` also means unknown; do not infer a charge from HTTP 200 alone.
+Read `status`, `code`, `charged`, `payment` (`amount`, `tx_hash`, `network`), `http_status`, `body`, `approval_id`, `approve_url`, `remaining_today`, `remaining_total`. `charged`: `yes` = confirmed payment, `no` = no charge, `maybe` = outcome unknown. Missing `charged` also means unknown; do not infer a charge from HTTP 200 alone.
 
 | status | what it means | what you do |
 |---|---|---|
 | `ok` | Request completed; `payment` may be null for a free service. | Use `body`. Report any amount paid, seller host and `tx_hash`. |
 | `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. |
-| `approval_required` | Human approval needed. | Get the quote from `GET $MONEY_API_BASE/v1/approvals/{approval_id}`, tell the user to approve in the dashboard, and poll every 15 seconds (same Authorization; expires in about 10 minutes). If approved, resend the exact same request plus `approval_id`. If denied or expired, stop. |
+| `approval_required` | Human approval needed; `approve_url` is the page where the user approves. | Send `approve_url` to the user in your reply and ask them to open it and approve. It asks for their administrator login, so you cannot approve for them and must not try. Then poll `GET $MONEY_API_BASE/v1/approvals/{approval_id}` every 15 seconds (same Authorization) until `status` is `approved`, `denied` or `expired` (about 10 minutes). If approved, resend the exact same request plus `approval_id`. If denied or expired, stop. |
 | `payment_unknown` | `TIMEOUT_AFTER_PAYMENT` / `UPSTREAM_ERROR_AFTER_PAYMENT`; `charged` is `maybe`. Also applies if your client times out after sending. | **NEVER retry automatically**: payment could repeat. Check `GET $MONEY_API_BASE/v1/history` later and let the user decide. |
 | `payment_failed` | `PAYMENT_REJECTED` or `PAYMENT_FAILED`. | If `charged` is `maybe`, do not retry. Otherwise report the failure; do not loop. |
 | `error` | `WALLET_LOCKED`, `WALLET_BUSY` (the wallet is being replaced for a moment), invalid/revoked/expired key, or upstream error. | If `charged` is `no`, you may retry once later (`WALLET_BUSY` clears by itself within about a minute; nothing was signed). Wallet/key problems need the user; replace a dead key via "Reset secret and copy skill". |

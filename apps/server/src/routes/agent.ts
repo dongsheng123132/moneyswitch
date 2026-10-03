@@ -22,6 +22,7 @@ import { performPaidFetch, type Charged } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireMoneyKey } from "../auth.js";
 import { paymentUnknownReason, bodyIncompleteReason } from "../paid-outcomes.js";
+import { publicBase } from "../public-base.js";
 
 const DENIED_CODES = new Set([
   "RATE_LIMITED",
@@ -117,6 +118,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         limit?: Record<string, string>;
         reason?: string | null;
         reserved_until_expiry?: boolean;
+        approve_url?: string;
       } = {}
     ) {
       return {
@@ -128,6 +130,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         body: extra.body ?? null,
         payment: extra.payment ?? null,
         approval_id: extra.approval_id ?? null,
+        ...(extra.approve_url !== undefined ? { approve_url: extra.approve_url } : {}),
         ...(extra.reason !== undefined ? { reason: extra.reason } : {}),
         ...(extra.reserved_until_expiry !== undefined
           ? { reserved_until_expiry: extra.reserved_until_expiry }
@@ -261,7 +264,10 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       );
     } catch (e) {
       if (e instanceof ApprovalRequiredError) {
-        return reply.send(envelope("approval_required", "APPROVAL_REQUIRED", "no", { approval_id: e.approvalId }));
+        // The page where the human approves (SPEC.md §3). The link carries no token and no secret: approving needs the administrator's
+        // own login, so an AI that holds this link (and its own key) still cannot approve anything.
+        const approveUrl = `${publicBase(ctx, req)}/approvals?id=${encodeURIComponent(e.approvalId)}`;
+        return reply.send(envelope("approval_required", "APPROVAL_REQUIRED", "no", { approval_id: e.approvalId, approve_url: approveUrl }));
       }
       if (e instanceof MoneySwitchError) {
         // performPaidFetch never throws once a payment is signed (it returns

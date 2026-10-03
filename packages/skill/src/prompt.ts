@@ -1,5 +1,6 @@
 import { AGENT_INFO, SHARED_SKILLS_ROOT, SKILL_NAME, type SkillAgent } from "./agents.js";
 import { renderSkill } from "./skill.js";
+import { offersTestPayment, TEST_PAYMENT_PRICE, TEST_PAYMENT_URL, type TestPaymentOffer } from "./testpay.js";
 import { assertKey, normalizeBaseUrl } from "./validate.js";
 
 export interface InstallPromptInput {
@@ -7,6 +8,12 @@ export interface InstallPromptInput {
   key: string;
   keyName?: string | null;
   agent: SkillAgent;
+  /**
+   * The ten-minute path: when the instance runs on a testnet and this key may pay the testnet receiver, the prompt asks the AI for one test
+   * payment after the status call and for its transaction hash. Anything else (no offer, mainnet, the host not allowed) leaves the prompt as it
+   * always was: no payment during installation.
+   */
+  testPayment?: TestPaymentOffer | null;
 }
 
 export const SKILL_BEGIN_MARKER = `-----BEGIN MONEYSWITCH SKILL (${SKILL_NAME}/SKILL.md)-----`;
@@ -21,6 +28,7 @@ export function renderInstallPrompt(input: InstallPromptInput): string {
   assertKey(input.key);
   const info = AGENT_INFO[input.agent] ?? AGENT_INFO.other;
   const skill = renderSkill({ baseUrl: base, key: input.key, keyName: input.keyName }).replace(/\n+$/, "");
+  const testPay = offersTestPayment(input.testPayment);
 
   const where: string[] = [];
   if (info.path) {
@@ -44,8 +52,15 @@ export function renderInstallPrompt(input: InstallPromptInput): string {
     "",
     "无法写入则只报告目标路径和原因，勿复述密钥。If you cannot write there, report the path and blocker, without the key.",
     "",
-    "保存后只查询额度 / Then call GET " + base + "/v1/status with the key; do not make a payment during installation.",
-    "正常只回复两句话：已接入；今日可用、单笔上限及审批线，尚未付款。Reply in at most two sentences: setup result, today's remaining budget, per-request limit, approval threshold, and no payment made. Omit file counts, directory audits and diagnostics unless blocked or asked.",
+    ...(testPay
+      ? [
+          `保存后先查询额度，再做一笔测试付款（${TEST_PAYMENT_PRICE} 测试 USDC，无真实价值）/ Then call GET ${base}/v1/status with the key, then make ONE test payment (${TEST_PAYMENT_PRICE} test USDC, no real value): POST ${base}/v1/fetch with {"url":"${TEST_PAYMENT_URL}","method":"GET","max_price":"${TEST_PAYMENT_PRICE}"}. Do it once; if it fails, say why and stop: never retry it or pay another way.`,
+          "正常只回复两句话：已接入；测试付款的 tx_hash；今日剩余额度。Reply in at most two sentences: setup result, the test payment's tx_hash, and today's remaining budget. Omit file counts, directory audits and diagnostics unless blocked or asked.",
+        ]
+      : [
+          "保存后只查询额度 / Then call GET " + base + "/v1/status with the key; do not make a payment during installation.",
+          "正常只回复两句话：已接入；今日可用、单笔上限及审批线，尚未付款。Reply in at most two sentences: setup result, today's remaining budget, per-request limit, approval threshold, and no payment made. Omit file counts, directory audits and diagnostics unless blocked or asked.",
+        ]),
     "",
     "密钥保密 / The key is a secret: never repeat it in chat, never commit it to git, never send it anywhere but that server.",
     "",

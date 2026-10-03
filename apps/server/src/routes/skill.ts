@@ -65,6 +65,7 @@ export function registerSkillRoutes(app: FastifyInstance, ctx: AppContext) {
         key: res.plaintextKey,
         name: res.row.name,
         key_prefix: res.row.keyPrefix,
+        allowed_hosts: res.row.allowedHosts,
         parent_id: res.row.parentId,
         depth: res.row.depth,
       });
