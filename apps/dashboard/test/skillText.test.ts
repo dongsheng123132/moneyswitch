@@ -142,6 +142,17 @@ describe("the ten-minute path: when the test payment is on offer", () => {
     assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [baseSepolia, monadTestnet] }), true, "Base Sepolia default, Monad testnet enabled too");
   });
 
+  it("ONLY when every enabled network is a testnet: a mainnet enabled next to the testnet is no, even with a testnet default", () => {
+    const baseMainnet = { ...monadTestnet, network: "eip155:8453", chain_id: 8453, network_label: "Base", is_mainnet: true };
+    // the default (is_mainnet describes it) is a testnet, but a mainnet is also enabled: the key is immutable and the test host would be allowed on every chain
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet, monadMainnet] }), false);
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadMainnet, monadTestnet] }), false);
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [baseSepolia, monadTestnet, baseMainnet] }), false);
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet, baseMainnet] }), false);
+    // and still yes when everything enabled is a testnet
+    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet, baseSepolia] }), true);
+  });
+
   it("a mainnet default, an unknown instance, or no Monad testnet (the only chain the test receiver accepts): no", () => {
     assert.equal(testPaymentAvailable({ is_mainnet: true, networks: [monadMainnet, monadTestnet] }), false);
     assert.equal(testPaymentAvailable(null), false);

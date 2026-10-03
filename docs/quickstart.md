@@ -35,7 +35,7 @@ The 12 recovery words are shown **once**. Write them down, tick "I wrote all 12 
 
 ## 4. A key for your AI
 
-On the **Keys** page issue a key: a name, a total, a daily and a per-request limit, an optional approval line, allowed hosts and an expiry. On a testnet instance leave "allow the test payment endpoint" ticked (it adds `app.moneyswitch.dev:443` to the allowed hosts). The key and its **skill paragraph** are shown once. Paste the paragraph into your AI (Claude Code, Codex, OpenClaw, Hermes, ...). Lost the key? *Reset secret and copy skill* revokes the old secret, keeps the limits and history, and gives a new paragraph. Limits cannot be changed after issuing: to change them, revoke the key and issue a new one.
+On the **Keys** page issue a key: a name, a total, a daily and a per-request limit, an optional approval line, allowed hosts and an expiry. On an instance that enables testnets only, leave "allow the test payment endpoint" ticked (it adds `app.moneyswitch.dev:443` to the allowed hosts). The key and its **skill paragraph** are shown once. Paste the paragraph into your AI (Claude Code, Codex, OpenClaw, Hermes, ...). Lost the key? *Reset secret and copy skill* revokes the old secret, keeps the limits and history, and gives a new paragraph. Limits cannot be changed after issuing: to change them, revoke the key and issue a new one.
 
 The skill tells the AI to read `GET /v1/status` and then make one test payment to `https://app.moneyswitch.dev/x402-testnet/check` and report the transaction hash. The same thing by hand:
 

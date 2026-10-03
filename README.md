@@ -33,7 +33,7 @@ The AI pays with `POST /v1/fetch`. Over the approval line the answer is `approva
 
 ### First payment on a testnet
 
-On an instance whose default network is a testnet, the key form offers "allow the test payment endpoint" (ticked by default; it adds `app.moneyswitch.dev:443` to the allowed hosts). The skill then asks the AI to make one test payment to `https://app.moneyswitch.dev/x402-testnet/check` and report the transaction hash. That endpoint is a test receiver on Monad testnet; the money has no value.
+On an instance that enables testnets only (a mainnet enabled next to them turns it off), the key form offers "allow the test payment endpoint" (ticked by default; it adds `app.moneyswitch.dev:443` to the allowed hosts). The skill then asks the AI to make one test payment to `https://app.moneyswitch.dev/x402-testnet/check` and report the transaction hash. That endpoint is a test receiver on Monad testnet; the money has no value.
 
 ## Deploy on your own server
 

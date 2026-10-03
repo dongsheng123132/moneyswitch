@@ -19,11 +19,12 @@ database is still **additive only**: no migration was added or removed, no table
   login (a visit without a session goes to `/login` and comes back to the same approval). The Approvals page marks and scrolls to the
   linked request. The skill (`/skill.md`, every per-key skill, `skills/moneyswitch-pay/SKILL.md`) tells the AI to give the link to a
   person, poll `GET /v1/approvals/:id` every 15 seconds and resend with the `approval_id`.
-- **The ten-minute path (SPEC §0).** On an instance whose default network is a testnet the key form offers "allow the test payment
+- **The ten-minute path (SPEC §0).** On an instance that enables testnets only (a mainnet enabled next to a testnet turns it off: the host
+  is not tied to a chain and an issued key cannot be edited) the key form offers "allow the test payment
   endpoint" (ticked by default; adds `app.moneyswitch.dev:443` to the allowed hosts), and the install prompt then asks the AI to call
   `GET /v1/status` and make one test payment to `https://app.moneyswitch.dev/x402-testnet/check` and report the transaction hash.
-  Never offered on a mainnet default, and only when the key may pay that host and Monad testnet is enabled (the only chain the receiver
-  accepts).
+  Never offered when any mainnet is enabled, and only when the key may pay that host and Monad testnet is enabled (the only chain the
+  receiver accepts).
 - **Wallet surface (SPEC §1, §5).** Routes: `GET /v1/admin/wallet` (status, balance per chain, replaced wallets), `POST …/create`
   (no password, no import: it refuses both), `POST …/backup/confirm` (now a plain acknowledgement that names the wallet whose words were written down, `409 WALLET_CHANGED` if that is not the current one; the two-word quiz is gone) and
   `POST …/replace`. Removed: `import`, `backup` (download), `unlock`, `reveal`, `auto-unlock`, `GET …/retired`. A wallet made by an

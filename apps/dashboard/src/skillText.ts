@@ -16,12 +16,15 @@ export {
 } from "@moneyswitch/skill";
 
 /**
- * The ten-minute path (SPEC.md §0): is the test payment on offer on this instance? Only when its default network is a testnet, and
- * Monad testnet (the one chain the test receiver accepts) is enabled. Unknown (meta not loaded) counts as no.
+ * The ten-minute path (SPEC.md §0): is the test payment on offer on this instance? Only when EVERY network it enables is a testnet,
+ * and Monad testnet (the one chain the test receiver accepts) is among them. A mainnet enabled next to a testnet is a no even when the
+ * default is the testnet: the allowed host is not tied to a chain and a key cannot be edited later, so the test host would stay
+ * allowed on the mainnet for the life of the key. Unknown (meta not loaded) counts as no.
  */
 export function testPaymentAvailable(meta: Pick<AdminMeta, "is_mainnet" | "networks"> | null | undefined): boolean {
   if (!meta || meta.is_mainnet !== false) return false;
-  return (meta.networks ?? []).some((n) => n.network === TEST_PAYMENT_NETWORK);
+  const networks = meta.networks ?? [];
+  return networks.every((n) => !n.is_mainnet) && networks.some((n) => n.network === TEST_PAYMENT_NETWORK);
 }
 
 /** The hosts a new key gets: what was typed plus, when it is on offer and ticked, the test receiver's host. No duplicates (any letter case). */

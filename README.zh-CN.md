@@ -33,7 +33,7 @@ AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，
 
 ### 测试网上的第一笔
 
-默认网络是测试网时，建 key 的表单有「允许测试付款接口」（默认勾选，会把 `app.moneyswitch.dev:443` 加进允许域名）。技能随后会让 AI 向 `https://app.moneyswitch.dev/x402-testnet/check` 付一笔测试款，并报告交易号。这个接口是 Monad 测试网上的测试收款端，钱没有价值。
+实例只启用测试网时（同时启用了主网就不提供），建 key 的表单有「允许测试付款接口」（默认勾选，会把 `app.moneyswitch.dev:443` 加进允许域名）。技能随后会让 AI 向 `https://app.moneyswitch.dev/x402-testnet/check` 付一笔测试款，并报告交易号。这个接口是 Monad 测试网上的测试收款端，钱没有价值。
 
 ## 自己的服务器
 

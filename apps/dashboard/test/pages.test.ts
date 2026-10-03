@@ -35,6 +35,7 @@ let BillsModule: typeof import("../src/pages/BillsPage.tsx");
 let KeyHandoff: typeof import("../src/components/KeyHandoff.tsx").default;
 let KeyRowActions: typeof import("../src/components/KeyRowActions.tsx").default;
 let AllowedHostsField: typeof import("../src/components/AllowedHostsField.tsx").default;
+let testPaymentAvailable: typeof import("../src/skillText.ts").testPaymentAvailable;
 let nav: typeof import("../src/Layout.tsx").NAV;
 let LangProvider: typeof import("../src/i18n/index.tsx").LangProvider;
 let AuthProvider: typeof import("../src/auth.tsx").AuthProvider;
@@ -59,7 +60,7 @@ before(async () => {
   nav = (await import("../src/Layout.tsx")).NAV;
   LangProvider = (await import("../src/i18n/index.tsx")).LangProvider;
   AuthProvider = (await import("../src/auth.tsx")).AuthProvider;
-  ({ TEST_PAYMENT_URL } = await import("../src/skillText.ts"));
+  ({ TEST_PAYMENT_URL, testPaymentAvailable } = await import("../src/skillText.ts"));
   en = {
     keys: (await import("../src/i18n/strings/keys.ts")).keysStrings.en,
     skill: (await import("../src/i18n/strings/skill.ts")).skillStrings.en,
@@ -179,6 +180,16 @@ describe("the ten-minute path: the test payment endpoint in the key form", () =>
     assert.ok(!/<input type="checkbox" checked=""/.test(html));
     assert.ok(!html.includes(esc(en.keys.testEndpointHint)));
     assert.ok(html.includes(esc(en.keys.allowedHostsHintEmpty)));
+  });
+
+  it("a mixed instance (a testnet default with a mainnet enabled too) gets no checkbox: the availability the page computes, fed to the form", () => {
+    const net = (network: string, is_mainnet: boolean) => ({ network, chain_id: 1, usdc_address: "0x1", network_label: network, explorer_base: "https://x", is_mainnet });
+    const mixed = { is_mainnet: false, networks: [net("eip155:10143", false), net("eip155:143", true)] };
+    const testnetsOnly = { is_mainnet: false, networks: [net("eip155:10143", false), net("eip155:84532", false)] };
+    const mixedHtml = render(h(AllowedHostsField, { ...props, testAvailable: testPaymentAvailable(mixed) }));
+    assert.ok(!mixedHtml.includes('type="checkbox"'));
+    assert.ok(!mixedHtml.includes("app.moneyswitch.dev"));
+    assert.ok(render(h(AllowedHostsField, { ...props, testAvailable: testPaymentAvailable(testnetsOnly) })).includes('type="checkbox"'));
   });
 
   it("where the test payment is not on offer (mainnet default, or unknown) there is no checkbox and no mention of the endpoint", () => {

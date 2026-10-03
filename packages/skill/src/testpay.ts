@@ -22,7 +22,7 @@ export function allowsTestPayment(allowedHosts: readonly string[] | null | undef
 export interface TestPaymentOffer {
   /** The key's allowed hosts. */
   allowedHosts: readonly string[];
-  /** The instance's default network is a testnet. */
+  /** Every network the instance enables is a testnet (a mainnet next to a testnet is not enough). */
   testnet: boolean;
 }
 
