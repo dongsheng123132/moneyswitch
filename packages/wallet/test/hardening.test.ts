@@ -14,7 +14,8 @@ import { LocalWalletDriver, WalletError, walletFilePath } from "../src/index.js"
 import { addressFromPhrase } from "./bip44.js";
 
 // Test-only: cheap scrypt, no OS-level ACL work (that is exercised for real in protect.win32.test.ts).
-const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false } as const;
+// (a short drain: a replace that finds a request in flight waits this long before it answers WALLET_BUSY; the production default is 60 s)
+const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false, drainTimeoutMs: 40 } as const;
 const PASSWORD = "original password 1";
 const NEW_PASSWORD = "brand new password 2";
 

@@ -2,7 +2,7 @@ import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
 import type { PaymentRequirements } from "@x402/core/types";
-import type { EvmTypedDataSigner } from "@moneyswitch/wallet";
+import type { EvmTypedDataSigner, SignerLease } from "@moneyswitch/wallet";
 import type { MoneySwitchDb } from "@moneyswitch/db";
 import { callerDeadlineDispatcher } from "@moneyswitch/net";
 import type Database from "better-sqlite3";
@@ -19,6 +19,17 @@ import {
   type MoneyKeyRow,
 } from "@moneyswitch/core";
 import { getActiveNetwork, getEnabledNetworks, SCHEME } from "./networks.js";
+
+/**
+ * Where a paid request gets its signer from. performPaidFetch asks for it LAZILY, at the moment a payment is about to be created
+ * (after the unpaid probe, after the seller asked for money), and gives it back when the call is over. A free resource, or a 402
+ * that is never paid, therefore holds nothing: steady traffic of that kind cannot keep a wallet replacement waiting for ever.
+ * LocalWalletDriver satisfies this.
+ */
+export interface SignerSource {
+  /** A signer plus an in-flight lease, or null when the wallet is locked. Throws (code WALLET_BUSY) while a wallet replacement is draining. */
+  leaseSigner(): SignerLease | null;
+}
 
 export interface PaidFetchInput {
   url: string;
@@ -142,6 +153,8 @@ type OwnAbortCode =
   | "KEY_INVALID"
   | "KEY_REVOKED"
   | "KEY_EXPIRED"
+  | "WALLET_LOCKED"
+  | "WALLET_BUSY"
   | "PAYMENT_FAILED";
 
 const RESPONSE_BODY_LIMIT_BYTES = 1024 * 1024; // 1MB
@@ -200,7 +213,7 @@ export async function performPaidFetch(
   db: MoneySwitchDb,
   sqlite: Database.Database,
   key: MoneyKeyRow,
-  signer: EvmTypedDataSigner,
+  wallet: SignerSource,
   input: PaidFetchInput
 ): Promise<PaidFetchResult> {
   const networks = getEnabledNetworks();
@@ -249,14 +262,21 @@ export async function performPaidFetch(
   // The seller's PAYMENT-RESPONSE said success:false: it could not (or could not yet) confirm the settlement.
   let settleUnconfirmed: { reason: string | null } | null = null;
 
+  // The signer lease, taken in onBeforePaymentCreation (see SignerSource) and given back in the `finally` at the end.
+  // (declared with a cast: it is assigned inside a hook, which would otherwise make the compiler believe it is still null below)
+  let lease = null as SignerLease | null;
   // The wallet refused to sign because it was replaced or locked after this request took its signer (WALLET_CHANGED).
   // Nothing was signed, so the reservation must be RELEASED (failed), never held as `unknown` like a transport error.
   let signerRefused = false;
-  const guardedSigner: EvmTypedDataSigner = {
-    address: signer.address,
+  const leasedSigner: EvmTypedDataSigner = {
+    get address() {
+      if (!lease) throw new Error("the wallet's signer was used before a lease on it was taken");
+      return lease.signer.address;
+    },
     async signTypedData(msg) {
+      if (!lease) throw new Error("the wallet's signer was used before a lease on it was taken");
       try {
-        return await signer.signTypedData(msg);
+        return await lease.signer.signTypedData(msg);
       } catch (e) {
         if ((e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
         throw e;
@@ -266,7 +286,7 @@ export async function performPaidFetch(
 
   const client = new x402Client();
   for (const enabled of networks) {
-    client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(guardedSigner as any));
+    client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(leasedSigner as any));
   }
   client.registerPolicy((_version, reqs) =>
       reqs.filter(
@@ -285,6 +305,24 @@ export async function performPaidFetch(
       if (timedOut || controller.signal.aborted) {
         deadlineBeforeSend = true;
         return { abort: true, reason: "PROBE_DEADLINE_EXPIRED" };
+      }
+      // A payment is about to be created: lease the wallet's signer NOW (not before the unpaid probe). While a wallet replacement
+      // is draining, no new lease is handed out: nothing is reserved or signed and the caller is told to try again.
+      if (!lease) {
+        try {
+          lease = wallet.leaseSigner();
+        } catch (e) {
+          if ((e as { code?: unknown } | null)?.code === "WALLET_BUSY") {
+            ownAbortCode = "WALLET_BUSY";
+            return { abort: true, reason: "WALLET_BUSY" };
+          }
+          ownAbortCode = "PAYMENT_FAILED";
+          return { abort: true, reason: "PAYMENT_FAILED" };
+        }
+        if (!lease) {
+          ownAbortCode = "WALLET_LOCKED";
+          return { abort: true, reason: "WALLET_LOCKED" };
+        }
       }
       const amount = BigInt(ctx.selectedRequirements.amount);
       try {
@@ -716,6 +754,7 @@ export async function performPaidFetch(
     throw e;
   } finally {
     disarmTimer();
+    lease?.release(); // however the call ended: the wallet may be replaced or locked again
   }
 }
 

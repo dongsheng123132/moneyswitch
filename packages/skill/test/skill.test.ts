@@ -143,6 +143,8 @@ describe("renderSkill: content contract", () => {
     expect(failed).toContain("If `charged` is `maybe`, do not retry");
     const err = text.split("\n").find((l) => l.startsWith("| `error`"))!;
     expect(err).toContain("If `charged` is `no`, you may retry once later");
+    // the wallet can be briefly busy (being replaced): nothing was signed, so a single later retry is the right answer
+    expect(err).toContain("WALLET_BUSY");
   });
 
   it("explains the key is a secret and what a MoneyKey is", () => {

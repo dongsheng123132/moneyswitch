@@ -11,7 +11,7 @@ import { unlockWalletOnStartup } from "../../src/context.js";
 
 // Test-only: a cheap scrypt keeps the suite fast (the production costs are covered in packages/wallet), and no OS-level
 // ACL work (it is exercised for real in packages/wallet/test/protect.*.test.ts).
-const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false } as const;
+const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false, drainTimeoutMs: 40 } as const; // (a replace that finds a request in flight waits this long, then answers WALLET_BUSY; production: 60 s)
 const HARDHAT_PHRASE = "test test test test test test test test test test test junk";
 const HARDHAT_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 

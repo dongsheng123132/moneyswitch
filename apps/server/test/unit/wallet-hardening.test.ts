@@ -11,7 +11,7 @@ import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { buildContext, unlockWalletOnStartup } from "../../src/context.js";
 
 // Cheap scrypt and no OS-level ACL work (that is exercised for real in packages/wallet and in the e2e suite).
-const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false } as const;
+const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false, drainTimeoutMs: 40 } as const; // (a replace that finds a request in flight waits this long, then answers WALLET_BUSY; production: 60 s)
 const HARDHAT_PHRASE = "test test test test test test test test test test test junk";
 const HARDHAT_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 

@@ -140,27 +140,17 @@ export function registerGatewayRoutes(app: FastifyInstance, ctx: AppContext) {
       const { approval_id: approvalIdFromBody, ...forwardBody } = body as ChatCompletionsBody & { approval_id?: string };
       const upstreamBody = { ...forwardBody, stream: false };
 
-      // A lease on the signer, held until the paid request is over (see routes/agent.ts): taken right before the
-      // call so nothing can throw between taking it and the `finally` that gives it back.
-      const lease = ctx.wallet.leaseSigner();
-      if (!lease) {
-        return sendPolicyError("WALLET_LOCKED", "Wallet is locked");
-      }
-      let result: Awaited<ReturnType<typeof performPaidFetch>>;
-      try {
-        result = await performPaidFetch(ctx.db, ctx.sqlite, key, lease.signer, {
-          url: upstreamUrl,
-          host: url.hostname + ":" + (url.port || (url.protocol === "https:" ? 443 : 80)),
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: upstreamBody,
-          approvalId: typeof approvalIdFromBody === "string" ? approvalIdFromBody : null,
-          kind: "chat",
-          model: body.model,
-        });
-      } finally {
-        lease.release();
-      }
+      // The wallet is leased inside performPaidFetch, when a payment is about to be created (see routes/agent.ts).
+      const result = await performPaidFetch(ctx.db, ctx.sqlite, key, ctx.wallet, {
+        url: upstreamUrl,
+        host: url.hostname + ":" + (url.port || (url.protocol === "https:" ? 443 : 80)),
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: upstreamBody,
+        approvalId: typeof approvalIdFromBody === "string" ? approvalIdFromBody : null,
+        kind: "chat",
+        model: body.model,
+      });
       chargedSoFar = result.charged;
 
       if (result.paymentUnknown || result.bodyIncomplete) {

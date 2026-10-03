@@ -162,6 +162,11 @@ export interface LocalWalletDriverOptions {
   /** Test seam: the PowerShell executable used on Windows. */
   powershellPath?: string;
   /**
+   * How long replaceWallet waits for the requests in flight to finish before it gives up with WALLET_BUSY (default 60 s). While it
+   * waits, no new lease is handed out, so steady traffic cannot keep it waiting for ever.
+   */
+  drainTimeoutMs?: number;
+  /**
    * Called when credentials were DELETED from retired/ because they only opened a copy of the live key (see
    * retiredSecretsOpeningLiveKey), so the server can write an audit row. File names only, never contents.
    */
@@ -450,10 +455,17 @@ export class LocalWalletDriver {
   private protectionState: SecretProtection | null = null;
   /** retired/ secret files that opened a retired copy of the live (password-mode) key at the last look: they are a way in without the password. */
   private retiredOpeners: string[] = [];
+  /** A replace is waiting for the requests in flight to finish: no new lease is handed out until it is over. */
+  private draining = false;
+  /** Wake-ups for a replace that waits for the last lease to be released. */
+  private idleWaiters: Array<() => void> = [];
+  /** How long replaceWallet waits for open leases (ms). Adjustable at run time (operations, tests). */
+  drainTimeoutMs: number;
 
   constructor(dataDir = defaultDataDir(), options: LocalWalletDriverOptions = {}) {
     this.dataDir = dataDir;
     this.options = options;
+    this.drainTimeoutMs = options.drainTimeoutMs ?? 60_000;
     this.protector = options.protect === false ? null : options.protect ?? defaultProtector({ powershellPath: options.powershellPath });
   }
 
@@ -761,6 +773,9 @@ export class LocalWalletDriver {
   leaseSigner(): SignerLease | null {
     const wallet = this.unlockedWallet;
     if (!wallet) return null;
+    // A replace is waiting for the requests in flight to finish: no NEW one may start, or steady traffic would keep it waiting
+    // for ever. Nothing has been signed for the refused request; it can simply try again once the replacement is over.
+    if (this.draining) throw new WalletError("WALLET_BUSY", "The wallet is being replaced; no new payment can start until that is done (nothing was signed)");
     this.leases++;
     let released = false;
     return {
@@ -769,8 +784,41 @@ export class LocalWalletDriver {
         if (released) return;
         released = true;
         this.leases--;
+        if (this.leases === 0) this.wakeIdleWaiters();
       },
     };
+  }
+
+  private wakeIdleWaiters(): void {
+    const waiters = this.idleWaiters;
+    this.idleWaiters = [];
+    for (const wake of waiters) wake();
+  }
+
+  /**
+   * Starts draining (new leases are refused) and waits until every open lease has been released, at most drainTimeoutMs. The
+   * caller clears the flag in a `finally`. Gives up with WALLET_BUSY when requests are still in flight after the bound.
+   */
+  private async waitForIdle(): Promise<void> {
+    this.draining = true;
+    if (this.leases === 0) return;
+    await new Promise<void>((resolve, reject) => {
+      const wake = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        this.idleWaiters = this.idleWaiters.filter((w) => w !== wake);
+        reject(
+          new WalletError(
+            "WALLET_BUSY",
+            `${this.leases} payment request(s) are still in flight after waiting ${Math.round(this.drainTimeoutMs / 1000)} s; try again when they have finished`
+          )
+        );
+      }, this.drainTimeoutMs);
+      timer.unref?.();
+      this.idleWaiters.push(wake);
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -871,27 +919,35 @@ export class LocalWalletDriver {
     return exclusive(this.dataDir, async () => {
       const old = this.readLive();
       if (!this.hasKeystore() || !old) throw new WalletError("NO_WALLET", "No wallet to replace");
-      this.assertIdle();
-      const wallet = spec.kind === "create" ? Wallet.createRandom() : await this.parseImport(spec.source);
-      if (spec.kind === "import") this.assertExpectedAddress(wallet, opts.expectedAddress);
-      const staged = await this.stage(wallet, mode, opts.password);
-      if (staged.secret) await this.protectDirectory();
-      // --- synchronous from here to the end of the swap ---
-      this.assertIdle();
-      hooks.guard?.({ oldAddress: old.address, newAddress: wallet.address });
-      const retired = this.swapForReplacement(old, staged, hooks);
-      this.adopt(staged);
-      if (staged.protection === "auto") await this.refreshProtection();
-      // Adopting a key in password mode (including the pair this very call just retired, when it is the same key).
-      const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "replace") : null;
-      return {
-        address: wallet.address,
-        mode,
-        ...(spec.kind === "create" ? { mnemonic: phraseOf(wallet)! } : {}),
-        hasRecoveryPhrase: phraseOf(wallet) !== null,
-        retired,
-        ...scrubReport(scrub),
-      };
+      // From here until the end no NEW payment may start (leaseSigner refuses), and the requests already in flight are given up to
+      // drainTimeoutMs to finish. Without this, free requests and 402 probes - or simply steady traffic - could keep the lock on
+      // the wallet closed for ever.
+      try {
+        await this.waitForIdle();
+        const wallet = spec.kind === "create" ? Wallet.createRandom() : await this.parseImport(spec.source);
+        if (spec.kind === "import") this.assertExpectedAddress(wallet, opts.expectedAddress);
+        const staged = await this.stage(wallet, mode, opts.password);
+        if (staged.secret) await this.protectDirectory();
+        // --- synchronous from here to the end of the swap ---
+        this.assertIdle();
+        hooks.guard?.({ oldAddress: old.address, newAddress: wallet.address });
+        const retired = this.swapForReplacement(old, staged, hooks);
+        this.adopt(staged);
+        this.draining = false; // the new wallet is live: payments may start again, with it
+        if (staged.protection === "auto") await this.refreshProtection();
+        // Adopting a key in password mode (including the pair this very call just retired, when it is the same key).
+        const scrub = mode === "manual" ? await this.scrubRetiredOpeners(staged.keystoreJson, "replace") : null;
+        return {
+          address: wallet.address,
+          mode,
+          ...(spec.kind === "create" ? { mnemonic: phraseOf(wallet)! } : {}),
+          hasRecoveryPhrase: phraseOf(wallet) !== null,
+          retired,
+          ...scrubReport(scrub),
+        };
+      } finally {
+        this.draining = false;
+      }
     });
   }
 

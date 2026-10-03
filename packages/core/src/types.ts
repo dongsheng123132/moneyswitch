@@ -100,6 +100,7 @@ export type MoneySwitchErrorCode =
   | "APPROVAL_REQUIRED"
   | "APPROVAL_INVALID"
   | "WALLET_LOCKED"
+  | "WALLET_BUSY"
   | "PAYMENT_FAILED"
   | "UPSTREAM_ERROR"
   | "FORBIDDEN";

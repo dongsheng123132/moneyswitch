@@ -505,3 +505,130 @@ describe("#1: every deletion from retired/ is reported to the audit hook (file n
     expect(await openersOfLiveKey(dir)).toEqual([]);
   });
 });
+
+// ==============================================================================================================
+// #2: replace drains instead of being starved by steady traffic
+// ==============================================================================================================
+
+describe("#2: replaceWallet waits (bounded) for requests in flight, and refuses new leases while it waits", () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const drainingDriver = (dir: string, drainTimeoutMs: number) => new LocalWalletDriver(dir, { ...FAST, drainTimeoutMs } as never);
+
+  it("it waits for the open lease to finish and then goes through (it does not answer WALLET_BUSY at once)", async () => {
+    const dir = mkdir("drain-wait");
+    const driver = drainingDriver(dir, 5_000);
+    const created = await driver.createWithPhrase();
+    const lease = driver.leaseSigner()!;
+    let finished = false;
+    const replacing = driver.replaceWallet({ kind: "create" }).then((r) => {
+      finished = true;
+      return r;
+    });
+    await sleep(150);
+    expect(finished, "still waiting for the request in flight").toBe(false);
+    expect(read(path.join(dir, "wallet.json"))).toContain(created.address.toLowerCase().slice(2)); // nothing touched yet
+    const started = Date.now();
+    lease.release();
+    const result = await replacing;
+    expect(Date.now() - started, "released -> the drain ends at once, it does not sleep out the bound").toBeLessThan(2_000);
+    expect(result.address).not.toBe(created.address);
+    expect(driver.getAddress()).toBe(result.address);
+    expect(driver.inFlight).toBe(0);
+  });
+
+  it("while it waits, NEW leases are refused with WALLET_BUSY (so steady traffic cannot keep it waiting)", async () => {
+    const dir = mkdir("drain-refuses");
+    const driver = drainingDriver(dir, 5_000);
+    await driver.createWithPhrase();
+    const first = driver.leaseSigner()!;
+    const replacing = driver.replaceWallet({ kind: "create" });
+    await sleep(100);
+    for (let i = 0; i < 3; i++) {
+      let refused: unknown = null;
+      try {
+        driver.leaseSigner();
+      } catch (e) {
+        refused = e;
+      }
+      expect(refused, "a lease taken while a replace is waiting").toMatchObject({ code: "WALLET_BUSY" });
+    }
+    expect(driver.inFlight, "refused leases are not counted").toBe(1);
+    first.release();
+    const result = await replacing;
+    // afterwards the flag is gone and the NEW wallet can be leased
+    const next = driver.leaseSigner()!;
+    expect(next.signer.address).toBe(result.address);
+    next.release();
+  });
+
+  it("it gives up after the bound with WALLET_BUSY, touches nothing, and payments can start again", async () => {
+    const dir = mkdir("drain-timeout");
+    const driver = drainingDriver(dir, 150);
+    const created = await driver.createWithPhrase();
+    const before = walk(dir);
+    const keystore = read(path.join(dir, "wallet.json"));
+    const lease = driver.leaseSigner()!;
+    const started = Date.now();
+    const error = await driver.replaceWallet({ kind: "create" }).then(() => null, (e) => e);
+    const elapsed = Date.now() - started;
+    expect(error).toMatchObject({ code: "WALLET_BUSY" });
+    expect(elapsed).toBeGreaterThanOrEqual(120);
+    expect(elapsed).toBeLessThan(3_000);
+    expect(walk(dir)).toEqual(before);
+    expect(read(path.join(dir, "wallet.json"))).toBe(keystore);
+    // the flag is cleared: the request in flight keeps its signer and new requests can lease again
+    const another = driver.leaseSigner()!;
+    expect(another.signer.address).toBe(created.address);
+    another.release();
+    lease.release();
+    await expect(driver.replaceWallet({ kind: "create" })).resolves.toBeTruthy();
+  });
+
+  it("with nothing in flight it is as immediate as before", async () => {
+    const dir = mkdir("drain-idle");
+    const driver = drainingDriver(dir, 60_000);
+    await driver.createWithPhrase();
+    const started = Date.now();
+    await driver.replaceWallet({ kind: "create" });
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  it("a replace that is vetoed or fails after the wait clears the flag too", async () => {
+    const dir = mkdir("drain-veto");
+    const driver = drainingDriver(dir, 5_000);
+    await driver.createWithPhrase();
+    const lease = driver.leaseSigner()!;
+    const replacing = driver.replaceWallet({ kind: "create" }, {}, { guard: () => { throw new Error("vetoed by the caller"); } });
+    await sleep(60);
+    lease.release();
+    await expect(replacing).rejects.toThrow("vetoed by the caller");
+    const next = driver.leaseSigner();
+    expect(next, "a vetoed replace must not leave the wallet refusing payments").not.toBeNull();
+    next!.release();
+  });
+
+  it("lock() is still refused at once while a lease is open (it does not wait)", async () => {
+    const dir = mkdir("drain-lock");
+    const driver = drainingDriver(dir, 5_000);
+    await driver.createWithPhrase();
+    const lease = driver.leaseSigner()!;
+    expect(() => driver.lock()).toThrow(/in flight/);
+    lease.release();
+    driver.lock();
+    expect(driver.leaseSigner()).toBeNull();
+  });
+
+  it("a second replace queued behind a waiting one waits its turn and still works", async () => {
+    const dir = mkdir("drain-two");
+    const driver = drainingDriver(dir, 5_000);
+    await driver.createWithPhrase();
+    const lease = driver.leaseSigner()!;
+    const one = driver.replaceWallet({ kind: "create" });
+    const two = driver.replaceWallet({ kind: "create" });
+    await sleep(80);
+    lease.release();
+    const [a, b] = await Promise.all([one, two]);
+    expect(a.address).not.toBe(b.address);
+    expect(driver.getAddress()).toBe(b.address);
+  });
+});

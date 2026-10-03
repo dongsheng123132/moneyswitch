@@ -96,6 +96,7 @@ export function openAiStatusForCode(code: string): number {
     case "APPROVAL_INVALID":
       return 409;
     case "WALLET_LOCKED":
+    case "WALLET_BUSY": // the wallet is being replaced right now: nothing was signed, try again in a moment
       return 503;
     case "model_not_found":
       return 404;
@@ -137,6 +138,8 @@ export function humanMessageForCode(code: string): string {
       return "approval_id is unknown, not approved yet, expired, already used, or does not match this request";
     case "WALLET_LOCKED":
       return "The MoneySwitch wallet is locked; an admin must unlock it";
+    case "WALLET_BUSY":
+      return "The MoneySwitch wallet is being replaced right now; nothing was signed or charged. Try again in a moment";
     case "model_not_allowed":
       return "MoneyKey is not allowed to use this model";
     case "model_not_found":

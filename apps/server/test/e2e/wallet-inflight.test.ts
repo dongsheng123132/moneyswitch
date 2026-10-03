@@ -107,8 +107,14 @@ async function waitFor(condition: () => boolean, what: string, timeoutMs = 10_00
   }
 }
 
-describe("a payment in flight keeps the wallet from being replaced", () => {
-  it("replace is refused with 409 WALLET_BUSY while a paid fetch is in flight, the fetch completes untouched, and afterwards replace works", async () => {
+describe("a payment in flight keeps the wallet from being replaced - for a bounded time", () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  afterEach(() => {
+    wallet.drainTimeoutMs = 60_000;
+  });
+
+  it("replace gives up with 409 WALLET_BUSY after the bound while a paid fetch is still in flight; the fetch completes untouched, and afterwards replace works", async () => {
+    wallet.drainTimeoutMs = 300;
     seller.setBehavior({ paidDelayMs: 1500 }); // the money is in (settled), the answer takes a while
     const key = await createKey();
     const address = wallet.getAddress()!;
@@ -119,7 +125,9 @@ describe("a payment in flight keeps the wallet from being replaced", () => {
     await waitFor(() => seller.requests.some((r) => r.paid), "the paid request to reach the seller");
     expect(wallet.inFlight).toBe(1);
 
+    const started = Date.now();
     const busy = await adminPost("/v1/admin/wallet/replace", { confirm_address: address });
+    expect(Date.now() - started, "it waited for the bound before giving up").toBeGreaterThanOrEqual(250);
     expect(busy.statusCode).toBe(409);
     expect(busy.json().error).toBe("WALLET_BUSY");
     expect(fs.readFileSync(walletFilePath(tmpDir), "utf-8")).toBe(keystoreBefore);
@@ -138,7 +146,93 @@ describe("a payment in flight keeps the wallet from being replaced", () => {
     expect(wallet.getAddress()).toBe(replaced.json().address);
   });
 
-  it("the lease is given back whatever happens to the request: policy refusal, an unusable max_price, an upstream that never answers", async () => {
+  it("with time to spare, replace WAITS for the fetch in flight and then goes through; a payment that starts meanwhile is refused (WALLET_BUSY, charged no, nothing signed)", async () => {
+    wallet.drainTimeoutMs = 20_000;
+    seller.setBehavior({ paidDelayMs: 1500 });
+    const key = await createKey();
+    const address = wallet.getAddress()!;
+
+    const first = fetchVia(key, { url: URL_ITEM() });
+    await waitFor(() => seller.requests.some((r) => r.paid), "the first paid request to reach the seller");
+    let replaceAnswered = false;
+    const replacing = adminPost("/v1/admin/wallet/replace", { confirm_address: address }).then((r) => {
+      replaceAnswered = true;
+      return r;
+    });
+    await sleep(250);
+    expect(replaceAnswered, "the replace is waiting, not refusing").toBe(false);
+
+    // a second payment during the wait: its probe is answered, but no lease is handed out for the payment
+    const second = await fetchVia(key, { url: URL_ITEM() });
+    expect(second.body).toMatchObject({ status: "error", code: "WALLET_BUSY", charged: "no" });
+    expect(seller.requests.filter((r) => r.paid), "only the first payment ever reached the seller").toHaveLength(1);
+    expect(await payments(key), "nothing was reserved for the refused one").toHaveLength(1);
+    expect(usedTotal(db, keyIds.get(key)!)).toBe(10_000n);
+
+    expect((await first).body).toMatchObject({ status: "ok", charged: "yes" });
+    const replaced = await replacing;
+    expect(replaced.statusCode).toBe(200);
+    const newAddress = replaced.json().address as string;
+    expect(newAddress).not.toBe(address);
+
+    // afterwards payments work again, signed by the NEW wallet
+    const third = await fetchVia(key, { url: URL_ITEM() });
+    expect(third.body).toMatchObject({ status: "ok", charged: "yes" });
+    const rows = await payments(key);
+    expect(rows.map((r) => r.authFrom)).toContain(newAddress);
+    expect(wallet.inFlight).toBe(0);
+  });
+
+  it("free requests and 402 probes do NOT hold the wallet: a replace is not held up by them (the lease is taken when a payment is about to be created)", async () => {
+    const key = await createKey();
+    const address = wallet.getAddress()!;
+
+    // a free resource: no payment, so no lease at all
+    seller.setBehavior({ free: true });
+    const lease = vi.spyOn(wallet, "leaseSigner");
+    const free = await fetchVia(key, { url: URL_ITEM() });
+    expect(free.body).toMatchObject({ status: "ok", charged: "no" });
+    expect(lease).not.toHaveBeenCalled();
+    lease.mockRestore();
+
+    // a request stuck in its unpaid probe for a long time: it holds nothing
+    seller.reset();
+    seller.setBehavior({ probeDelayMs: 2500 });
+    let probeDone = false;
+    const slow = fetchVia(key, { url: URL_ITEM() }).then((r) => {
+      probeDone = true;
+      return r;
+    });
+    await waitFor(() => seller.requests.length >= 1, "the probe to reach the seller");
+    expect(wallet.inFlight, "a request that is only probing holds no lease").toBe(0);
+    const started = Date.now();
+    const replaced = await adminPost("/v1/admin/wallet/replace", { confirm_address: address });
+    expect(replaced.statusCode).toBe(200);
+    expect(Date.now() - started, "no waiting for the probe").toBeLessThan(2000);
+    expect(probeDone, "the probe is still pending when the replace returns").toBe(false);
+
+    // when its 402 finally arrives it pays with the wallet that is live NOW
+    const result = await slow;
+    expect(result.body).toMatchObject({ status: "ok", charged: "yes" });
+    const row = (await payments(key)).find((r) => r.status === "settled")!;
+    expect(row.authFrom).toBe(replaced.json().address);
+  });
+
+  it("the lease is given back whatever happens to the request: policy refusal after it was taken, an unusable max_price, an upstream that never answers", async () => {
+    const poor = await app.inject({
+      method: "POST",
+      url: "/v1/keys",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { name: "poor", total_budget: "0.001", daily_budget: "0.001", per_request_limit: "1", allowed_hosts: [`127.0.0.1:${seller.port}`] },
+    });
+    keyIds.set(poor.json().key, poor.json().id);
+    const lease = vi.spyOn(wallet, "leaseSigner");
+    const denied = await fetchVia(poor.json().key, { url: URL_ITEM() });
+    expect(denied.body).toMatchObject({ status: "denied", charged: "no" });
+    expect(lease, "the lease WAS taken (a payment was about to be created) ...").toHaveBeenCalled();
+    expect(wallet.inFlight, "... and given back when the policy refused it").toBe(0);
+    lease.mockRestore();
+
     const key = await createKey();
     expect((await fetchVia(key, { url: `http://127.0.0.1:${seller.port + 1}/nope` })).body.status).toBe("denied"); // host not allowed
     expect(wallet.inFlight).toBe(0);
@@ -180,7 +274,10 @@ describe("a signer that outlived its wallet refuses to sign", () => {
   });
 });
 
-describe("the OpenAI-compatible gateway holds the lease too", () => {
+describe("the OpenAI-compatible gateway leases the wallet for a payment too", () => {
+  afterEach(() => {
+    wallet.drainTimeoutMs = 60_000;
+  });
   const chat = (key: string) =>
     app.inject({
       method: "POST",
@@ -189,7 +286,7 @@ describe("the OpenAI-compatible gateway holds the lease too", () => {
       payload: { model: "stub-model", messages: [{ role: "user", content: "hi" }] },
     });
 
-  it("replace is refused while a chat completion is in flight; a signer that outlived its wallet answers 503 WALLET_LOCKED with nothing paid", async () => {
+  it("a replace waits for a chat completion in flight while new payments get 503 WALLET_BUSY; a signer that outlived its wallet answers 503 WALLET_LOCKED with nothing paid", async () => {
     const channel = await app.inject({
       method: "POST",
       url: "/v1/admin/channels",
@@ -199,19 +296,25 @@ describe("the OpenAI-compatible gateway holds the lease too", () => {
     expect(channel.statusCode).toBeLessThan(300);
     const key = await createKey();
 
-    // 1. in flight: the lease is held until the paid answer is back
+    // 1. in flight: the lease is held until the paid answer is back; a replace waits for it, and a payment that starts meanwhile is refused
+    wallet.drainTimeoutMs = 20_000;
     seller.setBehavior({ paidDelayMs: 1500 });
     const inFlight = chat(key);
     await waitFor(() => seller.requests.some((r) => r.paid), "the paid chat request to reach the seller");
     expect(wallet.inFlight).toBe(1);
-    const busy = await adminPost("/v1/admin/wallet/replace", { confirm_address: wallet.getAddress() });
-    expect(busy.statusCode).toBe(409);
-    expect(busy.json().error).toBe("WALLET_BUSY");
+    const replacing = adminPost("/v1/admin/wallet/replace", { confirm_address: wallet.getAddress() });
+    await new Promise((r) => setTimeout(r, 200));
+    const during = await chat(key);
+    expect(during.statusCode).toBe(503);
+    expect(during.json().error.code).toBe("WALLET_BUSY");
+    expect(seller.requests.filter((r) => r.paid)).toHaveLength(1);
     expect((await inFlight).statusCode).toBe(200);
+    expect((await replacing).statusCode).toBe(200);
     expect(wallet.inFlight).toBe(0);
 
     // 2. a stale signer (replaced after it was taken) refuses to sign: 503, nothing paid, reservation released
     seller.reset();
+    wallet.drainTimeoutMs = 60_000;
     const staleLease = wallet.leaseSigner()!;
     const stale = staleLease.signer;
     staleLease.release();

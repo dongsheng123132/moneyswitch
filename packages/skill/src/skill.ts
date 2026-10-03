@@ -168,7 +168,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
       B +
       "/v1/history` later and let the user decide. |",
     "| `payment_failed` | `PAYMENT_REJECTED` or `PAYMENT_FAILED`. | If `charged` is `maybe`, do not retry. Otherwise report the failure; do not loop. |",
-    '| `error` | `WALLET_LOCKED`, invalid/revoked/expired key, or upstream error. | If `charged` is `no`, you may retry once later. Wallet/key problems need the user; replace a dead key via "Reset secret and copy skill". |',
+    '| `error` | `WALLET_LOCKED`, `WALLET_BUSY` (the wallet is being replaced for a moment), invalid/revoked/expired key, or upstream error. | If `charged` is `no`, you may retry once later (`WALLET_BUSY` clears by itself within about a minute; nothing was signed). Wallet/key problems need the user; replace a dead key via "Reset secret and copy skill". |',
     ""
   );
   push(
