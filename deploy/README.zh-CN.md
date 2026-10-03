@@ -54,9 +54,15 @@ curl --fail http://127.0.0.1:4020/healthz
 ```sh
 docker compose stop server
 mkdir -p backups
-docker compose run --rm --no-deps --user root --entrypoint tar server -C /data -czf - . > backups/data-$(date +%Y%m%d-%H%M%S).tgz
+f=backups/data-$(date +%Y%m%d-%H%M%S).tgz
+docker compose run --rm --no-deps --user node --entrypoint tar server -C /data -czf - . > "$f"
+sh deploy/check-backup.sh "$f"
 docker compose start server
 ```
+
+**必须用 `--user node`，不要用 `--user root`。** `/data` 的权限是 0700、里面的文件是 0600，属主是服务运行的 `node` 账户；`docker-compose.yml` 里有 `cap_drop: ALL`，容器里的 root 没有绕过文件权限的能力，对这个目录等于外人。用 root 运行 tar 只会打印 `Permission denied`，然后照样生成一份压缩包，里面**没有 `wallet.json` 和解锁密钥**，不细看根本发现不了。也可以像 `deploy/upgrade-us.sh` 那样，在宿主机上以 root 直接打包数据卷（`tar -C /var/lib/docker/volumes/moneyswitch_moneyswitch-data/_data -czf backups/data-<时间>.tgz .`，卷名以 `docker volume ls` 为准）。
+
+`deploy/check-backup.sh` 只列出压缩包的内容（不解压到磁盘，也不显示任何秘密），并断言：里面有 `wallet.json`；如果这个钱包是自动解锁模式，还要有**同一个地址**的 `wallet-unlock-<地址>.secret`（密码模式的钱包没有解锁密钥，不要求，但要记住密码）。输出 `OK` 才算备份有效；输出 `FAIL`（退出码 1）就说明这份备份不能用：先按上面的办法重做，再继续升级或清理。服务器仍是停止状态，别忘了 `docker compose start server`。
 
 备份目录设为仅管理员可读。升级前记录旧镜像 ID、Git commit 和备份；从同一个代码源重新构建新镜像后切换。回滚使用旧镜像。本版本的数据库迁移（`0007_wallet_lifecycle.sql`）只增不删（两个可空列和一张新表），旧镜像打开已迁移的数据库不会出错（`deploy/upgrade-us.sh` 升级失败时的自动回滚就是这样做的，并有测试覆盖）；想要最保守，或者在新版本上已经把钱包改成自动解锁/更换过之后（旧镜像打不开自动解锁的钱包），请用升级前的数据备份恢复。不要执行 `docker compose down -v`，它会删除持久数据。
 
