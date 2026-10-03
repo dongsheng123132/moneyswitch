@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, isNotNull, isNull, lt } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
+import { writeAudit } from "./audit.js";
 import { dbNumberToMicros } from "./money.js";
 import type { PaymentRow, PaymentStatus } from "./types.js";
 
@@ -72,6 +73,52 @@ export function markUnknown(
     })
     .where(eq(schema.payments.id, id))
     .run();
+}
+
+export interface SweepStaleReservationsResult {
+  /** Reserved rows with a captured authorization: now `unknown` (still counted; reconcile resolves them on chain). */
+  toUnknown: string[];
+  /** Reserved rows nothing was ever signed for: now `failed` (budget released). */
+  toFailed: string[];
+}
+
+/**
+ * Startup sweep of payments a dead process left `reserved`. Run once, synchronously, BEFORE the server accepts
+ * requests: every `reserved` row created before `bootedAtIso` belongs to a process that no longer exists, so
+ * nothing will ever settle, fail or mark it, and `reserved` counts against the key's budget forever.
+ *
+ *  - an EIP-3009 authorization was captured (`auth_*`, written by the x402 hook right after the buyer signed and
+ *    before the paid request left) means the money MAY have moved: the row becomes `unknown`, which keeps it counted
+ *    and lets reconcile ask the chain once the authorization has expired;
+ *  - without one nothing was ever signed, so nothing can have moved: the row becomes `failed` and the budget is
+ *    released.
+ *
+ * Rows created at or after `bootedAtIso` belong to this process and are not touched.
+ */
+export function sweepStaleReservations(db: MoneySwitchDb, bootedAtIso: string): SweepStaleReservationsResult {
+  const stale = db
+    .select()
+    .from(schema.payments)
+    .where(and(eq(schema.payments.status, "reserved"), lt(schema.payments.createdAt, bootedAtIso)))
+    .orderBy(schema.payments.createdAt)
+    .all()
+    .map(rowToPayment);
+
+  const result: SweepStaleReservationsResult = { toUnknown: [], toFailed: [] };
+  for (const payment of stale) {
+    // Any trace of a signed authorization counts: a half-written triple is still evidence that something was signed.
+    const signed = payment.authFrom !== null || payment.authNonce !== null || payment.authValidBefore !== null;
+    if (signed) {
+      markUnknown(db, payment.id, "RESTARTED_IN_FLIGHT");
+      writeAudit(db, "system", "payment.startup_sweep.unknown", { paymentId: payment.id, keyId: payment.keyId, errorCode: "RESTARTED_IN_FLIGHT" });
+      result.toUnknown.push(payment.id);
+    } else {
+      failPayment(db, payment.id, "RESTARTED_BEFORE_SIGNING");
+      writeAudit(db, "system", "payment.startup_sweep.failed", { paymentId: payment.id, keyId: payment.keyId, errorCode: "RESTARTED_BEFORE_SIGNING" });
+      result.toFailed.push(payment.id);
+    }
+  }
+  return result;
 }
 
 /**
