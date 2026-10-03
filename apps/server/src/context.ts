@@ -78,6 +78,12 @@ export async function unlockWalletOnStartup(wallet: LocalWalletDriver, password:
     }
     return;
   }
+  if (report.restoredSecret) {
+    console.log(
+      `[moneyswitch] This wallet's unlock secret had been moved to retired/${report.restoredSecret} (while wallet.json belonged to another wallet). ` +
+        "It opens this wallet, so it was moved back."
+    );
+  }
   const secretName = (): string => {
     const file = wallet.secretPath;
     return file ? path.basename(file) : "wallet-unlock-<address>.secret";
@@ -102,9 +108,14 @@ export async function unlockWalletOnStartup(wallet: LocalWalletDriver, password:
         secret_unreadable: "cannot be read",
         secret_wrong: "does not open wallet.json",
       };
+      // A secret that an earlier start moved aside (wallet.json belonged to another key then) is named exactly, so nobody has to guess.
+      const aside = attempt.reason === "secret_missing" && report.retiredSecretFiles?.length ? report.retiredSecretFiles : null;
       console.error(
         `[moneyswitch] ERROR: auto-unlock is ON for this wallet, but its unlock secret (${secretName()}) ${what[attempt.reason ?? "secret_wrong"] ?? "does not work"}, so the wallet stays LOCKED. ` +
-          "Restore that file from a backup of the data directory, or use Replace wallet in the Dashboard (import your recovery phrase or private key)."
+          (aside
+            ? `This wallet's secret was moved aside before (while wallet.json belonged to another wallet): ${aside.map((n) => `retired/${n}`).join(", ")} - but ${aside.length === 1 ? "it does" : "they do"} not open this wallet, so it was not moved back. ` +
+              "Restore the right file from a backup of the data directory, or use Replace wallet in the Dashboard (import your recovery phrase or private key)."
+            : "Restore that file from a backup of the data directory, or use Replace wallet in the Dashboard (import your recovery phrase or private key).")
       );
     }
   }

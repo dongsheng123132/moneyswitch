@@ -42,6 +42,13 @@ export interface StartupUnlock {
   unlocked: boolean;
   /** In the order tried. Empty when there was nothing to try (no wallet, or no credential configured). */
   attempts: UnlockAttempt[];
+  /**
+   * The wallet's own unlock secret was missing, and a copy that an earlier start had moved to retired/ (while wallet.json
+   * belonged to another key) opens the keystore: it was moved back. The value is its name inside retired/.
+   */
+  restoredSecret?: string;
+  /** The unlock secret is missing and these files in retired/ carry this wallet's address in their name but do NOT open it. */
+  retiredSecretFiles?: string[];
 }
 
 export interface UnlockStatus {
@@ -276,6 +283,17 @@ function removeQuietly(file: string): void {
     removeFile(file);
   } catch {
     /* already gone */
+  }
+}
+
+/** Moves a file; across file systems (EXDEV) it is copied and the original removed only after the copy exists. */
+function moveFileSync(from: string, to: string): void {
+  try {
+    renameOver(from, to);
+  } catch (e) {
+    if (errorCode(e) !== "EXDEV") throw e;
+    fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+    removeFile(from);
   }
 }
 
@@ -613,11 +631,18 @@ export class LocalWalletDriver {
       if (this.unlockedWallet) return { unlocked: true, attempts: [] };
 
       const attempts: UnlockAttempt[] = [];
+      let restoredSecret: string | undefined;
+      let retiredSecretFiles: string[] | undefined;
       const finish = (wallet: AnyWallet | null, by: UnlockSource | null): StartupUnlock => {
         if (wallet) this.adoptUnlocked(wallet);
         this.unlockState = { unlockedBy: wallet ? by : null, attempts };
         this.refreshProtection();
-        return { unlocked: wallet !== null, attempts: attempts.map((a) => ({ ...a })) };
+        return {
+          unlocked: wallet !== null,
+          attempts: attempts.map((a) => ({ ...a })),
+          ...(restoredSecret ? { restoredSecret } : {}),
+          ...(retiredSecretFiles?.length ? { retiredSecretFiles } : {}),
+        };
       };
 
       const configured = typeof opts.password === "string" && opts.password.trim() !== "" ? opts.password : null;
@@ -631,6 +656,13 @@ export class LocalWalletDriver {
       }
 
       const secretFile = this.secretPathFor(live.address);
+      if (live.protection === "auto" && !fs.existsSync(secretFile)) {
+        // An earlier start may have moved this wallet's secret to retired/ because wallet.json belonged to another key at the time.
+        // Now that the right wallet.json is back, put it back (never leave the operator with "restore it from a backup").
+        const found = await this.restoreOrphanedSecret(live);
+        restoredSecret = found.restored ?? undefined;
+        retiredSecretFiles = found.candidates;
+      }
       if (live.protection === "auto" || fs.existsSync(secretFile)) {
         const secret = this.readSecret(secretFile);
         if (secret.ok) {
@@ -1069,14 +1101,39 @@ export class LocalWalletDriver {
     const base = path.basename(file, ext);
     const name = uniqueName(this.retiredDir, `${kind}-${base}-${stamp()}`, ext);
     const dest = path.join(this.retiredDir, name);
-    try {
-      renameOver(file, dest);
-    } catch (e) {
-      if (errorCode(e) !== "EXDEV") throw e;
-      fs.copyFileSync(file, dest, fs.constants.COPYFILE_EXCL);
-      removeFile(file);
-    }
+    moveFileSync(file, dest);
     return dest;
+  }
+
+  /**
+   * The unlock secret of the live (auto) keystore is missing. Look in retired/ for secrets that an earlier start moved there under
+   * the name orphan-wallet-unlock-<this address>-<time>.secret (it does that when wallet.json belongs to another key), newest first,
+   * and move back the first one that really opens this keystore. Candidates that do not open it are left alone and reported by name.
+   */
+  private async restoreOrphanedSecret(live: LiveKeystore): Promise<{ restored: string | null; candidates: string[] }> {
+    const prefix = `orphan-wallet-unlock-${live.address.toLowerCase()}-`;
+    let names: string[];
+    try {
+      names = fs.readdirSync(this.retiredDir).filter((n) => n.startsWith(prefix) && n.endsWith(".secret")).sort().reverse();
+    } catch {
+      return { restored: null, candidates: [] };
+    }
+    const doNotOpen: string[] = [];
+    for (const name of names) {
+      const file = path.join(this.retiredDir, name);
+      const secret = this.readSecret(file);
+      const wallet = secret.ok ? await decryptWith(live.json, secret.secret) : null;
+      if (wallet && wallet.address === live.address) {
+        try {
+          moveFileSync(file, this.secretPathFor(live.address));
+          return { restored: name, candidates: [] };
+        } catch {
+          /* cannot move it: leave it, and say where it is */
+        }
+      }
+      doNotOpen.push(name);
+    }
+    return { restored: null, candidates: doNotOpen };
   }
 
   /**
@@ -1175,6 +1232,9 @@ export class LocalWalletDriver {
         temps.push(tempSecret);
         const stale = fs.existsSync(secretFile) ? this.retireFile(secretFile, "orphan") : null;
         undo.add(() => {
+          // Only take the new secret away when wallet.json is the previous keystore again. If putting it back failed, wallet.json
+          // is still the NEW auto keystore and this secret is the only thing that can open it: removing it would strand the key.
+          if (this.readLive()?.json !== live.json) return;
           removeQuietly(secretFile);
           if (stale) renameOver(stale, secretFile);
         });
@@ -1248,6 +1308,10 @@ export class LocalWalletDriver {
         temps.push(tempSecret);
         const displaced = fs.existsSync(newSecretFile) ? this.retireFile(newSecretFile, "orphan") : null;
         undo.add(() => {
+          // Only take the new secret away when wallet.json is the old keystore again (compared by content: a replacement by the SAME key
+          // has the same address). If restoring it failed too, wallet.json is the NEW keystore, its key was never delivered to anyone,
+          // and this secret is the only thing that can still open it.
+          if (this.readLive()?.json !== old.json) return;
           removeQuietly(newSecretFile);
           if (displaced) renameOver(displaced, newSecretFile);
         });
