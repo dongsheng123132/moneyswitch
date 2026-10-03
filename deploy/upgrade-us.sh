@@ -28,7 +28,17 @@ rollback() {
   MONEYSWITCH_IMAGE="$old_image" docker compose -p moneyswitch --env-file /opt/moneyswitch/config.env -f "$old_compose" up -d --no-build server
   echo "Upgrade failed; previous image restored. Backup: $backup" >&2
 }
-# Current upgrade has no schema changes; old image can use the unchanged database.
+# Schema: this release adds migration 0007_wallet_lifecycle.sql, which is ADDITIVE ONLY (two nullable columns on wallet_meta, a new
+# wallet_retirements table and its index; nothing is dropped, renamed or rewritten). It runs when the new image first starts, and
+# restoring the old image in rollback() below stays safe, because the old image:
+#   - tracks applied migrations by file name in __migrations and ignores names it does not know, so it neither re-applies 0007
+#     nor fails on it;
+#   - never reads or writes the new columns or the new table, and the columns it does use are unchanged (SQLite ignores extra
+#     columns, and the new ones are nullable, so its INSERTs keep working).
+# packages/core/test/wallet.test.ts ("rolling back to the previous image is safe") runs exactly that against a migrated file.
+# The upgrade does not touch the wallet files: an existing password wallet stays a password wallet and the old image keeps
+# unlocking it from config.env. (Once an operator has switched a wallet to auto-unlock or replaced it with the NEW image, the old
+# image cannot open it: restore $backup/data.tgz instead of just the image in that case.)
 if ! MONEYSWITCH_IMAGE="$image" docker compose -p moneyswitch --env-file /opt/moneyswitch/config.env -f "$release/docker-compose.yml" up -d --no-build server; then rollback; exit 1; fi
 ready=0
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do

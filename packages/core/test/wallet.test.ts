@@ -141,6 +141,53 @@ describe("migration 0007_wallet_lifecycle on a database created by the previous 
     }
   });
 
+  it("rolling back to the previous image is safe: a database already at 0007 opens and works with the previous release's migration list and statements", () => {
+    // deploy/upgrade-us.sh restores the previous image when the upgrade fails after the database was migrated. That image
+    // knows only 0000..0006: it must neither try to re-apply anything nor trip over the additive columns and table.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-rollback7-"));
+    const file = path.join(dir, "moneyswitch.sqlite");
+    const previous = path.join(dir, "previous-image-migrations");
+    try {
+      fs.mkdirSync(previous);
+      const sqlFiles = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
+      for (const f of sqlFiles.filter((n) => n < "0007")) fs.copyFileSync(path.join(migrationsDir, f), path.join(previous, f));
+      expect(fs.readdirSync(previous)).toHaveLength(7);
+
+      // the NEW release migrates the database and the wallet layer writes its rows
+      const current = openDb({ filePath: file });
+      recordWalletOrigin(current.db, ADDRESS, "generated");
+      recordWalletRetirement(current.db, { address: ADDRESS, retiredAt: "2026-10-03T00:00:00.000Z", reason: "lost_password", keystoreFile: "wallet-a.json", secretFile: null, replacedBy: null });
+      insertPayment(current.sqlite, "p-new", "settled");
+      current.sqlite.close();
+
+      // the PREVIOUS release opens the same file with its own list
+      const rolledBack = openDb({ filePath: file, migrationsDir: previous });
+      try {
+        const names = (rolledBack.sqlite.prepare(`SELECT name FROM __migrations ORDER BY name`).all() as { name: string }[]).map((r) => r.name);
+        expect(names).toEqual(sqlFiles); // nothing re-applied, and the record of 0007 is untouched
+        // statements the previous release issues keep working on the extended tables (it names the columns it knows)
+        rolledBack.sqlite.prepare(`INSERT INTO wallet_meta (id, address, created_at) VALUES (?, ?, ?)`).run("0xabc", "0xAbC", "2026-10-03T00:00:00.000Z");
+        expect(rolledBack.sqlite.prepare(`SELECT id, address, created_at FROM wallet_meta WHERE id = '0xabc'`).get()).toMatchObject({ address: "0xAbC" });
+        insertPayment(rolledBack.sqlite, "p-old-image", "reserved");
+        expect(rolledBack.sqlite.prepare(`SELECT count(*) AS n FROM payments`).get()).toEqual({ n: 2 });
+        // and the data the new release wrote is all still there
+        expect(rolledBack.sqlite.prepare(`SELECT backup_confirmed_at, origin FROM wallet_meta WHERE id = ?`).get(ADDRESS.toLowerCase())).toEqual({ backup_confirmed_at: null, origin: "generated" });
+      } finally {
+        rolledBack.sqlite.close();
+      }
+      // finally the new release opens it again without complaint
+      const again = openDb({ filePath: file });
+      expect(listRetiredWallets(again.db)).toHaveLength(1);
+      again.sqlite.close();
+    } finally {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* Windows file locks: harmless */
+      }
+    }
+  });
+
   it("the copy bundled with the moneyswitch-server package is byte-identical", () => {
     const bundled = path.resolve(here, "..", "..", "..", "apps", "server-pkg", "migrations");
     for (const f of fs.readdirSync(migrationsDir).filter((n) => n.endsWith(".sql"))) {
