@@ -257,3 +257,45 @@
 .wallet-retired-address {
   overflow-wrap: anywhere;
 }
+
+/* The Replace dialog names the wallet that is about to be retired, in the colour of a warning. */
+.wallet-replace-current {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--red) 40%, var(--panel-border));
+  border-radius: 8px;
+}
+
+.wallet-replace-current code {
+  display: block;
+  margin: 4px 0;
+  user-select: all;
+}
+
+.wallet-replace-warn {
+  font-weight: 650;
+  color: var(--red);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+/* The honest choices on the backup screen of a locked wallet. */
+.wallet-locked-choices ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.wallet-locked-choices li {
+  border: 1px solid var(--panel-border-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.wallet-locked-choices li p {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin: 4px 0 8px;
+}

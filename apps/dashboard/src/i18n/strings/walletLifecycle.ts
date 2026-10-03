@@ -131,6 +131,8 @@ export const walletLifecycle = defineMessages(
     revealBody:
       "Shows the 12 words of a wallet created here, or the private key of a wallet you imported (the server never keeps an imported phrase). Type the wallet address to confirm, and make sure no one is looking at your screen.",
     revealUseBackupFlow: "Until the backup is confirmed, the recovery phrase is shown under \"Finish the backup first\" above, and the wallet's address is shown nowhere.",
+    revealLockedNote:
+      "The wallet is locked, so its recovery phrase cannot be shown. Unlock it with its password first, or replace the wallet below.",
     revealButton: "Reveal",
     hideButton: "Hide",
     revealedPhrase: "Recovery phrase",
@@ -169,6 +171,10 @@ export const walletLifecycle = defineMessages(
     replaceWithCreate: "Create a new wallet",
     replaceWithPhrase: "Import a recovery phrase",
     replaceWithKey: "Import a private key",
+    replaceCurrentLabel: "The wallet being replaced",
+    replaceCurrentWarn: "This wallet will be retired. Do not send money to it.",
+    replaceCurrentHint: "Shown here so you can confirm which wallet is being replaced. Type it exactly in the box below.",
+    replaceEmbedSummary: "Lost the password? Replace this wallet",
     replaceTypeAddress: "Type the current wallet address to confirm",
     replaceButton: "Replace wallet",
     replaceBusy: "A payment is in flight. Wait for it to finish, then try again.",
@@ -195,8 +201,22 @@ export const walletLifecycle = defineMessages(
     reason_replaced: "Replaced",
 
     // --- locked wallet
+    lockedBackupTitle: "This wallet is locked, so its recovery phrase cannot be shown",
+    lockedBackupBody: "A recovery phrase can only be shown while the wallet is open. Choose what fits:",
+    lockedChoiceUnlockTitle: "I know the password",
+    lockedChoiceUnlockBody: "Unlock the wallet with it. Then write down the recovery phrase and confirm it.",
+    lockedChoiceUnlockLink: "Go to the unlock form",
+    lockedChoiceAutoTitle: "The server's unlock secret can be restored",
+    lockedChoiceAutoBody:
+      "This wallet has no password: the server opens it with its own unlock secret file. Restore that file from a backup of the data folder and restart the server.",
+    lockedChoiceReplaceTitle: "I lost the password",
+    lockedChoiceReplaceAutoTitle: "I cannot restore that file",
+    lockedChoiceReplaceBody: "Replace the wallet. Its files are kept in the retired/ folder, a new wallet takes over, and your keys, budgets, approvals and history stay.",
+    lockedChoiceReplaceLink: "Go to Replace wallet",
+    lockedRecoveryHere:
+      "Forgot the password? Nobody can unlock this wallet for you, but you can move on: Replace wallet, right below, keeps the old files in the retired/ folder and starts a new wallet. Funds in the old wallet can be recovered with its recovery phrase.",
     autoLockedBody:
-      "This wallet has no password: the server opens it with its own unlock secret file, and that did not work at startup. Restore the file from a backup of the server's data folder and restart, or use Replace wallet (Danger zone below) to start a new wallet; the old files are kept in the retired/ folder and its funds can be recovered with its recovery phrase.",
+      "This wallet has no password: the server opens it with its own unlock secret file, and that did not work at startup. Restore the file from a backup of the server's data folder and restart, or use Replace wallet (below) to start a new wallet; the old files are kept in the retired/ folder and its funds can be recovered with its recovery phrase.",
     lockedRecovery:
       "Forgot the password? Nobody can unlock this wallet for you, but you can move on: Replace wallet (Danger zone below) keeps the old files in the retired/ folder and starts a new wallet. Funds in the old wallet can be recovered with its recovery phrase.",
 
@@ -325,6 +345,7 @@ export const walletLifecycle = defineMessages(
     revealTitle: "查看恢复短语",
     revealBody: "显示在这里创建的钱包的 12 个单词，或你导入的钱包的私钥（服务器从不保存导入的恢复短语）。请输入钱包地址确认，并确保没有人看着你的屏幕。",
     revealUseBackupFlow: "备份确认之前，恢复短语显示在上方的“请先完成备份”里，钱包地址在任何地方都不显示。",
+    revealLockedNote: "钱包处于锁定状态，无法显示恢复短语。请先用密码解锁，或者在下面更换钱包。",
     revealButton: "显示",
     hideButton: "隐藏",
     revealedPhrase: "恢复短语",
@@ -362,6 +383,10 @@ export const walletLifecycle = defineMessages(
     replaceWithCreate: "新建钱包",
     replaceWithPhrase: "导入恢复短语",
     replaceWithKey: "导入私钥",
+    replaceCurrentLabel: "即将被更换的钱包",
+    replaceCurrentWarn: "这个钱包将被停用，请不要再向它转钱。",
+    replaceCurrentHint: "在这里显示，是为了让你确认要更换的是哪个钱包。请在下面的输入框里原样输入。",
+    replaceEmbedSummary: "丢了密码？更换这个钱包",
     replaceTypeAddress: "输入当前钱包地址以确认",
     replaceButton: "更换钱包",
     replaceBusy: "有一笔付款正在进行。请等它结束后再试。",
@@ -386,8 +411,21 @@ export const walletLifecycle = defineMessages(
     reason_other: "其他",
     reason_replaced: "已更换",
 
+    lockedBackupTitle: "这个钱包已锁定，无法显示恢复短语",
+    lockedBackupBody: "恢复短语只有在钱包打开时才能显示。请选择适合你的做法：",
+    lockedChoiceUnlockTitle: "我知道密码",
+    lockedChoiceUnlockBody: "用密码解锁钱包，然后抄下恢复短语并确认。",
+    lockedChoiceUnlockLink: "前往解锁表单",
+    lockedChoiceAutoTitle: "可以恢复服务器的解锁密钥",
+    lockedChoiceAutoBody: "这个钱包没有密码：服务器用自己的解锁密钥文件打开它。请从数据目录的备份中恢复该文件，然后重启服务器。",
+    lockedChoiceReplaceTitle: "我丢了密码",
+    lockedChoiceReplaceAutoTitle: "我恢复不了这个文件",
+    lockedChoiceReplaceBody: "更换钱包。旧文件会保留在 retired/ 文件夹，新钱包接替，你的 Key、预算、审批和历史记录都保留。",
+    lockedChoiceReplaceLink: "前往更换钱包",
+    lockedRecoveryHere:
+      "忘记密码了？没有人能替你解锁这个钱包，但你可以继续往前走：使用下方的“更换钱包”，旧文件会保留在 retired/ 文件夹，并开始一个新钱包。旧钱包里的资金可以用它的恢复短语找回。",
     autoLockedBody:
-      "这个钱包没有密码：服务器用自己的解锁密钥文件打开它，而这个文件在启动时没有起作用。请从服务器数据目录的备份里恢复该文件后重启，或使用下方“危险操作”里的“更换钱包”开始一个新钱包；旧文件会保留在 retired/ 文件夹，里面的资金可用它的恢复短语找回。",
+      "这个钱包没有密码：服务器用自己的解锁密钥文件打开它，而这个文件在启动时没有起作用。请从服务器数据目录的备份里恢复该文件后重启，或使用下方的“更换钱包”开始一个新钱包；旧文件会保留在 retired/ 文件夹，里面的资金可用它的恢复短语找回。",
     lockedRecovery:
       "忘记密码了？没有人能替你解锁这个钱包，但你可以继续往前走：使用下方“危险操作”里的“更换钱包”，旧文件会保留在 retired/ 文件夹，并开始一个新钱包。旧钱包里的资金可以用它的恢复短语找回。",
 

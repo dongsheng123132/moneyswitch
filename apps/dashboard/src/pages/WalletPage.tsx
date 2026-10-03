@@ -16,6 +16,7 @@ import { useAdminMeta } from "../useAdminMeta";
 import "../styles/wallet.css";
 import { WalletAccess } from "../components/WalletAccess";
 import { WalletSetup, BackupRequired } from "../components/WalletSetup";
+import { lockedKind } from "../walletMode";
 import { WalletHealthCard } from "../components/WalletHealth";
 import { WalletDangerZone } from "../components/WalletDangerZone";
 
@@ -143,7 +144,7 @@ export function WalletView({
         <div className="card wallet-receive-card">
           <div className="stat-label">{t("receiveTitle")}</div>
           {backupMissing ? (
-            <BackupRequired onConfirmed={onChanged} address={wallet.address} />
+            <BackupRequired onConfirmed={onChanged} address={wallet.address} locked={lockedKind(wallet)} />
           ) : (
             <>
               {wallet.address ? (

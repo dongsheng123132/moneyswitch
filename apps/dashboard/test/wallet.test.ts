@@ -37,6 +37,8 @@ let WalletBanners: typeof import("../src/components/WalletHealth.tsx").WalletBan
 let walletBannerKinds: typeof import("../src/components/WalletHealth.tsx").walletBannerKinds;
 let WalletDangerZone: typeof import("../src/components/WalletDangerZone.tsx").WalletDangerZone;
 let ReplaceSection: typeof import("../src/components/WalletDangerZone.tsx").ReplaceSection;
+let performReplace: typeof import("../src/components/WalletDangerZone.tsx").performReplace;
+let BackupRequired: typeof import("../src/components/WalletSetup.tsx").BackupRequired;
 let RetiredWalletsList: typeof import("../src/components/WalletDangerZone.tsx").RetiredWalletsList;
 let WalletChip: typeof import("../src/components/WalletChip.tsx").WalletChip;
 let WalletAccess: typeof import("../src/components/WalletAccess.tsx").WalletAccess;
@@ -49,10 +51,10 @@ before(async () => {
   WalletStep = (await import("../src/pages/SetupPage.tsx")).WalletStep;
   WalletView = (await import("../src/pages/WalletPage.tsx")).WalletView;
   const setup = await import("../src/components/WalletSetup.tsx");
-  ({ WalletSetup, BackupFlow, PhraseView, pickPositions } = setup);
+  ({ WalletSetup, BackupFlow, BackupRequired, PhraseView, pickPositions } = setup);
   ({ WalletHealthCard, WalletBanners, walletBannerKinds } = await import("../src/components/WalletHealth.tsx"));
   const danger = await import("../src/components/WalletDangerZone.tsx");
-  ({ WalletDangerZone, RetiredWalletsList, ReplaceSection } = danger);
+  ({ WalletDangerZone, RetiredWalletsList, ReplaceSection, performReplace } = danger);
   WalletChip = (await import("../src/components/WalletChip.tsx")).WalletChip;
   WalletAccess = (await import("../src/components/WalletAccess.tsx")).WalletAccess;
   freshPhrase = (await import("../src/freshPhrase.ts")).freshPhrase;
@@ -69,6 +71,8 @@ const render = (el: Parameters<typeof renderToStaticMarkup>[0], lang: "en" | "zh
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 const fill = (s: string, vars: Record<string, string | number>) => esc(s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k])));
 const noop = () => undefined;
+/** The page with the one place that may name the current wallet (the Replace dialog's read-only line) cut out. */
+const withoutReplaceAddress = (html: string) => html.replace(/<code[^>]*data-testid="replace-current-address"[^>]*>[^<]*<\/code>/g, "");
 
 function health(over: Partial<Health> = {}): Health {
   return {
@@ -154,7 +158,8 @@ describe("set-up step: no password by default", () => {
     const html = render(h(WalletStep, { wallet: wallet({ unlocked: false }, manualHealth), refresh: noop }));
     assert.ok(html.includes('data-action-id="wallet.unlock"'));
     assert.ok(html.includes('type="password"'));
-    assert.ok(html.includes(esc(L.en.lockedRecovery)));
+    assert.ok(html.includes(esc(L.en.lockedRecoveryHere)), "the setup guide has no Danger zone: the Replace action is embedded right below");
+    assert.ok(html.includes('data-testid="embedded-replace"'));
     assert.ok(!html.includes(esc(L.en.hAutoBroken)));
   });
 
@@ -331,7 +336,7 @@ describe("Wallet page", () => {
     const html = view(wallet({}, { backup: "missing" }));
     assert.ok(html.includes(esc(L.en.finishBackupTitle)));
     assert.ok(html.includes('data-testid="backup-required"'));
-    assert.ok(!html.includes(ADDRESS), "the address appears nowhere on the page");
+    assert.ok(!withoutReplaceAddress(html).includes(ADDRESS), "the address appears in no deposit or copy context (only the Replace dialog names it, as the wallet to retire)");
     assert.ok(!html.includes("public-address-value"));
     assert.ok(!html.includes("wallet-funding-steps"), "no 'how to fund' steps either");
     assert.ok(html.includes('data-testid="wallet-health"'), "the health card says why");
@@ -742,7 +747,7 @@ describe("m9: a fresh recovery phrase belongs to one wallet and is shown only fo
 
   it("the Wallet page with an unfinished backup shows the address nowhere, yet can still reveal the phrase", () => {
     const html = render(h(WalletView, { wallet: wallet({}, { backup: "missing" }), meta: null, onChanged: noop }));
-    assert.ok(!html.includes(ADDRESS) && !html.includes("0xf39F"));
+    assert.ok(!withoutReplaceAddress(html).includes(ADDRESS), "only the Replace dialog may name it");
     assert.ok(html.includes('data-action-id="wallet.reveal"'));
   });
 });
@@ -756,6 +761,199 @@ describe("wording: nothing promises what the server no longer does", () => {
         assert.ok(!/0600/.test(value), `${lang}.${key} claims a file mode`);
       }
     }
+  });
+});
+
+describe("a locked wallet whose password is lost can be replaced, whatever its backup state (the dead end of an unconfirmed legacy wallet)", () => {
+  // The case that started this: a wallet made by the previous release with a password, locked after a restart, the password
+  // lost, the recovery phrase never confirmed. It cannot reveal its phrase while locked, so its backup can never be confirmed,
+  // so its address is hidden everywhere, and Replace asks for that address. The Replace dialog is the one place that names it.
+  const NEW_ADDRESS = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
+  const legacyLocked = (): Wallet => wallet({ unlocked: false }, { ...manualHealth, backup: "missing" });
+  const page = (w: Wallet, lang: "en" | "zh" = "en") => render(h(WalletView, { wallet: w, meta: null, onChanged: noop }), lang);
+  const shownInDialog = (html: string) => /data-testid="replace-current-address">(0x[0-9a-fA-F]{40})</.exec(html)?.[1] ?? null;
+  const outsideDialog = (html: string) => html.replace(/<code[^>]*data-testid="replace-current-address"[^>]*>[^<]*<\/code>/g, "");
+
+  it("Wallet page: the Replace dialog shows the current address read-only, plainly labelled as the wallet that will be retired", () => {
+    const html = page(legacyLocked());
+    assert.ok(html.includes('data-section="replace"'));
+    assert.equal(shownInDialog(html), ADDRESS, "the address can be read off the dialog");
+    assert.ok(html.includes(esc(L.en.replaceCurrentLabel)));
+    assert.ok(html.includes(esc(L.en.replaceCurrentWarn)), "'will be retired, do not send money to it'");
+    assert.match(L.en.replaceCurrentWarn, /retired/i);
+    assert.match(L.en.replaceCurrentWarn, /do not send money/i);
+    assert.ok(html.includes('id="replace-address"'), "and the box to type it into");
+    assert.match(html, /<details open="">/, "a locked wallet opens the danger zone by itself");
+    // read-only: not an input, no Copy button next to it, no QR code
+    assert.ok(!/<input[^>]*value="0xf39F/.test(html));
+    const dialog = html.slice(html.indexOf('data-testid="replace-current"'), html.indexOf('id="replace-address"'));
+    assert.ok(!dialog.includes("copy-btn") && !dialog.includes("qr-wrap"));
+  });
+
+  it("...and still names it in no deposit or copy context: no receive card, QR code, funding steps or copy button", () => {
+    const html = page(legacyLocked());
+    assert.ok(!outsideDialog(html).includes(ADDRESS), "the address appears only in the Replace dialog");
+    for (const marker of ["public-address-value", "qr-wrap", "wallet-funding-steps", "chip-copy"]) assert.ok(!html.includes(marker), marker);
+    assert.ok(html.includes('data-testid="backup-required"'));
+    // the header chip of a locked wallet is a lock, not an address
+    assert.ok(!render(h(WalletChip, { wallet: legacyLocked(), loading: false })).includes("0xf39F"));
+  });
+
+  it("the dialog shows the address whatever the backup or lock state", () => {
+    for (const [label, w] of [
+      ["locked, backup missing", legacyLocked()],
+      ["unlocked, backup missing", wallet({}, { backup: "missing" })],
+      ["locked, backup confirmed", wallet({ unlocked: false }, manualHealth)],
+      ["unlocked, nothing to back up", wallet({}, { backup: "not_applicable" })],
+      ["an older server without health", wallet({ unlocked: false }, null)],
+    ] as const) {
+      assert.equal(shownInDialog(render(h(WalletDangerZone, { wallet: w, onChanged: noop }))), ADDRESS, label);
+    }
+  });
+
+  it("the backup screen of a LOCKED wallet offers the two honest choices instead of a 'Show my recovery phrase' that cannot work", () => {
+    const html = page(legacyLocked());
+    const screen = html.slice(html.indexOf('data-testid="backup-required"'));
+    assert.ok(screen.includes('data-testid="locked-choices"'));
+    assert.ok(screen.includes(esc(L.en.lockedBackupTitle)));
+    assert.ok(screen.includes(esc(L.en.lockedChoiceUnlockTitle)) && screen.includes(esc(L.en.lockedChoiceUnlockBody)));
+    assert.ok(screen.includes(esc(L.en.lockedChoiceReplaceTitle)) && screen.includes(esc(L.en.lockedChoiceReplaceBody)));
+    // both choices lead somewhere on this very page
+    assert.ok(screen.includes('href="#wallet-unlock"') && html.includes('id="wallet-unlock"'), "the unlock form");
+    assert.ok(screen.includes('href="#wallet-replace"') && html.includes('id="wallet-replace"'), "the Replace section");
+    // and the dead end is gone: no reveal button, no words
+    assert.ok(!html.includes('data-action-id="wallet.reveal"'), "nothing on the page offers to reveal a phrase that cannot be shown");
+    assert.ok(!html.includes(esc(L.en.revealNowBody)));
+    assert.ok(!html.includes("wallet-phrase-index"));
+  });
+
+  it("a locked AUTO-unlock wallet has no password: the first choice is the secret file, not 'I know the password'", () => {
+    const w = wallet({ unlocked: false }, { auto_unlock_ok: false, backup: "missing", unlock_sources: [{ source: "auto", ok: false, reason: "secret_missing" }] });
+    const html = page(w);
+    const fromChoices = html.slice(html.indexOf('data-testid="locked-choices"'));
+    const screen = fromChoices.slice(0, fromChoices.indexOf("</ul>")); // the two choices only (the Replace dialog further down has its own wording)
+    assert.ok(screen.includes(esc(L.en.lockedChoiceAutoTitle)) && screen.includes(esc(L.en.lockedChoiceAutoBody)));
+    assert.ok(!screen.includes(esc(L.en.lockedChoiceUnlockTitle)) && !screen.includes('href="#wallet-unlock"'));
+    assert.ok(screen.includes(esc(L.en.lockedChoiceReplaceAutoTitle)) && !screen.includes(esc(L.en.lockedChoiceReplaceTitle)), "nobody lost a password that does not exist");
+    assert.ok(screen.includes('href="#wallet-replace"'));
+  });
+
+  it("the standalone backup screen takes the lock state too (locked -> choices, open -> the one-click reveal)", () => {
+    const locked = render(h(BackupRequired, { onConfirmed: noop, address: ADDRESS, locked: "password" }));
+    assert.ok(locked.includes('data-testid="locked-choices"') && !locked.includes('data-action-id="wallet.reveal"'));
+    const open = render(h(BackupRequired, { onConfirmed: noop, address: ADDRESS, locked: false }));
+    assert.ok(open.includes('data-action-id="wallet.reveal"') && !open.includes('data-testid="locked-choices"'));
+    assert.ok(!locked.includes(ADDRESS) && !open.includes(ADDRESS), "neither shows the address");
+  });
+
+  it("Danger zone: Reveal says WHY it is not available while the wallet is locked, and what to do", () => {
+    const locked = render(h(WalletDangerZone, { wallet: legacyLocked(), onChanged: noop }));
+    assert.ok(locked.includes(esc(L.en.revealLockedNote)));
+    assert.ok(!locked.includes(esc(L.en.revealUseBackupFlow)) && !locked.includes('id="wallet-reveal-address"'));
+    const open = render(h(WalletDangerZone, { wallet: wallet({}, { backup: "missing" }), onChanged: noop }));
+    assert.ok(open.includes(esc(L.en.revealUseBackupFlow)) && !open.includes(esc(L.en.revealLockedNote)));
+  });
+
+  it("Setup guide: a locked wallet gets the unlock form AND the Replace action right there, with the address to confirm", () => {
+    const html = render(h(WalletStep, { wallet: legacyLocked(), refresh: noop }));
+    assert.ok(html.includes('data-action-id="wallet.unlock"') && html.includes('id="wallet-unlock"'));
+    assert.ok(html.includes('data-testid="embedded-replace"'));
+    assert.ok(html.includes(esc(L.en.replaceEmbedSummary)));
+    assert.ok(html.includes('id="replace-address"') && html.includes('data-section="replace"'));
+    assert.equal(shownInDialog(html), ADDRESS);
+    assert.ok(html.includes(esc(L.en.lockedRecoveryHere)), "says the way out is right below, not 'Danger zone below'");
+    assert.ok(!html.includes(esc(L.en.lockedRecovery)));
+    assert.ok(!outsideDialog(html).includes(ADDRESS));
+    assert.ok(!html.includes("public-address-value") && !html.includes("qr-wrap"));
+  });
+
+  it("Setup guide: a locked auto-unlock wallet gets the reason AND the Replace action", () => {
+    const w = wallet({ unlocked: false }, { auto_unlock_ok: false, backup: "missing", unlock_sources: [{ source: "auto", ok: false, reason: "secret_wrong" }] });
+    const html = render(h(WalletStep, { wallet: w, refresh: noop }));
+    assert.ok(html.includes('data-testid="auto-locked"') && html.includes(esc(L.en.hSecretWrong)));
+    assert.ok(html.includes('data-testid="embedded-replace"') && html.includes('id="replace-address"'));
+    assert.ok(!html.includes('type="password"'), "still no password form for a wallet that has no password");
+  });
+
+  it("the Wallet page does not embed a second Replace form (one id, one dialog)", () => {
+    const html = page(legacyLocked());
+    assert.equal((html.match(/id="replace-address"/g) ?? []).length, 1);
+    assert.ok(!html.includes('data-testid="embedded-replace"'));
+    assert.ok(html.includes(esc(L.en.lockedRecovery)));
+  });
+
+  it("completes: type what the dialog shows, replace, and the new wallet's phrase is waiting under the NEW address", async () => {
+    const calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
+      calls.push({ url, method: init?.method ?? "GET", body });
+      if (url === "/v1/admin/wallet/replace") {
+        if (body?.confirm_address !== ADDRESS) return new Response(JSON.stringify({ error: "ADDRESS_MISMATCH" }), { status: 400 });
+        return new Response(
+          JSON.stringify({
+            address: NEW_ADDRESS,
+            unlock_mode: "auto",
+            recovery_phrase: PHRASE,
+            retired: { address: ADDRESS, retired_at: "2026-10-03T12:00:00.000Z", reason: "lost_password", keystore_file: `wallet-${ADDRESS.toLowerCase()}-20261003T120000000Z.json` },
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ error: "NOT_FOUND" }), { status: 404 });
+    }) as typeof fetch;
+    try {
+      // 1. the operator opens the Wallet page of the locked legacy wallet and reads the address off the dialog
+      const before = page(legacyLocked());
+      const typed = shownInDialog(before)!;
+      assert.equal(typed, ADDRESS);
+
+      // 2. a wrong address is refused by the server and the dialog says so; nothing is remembered
+      const wrong = await performReplace({ typedAddress: OLD_ADDRESS, reason: "lost_password", next: { kind: "create" } });
+      assert.deepEqual(wrong, { ok: false, error: "mismatch" });
+      assert.equal(freshPhrase.get(), null);
+
+      // 3. the address as shown (surrounding blanks from a paste are ignored) replaces the wallet
+      const done = await performReplace({ typedAddress: `  ${typed}\n`, reason: "lost_password", next: { kind: "create" } });
+      assert.equal(done.ok, true);
+      if (done.ok) assert.equal(done.result.address, NEW_ADDRESS);
+      assert.deepEqual(calls.at(-1), { url: "/v1/admin/wallet/replace", method: "POST", body: { confirm_address: ADDRESS, reason: "lost_password", kind: "create" } });
+
+      // 4. the new phrase is remembered for the NEW wallet only
+      assert.equal(freshPhrase.getFor(NEW_ADDRESS), PHRASE);
+      assert.equal(freshPhrase.getFor(ADDRESS), null);
+
+      // 5. the next poll: an open wallet with an unconfirmed backup. Its 12 words are on screen, its address still is not.
+      const after = page({ ...wallet({}, { backup: "missing" }), address: NEW_ADDRESS });
+      assert.equal((after.match(/class="wallet-phrase-index"/g) ?? []).length, 12);
+      assert.ok(!after.includes("locked-choices") && !after.includes('data-action-id="wallet.unlock"'));
+      assert.ok(!outsideDialog(after).includes(NEW_ADDRESS), "no deposit or copy context shows the new address either");
+      assert.equal(shownInDialog(after), NEW_ADDRESS, "the dialog now names the new current wallet");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("completes: the error cases of the dialog map to their own messages", async () => {
+    const original = globalThis.fetch;
+    const answer = (status: number, error: string) => (globalThis.fetch = (async () => new Response(JSON.stringify({ error }), { status })) as typeof fetch);
+    try {
+      answer(409, "WALLET_BUSY");
+      assert.deepEqual(await performReplace({ typedAddress: ADDRESS, reason: "other", next: { kind: "create" } }), { ok: false, error: "busy" });
+      answer(400, "EXPECTED_ADDRESS_MISMATCH");
+      assert.deepEqual(await performReplace({ typedAddress: ADDRESS, reason: "other", next: { kind: "mnemonic", mnemonic: PHRASE }, expectedAddress: OLD_ADDRESS }), { ok: false, error: "expected_mismatch" });
+      answer(500, "STORAGE_FAILED");
+      assert.deepEqual(await performReplace({ typedAddress: ADDRESS, reason: "other", next: { kind: "create" } }), { ok: false, error: "failed" });
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("Chinese", () => {
+    const html = page(legacyLocked(), "zh");
+    assert.ok(html.includes(L.zh.replaceCurrentWarn));
+    assert.ok(html.includes(L.zh.lockedBackupTitle));
+    assert.ok(render(h(WalletStep, { wallet: legacyLocked(), refresh: noop }), "zh").includes(L.zh.replaceEmbedSummary));
   });
 });
 

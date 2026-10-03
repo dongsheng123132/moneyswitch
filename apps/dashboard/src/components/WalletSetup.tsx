@@ -498,15 +498,51 @@ function RevealNow({ address, onRevealed }: { address: string; onRevealed: (secr
   );
 }
 
-/** What stands where the deposit address would be until the recovery phrase is written down and checked. */
-export function BackupRequired({ onConfirmed, address }: { onConfirmed: () => void; address?: string | null }) {
+/**
+ * A CLOSED wallet cannot show its recovery phrase, so its backup can never be confirmed from here. Instead of a button that
+ * can only fail, say so and offer the two ways forward: open the wallet, or replace it (which only moves files and needs
+ * no password). The links point at the unlock form and the Replace section of the same page.
+ */
+function LockedBackupChoices({ kind }: { kind: "password" | "auto" }) {
+  const t = useT(walletLifecycle);
+  return (
+    <div className="wallet-locked-choices" data-testid="locked-choices">
+      <h3>{t("lockedBackupTitle")}</h3>
+      <p>{t("lockedBackupBody")}</p>
+      <ul>
+        <li>
+          <strong>{kind === "password" ? t("lockedChoiceUnlockTitle") : t("lockedChoiceAutoTitle")}</strong>
+          <p>{kind === "password" ? t("lockedChoiceUnlockBody") : t("lockedChoiceAutoBody")}</p>
+          {kind === "password" && (
+            <a className="btn small secondary" href="#wallet-unlock">
+              {t("lockedChoiceUnlockLink")}
+            </a>
+          )}
+        </li>
+        <li>
+          <strong>{kind === "password" ? t("lockedChoiceReplaceTitle") : t("lockedChoiceReplaceAutoTitle")}</strong>
+          <p>{t("lockedChoiceReplaceBody")}</p>
+          <a className="btn small secondary" href="#wallet-replace">
+            {t("lockedChoiceReplaceLink")}
+          </a>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * What stands where the deposit address would be until the recovery phrase is written down and checked. For a wallet that is
+ * locked (`locked` = how it can be opened again) the phrase cannot be shown, so it offers the honest choices instead.
+ */
+export function BackupRequired({ onConfirmed, address, locked = false }: { onConfirmed: () => void; address?: string | null; locked?: false | "password" | "auto" }) {
   const t = useT(walletLifecycle);
   return (
     <div className="wallet-backup-required" data-testid="backup-required">
       <Callout tone="warn" title={t("finishBackupTitle")}>
         {t("finishBackupBody")}
       </Callout>
-      <BackupFlow onConfirmed={onConfirmed} address={address} />
+      {locked ? <LockedBackupChoices kind={locked} /> : <BackupFlow onConfirmed={onConfirmed} address={address} />}
     </div>
   );
 }

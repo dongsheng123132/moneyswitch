@@ -6,6 +6,7 @@ import {
   replaceWallet,
   setAutoUnlock,
   type ReplaceReason,
+  type ReplacedWallet,
   type RetiredWalletRow,
   type RevealedWalletSecret,
   type WalletImport,
@@ -19,14 +20,8 @@ import { formatUsdc } from "../money";
 import Callout from "./Callout";
 import CopyButton from "./CopyButton";
 import { secretGoneWhileRunning } from "./WalletHealth";
+import { isAutoWallet } from "../walletMode";
 import { ExpectedAddressField, ImportWarning, PhraseWords, RevealForm } from "./WalletSetup";
-
-/** The recorded protection mode; an older server that does not send it is judged by what it calls the unlock mode. */
-function isAutoWallet(wallet: WalletInfo): boolean {
-  const health = wallet.health;
-  if (!health) return false;
-  return health.protection === "auto" || (health.protection === undefined && health.unlock_mode === "auto");
-}
 
 /**
  * Everything that recovers, protects or replaces the wallet, behind one collapsed section. Each action
@@ -47,10 +42,11 @@ export function WalletDangerZone({ wallet, onChanged }: { wallet: WalletInfo; on
         <p className="field-hint">{t("dangerLead")}</p>
         {/* keyed by address: a revealed phrase belongs to ONE wallet and must not stay on screen after it is replaced */}
         {health?.backup === "missing" ? (
-          // The address is shown nowhere until the backup is confirmed, so it cannot be typed here: the guided backup above does the job.
+          // The address is shown nowhere until the backup is confirmed, so it cannot be typed here: the guided backup above does the
+          // job. A LOCKED wallet cannot show its phrase at all (nothing to type an address for): say so and point at the ways forward.
           <div className="wallet-danger-item" data-section="reveal">
             <h4>{t("revealTitle")}</h4>
-            <p>{t("revealUseBackupFlow")}</p>
+            <p>{wallet.unlocked ? t("revealUseBackupFlow") : t("revealLockedNote")}</p>
           </div>
         ) : (
           <RevealSection key={`reveal-${wallet.address}`} />
@@ -247,6 +243,35 @@ function DownloadBackupSection({ wallet }: { wallet: WalletInfo }) {
 
 type ReplaceWith = "create" | "mnemonic" | "private_key";
 
+export type ReplaceFailure = "busy" | "mismatch" | "expected_mismatch" | "failed";
+
+/**
+ * What the Replace form's submit does once its fields are checked: ask the server, and remember the new wallet's recovery phrase
+ * (under the NEW address) when one was created. Kept apart from the component so the whole step can be exercised without a browser.
+ */
+export async function performReplace(input: {
+  /** What the operator typed as the current wallet's address (blanks around a paste are ignored). */
+  typedAddress: string;
+  reason: ReplaceReason;
+  next: { kind: "create" } | WalletImport;
+  password?: string;
+  expectedAddress?: string;
+}): Promise<{ ok: true; result: ReplacedWallet } | { ok: false; error: ReplaceFailure }> {
+  try {
+    const result = await replaceWallet(input.typedAddress.trim(), input.reason, input.next, {
+      ...(input.password !== undefined ? { password: input.password } : {}),
+      ...(input.expectedAddress ? { expectedAddress: input.expectedAddress } : {}),
+    });
+    if (result.recovery_phrase) freshPhrase.set(result.address, result.recovery_phrase);
+    return { ok: true, result };
+  } catch (err) {
+    const code = err instanceof ApiError ? err.error : null;
+    const error: ReplaceFailure =
+      code === "WALLET_BUSY" ? "busy" : code === "ADDRESS_MISMATCH" ? "mismatch" : code === "EXPECTED_ADDRESS_MISMATCH" ? "expected_mismatch" : "failed";
+    return { ok: false, error };
+  }
+}
+
 /** (`initialWith` only lets a render test start on an import variant.) */
 export function ReplaceSection({ wallet, onChanged, initialWith = "create" }: { wallet: WalletInfo; onChanged: () => void; initialWith?: ReplaceWith }) {
   const t = useT(walletLifecycle);
@@ -273,11 +298,25 @@ export function ReplaceSection({ wallet, onChanged, initialWith = "create" }: { 
       withWhat === "create" ? { kind: "create" } : withWhat === "mnemonic" ? { kind: "mnemonic", mnemonic: phrase } : { kind: "private_key", private_key: privateKey };
     setBusy(true);
     try {
-      const result = await replaceWallet(address.trim(), reason, next, {
+      const outcome = await performReplace({
+        typedAddress: address,
+        reason,
+        next,
         ...(askPassword ? { password } : {}),
         ...(withWhat !== "create" && expectedAddress.trim() ? { expectedAddress: expectedAddress.trim() } : {}),
       });
-      if (result.recovery_phrase) freshPhrase.set(result.address, result.recovery_phrase);
+      if (!outcome.ok) {
+        setError(
+          outcome.error === "busy"
+            ? t("replaceBusy")
+            : outcome.error === "mismatch"
+            ? t("replaceMismatch")
+            : outcome.error === "expected_mismatch"
+            ? t("importMismatch")
+            : t("replaceFailed")
+        );
+        return;
+      }
       setAddress("");
       setExpectedAddress("");
       setPhrase("");
@@ -286,25 +325,24 @@ export function ReplaceSection({ wallet, onChanged, initialWith = "create" }: { 
       setConfirm("");
       setDone(true);
       onChanged();
-    } catch (err) {
-      setError(
-        err instanceof ApiError && err.error === "WALLET_BUSY"
-          ? t("replaceBusy")
-          : err instanceof ApiError && err.error === "ADDRESS_MISMATCH"
-          ? t("replaceMismatch")
-          : err instanceof ApiError && err.error === "EXPECTED_ADDRESS_MISMATCH"
-          ? t("importMismatch")
-          : t("replaceFailed")
-      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="wallet-danger-item" data-section="replace">
+    <div className="wallet-danger-item" data-section="replace" id="wallet-replace">
       <h4>{t("replaceTitle")}</h4>
       <Callout tone="warn">{t("replaceBody")}</Callout>
+      {/* The one place that always names the current wallet, whatever its backup or lock state: it is shown as the wallet that
+          will be RETIRED (no copy button, no QR code, no funding steps), so it can be typed below even when the deposit address
+          is hidden everywhere else. A locked wallet whose password is lost must be replaceable. */}
+      <div className="wallet-replace-current" data-testid="replace-current">
+        <div className="stat-label">{t("replaceCurrentLabel")}</div>
+        <code className="mono wallet-retired-address" data-testid="replace-current-address">{wallet.address ?? ""}</code>
+        <div className="wallet-replace-warn">{t("replaceCurrentWarn")}</div>
+        <div className="field-hint">{t("replaceCurrentHint")}</div>
+      </div>
       <form onSubmit={submit} autoComplete="off">
         <div className="field">
           <label htmlFor="replace-reason">{t("replaceReason")}</label>
