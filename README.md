@@ -4,6 +4,8 @@
 
 [Website](https://moneyswitch.dev) · [中文](README.zh-CN.md) · [Spec](SPEC.md) · [Self-hosting guide](deploy/README.zh-CN.md)
 
+**One MoneySwitch spends for one payer.** You on your own machine, a company issuing keys to its staff's AIs, a company running its own bots: each is one payer, and every coin in the wallet belongs to whoever deployed the server. The administrator issues the keys; there is no sign-up and there are no user accounts.
+
 [SPEC.md](SPEC.md) is the only specification. This file says how to run it.
 
 ## Run it
@@ -47,7 +49,7 @@ Every `/v1/fetch` answer says `charged: yes | no | maybe`. A payment that was si
 
 ## What it does not do
 
-Never: fiat on/off-ramp, swaps, bridges, issuing tokens, receiving or selling features, holding money for others. Not now: an employee portal UI, push channels, a model gateway, MCP, a command-line client, a local launcher, a desktop shell, wallet import, external wallets. Child keys keep their back end, without a UI. Old database tables stay. See [SPEC.md](SPEC.md) §8.
+Never: fiat on/off-ramp, swaps, bridges, issuing tokens, receiving or selling features, holding money for others — that includes open sign-up, per-user balances, deposits and withdrawals, redemption codes and resale with a markup. Letting strangers deposit money and spend it through keys is custody, not a relay: in most places it needs a licence, in some it is forbidden. MoneySwitch is self-hosted software that spends its deployer's own money; whoever runs it to hold or spend other people's money carries that legal duty. Pull requests that add sign-up, balances, deposits or payment integrations will be closed. Not now: an employee portal UI, push channels, a model gateway, MCP, a command-line client, a local launcher, a desktop shell, wallet import, external wallets. Child keys keep their back end, without a UI. Old database tables stay. See [SPEC.md](SPEC.md) §8.
 
 ## Tests and licence
 
