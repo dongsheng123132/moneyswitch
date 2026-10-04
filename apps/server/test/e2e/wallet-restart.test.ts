@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Each test starts the real server two or three times; on Windows every start and wallet creation also runs PowerShell to set
 // and read back the ACL. That takes ~15 s per test on a desktop and more than the suite's 30 s default on GitHub's
 // windows-latest runner (CI run 37161992876), so these tests get a longer budget. A real hang still fails, just later.
-vi.setConfig({ testTimeout: 120_000 });
+// On that runner a single start (unlock + PowerShell ACL check) has also taken more than 25 s (CI run 37174353479), so on
+// Windows each start may take up to 90 s and each test up to 5 minutes.
+const ON_WINDOWS = process.platform === "win32";
+const START_LIMIT_MS = ON_WINDOWS ? 90_000 : 25_000;
+vi.setConfig({ testTimeout: ON_WINDOWS ? 300_000 : 120_000 });
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
@@ -89,9 +93,9 @@ async function boot(dataDir: string, extraEnv: Record<string, string> = {}): Pro
   const start = Date.now();
   while (!/server listening on/.test(out)) {
     if (exited(proc)) throw new Error(`server exited early:\n${out}`);
-    if (Date.now() - start > 25_000) {
+    if (Date.now() - start > START_LIMIT_MS) {
       proc.kill();
-      throw new Error(`server did not start within 25s:\n${out}`);
+      throw new Error(`server did not start within ${START_LIMIT_MS / 1000}s:\n${out}`);
     }
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -206,7 +210,7 @@ describe("a restart does not lock the wallet", () => {
 
   it(
     "a legacy password wallet whose password is LOST (locked, backup never confirmed) can be replaced: nothing is decrypted, the old file is kept, the new wallet opens by itself, keys and history stay",
-    { timeout: 180_000 },
+    { timeout: ON_WINDOWS ? 300_000 : 180_000 },
     async () => {
       const dataDir = newDataDir();
 
