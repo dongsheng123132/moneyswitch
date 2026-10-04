@@ -36,6 +36,13 @@ describe("which database the reset works on: the one the service uses", () => {
   it("MONEYSWITCH_DB_PATH moves the database exactly as it does for the server", () => {
     expect(resolveDataPaths("/srv/ms", { MONEYSWITCH_DB_PATH: "/elsewhere/ms.db" }).dbFilePath).toBe("/elsewhere/ms.db");
   });
+
+  it("an empty or blank MONEYSWITCH_DATA_DIR counts as unset, as in apps/server (it used to mean the current directory)", () => {
+    const home = path.join(os.homedir(), ".moneyswitch", "server");
+    expect(resolveDataPaths(null, { MONEYSWITCH_DATA_DIR: "" }).dataDir).toBe(home);
+    expect(resolveDataPaths(null, { MONEYSWITCH_DATA_DIR: "   " }).dataDir).toBe(home);
+    expect(resolveDataPaths(null, { MONEYSWITCH_DATA_DIR: "" }).dataDir).not.toBe(path.resolve(""));
+  });
 });
 
 describe("moneyswitch-server reset-admin-token (the command, with the reset itself replaced)", () => {
@@ -46,6 +53,12 @@ describe("moneyswitch-server reset-admin-token (the command, with the reset itse
     expect(r.stderr).not.toContain(TOKEN);
     expect(r.stderr).toMatch(/shown only now/);
     expect(r.calls).toEqual([path.join(path.resolve("/srv/ms"), "moneyswitch.sqlite")]);
+  });
+
+  it("names the database it changed (on stderr), so a reset of the wrong instance is obvious", () => {
+    const r = run("/srv/ms", {}, () => TOKEN);
+    expect(r.stderr).toContain(`Administrator token replaced in ${path.join(path.resolve("/srv/ms"), "moneyswitch.sqlite")}`);
+    expect(r.stdout).toBe(`${TOKEN}\n`);
   });
 
   it("uses the configured data directory when no flag is given", () => {

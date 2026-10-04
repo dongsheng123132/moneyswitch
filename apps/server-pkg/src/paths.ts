@@ -21,6 +21,8 @@ export function bundledMigrationsDir(): string {
  * `reset-admin-token`, so the reset always finds the database the service is using.
  */
 export function resolveDataPaths(dataDirFlag: string | null, env: NodeJS.ProcessEnv = process.env): { dataDir: string; dbFilePath: string } {
-  const dataDir = path.resolve(dataDirFlag ?? env.MONEYSWITCH_DATA_DIR ?? path.join(os.homedir(), ".moneyswitch", "server"));
+  // An empty or blank MONEYSWITCH_DATA_DIR counts as unset (as in apps/server); before, "" resolved to the current directory.
+  const fromEnv = env.MONEYSWITCH_DATA_DIR?.trim() ? env.MONEYSWITCH_DATA_DIR : undefined;
+  const dataDir = path.resolve(dataDirFlag ?? fromEnv ?? path.join(os.homedir(), ".moneyswitch", "server"));
   return { dataDir, dbFilePath: env.MONEYSWITCH_DB_PATH || path.join(dataDir, "moneyswitch.sqlite") };
 }
