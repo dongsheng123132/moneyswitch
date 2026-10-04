@@ -2,8 +2,26 @@
   "network": "Monad testnet (eip155:10143)",
   "vault": "0xFEd3f24cee2B3E2d94ad9f561ead4fEA589Ce2e3",
   "payTo": "0x28D99765A108279Ca8A92cc6543B6104cEeb33BE",
-  "count": 11,
+  "count": 5,
   "payments": [
+    {
+      "time": "2026-10-02T16:15:08.000Z",
+      "kind": "fetch",
+      "what": "demo-seller",
+      "amount_usdc": "0.01",
+      "tx": "0xe9b892e043bf031af619167099faba3e16e798b0f79c5a39ee3cadc7c10bd091",
+      "explorer": "https://testnet.monadvision.com/tx/0xe9b892e043bf031af619167099faba3e16e798b0f79c5a39ee3cadc7c10bd091",
+      "label": "wallet-test-back"
+    },
+    {
+      "time": "2026-10-02T16:14:00.000Z",
+      "kind": "fetch",
+      "what": "demo-seller",
+      "amount_usdc": "0.01",
+      "tx": "0xb52e956608b73e87a6546ce2e8168c7e9d69ed8d8b7732cb855fc8b20d9bf982",
+      "explorer": "https://testnet.monadvision.com/tx/0xb52e956608b73e87a6546ce2e8168c7e9d69ed8d8b7732cb855fc8b20d9bf982",
+      "label": "wallet-test-out"
+    },
     {
       "time": "2026-09-25T16:18:29.265Z",
       "kind": "fetch",
@@ -14,78 +32,13 @@
       "label": "admin-approved"
     },
     {
-      "time": "2026-09-25T14:58:46.559Z",
-      "kind": "chat",
-      "what": "moneyswitch-demo-chat",
-      "amount_usdc": "0.01",
-      "tx": "0xbc1dc883e964238d4608284dc9fdbd36d984043ecfbb7ed8075e80a563697080",
-      "explorer": "https://testnet.monadvision.com/tx/0xbc1dc883e964238d4608284dc9fdbd36d984043ecfbb7ed8075e80a563697080"
-    },
-    {
-      "time": "2026-09-25T14:58:27.028Z",
-      "kind": "chat",
-      "what": "moneyswitch-demo-chat",
-      "amount_usdc": "0.01",
-      "tx": "0xd3697cadea90194c9878f5584d7d22eeb5d877b94006da76021cfb539f9680ad",
-      "explorer": "https://testnet.monadvision.com/tx/0xd3697cadea90194c9878f5584d7d22eeb5d877b94006da76021cfb539f9680ad",
-      "label": "openai-sdk-chat"
-    },
-    {
-      "time": "2026-09-25T14:31:02.056Z",
-      "kind": "fetch",
-      "what": "/premium-report",
-      "amount_usdc": "0.01",
-      "tx": "0xb5d0099ba8c23ed9a30e1e8ca930411fc7a030051b3176d7835dfadf79dd4e66",
-      "explorer": "https://testnet.monadvision.com/tx/0xb5d0099ba8c23ed9a30e1e8ca930411fc7a030051b3176d7835dfadf79dd4e66"
-    },
-    {
-      "time": "2026-09-25T14:30:59.857Z",
-      "kind": "fetch",
-      "what": "/premium-report",
-      "amount_usdc": "0.01",
-      "tx": "0x8de5751ec9d664d1e0068c4a570b2200d384e905f7438c500ab03f3f23e41202",
-      "explorer": "https://testnet.monadvision.com/tx/0x8de5751ec9d664d1e0068c4a570b2200d384e905f7438c500ab03f3f23e41202"
-    },
-    {
-      "time": "2026-09-25T14:30:58.547Z",
-      "kind": "fetch",
-      "what": "/premium-report",
-      "amount_usdc": "0.01",
-      "tx": "0x41deecb21482c28bb63b7a9a16a4a7671f161e0c4bc3eb01183997c98ce359a0",
-      "explorer": "https://testnet.monadvision.com/tx/0x41deecb21482c28bb63b7a9a16a4a7671f161e0c4bc3eb01183997c98ce359a0"
-    },
-    {
-      "time": "2026-09-25T14:30:56.540Z",
-      "kind": "fetch",
-      "what": "/premium-report",
-      "amount_usdc": "0.01",
-      "tx": "0xbef1683875abcbdeb166e30d4b23ff677099ba3823e0f81dd7f3014bc8878bb2",
-      "explorer": "https://testnet.monadvision.com/tx/0xbef1683875abcbdeb166e30d4b23ff677099ba3823e0f81dd7f3014bc8878bb2"
-    },
-    {
-      "time": "2026-09-25T14:30:55.330Z",
-      "kind": "fetch",
-      "what": "/premium-report",
-      "amount_usdc": "0.01",
-      "tx": "0xa7e0fe42ee11b3c530b35d4e1b698c2ba5708c6069918b040e2cbc62aeffc3e5",
-      "explorer": "https://testnet.monadvision.com/tx/0xa7e0fe42ee11b3c530b35d4e1b698c2ba5708c6069918b040e2cbc62aeffc3e5"
-    },
-    {
-      "time": "2026-09-25T14:30:53.584Z",
-      "kind": "fetch",
-      "what": "/premium-report",
-      "amount_usdc": "0.01",
-      "tx": "0x18d6782e239c42a18f7f94c175368ea9f31be22570b9fbaf26aacad1bed11811",
-      "explorer": "https://testnet.monadvision.com/tx/0x18d6782e239c42a18f7f94c175368ea9f31be22570b9fbaf26aacad1bed11811"
-    },
-    {
       "time": "2026-09-25T14:30:26.646Z",
       "kind": "fetch",
       "what": "/premium-report",
       "amount_usdc": "0.01",
       "tx": "0x1cdf773ecc03c84f3aabaa8b4426fb6d4fd2cfd1c87e77cb8869cd2870dc2729",
       "explorer": "https://testnet.monadvision.com/tx/0x1cdf773ecc03c84f3aabaa8b4426fb6d4fd2cfd1c87e77cb8869cd2870dc2729",
-      "label": "claude-code-mcp"
+      "label": "claude-code"
     },
     {
       "time": "2026-09-25T14:26:13.718Z",
