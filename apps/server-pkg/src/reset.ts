@@ -29,6 +29,8 @@ export function runResetAdminToken(dataDirFlag: string | null, deps: ResetDeps =
     err(`moneyswitch-server: ${e instanceof AdminResetError ? e.message : `could not reset the administrator token: ${e instanceof Error ? e.message : String(e)}`}\n`);
     return 1;
   }
+  // Name the database, so resetting the wrong instance (another data dir, another container) is obvious at once.
+  err(`Administrator token replaced in ${dbFilePath}\n`);
   err("New administrator token below. It is shown only now. The old one has stopped working; the running server needs no restart.\n");
   out(`${token}\n`);
   return 0;
