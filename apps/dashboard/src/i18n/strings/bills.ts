@@ -38,6 +38,9 @@ export const billsStrings = defineMessages(
     emptyNoPaymentsAction: "Go to Keys",
     emptyFilteredTitle: "No payments match",
     emptyFilteredBody: "Try a different filter or search term.",
+
+    truncatedNotice: "Showing only the latest {shown} payments ({total} in total). The totals and the CSV export cover only these.",
+    renderCapNotice: "Showing the newest {shown} of {matching} matching payments. The count, the total and the CSV export cover all {matching}.",
   },
   {
     allKeys: "全部 Key",
@@ -74,5 +77,8 @@ export const billsStrings = defineMessages(
     emptyNoPaymentsAction: "去发一把 Key",
     emptyFilteredTitle: "没有符合条件的记录",
     emptyFilteredBody: "换一个筛选条件或搜索词试试。",
+
+    truncatedNotice: "只显示最近 {shown} 笔付款（共 {total} 笔）；合计和导出只覆盖这些。",
+    renderCapNotice: "只列出最新的 {shown} 笔（符合条件的共 {matching} 笔）；笔数、合计和导出覆盖全部 {matching} 笔。",
   }
 );

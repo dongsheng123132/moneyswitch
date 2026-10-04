@@ -144,10 +144,18 @@ export function agentIdentity(name: string): AgentIdentity {
 // CSV export
 // ---------------------------------------------------------------------------
 
+/**
+ * Turns rows into CSV text. A value holding a comma, a quote, a line break or a carriage return is wrapped in double quotes.
+ *
+ * A spreadsheet runs a cell that starts with = + - @ (or a tab or carriage return) as a formula, and some of these values come from
+ * outside (a paid URL, a key name). So such a value is written with a single quote in front: the spreadsheet then shows it as text.
+ * A value that merely starts with one of those characters, like "-1", gets the quote as well.
+ */
 export function toCsv(headers: string[], rows: Array<Array<string | number>>): string {
   const escape = (v: string | number) => {
-    const s = String(v);
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    let s = String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
     return s;
   };
   const lines = [headers.map(escape).join(","), ...rows.map((r) => r.map(escape).join(","))];

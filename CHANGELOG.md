@@ -75,6 +75,23 @@ database is still **additive only**: no migration was added or removed, no table
   restart, unlock file named after the address and protected, an approval link opens the Dashboard, the removed routes are absent.
 - **Docs** cut back to this product and pointed at `SPEC.md`: both READMEs, `deploy/README.zh-CN.md`, `docs/wallet-setup.md`,
   `docs/security.md`, `docs/quickstart.md`, `CONTRIBUTING.md`, the pull-request template.
+- **Bills list every payment (SPEC §2), not the newest 200.** `GET /v1/admin/usage` stopped silently at 200 rows, so for anyone past that the
+  Bills page's "All time", its totals and its CSV were wrong without saying so. It now returns every payment, newest first, up to a hard cap
+  of `BILLS_MAX_ROWS` = 10,000 (`packages/core`, `listPaymentsForBills`; about 6 MB and 75 ms of server time per request), and the answer
+  carries two new fields next to `payments`: `truncated` (true only when rows exist that were not returned) and `total` (the size of the
+  payments table). The fields of each payment are unchanged and no route was added. When `truncated` is true the Bills page shows a warning,
+  "only the latest N payments (T in total); the totals and the export cover only these", in English and Chinese. The CSV export gains `pay_to`,
+  `method` and `approval_id` at the end of its columns; the existing columns keep their order.
+  The daily budget still rolls over at UTC midnight, unchanged.
+- **Bills page, new on-screen behaviour: the table draws at most the newest 500 matching rows** (`BILLS_RENDER_ROWS`) and says so in a note
+  above it; the count, the total and the CSV still cover every match. Drawing thousands of rows on every poll and keystroke would freeze the tab.
+- **Polling.** The Bills page now fetches its list every 15 s instead of every 3 s (the keys list on the same page stays at 3 s). On every
+  page, a scheduled poll is now skipped while the previous request is still unanswered, so a slow server is not handed a new request every
+  interval; the refresh after a click (create key, approve, replace wallet) is never skipped. Every Dashboard GET now gives up after 30 s (`GET_TIMEOUT_MS`), so a request that never
+  answers cannot stop polling for good; requests that change something are never cut short by the client.
+- **CSV export no longer hands a spreadsheet a formula.** A value that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is written
+  with a single quote in front, so Excel / Sheets / Calc show it as text (a value that is only a negative number, like `-1`, gets the quote too);
+  a value holding a carriage return is now wrapped in double quotes, as one holding a line feed already was.
 
 ## Unreleased — atomic features only (2026-10-03)
 

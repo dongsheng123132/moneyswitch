@@ -12,7 +12,7 @@ import {
   buildKeyTree,
   type KeyTreeNode,
   parseUsdcToMicros,
-  listAllPayments,
+  listPaymentsForBills,
   writeAudit,
 } from "@moneyswitch/core";
 import type { AppContext } from "../context.js";
@@ -153,9 +153,11 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.get("/v1/admin/usage", { preHandler: adminGuard }, async (_req, reply) => {
-    const payments = listAllPayments(ctx.db, 200);
+    const { rows, truncated, total } = listPaymentsForBills(ctx.db);
     return reply.send({
-      payments: payments.map((p) => ({
+      truncated,
+      total,
+      payments: rows.map((p) => ({
         id: p.id,
         key_id: p.keyId,
         url: p.url,

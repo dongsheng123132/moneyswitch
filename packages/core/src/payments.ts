@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { writeAudit } from "./audit.js";
 import { dbNumberToMicros } from "./money.js";
@@ -152,14 +152,30 @@ export function listHistoryForKey(db: MoneySwitchDb, keyId: string, limit = 20):
     .map(rowToPayment);
 }
 
-export function listAllPayments(db: MoneySwitchDb, limit = 100): PaymentRow[] {
-  return db
+/**
+ * Hard cap on the rows the admin bills list returns (the dashboard holds them all in the browser and polls for them). 10,000 rows is
+ * about 6 MB and about 75 ms of blocking server work per request.
+ */
+export const BILLS_MAX_ROWS = 10_000;
+
+/**
+ * The bills page: every payment, newest first, up to `max` rows. `total` is the
+ * size of the whole payments table; `truncated` is true only when rows exist
+ * that are not in `rows`, so a caller never presents a cut-off list as complete.
+ */
+export function listPaymentsForBills(
+  db: MoneySwitchDb,
+  max = BILLS_MAX_ROWS
+): { rows: PaymentRow[]; truncated: boolean; total: number } {
+  const total = db.get<{ n: number }>(sql`SELECT COUNT(*) AS n FROM ${schema.payments}`)?.n ?? 0;
+  const rows = db
     .select()
     .from(schema.payments)
     .orderBy(desc(schema.payments.createdAt))
-    .limit(limit)
+    .limit(max)
     .all()
     .map(rowToPayment);
+  return { rows, truncated: total > rows.length, total };
 }
 
 /**
