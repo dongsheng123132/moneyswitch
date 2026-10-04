@@ -440,4 +440,57 @@ describe("Bills page", () => {
     assert.ok(html.includes("PAYMENT_REJECTED") && html.includes("TIMEOUT_AFTER_PAYMENT"), "the reason stays visible next to a no / maybe");
     assert.ok(html.includes(esc(en.bills.chargedMaybeHint)), "a maybe is explained");
   });
+
+  it("a truncated list says so: how many are shown and how many there are, in both languages", () => {
+    const bills = { payments: rows as never, truncated: true, total: 61234 };
+    const html = render(h(BillsModule.BillsTruncation, { bills }));
+    assert.ok(html.includes(fill(en.bills.truncatedNotice, { shown: rows.length, total: 61234 })));
+    assert.ok(html.includes("callout-warn"), "it is a warning, not a footnote");
+    const zh = render(h(BillsModule.BillsTruncation, { bills }), "zh");
+    assert.ok(zh.includes("只显示最近 4 笔付款（共 61234 笔）"), zh);
+  });
+
+  it("a list that is whole, or not loaded yet, shows no such notice", () => {
+    const whole = render(h(BillsModule.BillsTruncation, { bills: { payments: rows as never, truncated: false, total: rows.length } }));
+    assert.ok(!whole.includes("callout") && !whole.includes("Showing only"), whole);
+    assert.equal(render(h(BillsModule.BillsTruncation, { bills: null })), "");
+  });
+
+  it("the table draws at most BILLS_RENDER_ROWS rows, the newest ones, and says how many match", () => {
+    const many = Array.from({ length: BillsModule.BILLS_RENDER_ROWS + 700 }, (_, i) => payment(`p${i}`, "settled"));
+    const visible = BillsModule.visibleBills(many as never);
+    assert.equal(visible.length, BillsModule.BILLS_RENDER_ROWS);
+    assert.equal(visible[0].id, "p0", "the list is newest first, so the newest rows are the ones drawn");
+    const html = render(h(BillsModule.BillsTable, { payments: visible, keyNames: new Map(), chainLabels: new Map() }));
+    assert.equal([...html.matchAll(/data-charged="/g)].length, BillsModule.BILLS_RENDER_ROWS);
+    const note = render(h(BillsModule.BillsRenderCap, { shown: visible.length, matching: many.length }));
+    assert.ok(note.includes(fill(en.bills.renderCapNotice, { shown: BillsModule.BILLS_RENDER_ROWS, matching: many.length })), note);
+    const zh = render(h(BillsModule.BillsRenderCap, { shown: visible.length, matching: many.length }), "zh");
+    assert.ok(zh.includes(`只列出最新的 ${BillsModule.BILLS_RENDER_ROWS} 笔（符合条件的共 ${many.length} 笔）`), zh);
+  });
+
+  it("a list that fits in the table is drawn whole and shows no cap notice", () => {
+    assert.equal(BillsModule.visibleBills(rows as never), rows, "nothing is copied or cut");
+    assert.equal(BillsModule.visibleBills(rows as never, rows.length).length, rows.length, "exactly at the limit is not over it");
+    assert.equal(BillsModule.visibleBills(rows as never, 2).length, 2);
+    assert.equal(render(h(BillsModule.BillsRenderCap, { shown: rows.length, matching: rows.length })), "");
+  });
+
+  it("the CSV keeps its original columns in order and ends with pay_to, method, approval_id", () => {
+    const csv = BillsModule.billsCsv(
+      [payment("paid", "settled", { approval_id: "appr-1" }), payment("refused", "failed", { error_code: "PAYMENT_REJECTED" })] as never,
+      new Map([["key-1", "Codex"]])
+    );
+    const [head, first, second] = csv.split("\n");
+    assert.equal(head, "time,key_id,key_name,host,url,network,amount,charged,tx_hash,error_code,pay_to,method,approval_id");
+    assert.ok(first.startsWith("2026-10-04T12:00:00.000Z,key-1,Codex,api.example.com:443,https://api.example.com/paid?q=1,eip155:10143,0.01,yes,0x"), first);
+    assert.ok(first.endsWith(",,0x000000000000000000000000000000000000dEaD,GET,appr-1"), first);
+    assert.ok(second.endsWith(",PAYMENT_REJECTED,0x000000000000000000000000000000000000dEaD,GET,"), second);
+  });
+
+  it("the CSV does not hand a spreadsheet a formula: a key name or URL that starts with = + - @ is written as text", () => {
+    const csv = BillsModule.billsCsv([payment("p", "settled", { url: "@evil.example/x" })] as never, new Map([["key-1", "=1+1"]]));
+    const [, line] = csv.split("\n");
+    assert.ok(line.startsWith("2026-10-04T12:00:00.000Z,key-1,'=1+1,api.example.com:443,'@evil.example/x,eip155:10143,0.01,yes,"), line);
+  });
 });

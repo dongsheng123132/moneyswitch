@@ -83,3 +83,76 @@ describe("Poller: answers are applied in the order the requests were made", () =
     assert.deepEqual(p.state, { data: "B", error: null, loading: false });
   });
 });
+
+describe("Poller: a slow request is not stacked on", () => {
+  /** A fetcher that counts how many requests were actually made. */
+  function counted<T>() {
+    const c = controlled<T>();
+    let calls = 0;
+    return { ...c, fetcher: () => (calls++, c.fetcher()), calls: () => calls };
+  }
+
+  it("scheduled polls that arrive while the request is still unanswered make no request at all", async () => {
+    const c = counted<string>();
+    const { poller: p } = poller(c.fetcher);
+    const first = p.run(); // the first poll: the server is slow
+    await p.tick(); // 3 intervals go by with no answer
+    await p.tick();
+    await p.tick();
+    assert.equal(c.calls(), 1, "still the one request");
+    c.pending[0]!.resolve("A");
+    await first;
+    assert.equal(p.state.data, "A");
+  });
+
+  it("once the slow request is answered, the next scheduled poll goes out again", async () => {
+    const c = counted<string>();
+    const { poller: p } = poller(c.fetcher);
+    const first = p.tick();
+    await p.tick();
+    assert.equal(c.calls(), 1);
+    c.pending[0]!.resolve("A");
+    await first;
+    const second = p.tick();
+    assert.equal(c.calls(), 2, "the answer freed the slot");
+    c.pending[1]!.resolve("B");
+    await second;
+    assert.equal(p.state.data, "B");
+  });
+
+  it("a request that FAILS frees the slot too: polling does not stop after an error", async () => {
+    const c = counted<string>();
+    const { poller: p } = poller(c.fetcher);
+    const first = p.tick();
+    c.pending[0]!.reject(new Error("offline"));
+    await first;
+    const second = p.tick();
+    assert.equal(c.calls(), 2);
+    c.pending[1]!.resolve("back");
+    await second;
+    assert.deepEqual(p.state, { data: "back", error: null, loading: false });
+  });
+
+  it("a deliberate refresh is never skipped, even with a poll in flight (the swap race above depends on it)", async () => {
+    const c = counted<string>();
+    const { poller: p } = poller(c.fetcher);
+    const poll = p.tick();
+    const refresh = p.run();
+    assert.equal(c.calls(), 2, "both went out");
+    c.pending[1]!.resolve("fresh");
+    await refresh;
+    c.pending[0]!.resolve("stale");
+    await poll;
+    assert.equal(p.state.data, "fresh");
+  });
+
+  it("while a refresh is in flight, a scheduled poll waits for it too", async () => {
+    const c = counted<string>();
+    const { poller: p } = poller(c.fetcher);
+    const refresh = p.run();
+    await p.tick();
+    assert.equal(c.calls(), 1);
+    c.pending[0]!.resolve("A");
+    await refresh;
+  });
+});

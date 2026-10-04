@@ -2,9 +2,10 @@ import React, { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Download, Search } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listBills, listKeys, isMockPayment, type MoneyKeyRow, type PaymentRow } from "../api";
+import { listBills, listKeys, isMockPayment, type BillsList, type MoneyKeyRow, type PaymentRow } from "../api";
 import { formatUsdc, sumDecimalStrings, toCsv, downloadCsv, urlPath, isTodayUtc } from "../money";
 import Pill from "../components/Pill";
+import Callout from "../components/Callout";
 import TxLink from "../components/TxLink";
 import EmptyState from "../components/EmptyState";
 import { SkeletonTable } from "../components/Skeleton";
@@ -104,11 +105,60 @@ export function BillsTable({
   );
 }
 
+/** Said whenever the server held more payments than it sent: the list, the totals and the CSV then cover only the newest ones. */
+export function BillsTruncation({ bills }: { bills: BillsList | null | undefined }) {
+  const t = useT(billsStrings);
+  if (!bills?.truncated) return null;
+  return <Callout tone="warn">{t("truncatedNotice", { shown: bills.payments.length, total: bills.total })}</Callout>;
+}
+
+/**
+ * The most rows the table draws at once. The server may send up to 10,000 payments and the page re-renders on every poll (the keys list
+ * is polled every 3 s) and every keystroke in the search box, so drawing them all would freeze the tab. The count, the total and the
+ * CSV still cover every match.
+ */
+export const BILLS_RENDER_ROWS = 500;
+
+/** The newest `max` of the (newest-first) matching payments: what the table draws. */
+export function visibleBills(matching: PaymentRow[], max: number = BILLS_RENDER_ROWS): PaymentRow[] {
+  return matching.length > max ? matching.slice(0, max) : matching;
+}
+
+/** Said whenever the table draws fewer rows than match: the count, the total and the CSV cover all of them. */
+export function BillsRenderCap({ shown, matching }: { shown: number; matching: number }) {
+  const t = useT(billsStrings);
+  if (shown >= matching) return null;
+  return <Callout tone="info">{t("renderCapNotice", { shown, matching })}</Callout>;
+}
+
+/** The CSV of the bills: the original columns first, in their original order, then pay_to, method and approval_id. */
+export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>): string {
+  const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code", "pay_to", "method", "approval_id"];
+  const rows = payments.map((p) => [
+    p.created_at,
+    p.key_id,
+    keyNames.get(p.key_id) ?? "",
+    p.host,
+    p.url,
+    p.network,
+    p.amount,
+    chargedOf(p),
+    p.tx_hash ?? "",
+    p.error_code ?? "",
+    p.pay_to,
+    p.method,
+    p.approval_id ?? "",
+  ]);
+  return toCsv(headers, rows);
+}
+
 export default function BillsPage() {
   const t = useT(billsStrings);
   const tc = useT(common);
   const meta = useAdminMeta();
-  const { data: payments, error, loading } = usePolling(listBills);
+  // The bills answer is big (every payment, up to 10,000 of them), so it is fetched every 15 s; the keys list stays on the default 3 s.
+  const { data: bills, error, loading } = usePolling(listBills, 15000);
+  const payments = bills?.payments;
   const { data: keys } = usePolling(listKeys);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -143,6 +193,8 @@ export default function BillsPage() {
     });
   }, [payments, keyFilter, chargedFilter, range, q]);
 
+  const visible = useMemo(() => visibleBills(filtered), [filtered]);
+
   const totalAmount = sumDecimalStrings(filtered.filter((p) => chargedOf(p) !== "no").map((p) => p.amount));
   const maybeCount = filtered.filter((p) => chargedOf(p) === "maybe").length;
   const hasActiveFilters = keyFilter !== "all" || chargedFilter !== "all" || range !== "7d" || q !== "";
@@ -152,20 +204,7 @@ export default function BillsPage() {
   }
 
   function exportCsv() {
-    const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code"];
-    const rows = filtered.map((p) => [
-      p.created_at,
-      p.key_id,
-      keyNames.get(p.key_id) ?? "",
-      p.host,
-      p.url,
-      p.network,
-      p.amount,
-      chargedOf(p),
-      p.tx_hash ?? "",
-      p.error_code ?? "",
-    ]);
-    downloadCsv(`moneyswitch-bills-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(headers, rows));
+    downloadCsv(`moneyswitch-bills-${new Date().toISOString().slice(0, 10)}.csv`, billsCsv(filtered, keyNames));
   }
 
   return (
@@ -212,6 +251,8 @@ export default function BillsPage() {
 
       {error && <div className="error-banner">{tc("requestFailed", { message: error })}</div>}
 
+      <BillsTruncation bills={bills} />
+
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 32 }}>
           <div>
@@ -257,7 +298,10 @@ export default function BillsPage() {
             {t("emptyFilteredBody")}
           </EmptyState>
         ) : (
-          <BillsTable payments={filtered} keyNames={keyNames} chainLabels={chainLabels} onPickKey={(id) => updateParam("key", id, "all")} />
+          <>
+            <BillsRenderCap shown={visible.length} matching={filtered.length} />
+            <BillsTable payments={visible} keyNames={keyNames} chainLabels={chainLabels} onPickKey={(id) => updateParam("key", id, "all")} />
+          </>
         )}
       </div>
     </div>

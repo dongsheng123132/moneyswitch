@@ -28,6 +28,8 @@ export class ApiError extends Error {
   }
 }
 
+export const GET_TIMEOUT_MS = 30_000;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -37,7 +39,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...(init?.headers as Record<string, string> | undefined),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, { ...init, headers });
+  // A GET that never answers would otherwise hold a polling slot forever (usePolling skips a tick while one is in flight).
+  const isGet = !init?.method || init.method.toUpperCase() === "GET";
+  const signal = init?.signal ?? (isGet ? AbortSignal.timeout(GET_TIMEOUT_MS) : undefined);
+  const res = await fetch(path, { ...init, headers, signal });
   const text = await res.text();
   let json: unknown = null;
   if (text) {
@@ -197,9 +202,16 @@ export interface PaymentRow {
   kind: "fetch" | "chat";
 }
 
-export async function listBills(): Promise<PaymentRow[]> {
-  const res = await request<{ payments: PaymentRow[] }>("/v1/admin/usage");
-  return res.payments;
+/** `truncated`: the server holds more payments than it sent (it caps the list); `total`: how many it holds in all. */
+export interface BillsList {
+  payments: PaymentRow[];
+  truncated: boolean;
+  total: number;
+}
+
+export async function listBills(): Promise<BillsList> {
+  const res = await request<{ payments: PaymentRow[]; truncated: boolean; total: number }>("/v1/admin/usage");
+  return { payments: res.payments, truncated: res.truncated, total: res.total };
 }
 
 export function isMockPayment(p: PaymentRow): boolean {
