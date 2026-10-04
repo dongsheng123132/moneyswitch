@@ -15,6 +15,11 @@ document before opening a PR.
   implementation that might not fit the spec (`SPEC.md` is the only
   authoritative spec; older versions are kept in `docs/archive/` for history
   only. When in doubt, `SPEC.md` wins over this file).
+- **Out of scope, closed without review:** user sign-up or accounts, per-user
+  balances, deposits or withdrawals, payment or top-up integrations,
+  redemption codes, resale with a markup. One MoneySwitch spends for one
+  payer (`SPEC.md` §0); holding or spending other people's money is custody
+  (`SPEC.md` §8).
 - Security issues: see [SECURITY.md](SECURITY.md) — do **not** open a
   public issue for a vulnerability.
 
