@@ -42,8 +42,14 @@ describe("request timeout", () => {
       new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => reject(init.signal!.reason));
       })) as typeof fetch;
+    // AbortSignal.timeout's timer is unref'd: with only the never-answering fetch pending, the event loop can end before it fires
+    // (seen on Windows CI). A ref'd setTimeout aborts the same way and keeps the test alive until it does.
     const realTimeout = AbortSignal.timeout;
-    AbortSignal.timeout = () => realTimeout.call(AbortSignal, 10);
+    AbortSignal.timeout = () => {
+      const c = new AbortController();
+      setTimeout(() => c.abort(new DOMException("signal timed out", "TimeoutError")), 10);
+      return c.signal;
+    };
     try {
       await assert.rejects(listBills(), (e: Error) => e.name === "TimeoutError");
     } finally {
