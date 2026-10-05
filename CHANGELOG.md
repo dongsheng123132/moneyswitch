@@ -3,8 +3,24 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
-## Unreleased — v0.7.1 (2026-10-05)
+## v0.7.1 — 2026-10-06
 
+Positioning, settled 2026-10-04 (SPEC §0, §8): **one MoneySwitch spends for one payer.** Open sign-up, per-user balances, deposits,
+withdrawals, redemption codes and resale are custody, not a relay, and stay out; keys are issued by the administrator. Proven on real money:
+one wallet paid Nansen's x402 API on Base mainnet (tx `0x69d0f6f0…f2a5`) and Monad mainnet (tx `0xd68d307a…af7e`) on 2026-10-05.
+
+- **A host outside the key's list asks a person (SPEC §3).** An unlisted public host on a root key returns `approval_required` before any
+  request goes out; **approving adds `host:port` to that key's `allowed_hosts`** (audited `key.allow_host`) and the AI simply retries. The
+  name is looked up once, at approval (3 s, fail closed); private, special-use (including 100.64.0.0/10) and own-interface answers are refused.
+  Child keys, non-http(s) and non-public literal addresses stay `HOST_NOT_ALLOWED`. One pending approval per key and host, at most 5 per key
+  (`RATE_LIMITED`). Migration `0008_approval_kind` adds `approvals.kind` (additive; old rows are `payment`). Amount approvals are unchanged.
+- **Pay on the chain the wallet can afford (SPEC §6).** Of the chains a seller accepts, the first one in `MONEYSWITCH_NETWORKS` whose USDC
+  balance covers the price is used; when every balance is known to be short the answer is `INSUFFICIENT_FUNDS`, `charged: no`, nothing
+  signed. Unreadable balances are still tried, after funded chains. Per-request limit and `max_price` are checked first, with their own codes.
+  Balances are cached 15 s (failures 2 s); a resend with an approval pays on the approval's chain; a wallet replaced mid-payment gives
+  `WALLET_BUSY`. Known limit: two concurrent payments can pick the same chain.
+- **Website** rewritten for v0.7 and the one-payer positioning (no MCP, CLI, toll booth, desktop or employee portal; quickstart matches the
+  README; proof rows link to explorers; seven images of removed UI and the v0.4 video removed).
 - **A seller's price is checked by MoneySwitch itself (`PRICE_INVALID`).** The price in a seller's 402 (`requirements.amount`) went straight
   into `BigInt()` and then into the reservation, and the only thing that kept a negative or fractional price out was `@x402/core`'s
   `spendControls`, which drops prices that are not `/^\d+$/` before our code runs (it lets `"0"` through). A negative price written into a
@@ -17,10 +33,30 @@ each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive
   Tests: `packages/x402/test/price-guard.test.ts` and `apps/server/test/e2e/price-invalid.test.ts` switch `spendControls` off to show our
   own check holds on its own (with the old code and `spendControls` off, a `"-1000000"` price left the key's used budget at -1000000 and a `"0"` price
   was accepted instead of refused). The code is listed in the skill (`/skill.md`, every per-key skill, `skills/moneyswitch-pay/SKILL.md`) and in
-  `docs/money-api-v0.md`. No route, table or column changed. The Dashboard bundle in `apps/server-pkg/dashboard` was not rebuilt, so its
-  copy of the skill text lacks the new code until the next Dashboard build.
+  `docs/money-api-v0.md`. No route, table or column changed. The Dashboard bundle carries the new
+  skill text from this release on.
+- **Bills list every payment (SPEC §2), not the newest 200.** `GET /v1/admin/usage` stopped silently at 200 rows, so for anyone past that the
+  Bills page's "All time", its totals and its CSV were wrong without saying so. It now returns every payment, newest first, up to a hard cap
+  of `BILLS_MAX_ROWS` = 10,000 (`packages/core`, `listPaymentsForBills`; about 6 MB and 75 ms of server time per request), and the answer
+  carries two new fields next to `payments`: `truncated` (true only when rows exist that were not returned) and `total` (the size of the
+  payments table). The fields of each payment are unchanged and no route was added. When `truncated` is true the Bills page shows a warning,
+  "only the latest N payments (T in total); the totals and the export cover only these", in English and Chinese. The CSV export gains `pay_to`,
+  `method` and `approval_id` at the end of its columns; the existing columns keep their order.
+  The daily budget still rolls over at UTC midnight, unchanged.
+- **Bills page, new on-screen behaviour: the table draws at most the newest 500 matching rows** (`BILLS_RENDER_ROWS`) and says so in a note
+  above it; the count, the total and the CSV still cover every match. Drawing thousands of rows on every poll and keystroke would freeze the tab.
+- **Polling.** The Bills page now fetches its list every 15 s instead of every 3 s (the keys list on the same page stays at 3 s). On every
+  page, a scheduled poll is now skipped while the previous request is still unanswered, so a slow server is not handed a new request every
+  interval; the refresh after a click (create key, approve, replace wallet) is never skipped. Every Dashboard GET now gives up after 30 s (`GET_TIMEOUT_MS`), so a request that never
+  answers cannot stop polling for good; requests that change something are never cut short by the client.
+- **CSV export no longer hands a spreadsheet a formula.** A value that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is written
+  with a single quote in front, so Excel / Sheets / Calc show it as text (a value that is only a negative number, like `-1`, gets the quote too);
+  a value holding a carriage return is now wrapped in double quotes, as one holding a line feed already was.
+- **Small fixes since v0.7.0:** wallet ACL protection works when the server runs under PowerShell 7; e2e start-up budgets on Windows;
+  clearer skill install text; `reset-admin-token` names the database it changed and an empty `MONEYSWITCH_DATA_DIR` counts as unset; the
+  Dashboard GET-timeout test keeps the event loop alive (was flaky on Windows CI).
 
-## Unreleased — v0.7: the small product (2026-10-04)
+## v0.7.0 — the small product (2026-10-04)
 
 `SPEC.md` is the only specification now (v0.1 to v0.6 are in `docs/archive/`): an AI spends from a capped key, anything over the approval
 line waits for a human, the private key is never given to the AI; a new user makes the first testnet payment within ten minutes. The
@@ -92,23 +128,6 @@ database is still **additive only**: no migration was added or removed, no table
   restart, unlock file named after the address and protected, an approval link opens the Dashboard, the removed routes are absent.
 - **Docs** cut back to this product and pointed at `SPEC.md`: both READMEs, `deploy/README.zh-CN.md`, `docs/wallet-setup.md`,
   `docs/security.md`, `docs/quickstart.md`, `CONTRIBUTING.md`, the pull-request template.
-- **Bills list every payment (SPEC §2), not the newest 200.** `GET /v1/admin/usage` stopped silently at 200 rows, so for anyone past that the
-  Bills page's "All time", its totals and its CSV were wrong without saying so. It now returns every payment, newest first, up to a hard cap
-  of `BILLS_MAX_ROWS` = 10,000 (`packages/core`, `listPaymentsForBills`; about 6 MB and 75 ms of server time per request), and the answer
-  carries two new fields next to `payments`: `truncated` (true only when rows exist that were not returned) and `total` (the size of the
-  payments table). The fields of each payment are unchanged and no route was added. When `truncated` is true the Bills page shows a warning,
-  "only the latest N payments (T in total); the totals and the export cover only these", in English and Chinese. The CSV export gains `pay_to`,
-  `method` and `approval_id` at the end of its columns; the existing columns keep their order.
-  The daily budget still rolls over at UTC midnight, unchanged.
-- **Bills page, new on-screen behaviour: the table draws at most the newest 500 matching rows** (`BILLS_RENDER_ROWS`) and says so in a note
-  above it; the count, the total and the CSV still cover every match. Drawing thousands of rows on every poll and keystroke would freeze the tab.
-- **Polling.** The Bills page now fetches its list every 15 s instead of every 3 s (the keys list on the same page stays at 3 s). On every
-  page, a scheduled poll is now skipped while the previous request is still unanswered, so a slow server is not handed a new request every
-  interval; the refresh after a click (create key, approve, replace wallet) is never skipped. Every Dashboard GET now gives up after 30 s (`GET_TIMEOUT_MS`), so a request that never
-  answers cannot stop polling for good; requests that change something are never cut short by the client.
-- **CSV export no longer hands a spreadsheet a formula.** A value that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is written
-  with a single quote in front, so Excel / Sheets / Calc show it as text (a value that is only a negative number, like `-1`, gets the quote too);
-  a value holding a carriage return is now wrapped in double quotes, as one holding a line feed already was.
 
 ## Unreleased — atomic features only (2026-10-03)
 

@@ -86,7 +86,7 @@
 <!-- ============ HERO ============ -->
 <section class="hero">
   <div class="wrap">
-    <p class="pill"><span class="dot" aria-hidden="true"></span><span data-i18n="hero.badge">v0.7 · Open source · Monad + Base · testnet by default</span></p>
+    <p class="pill"><span class="dot" aria-hidden="true"></span><span data-i18n="hero.badge">v0.7.1 · Open source · Monad + Base · testnet by default</span></p>
     <h1 class="hero-title" data-i18n="hero.title">Give your AI an <span class="hl">API key</span> for money.</h1>
     <p class="hero-sub" data-i18n="hero.sub">Your AI gets a key with a spending limit. Anything over the approval line waits for a person to approve it, and the private key is never given to the AI. MoneySwitch checks every payment against the key's limits <em>before</em> it signs, then pays x402-priced APIs in USDC.</p>
     <p class="hero-compare" data-i18n="hero.compare"><span>One MoneySwitch spends for one payer.</span> <span class="lime">The administrator issues the keys; there is no sign-up.</span></p>
@@ -244,7 +244,7 @@ MONEY_API_KEY=<span class="s">mk_live_…</span></code></pre>
       <li><span class="n">2</span><h3 data-i18n="how.2t">Key</h3><p data-i18n="how.2"><code>mk_live_…</code> bearer token, issued by the administrator. Limits are fixed when it is issued; revocable; only its SHA-256 hash is stored.</p></li>
       <li><span class="n">3</span><h3 data-i18n="how.3t">Policy</h3><p data-i18n="how.3">Per-request limit, <code>max_price</code>, daily / total budget, approval line, host allowlist — all before signing.</p></li>
       <li><span class="n">4</span><h3>x402</h3><p data-i18n="how.4">The API answers HTTP 402 with a price. MoneySwitch signs an EIP-3009 USDC authorization with its local, low-balance wallet.</p></li>
-      <li><span class="n">5</span><h3>USDC</h3><p data-i18n="how.5">A facilitator settles the transfer on the chain the API asks for — Monad or Base, testnet by default — and pays the gas.</p></li>
+      <li><span class="n">5</span><h3>USDC</h3><p data-i18n="how.5">A facilitator settles the transfer and pays the gas. Of the chains the API accepts, MoneySwitch picks the first one in your list that the wallet can afford — Monad or Base, testnet by default.</p></li>
       <li><span class="n">6</span><h3 data-i18n="how.6t">Paid API</h3><p data-i18n="how.6">Receives USDC. No MoneySwitch account needed.</p></li>
     </ol>
     <p class="fineprint" data-i18n="how.fine">The private key lives in an encrypted wallet on the MoneySwitch server. It is decrypted only in the server's memory, never written to disk unencrypted, never logged, and no API returns it; the only wallet secret ever shown is the 12 recovery words, once, when the wallet is created. The server unlocks itself after a restart with a random secret kept next to the wallet, so whoever can read the data folder can spend it: keep only a small float in the wallet, and keep the AI on another machine or system user.</p>
@@ -260,8 +260,8 @@ MONEY_API_KEY=<span class="s">mk_live_…</span></code></pre>
       <div class="card"><span class="ico" aria-hidden="true">⚿</span><h3 data-i18n="g1.t">No private key for agents</h3><p data-i18n="g1.p">The agent only ever holds an <code>mk_live_</code> key. It cannot reach the wallet or admin routes.</p></div>
       <div class="card"><span class="ico" aria-hidden="true">≤</span><h3 data-i18n="g2.t">Per-request limit &amp; max_price</h3><p data-i18n="g2.p">Any single payment above the key's cap, or above the caller's <code>max_price</code>, is refused.</p></div>
       <div class="card"><span class="ico" aria-hidden="true">◔</span><h3 data-i18n="g3.t">Daily &amp; total budgets</h3><p data-i18n="g3.p">Checked and reserved inside one database transaction, so concurrent calls can't overspend.</p></div>
-      <div class="card"><span class="ico" aria-hidden="true">✋</span><h3 data-i18n="g4.t">Human approval line</h3><p data-i18n="g4.p">Above the line, the payment pauses and the AI gets an approval link. An administrator approves it after logging in to the Dashboard; the link carries no token, so the AI can't approve it itself. The agent then retries with the <code>approval_id</code>.</p></div>
-      <div class="card"><span class="ico" aria-hidden="true">⌘</span><h3 data-i18n="g5.t">Host allowlist</h3><p data-i18n="g5.p">Governs every outbound request, including free ones. An empty allowlist denies everything.</p></div>
+      <div class="card"><span class="ico" aria-hidden="true">✋</span><h3 data-i18n="g4.t">Human approval line</h3><p data-i18n="g4.p">Above the line, the payment pauses and the AI gets an approval link. An administrator approves it after logging in to the Dashboard; the link carries no token, so the AI can't approve it itself. The agent then retries with the <code>approval_id</code>. A host the key does not list yet asks the same way; approving adds that host to the key.</p></div>
+      <div class="card"><span class="ico" aria-hidden="true">⌘</span><h3 data-i18n="g5.t">Host allowlist</h3><p data-i18n="g5.p">Governs every outbound request, including free ones. A public host that is not listed asks a person first, and nothing is sent until it is approved; private and special-use addresses can never be added that way.</p></div>
       <div class="card"><span class="ico" aria-hidden="true">⤺</span><h3 data-i18n="g6.t">SSRF guard</h3><p data-i18n="g6.p">Requests to MoneySwitch’s own listening address (<code>127.0.0.1</code>, <code>localhost</code>, <code>0.0.0.0</code>, <code>::1</code>) are refused. The match is literal, not a DNS-rebinding defence; see <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p></div>
     </div>
     <p class="fineprint" data-i18n="guard.fine">Also: every answer says <code>charged: yes | no | maybe</code> · payments with an <code>unknown</code> outcome count as spent, and the AI must not retry them · secrets are shown exactly once and stored only as SHA-256 hashes · a revoked key stops working immediately. Full threat model in <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SECURITY.md" rel="noopener">SECURITY.md</a>.</p>
@@ -294,7 +294,7 @@ MONEY_API_KEY=<span class="s">mk_live_…</span></code></pre>
       <div class="stat"><b id="stat-count">5</b><span data-i18n="stat.count">real testnet settlements</span></div>
       <div class="stat"><b id="stat-total">0.19</b><span data-i18n="stat.total">test USDC settled in total</span></div>
       <div class="stat"><b>0 MON</b><span data-i18n="stat.gas">gas paid by the wallet</span></div>
-      <div class="stat"><b>7</b><span data-i18n="stat.main">real-USDC settlements on Monad mainnet</span></div>
+      <div class="stat"><b>9</b><span data-i18n="stat.main">real-USDC settlements on mainnet (Monad 8, Base 1)</span></div>
     </div>
     <div class="ledger">
       <div class="ledger-head">
@@ -306,7 +306,7 @@ MONEY_API_KEY=<span class="s">mk_live_…</span></code></pre>
         <tbody id="tx-body"></tbody>
       </table>
     </div>
-    <p class="fineprint" data-i18n="proof.main">On Monad mainnet, with real USDC (made on 27 September, also with a version before v0.7): a key scoped to <code>api.nansen.ai</code> paid Nansen’s x402 API (<a href="https://monadvision.com/tx/0x98297ba48601af6b2acc032f280db1c292de1071c754921d24a27464e3ce5e9c" target="_blank" rel="noopener">0.01 USDC, tx 0x98297ba4…e5e9c ↗</a>); later a Qwen agent spent a $0.09 key budget on five more queries by itself, and one more query was paid in an earlier Qwen run. The five Qwen hashes are in the <a href="blog/qwen-agent-pays-nansen/">blog post</a>.</p>
+    <p class="fineprint" data-i18n="proof.main">On Monad mainnet, with real USDC (made on 27 September, also with a version before v0.7): a key scoped to <code>api.nansen.ai</code> paid Nansen’s x402 API (<a href="https://monadvision.com/tx/0x98297ba48601af6b2acc032f280db1c292de1071c754921d24a27464e3ce5e9c" target="_blank" rel="noopener">0.01 USDC, tx 0x98297ba4…e5e9c ↗</a>); later a Qwen agent spent a $0.09 key budget on five more queries by itself, and one more query was paid in an earlier Qwen run. The five Qwen hashes are in the <a href="blog/qwen-agent-pays-nansen/">blog post</a>. On 5 October one wallet paid Nansen on both mainnets with v0.7.0: Base (<a href="https://basescan.org/tx/0x69d0f6f0cf15d466b8e8d1c7c4ec6b21e24c4ffee6c533b0ba4b03a79688f2a5" target="_blank" rel="noopener">0.01 USDC, tx 0x69d0f6f0…f2a5 ↗</a>) and Monad (<a href="https://monadvision.com/tx/0xd68d307a0e5c8d40c21803bef61a0a6c55c9f8a8b19cebe594e61f0ecdbeaf7e" target="_blank" rel="noopener">0.01 USDC, tx 0xd68d307a…af7e ↗</a>).</p>
   </div>
 </section>
 
