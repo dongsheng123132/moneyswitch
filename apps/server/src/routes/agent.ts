@@ -30,6 +30,7 @@ const DENIED_CODES = new Set([
   "SSRF_BLOCKED",
   "UNSUPPORTED_PAYMENT",
   "PRICE_INVALID",
+  "INSUFFICIENT_FUNDS",
   "PER_REQUEST_LIMIT_EXCEEDED",
   "MAX_PRICE_EXCEEDED",
   "DAILY_BUDGET_EXCEEDED",
@@ -183,7 +184,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         body: body.body,
         maxPrice,
         approvalId: body.approval_id ?? null,
-      });
+      }, { balanceReader: ctx.balanceReader });
       chargedSoFar = result.charged;
 
       if (result.paymentUnknown) {

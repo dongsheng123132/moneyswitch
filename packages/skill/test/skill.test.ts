@@ -164,6 +164,13 @@ describe("renderSkill: content contract", () => {
     expect(err).toContain("WALLET_BUSY");
   });
 
+  it("INSUFFICIENT_FUNDS: top it up first, no retry before that; the balance is cached up to 15 s, so wait a moment after the top-up", () => {
+    const denied = text.split("\n").find((l) => l.startsWith("| `denied`"))!;
+    expect(denied).toContain("`INSUFFICIENT_FUNDS` means the wallet does not hold enough USDC on any chain this seller accepts");
+    expect(denied).toContain("ask the user to top it up, and do not retry before that");
+    expect(denied).toContain("cached for at most 15 seconds, so after a top-up wait a moment, then retry");
+  });
+
   it("explains the key is a secret and what a MoneyKey is", () => {
     expect(text).toContain("not money and not a private key");
     expect(text).toContain("Never put it in a URL or query string");

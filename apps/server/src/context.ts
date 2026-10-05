@@ -3,7 +3,7 @@ import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import type Database from "better-sqlite3";
 import { LocalWalletDriver, type LocalWalletDriverOptions } from "@moneyswitch/wallet";
 import { bootstrapAdminToken, SetupTokenStore, sweepStaleReservations, writeAudit, type AuthorizationReader } from "@moneyswitch/core";
-import { createMultiNetworkAuthorizationReader } from "@moneyswitch/x402";
+import { createBalanceReader, createMultiNetworkAuthorizationReader, type KnownBalanceReader } from "@moneyswitch/x402";
 import type { ServerConfig } from "./config.js";
 import { publicBaseUrl } from "./public-base.js";
 
@@ -23,6 +23,12 @@ export interface AppContext {
    * touches a real RPC endpoint. Left undefined, reconcile is a no-op.
    */
   chainReader?: AuthorizationReader;
+  /**
+   * The wallet's USDC balance per chain, read before a payment goes out so it is made on a chain that can cover it (SPEC.md §6;
+   * INSUFFICIENT_FUNDS when none can). buildContext sets a real one (the wallet page's own RPC read, cached 15 s); test suites that
+   * build an AppContext by hand should inject a fake or leave it unset, which means balances are not looked at and no RPC is touched.
+   */
+  balanceReader?: KnownBalanceReader;
 }
 
 export interface BuildContextOptions {
@@ -154,6 +160,10 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
   await unlockWalletOnStartup(wallet, config.walletPassword);
 
   const chainReader = createMultiNetworkAuthorizationReader();
+  // The same RPC read the wallet page uses (routes/wallet.ts readBalance wraps this very call with its own 5 s cache).
+  const balanceReader = createBalanceReader((address, network, signal) =>
+    wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress, signal)
+  );
 
-  return { db, sqlite, wallet, config, setup, chainReader };
+  return { db, sqlite, wallet, config, setup, chainReader, balanceReader };
 }
