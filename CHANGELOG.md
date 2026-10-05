@@ -3,6 +3,23 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
+## Unreleased — v0.7.1 (2026-10-05)
+
+- **A seller's price is checked by MoneySwitch itself (`PRICE_INVALID`).** The price in a seller's 402 (`requirements.amount`) went straight
+  into `BigInt()` and then into the reservation, and the only thing that kept a negative or fractional price out was `@x402/core`'s
+  `spendControls`, which drops prices that are not `/^\d+$/` before our code runs (it lets `"0"` through). A negative price written into a
+  reservation would lower the key's used budget while it is held and let concurrent payments pass its limits. Now `performPaidFetch` refuses a
+  price that is not a plain decimal integer above zero (`"0"`, `"-5"`, `"1.5"`, `"abc"`, `""`, `"0x10"`, `" 5"`, a non-string) in the
+  `onBeforePaymentCreation` hook, before the wallet is leased, a payments row is written or anything is signed: `/v1/fetch` answers
+  `status: "denied"`, `code: "PRICE_INVALID"`, `charged: "no"`. The check is in one place (`parsePositiveAtomicAmount`,
+  `packages/x402/src/client.ts`); the policy engine is unchanged. With the SDK of today only `"0"` reaches it: the other bad prices are
+  still dropped by `spendControls` first and are reported as `PER_REQUEST_LIMIT_EXCEEDED`, which is the same refusal under another name.
+  Tests: `packages/x402/test/price-guard.test.ts` and `apps/server/test/e2e/price-invalid.test.ts` switch `spendControls` off to show our
+  own check holds on its own (with the old code and `spendControls` off, a `"-1000000"` price left the key's used budget at -1000000 and a `"0"` price
+  was accepted instead of refused). The code is listed in the skill (`/skill.md`, every per-key skill, `skills/moneyswitch-pay/SKILL.md`) and in
+  `docs/money-api-v0.md`. No route, table or column changed. The Dashboard bundle in `apps/server-pkg/dashboard` was not rebuilt, so its
+  copy of the skill text lacks the new code until the next Dashboard build.
+
 ## Unreleased — v0.7: the small product (2026-10-04)
 
 `SPEC.md` is the only specification now (v0.1 to v0.6 are in `docs/archive/`): an AI spends from a capped key, anything over the approval

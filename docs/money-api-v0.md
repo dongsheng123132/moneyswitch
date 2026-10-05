@@ -153,6 +153,7 @@ against the live Monad testnet facilitator never sets it.
 | `HOST_NOT_ALLOWED` | Target host not in the key's `allowed_hosts` |
 | `SSRF_BLOCKED` | Target resolves to MoneySwitch's own listening address |
 | `UNSUPPORTED_PAYMENT` | No offered payment requirement matches the configured scheme/network/asset |
+| `PRICE_INVALID` | The seller quoted a price that is not a positive whole number of atomic USDC units (zero, negative, fractional or not a number); nothing was reserved or signed, `charged` is `no` |
 | `PER_REQUEST_LIMIT_EXCEEDED` | Price exceeds the key's `per_request_limit` |
 | `MAX_PRICE_EXCEEDED` | Price exceeds the request's `max_price` |
 | `DAILY_BUDGET_EXCEEDED` | Would exceed the key's remaining daily budget |

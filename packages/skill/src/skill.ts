@@ -162,7 +162,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     "| status | what it means | what you do |",
     "|---|---|---|",
     "| `ok` | Request completed; `payment` may be null for a free service. | Use `body`. Report any amount paid, seller host and `tx_hash`. |",
-    "| `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. |",
+    "| `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `PRICE_INVALID`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. |",
     "| `approval_required` | Human approval needed; `approve_url` is the page where the user approves. | Send `approve_url` to the user in your reply and ask them to open it and approve. It asks for their administrator login, so you cannot approve for them and must not try. Then poll `GET " +
       B +
       "/v1/approvals/{approval_id}` every 15 seconds (same Authorization) until `status` is `approved`, `denied` or `expired` (about 10 minutes). If approved, resend the exact same request plus `approval_id`. If denied or expired, stop. |",

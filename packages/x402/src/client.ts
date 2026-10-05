@@ -46,6 +46,21 @@ export function usesEip3009(requirement: { extra?: unknown }): boolean {
   return method === undefined || method === null || method === "eip3009";
 }
 
+/**
+ * The price a seller quotes (`requirements.amount`) is the seller's own text. It becomes money arithmetic: it is added to the
+ * key's used budget when a reservation is written, so a NEGATIVE price would lower a key's spend and let concurrent payments
+ * walk past its limits, and `BigInt()` itself reads "", " 5", "0x10" and "-5" as numbers. Only a plain decimal integer
+ * string (atomic units, ASCII digits) above zero is a price; anything else gives null.
+ *
+ * This is OUR check, made right before the reservation is written. The SDK's own spendControls happens to drop most of these
+ * (not "0") one step earlier today, but that is an implementation detail of a library we update, not an invariant we own.
+ */
+export function parsePositiveAtomicAmount(raw: unknown): bigint | null {
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) return null;
+  const amount = BigInt(raw);
+  return amount > 0n ? amount : null;
+}
+
 export interface PaidFetchInput {
   url: string;
   host: string;
@@ -159,6 +174,7 @@ function describeError(e: unknown): string {
 type OwnAbortCode =
   | "PER_REQUEST_LIMIT_EXCEEDED"
   | "MAX_PRICE_EXCEEDED"
+  | "PRICE_INVALID"
   | "DAILY_BUDGET_EXCEEDED"
   | "TOTAL_BUDGET_EXCEEDED"
   | "APPROVAL_INVALID"
@@ -325,6 +341,13 @@ export async function performPaidFetch(
         deadlineBeforeSend = true;
         return { abort: true, reason: "PROBE_DEADLINE_EXPIRED" };
       }
+      // A price that is not a positive plain integer is refused here, before the wallet is leased, anything is reserved (no
+      // payments row, no budget touched) or anything is signed. Every payment this client makes goes through this hook.
+      const amount = parsePositiveAtomicAmount(ctx.selectedRequirements.amount);
+      if (amount === null) {
+        ownAbortCode = "PRICE_INVALID";
+        return { abort: true, reason: "PRICE_INVALID" };
+      }
       // A payment is about to be created: lease the wallet's signer NOW (not before the unpaid probe). While a wallet replacement
       // is draining, no new lease is handed out: nothing is reserved or signed and the caller is told to try again.
       if (!lease) {
@@ -343,7 +366,6 @@ export async function performPaidFetch(
           return { abort: true, reason: "WALLET_LOCKED" };
         }
       }
-      const amount = BigInt(ctx.selectedRequirements.amount);
       try {
         const result = evaluateAndReserveInTransaction(sqlite, db, key, {
           url: input.url,
