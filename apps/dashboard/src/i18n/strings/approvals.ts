@@ -5,9 +5,14 @@ export const approvalsStrings = defineMessages(
   {
     introTitle: "How approvals work",
     introBody:
-      "Payments at or above a key's approval threshold pause here and your AI sends you a link to this page. After you approve, the AI sends the request again with the approval id and the payment goes through. Requests you don't handle within 10 minutes expire.",
+      "Payments at or above a key's approval threshold pause here and your AI sends you a link to this page. After you approve, the AI sends the request again with the approval id and the payment goes through. A request to a host that is not on the key's list pauses here too: approving it adds that host to the key from now on, and the AI sends the request again as it was. Requests you don't handle within 10 minutes expire.",
 
     payTo: "pay to {addr}",
+    hostBadge: "New host",
+    hostSource: "Requested:",
+    hostNote: "Once approved, this key can reach {host} from now on. The price is only known when the seller quotes it; the key's limits are still checked.",
+    errHostPrivate: "Not approved: this host is, or resolves to, a private, loopback or special-use address, or one of this machine's own. Only a host written when the key was issued can be allowed that way. The request stays pending.",
+    errHostUnresolved: "Not approved: the host's address could not be looked up (it failed or took longer than 3 seconds), so nothing was added. The request stays pending: try Approve again, or Deny.",
     countdownLeft: "{m}m {s}s left",
     countdownExpired: "expired",
 
@@ -21,7 +26,7 @@ export const approvalsStrings = defineMessages(
     successDenied: "Denied.",
 
     emptyTitle: "Nothing waiting",
-    emptyBody: "Payments that hit a key's approval threshold will show up here for you to approve or deny.",
+    emptyBody: "Payments that hit a key's approval threshold, and requests to a host outside a key's list, will show up here for you to approve or deny.",
     emptyAction: "Manage keys",
 
     linkedTitle: "This is the request your AI linked to",
@@ -37,9 +42,14 @@ export const approvalsStrings = defineMessages(
   {
     introTitle: "审批是怎么回事",
     introBody:
-      "单笔金额达到这把 Key 的审批阈值时会先暂停在这里，你的 AI 会把指向本页的链接发给你。你批准之后，AI 会带着审批编号重新发起请求，付款随之完成；10 分钟内没有处理的请求会自动过期。",
+      "单笔金额达到这把 Key 的审批阈值时会先暂停在这里，你的 AI 会把指向本页的链接发给你。你批准之后，AI 会带着审批编号重新发起请求，付款随之完成。请求的域名不在这把 Key 的允许列表里时也会先停在这里：批准就是把这个域名加进这把 Key 的允许列表，AI 原样重发即可；10 分钟内没有处理的请求会自动过期。",
 
     payTo: "付给 {addr}",
+    hostBadge: "新域名",
+    hostSource: "来源网址：",
+    hostNote: "批准后，这把 key 以后都可以访问 {host}；价格要等卖家报价，额度照常检查。",
+    errHostPrivate: "未批准：这个域名本身是、或解析到私有 / 本机 / 特殊用途地址。只有发 key 时写上的域名才能这样放行。这条请求仍在待批。",
+    errHostUnresolved: "未批准：查不到这个域名的地址（查询失败或超过 3 秒），所以什么都没有加。这条请求仍在待批：可以再点一次批准，或拒绝。",
     countdownLeft: "剩 {m} 分 {s} 秒",
     countdownExpired: "已过期",
 
@@ -53,7 +63,7 @@ export const approvalsStrings = defineMessages(
     successDenied: "已拒绝。",
 
     emptyTitle: "暂无待处理",
-    emptyBody: "当某把 Key 的单笔付款达到审批阈值时，会出现在这里等你批准或拒绝。",
+    emptyBody: "当某把 Key 的单笔付款达到审批阈值，或请求的域名不在某把 Key 的允许列表里时，会出现在这里等你批准或拒绝。",
     emptyAction: "管理 Key",
 
     linkedTitle: "这就是你的 AI 发来链接的那一笔",

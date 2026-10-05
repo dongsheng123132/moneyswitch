@@ -166,3 +166,72 @@ describe("migrations 0005 / 0006 (unused push-notification tables) on older data
     }
   });
 });
+
+/** Migration 0008 added approvals.kind ('payment' | 'host'); the database is additive-only, so an older database must upgrade in place. */
+describe("migration 0008 (approvals.kind) on an older database", () => {
+  it("every approval that existed before is a 'payment' approval afterwards; nothing else about it changes", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-mig8-"));
+    const file = path.join(dir, "v7.sqlite");
+    try {
+      // a database as the release before host approvals left it: migrations 0000..0007
+      const old = new Database(file);
+      old.pragma("journal_mode = WAL");
+      old.exec(`CREATE TABLE IF NOT EXISTS __migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`);
+      const upTo0007 = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql") && f < "0008").sort();
+      expect(upTo0007.at(-1)).toBe("0007_wallet_lifecycle.sql");
+      for (const f of upTo0007) {
+        old.exec(fs.readFileSync(path.join(migrationsDir, f), "utf-8"));
+        old.prepare(`INSERT INTO __migrations (name, applied_at) VALUES (?, ?)`).run(f, new Date().toISOString());
+      }
+      expect((old.prepare(`PRAGMA table_info(approvals)`).all() as { name: string }[]).map((c) => c.name)).not.toContain("kind");
+      const now = Date.now();
+      const iso = (ms: number) => new Date(ms).toISOString();
+      old.prepare(
+        `INSERT INTO money_keys (id, name, key_prefix, key_hash, enabled, total_budget, daily_budget, per_request_limit,
+           approval_threshold, allowed_hosts, max_payments_per_minute, expires_at, created_at, last_used_at, allowed_models,
+           parent_id, depth, can_delegate, created_by)
+         VALUES ('k1', 'v7-key', 'mk_live_v7aa', 'hash', 1, 10000000, 5000000, 1000000, 100000, '["api.example.com"]', 10,
+           NULL, ?, NULL, NULL, NULL, 0, 0, 'admin')`
+      ).run(iso(now));
+      const insertApproval = old.prepare(
+        `INSERT INTO approvals (id, key_id, url, method, body_sha256, network, asset, pay_to, amount, status, expires_at, decided_at, created_at)
+         VALUES (?, 'k1', 'https://api.example.com/old', 'GET', 'sha', 'eip155:10143', '0xusdc', '0xpay', 150000, ?, ?, NULL, ?)`
+      );
+      for (const [id, status] of [["ap-pending", "pending"], ["ap-approved", "approved"], ["ap-used", "used"], ["ap-denied", "denied"]]) {
+        insertApproval.run(id, status, iso(now + 5 * 60_000), iso(now - 60_000));
+      }
+      old.close();
+
+      const { sqlite } = openDb({ filePath: file });
+      try {
+        const applied = (sqlite.prepare(`SELECT name FROM __migrations ORDER BY name`).all() as { name: string }[]).map((r) => r.name);
+        expect(applied).toContain("0008_approval_kind.sql"); // (later migrations may follow)
+        expect(sqlite.prepare(`PRAGMA table_info(approvals)`).all().find((c: any) => c.name === "kind")).toMatchObject({ notnull: 1, dflt_value: "'payment'" });
+        expect(sqlite.prepare(`SELECT id, status, kind, amount, pay_to FROM approvals ORDER BY id`).all()).toEqual([
+          { id: "ap-approved", status: "approved", kind: "payment", amount: 150000, pay_to: "0xpay" },
+          { id: "ap-denied", status: "denied", kind: "payment", amount: 150000, pay_to: "0xpay" },
+          { id: "ap-pending", status: "pending", kind: "payment", amount: 150000, pay_to: "0xpay" },
+          { id: "ap-used", status: "used", kind: "payment", amount: 150000, pay_to: "0xpay" },
+        ]);
+        // a row written without naming the column is a payment approval too; a host approval is written with its kind
+        sqlite
+          .prepare(
+            `INSERT INTO approvals (id, key_id, url, method, body_sha256, network, asset, pay_to, amount, status, expires_at, decided_at, created_at)
+             VALUES ('ap-new', 'k1', 'https://api.example.com/new', 'GET', 'sha', 'n', 'a', 'p', 1, 'pending', ?, NULL, ?)`
+          )
+          .run(iso(now + 60_000), iso(now));
+        expect(sqlite.prepare(`SELECT kind FROM approvals WHERE id = 'ap-new'`).get()).toEqual({ kind: "payment" });
+      } finally {
+        sqlite.close();
+      }
+
+      // re-opening does not apply it twice and loses nothing
+      const again = openDb({ filePath: file });
+      expect(again.sqlite.prepare(`SELECT count(*) AS n FROM __migrations WHERE name = '0008_approval_kind.sql'`).get()).toEqual({ n: 1 });
+      expect(again.sqlite.prepare(`SELECT count(*) AS n FROM approvals WHERE kind = 'payment'`).get()).toEqual({ n: 5 });
+      again.sqlite.close();
+    } finally {
+      removeQuietly(dir);
+    }
+  });
+});

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { expireStaleApprovals, getApproval, formatMicrosToUsdc } from "@moneyswitch/core";
+import { expireStaleApprovals, getApproval, formatMicrosToUsdc, hostOfApproval } from "@moneyswitch/core";
 import type { AppContext } from "../context.js";
 import { requireMoneyKey } from "../auth.js";
 
@@ -13,7 +13,9 @@ import { requireMoneyKey } from "../auth.js";
  * MoneyKey. Every other case (another key's id, unknown id) answers the same
  * 404, so a MoneyKey can never learn whether an id belongs to someone else.
  *
- * Response (the cross-package contract): {id, status, amount, currency, url, method, expires_at}.
+ * Response (the cross-package contract): {id, status, kind, amount, currency, url, method, expires_at}, plus `host` for a "host" approval.
+ * `kind` is "payment" (a price over the approval line) or "host" (a host outside the key's allowed list; amount is then 0 because
+ * nothing was quoted yet, and `host` is the host:port that approving it adds to the list).
  */
 export function registerApprovalStatusRoutes(app: FastifyInstance, ctx: AppContext) {
   const keyGuard = requireMoneyKey(ctx);
@@ -34,6 +36,8 @@ export function registerApprovalStatusRoutes(app: FastifyInstance, ctx: AppConte
     return reply.send({
       id: approval.id,
       status: approval.status,
+      kind: approval.kind,
+      ...(approval.kind === "host" ? { host: hostOfApproval(approval) } : {}),
       amount: formatMicrosToUsdc(approval.amount),
       currency: "USDC",
       url: approval.url,

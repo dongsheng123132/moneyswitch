@@ -151,6 +151,20 @@ describe("renderSkill: content contract", () => {
     expect(row).toContain("exact same request plus `approval_id`");
   });
 
+  it("approval_required has two reasons (a host not on the key's list, a price over the line): a new host is resent as it was, without approval_id, and a price over the line can still ask once more", () => {
+    const row = text.split("\n").find((l) => l.startsWith("| `approval_required`"))!;
+    expect(row).toContain("the host in `url` is not on this key's list yet (nothing has been sent to it)");
+    expect(row).toContain("the price is over the key's approval line");
+    expect(row).toContain("says which in `kind`: `host` or `payment`");
+    expect(row).toContain("If approved and `kind` is `host`");
+    expect(row).toContain("resend the exact same request, without `approval_id`");
+    expect(row).toContain("`approval_required` once more, with a new `approval_id` and `kind` `payment`");
+    expect(row).toContain("If approved and `kind` is `payment`, resend the exact same request plus `approval_id`");
+    const field = text.split("\n").find((l) => l.startsWith("| `approval_id`"))!;
+    expect(field).toContain("only when resending after the user approved a price");
+    expect(field).toContain("not needed after a new host was approved");
+  });
+
   it("denied: name the limit, nothing charged, no retry or workaround; payment_failed: maybe means no retry; error: retry once only when charged is no", () => {
     const denied = text.split("\n").find((l) => l.startsWith("| `denied`"))!;
     expect(denied).toContain("`charged` is `no`");

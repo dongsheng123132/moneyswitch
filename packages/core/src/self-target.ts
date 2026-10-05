@@ -66,7 +66,7 @@ export function effectivePort(url: URL): number {
 }
 
 /** Addresses bound to this machine's network interfaces (so a LAN/public IP of this host counts as "self"). */
-function localInterfaceAddresses(): Set<string> {
+export function localInterfaceAddresses(): Set<string> {
   const out = new Set<string>();
   try {
     for (const list of Object.values(os.networkInterfaces())) {
@@ -78,7 +78,7 @@ function localInterfaceAddresses(): Set<string> {
   return out;
 }
 
-function isSelfAddress(host: string, localAddrs: Set<string>): boolean {
+export function isSelfAddress(host: string, localAddrs: Set<string>): boolean {
   const bare = stripBrackets(host.toLowerCase());
   if (LOOPBACK_NAMES.has(host.toLowerCase()) || LOOPBACK_NAMES.has(bare)) return true;
   const mapped = ipv4FromMapped(bare);
