@@ -74,6 +74,8 @@ DEMO_SELLER_FACILITATOR_URL=http://127.0.0.1:4099 node apps/demo-seller/dist/ind
 
 `DEMO_SELLER_PAY_TO` must not be the MoneySwitch wallet's address. Put `127.0.0.1:4021` into the key's allowed hosts and call `http://127.0.0.1:4021/premium-report` through `/v1/fetch`. For a real Monad testnet run with the real facilitator (needs a funded wallet): `DEMO_SELLER_PAY_TO=0xYourAddress pnpm demo:testnet`. It starts the test seller and the server; it does not fund or pay anything by itself.
 
+Even though the facilitator is the offline mock, the wallet is still looked at: before paying, MoneySwitch reads its USDC balance on the chain the seller quotes in (the demo seller quotes Monad testnet), so the wallet needs **testnet USDC on that chain** (the faucet link is on the Wallet page). Without it `/v1/fetch` answers `INSUFFICIENT_FUNDS` and nothing is signed. If that chain's RPC cannot be reached, the balance is simply unknown and the payment is tried as usual.
+
 ## 丢了 admin token 怎么办
 
 admin token（`ms_admin_xxx`）只在数据目录**第一次**启动时打印一次，库里只存了它的哈希——没有任何办法把原文找回来。丢了不代表要删库重来：

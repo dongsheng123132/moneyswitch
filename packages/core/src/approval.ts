@@ -120,14 +120,14 @@ export function decideApproval(
 
 /**
  * Validates that an approval_id supplied on a /v1/fetch retry matches the
- * current request (same key, url, method, body hash, payTo) and is
+ * current request (same key, url, method, body hash, chain, asset, payTo) and is
  * `approved` and unexpired. Does NOT mark it used — call markApprovalUsed
  * after the policy engine accepts the payment, inside the same transaction.
  */
 export function validateApprovalForUse(
   db: MoneySwitchDb,
   approvalId: string,
-  ctx: { keyId: string; url: string; method: string; body: unknown; payTo: string; amount: bigint }
+  ctx: { keyId: string; url: string; method: string; body: unknown; network: string; asset: string; payTo: string; amount: bigint }
 ): ApprovalRow {
   const approval = getApproval(db, approvalId);
   if (!approval) throw new Error("APPROVAL_INVALID");
@@ -137,6 +137,9 @@ export function validateApprovalForUse(
   if (approval.url !== ctx.url) throw new Error("APPROVAL_INVALID");
   if (approval.method !== ctx.method) throw new Error("APPROVAL_INVALID");
   if (approval.bodySha256 !== sha256OfBody(ctx.body)) throw new Error("APPROVAL_INVALID");
+  // The approval was given for a payment on one chain in one asset: the same money on another chain is not what was approved.
+  if (approval.network !== ctx.network) throw new Error("APPROVAL_INVALID");
+  if (approval.asset.toLowerCase() !== ctx.asset.toLowerCase()) throw new Error("APPROVAL_INVALID");
   if (approval.payTo.toLowerCase() !== ctx.payTo.toLowerCase()) throw new Error("APPROVAL_INVALID");
   if (ctx.amount > approval.amount) throw new Error("APPROVAL_INVALID");
   return approval;

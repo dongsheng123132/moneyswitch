@@ -38,6 +38,21 @@ export interface PolicyResult {
 }
 
 /**
+ * The two refusals that need nothing but the price: it exceeds the per-request limit of some level of the key's chain (the first such
+ * level is reported), or the caller's max_price. Returned, not thrown, so a caller that only wants to know (the x402 client, before it
+ * reads the wallet's balance) can decide what to do with it; null = the price passes both.
+ */
+export function checkPriceLimits(chain: MoneyKeyRow[], amount: bigint, maxPrice?: bigint): MoneySwitchError | null {
+  for (let i = 0; i < chain.length; i++) {
+    if (amount > chain[i].perRequestLimit) {
+      return new MoneySwitchError("PER_REQUEST_LIMIT_EXCEEDED", undefined, limitAt(chain, i));
+    }
+  }
+  if (maxPrice != null && amount > maxPrice) return new MoneySwitchError("MAX_PRICE_EXCEEDED");
+  return null;
+}
+
+/**
  * The policy engine gate from SPEC §6 step 5. MUST be called inside a single
  * SQLite transaction (the caller in packages/x402 wraps this in
  * db's synchronous better-sqlite3 transaction so the reservation and every
@@ -83,14 +98,8 @@ export function evaluateAndReserve(
   }
   assertChainUsable(chain, now.getTime());
 
-  chain.forEach((k, i) => {
-    if (input.amount > k.perRequestLimit) {
-      throw new MoneySwitchError("PER_REQUEST_LIMIT_EXCEEDED", undefined, limitAt(chain, i));
-    }
-  });
-  if (input.maxPrice != null && input.amount > input.maxPrice) {
-    throw new MoneySwitchError("MAX_PRICE_EXCEEDED");
-  }
+  const priceRefusal = checkPriceLimits(chain, input.amount, input.maxPrice);
+  if (priceRefusal) throw priceRefusal;
 
   const dayStart = startOfUtcDay(now);
   chain.forEach((k, i) => {
@@ -123,6 +132,8 @@ export function evaluateAndReserve(
           url: input.url,
           method: input.method,
           body: input.body,
+          network: input.network,
+          asset: input.asset,
           payTo: input.payTo,
           amount: input.amount,
         });

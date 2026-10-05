@@ -35,6 +35,32 @@ describe("LocalWalletDriver", () => {
     await expect(driver.getUsdcBalance("https://rpc.example.test", address)).rejects.toThrow("Invalid USDC balance");
   });
 
+  it("a balance read stops its RPC request when the caller's signal is aborted (and is still bounded without one)", async () => {
+    const driver = drv();
+    const { address } = await driver.createWithPhrase();
+    const seen: AbortSignal[] = [];
+    // an RPC that never answers: the request ends only when its signal says so
+    const hang = vi.fn((_url: string, init: { signal: AbortSignal }) => {
+      seen.push(init.signal);
+      return new Promise<Response>((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true }));
+    });
+    vi.stubGlobal("fetch", hang);
+
+    const caller = new AbortController();
+    const read = driver.getUsdcBalanceOf(address, "https://rpc.example.test", address, caller.signal);
+    const outcome = read.then(() => "answered", () => "rejected");
+    await Promise.resolve();
+    expect(seen[0].aborted, "still waiting").toBe(false);
+    caller.abort(new Error("gave up"));
+    expect(await outcome).toBe("rejected");
+    expect(seen[0].aborted, "the request itself was cancelled, not just forgotten").toBe(true);
+
+    void driver.getUsdcBalanceOf(address, "https://rpc.example.test", address).catch(() => undefined);
+    await Promise.resolve();
+    expect(seen[1], "without a caller signal the 15 s bound is still there").toBeInstanceOf(AbortSignal);
+    expect(seen[1].aborted).toBe(false);
+  });
+
   it("concurrent creates publish only one complete wallet: the keystore and its own unlock secret, nothing else", async () => {
     const a = drv();
     const b = drv();

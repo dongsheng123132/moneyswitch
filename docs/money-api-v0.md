@@ -154,17 +154,20 @@ against the live Monad testnet facilitator never sets it.
 | `SSRF_BLOCKED` | Target resolves to MoneySwitch's own listening address |
 | `UNSUPPORTED_PAYMENT` | No offered payment requirement matches the configured scheme/network/asset |
 | `PRICE_INVALID` | The seller quoted a price that is not a positive whole number of atomic USDC units (zero, negative, fractional or not a number); nothing was reserved or signed, `charged` is `no` |
+| `INSUFFICIENT_FUNDS` | The wallet does not hold enough USDC on any chain this seller accepts (checked on each chain in `MONEYSWITCH_NETWORKS` order): ask a person to top it up, do not retry before that. The balance is cached for at most 15 s, so after a top-up wait a moment, then retry. Nothing was reserved or signed, `charged` is `no` |
 | `PER_REQUEST_LIMIT_EXCEEDED` | Price exceeds the key's `per_request_limit` |
 | `MAX_PRICE_EXCEEDED` | Price exceeds the request's `max_price` |
 | `DAILY_BUDGET_EXCEEDED` | Would exceed the key's remaining daily budget |
 | `TOTAL_BUDGET_EXCEEDED` | Would exceed the key's remaining total budget |
 | `APPROVAL_REQUIRED` | Price is between the approval threshold and the per-request limit |
-| `APPROVAL_INVALID` | `approval_id` given but not valid (wrong key/url/method/body, expired, already used, or not yet approved) |
+| `APPROVAL_INVALID` | `approval_id` given but not valid (wrong key/url/method/body, expired, already used, or not yet approved; also when the seller no longer offers the chain and asset the approval was given for — a resend pays only on that chain) |
 | `WALLET_LOCKED` | The server's wallet is locked; cannot sign |
 | `PAYMENT_FAILED` | Payment definitively failed |
 | `PAYMENT_REJECTED` | Seller answered 402 again after we signed and sent payment (its facilitator rejected it); reservation kept `unknown`, held until the signed authorization expires, then auto-released |
 | `UPSTREAM_ERROR` | Unexpected error reaching the priced resource |
 | `FORBIDDEN` | Malformed request (e.g. invalid `url`) |
+
+Known limit of the chain choice: two payments made at the same moment can pick the same chain, because nothing is held back per chain for a payment that is still in flight; each looks only at the balance the chain shows when it is read.
 
 ## Child keys (back end kept, no UI)
 

@@ -719,8 +719,8 @@ export class LocalWalletDriver {
     return this.getUsdcBalanceOf(this.getAddress(), rpcUrl, usdcAddress);
   }
 
-  /** Same read for any address (the retired wallets list). */
-  async getUsdcBalanceOf(address: string | null, rpcUrl: string, usdcAddress: string): Promise<bigint> {
+  /** Same read for any address (the retired wallets list). `signal` lets a caller that stopped waiting cancel the request, besides the 15 s bound. */
+  async getUsdcBalanceOf(address: string | null, rpcUrl: string, usdcAddress: string, signal?: AbortSignal): Promise<bigint> {
     if (!address) throw new Error("No wallet address available");
     // Use the same fetch dispatcher as payment requests: the server installs
     // its outbound proxy there. ethers' default HTTP transport bypasses it.
@@ -729,7 +729,7 @@ export class LocalWalletDriver {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [
         { to: usdcAddress, data: ERC20_ABI.encodeFunctionData("balanceOf", [address]) }, "latest",
       ] }),
-      signal: AbortSignal.timeout(15_000), redirect: "error",
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000), redirect: "error",
     });
     if (!response.ok) throw new Error("USDC balance RPC request failed");
     const body = await response.json() as { result?: string; error?: unknown };

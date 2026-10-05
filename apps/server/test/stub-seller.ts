@@ -61,6 +61,8 @@ export interface SellerBehavior {
   assetTransferMethod: string | undefined;
   /** Offer a second, plain EIP-3009 requirement for the same asset AFTER the first one (a seller that supports both methods). */
   alsoOfferEip3009: boolean;
+  /** Offer one requirement per listed chain, in this order, instead of only the chain the seller was started with (a multi-chain seller). */
+  networks: NetworkConfig[] | undefined;
 }
 
 /** The tx hash the "settle-failed-402" response claims the facilitator broadcast. */
@@ -77,6 +79,7 @@ export const DEFAULT_BEHAVIOR: SellerBehavior = {
   amount: "10000",
   assetTransferMethod: undefined,
   alsoOfferEip3009: false,
+  networks: undefined,
 };
 
 export interface SellerRequest {
@@ -146,19 +149,19 @@ export async function startStubSeller(opts: { facilitatorUrl: string; payTo: str
       error,
       resource: { url: base, description: "stub seller", mimeType: "application/json" },
       accepts: [
-        {
+        ...(b.networks ?? [network]).map((n) => ({
           scheme: "exact",
-          network: network.caip2,
+          network: n.caip2,
           amount: b.amount,
-          asset: network.usdcAddress,
+          asset: n.usdcAddress,
           payTo: opts.payTo,
           maxTimeoutSeconds: 60,
           extra: {
-            name: network.usdcDomainName,
-            version: network.usdcDomainVersion,
+            name: n.usdcDomainName,
+            version: n.usdcDomainVersion,
             ...(b.assetTransferMethod !== undefined ? { assetTransferMethod: b.assetTransferMethod } : {}),
           },
-        },
+        })),
         ...(b.alsoOfferEip3009
           ? [
               {

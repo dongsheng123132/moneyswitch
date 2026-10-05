@@ -83,7 +83,7 @@ describe("approval body binding follows the wire bytes", () => {
     }).row;
     return { db, key };
   }
-  const base = { url: "https://example.com/x", method: "POST", payTo: "0xabc", amount: 10_000n };
+  const base = { url: "https://example.com/x", method: "POST", network: "eip155:10143", asset: "0xasset", payTo: "0xabc", amount: 10_000n };
 
   it("an approval created for a string body validates for the same string, and not for a different one", () => {
     const { db, key } = setup();

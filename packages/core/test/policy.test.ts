@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { freshDb } from "./helpers.js";
 import { createMoneyKey } from "../src/keys.js";
 import { parseUsdcToMicros, formatMicrosToUsdc } from "../src/money.js";
-import { evaluateAndReserve, ApprovalRequiredError } from "../src/policy.js";
+import { evaluateAndReserve, checkPriceLimits, ApprovalRequiredError } from "../src/policy.js";
 import { decideApproval } from "../src/approval.js";
 import { MoneySwitchError } from "../src/types.js";
 import { settlePayment } from "../src/payments.js";
@@ -191,6 +191,79 @@ describe("Policy engine — DENY / ALLOW / PENDING", () => {
     } catch (e) {
       expect((e as MoneySwitchError).code).toBe("APPROVAL_INVALID");
     }
+  });
+
+  describe("an approval is for one chain and one asset", () => {
+    function approvedOnChainA() {
+      const { db } = freshDb();
+      const { row: key } = createMoneyKey(db, {
+        name: "k",
+        totalBudget: parseUsdcToMicros("10"),
+        dailyBudget: parseUsdcToMicros("10"),
+        perRequestLimit: parseUsdcToMicros("1"),
+        approvalThreshold: parseUsdcToMicros("0.10"),
+        allowedHosts: ["example.com:443"],
+      });
+      const input = baseInput({ amount: parseUsdcToMicros("0.15") });
+      let approvalId = "";
+      try {
+        evaluateAndReserve(db, key, input);
+      } catch (e) {
+        approvalId = (e as ApprovalRequiredError).approvalId;
+      }
+      decideApproval(db, approvalId, "approved");
+      return { db, key, input, approvalId };
+    }
+    const codeOf = (run: () => unknown) => {
+      try {
+        run();
+      } catch (e) {
+        return (e as MoneySwitchError).code;
+      }
+      return "no error";
+    };
+
+    it("the same payment on another chain -> APPROVAL_INVALID, and the approval is still unused", () => {
+      const { db, key, input, approvalId } = approvedOnChainA();
+      expect(codeOf(() => evaluateAndReserve(db, key, { ...input, network: "eip155:84532", approvalId }))).toBe("APPROVAL_INVALID");
+      expect(evaluateAndReserve(db, key, { ...input, approvalId }).approvalId, "on the approved chain it still works").toBe(approvalId);
+    });
+
+    it("the same chain with another asset -> APPROVAL_INVALID; the asset's letter case does not matter", () => {
+      const { db, key, input, approvalId } = approvedOnChainA();
+      expect(codeOf(() => evaluateAndReserve(db, key, { ...input, asset: "0x1111111111111111111111111111111111111111", approvalId }))).toBe("APPROVAL_INVALID");
+      expect(evaluateAndReserve(db, key, { ...input, asset: input.asset.toLowerCase(), approvalId }).approvalId).toBe(approvalId);
+    });
+  });
+});
+
+describe("checkPriceLimits (the refusals that need only the price)", () => {
+  function chainOf(perRequestLimit: string) {
+    const { db } = freshDb();
+    const { row } = createMoneyKey(db, {
+      name: "k",
+      totalBudget: parseUsdcToMicros("10"),
+      dailyBudget: parseUsdcToMicros("10"),
+      perRequestLimit: parseUsdcToMicros(perRequestLimit),
+      allowedHosts: ["example.com:443"],
+    });
+    return [row];
+  }
+
+  it("passes a price within the limit and within max_price (equal counts as within)", () => {
+    expect(checkPriceLimits(chainOf("0.5"), parseUsdcToMicros("0.5"), parseUsdcToMicros("0.5"))).toBeNull();
+    expect(checkPriceLimits(chainOf("0.5"), parseUsdcToMicros("0.01"))).toBeNull();
+  });
+
+  it("returns (does not throw) PER_REQUEST_LIMIT_EXCEEDED with the limit's scope, before MAX_PRICE_EXCEEDED", () => {
+    const refusal = checkPriceLimits(chainOf("0.5"), parseUsdcToMicros("0.6"), parseUsdcToMicros("0.1"));
+    expect(refusal).toBeInstanceOf(MoneySwitchError);
+    expect(refusal!.code).toBe("PER_REQUEST_LIMIT_EXCEEDED");
+    expect(refusal!.limit?.scope).toBe("self");
+  });
+
+  it("returns MAX_PRICE_EXCEEDED when only the caller's max_price is exceeded", () => {
+    expect(checkPriceLimits(chainOf("0.5"), parseUsdcToMicros("0.2"), parseUsdcToMicros("0.1"))!.code).toBe("MAX_PRICE_EXCEEDED");
   });
 });
 

@@ -1,7 +1,7 @@
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
-import type { PaymentRequirements } from "@x402/core/types";
+import type { PaymentRequired, PaymentRequirements } from "@x402/core/types";
 import type { EvmTypedDataSigner, SignerLease } from "@moneyswitch/wallet";
 import type { MoneySwitchDb } from "@moneyswitch/db";
 import { callerDeadlineDispatcher } from "@moneyswitch/net";
@@ -9,7 +9,10 @@ import type Database from "better-sqlite3";
 import {
   MoneySwitchError,
   ApprovalRequiredError,
+  checkPriceLimits,
   evaluateAndReserveInTransaction,
+  getApproval,
+  getKeyChain,
   settlePayment,
   failPayment,
   markUnknown,
@@ -18,7 +21,8 @@ import {
   resolveRequestBody,
   type MoneyKeyRow,
 } from "@moneyswitch/core";
-import { getActiveNetwork, getEnabledNetworks, SCHEME } from "./networks.js";
+import { getActiveNetwork, getEnabledNetworks, SCHEME, type NetworkConfig } from "./networks.js";
+import type { KnownBalanceReader } from "./balance.js";
 
 /**
  * Where a paid request gets its signer from. performPaidFetch asks for it LAZILY, at the moment a payment is about to be created
@@ -29,6 +33,17 @@ import { getActiveNetwork, getEnabledNetworks, SCHEME } from "./networks.js";
 export interface SignerSource {
   /** A signer plus an in-flight lease, or null when the wallet is locked. Throws (code WALLET_BUSY) while a wallet replacement is draining. */
   leaseSigner(): SignerLease | null;
+  /** The wallet's address, null when there is none. Read WITHOUT a lease: looking at a balance must not hold the wallet. */
+  getAddress(): string | null;
+}
+
+/** Things performPaidFetch is handed rather than reaching for. */
+export interface PaidFetchDeps {
+  /**
+   * The wallet's USDC balance per chain (see createBalanceReader). Absent = balances are not looked at: the seller's offers are still
+   * tried in MONEYSWITCH_NETWORKS order, but nothing is ever refused as INSUFFICIENT_FUNDS.
+   */
+  balanceReader?: KnownBalanceReader;
 }
 
 /**
@@ -59,6 +74,105 @@ export function parsePositiveAtomicAmount(raw: unknown): bigint | null {
   if (typeof raw !== "string" || !/^\d+$/.test(raw)) return null;
   const amount = BigInt(raw);
   return amount > 0n ? amount : null;
+}
+
+/** The offers in MONEYSWITCH_NETWORKS order (the seller's own order does not matter). */
+function inConfigOrder(offers: PaymentRequirements[], networks: NetworkConfig[]): PaymentRequirements[] {
+  const rank = (offer: PaymentRequirements) => networks.findIndex((n) => n.caip2 === offer.network);
+  return [...offers].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * What can be settled about the offers WITHOUT reading a balance, and so is settled first: a payment that is refused anyway must not
+ * cost an RPC read, and must be refused for its own reason (never turn into INSUFFICIENT_FUNDS).
+ *   - With an approval_id, only the chain and asset the approval was given for stay (the approval is for that payment, not for the
+ *     same money elsewhere). None of them on offer any more: APPROVAL_INVALID. The caller hands in an approval only when it is this
+ *     key's own for this url and method; an approval that does not exist, or is someone else's, narrows nothing (the policy engine
+ *     reports it).
+ *   - An offer over the key's per-request limit (any level of its chain) or the caller's max_price is left out. When that leaves
+ *     nothing, the refusal for the first of them (configuration order) is the answer: PER_REQUEST_LIMIT_EXCEEDED / MAX_PRICE_EXCEEDED.
+ *     Without a readable key chain, or for a price that is not a number (PRICE_INVALID's business), nothing is left out here.
+ * The policy engine still checks everything again, inside its transaction, when the payment is reserved.
+ */
+export function narrowOffersWithoutBalance(
+  payable: PaymentRequirements[],
+  networks: NetworkConfig[],
+  ctx: { approval?: { network: string; asset: string }; keyChain: MoneyKeyRow[] | null; maxPrice?: bigint }
+): { offers: PaymentRequirements[] } | { refusal: MoneySwitchError } {
+  let offers = inConfigOrder(payable, networks);
+  const { approval } = ctx;
+  if (approval) {
+    offers = offers.filter((o) => o.network === approval.network && o.asset.toLowerCase() === approval.asset.toLowerCase());
+    if (offers.length === 0) return { refusal: new MoneySwitchError("APPROVAL_INVALID") };
+  }
+  if (!ctx.keyChain) return { offers };
+  const keyChain = ctx.keyChain;
+  let firstRefusal: MoneySwitchError | null = null;
+  const within = offers.filter((o) => {
+    const price = parsePositiveAtomicAmount(o.amount);
+    const refusal = price === null ? null : checkPriceLimits(keyChain, price, ctx.maxPrice);
+    if (refusal) firstRefusal ??= refusal;
+    return !refusal;
+  });
+  if (within.length === 0 && firstRefusal) return { refusal: firstRefusal };
+  return { offers: within };
+}
+
+/**
+ * SPEC §6, pick the chain the wallet can actually pay on. `payable` is what the seller offered that already passed our own filter
+ * (scheme, EIP-3009, our USDC on an enabled chain). The result is in MONEYSWITCH_NETWORKS order, NOT the seller's, and the first
+ * entry is the one to pay with:
+ *   - an offer whose chain is KNOWN to hold less USDC than its price is left out;
+ *   - an offer whose balance could not be read (RPC down, timeout, no reader) - or whose price is not a number, which is
+ *     PRICE_INVALID's business, decided later - comes after the covered ones, so a failed read never refuses a payment.
+ * An empty result means every offer is known to be short: the wallet cannot pay this seller on any chain.
+ */
+export async function orderOffersByBalance(
+  payable: PaymentRequirements[],
+  networks: NetworkConfig[],
+  address: string | null,
+  readBalance: KnownBalanceReader | undefined
+): Promise<PaymentRequirements[]> {
+  const ordered = inConfigOrder(payable, networks);
+  if (!readBalance || !address) return ordered;
+  const balances = new Map<string, bigint | null>();
+  await Promise.all(
+    networks
+      .filter((n) => ordered.some((offer) => offer.network === n.caip2))
+      .map(async (n) => {
+        try {
+          balances.set(n.caip2, await readBalance(address, n));
+        } catch {
+          balances.set(n.caip2, null); // a reader is meant never to throw; if one does, that chain's balance is simply unknown
+        }
+      })
+  );
+  const covered: PaymentRequirements[] = [];
+  const unknown: PaymentRequirements[] = [];
+  for (const offer of ordered) {
+    const price = parsePositiveAtomicAmount(offer.amount);
+    const balance = balances.get(offer.network) ?? null;
+    if (price === null || balance === null) unknown.push(offer);
+    else if (balance >= price) covered.push(offer);
+  }
+  return [...covered, ...unknown];
+}
+
+/**
+ * x402Client with one async step in front of the SDK's own choice. @x402/core (2.27) cannot do this itself: a registered policy is
+ * called synchronously (its return value is used as the array, client/index.mjs:472-477) and the offer is chosen in the same
+ * synchronous call (createPaymentPayload, :259), once, before any hook; onBeforePaymentCreation only sees the chosen offer and can
+ * only abort. So `prepare` gets the seller's PaymentRequired first and may hand back the same offers in the order to try (the SDK
+ * picks the first one that survives its filters) or throw.
+ */
+class PreparingClient extends x402Client {
+  constructor(private readonly prepare: (required: PaymentRequired) => Promise<PaymentRequired>) {
+    super();
+  }
+
+  override async createPaymentPayload(required: PaymentRequired) {
+    return super.createPaymentPayload(await this.prepare(required));
+  }
 }
 
 export interface PaidFetchInput {
@@ -175,6 +289,7 @@ type OwnAbortCode =
   | "PER_REQUEST_LIMIT_EXCEEDED"
   | "MAX_PRICE_EXCEEDED"
   | "PRICE_INVALID"
+  | "INSUFFICIENT_FUNDS"
   | "DAILY_BUDGET_EXCEEDED"
   | "TOTAL_BUDGET_EXCEEDED"
   | "APPROVAL_INVALID"
@@ -220,7 +335,8 @@ export function resolvePaidFetchTimeouts(env: NodeJS.ProcessEnv = process.env): 
 
 /**
  * Implements SPEC §6 steps 3-6: builds a fresh x402Client per request,
- * filters payment requirements to our configured scheme/network/asset,
+ * filters payment requirements to our configured scheme/network/asset (and,
+ * of those, picks the chain the wallet can pay on: orderOffersByBalance),
  * gates the payment through the policy engine (single SQLite transaction,
  * signed before payment) via onBeforePaymentCreation, sends the request,
  * and reconciles the reservation to settled/failed/unknown afterwards using
@@ -242,7 +358,8 @@ export async function performPaidFetch(
   sqlite: Database.Database,
   key: MoneyKeyRow,
   wallet: SignerSource,
-  input: PaidFetchInput
+  input: PaidFetchInput,
+  deps: PaidFetchDeps = {}
 ): Promise<PaidFetchResult> {
   const networks = getEnabledNetworks();
   let network = getActiveNetwork();
@@ -293,6 +410,8 @@ export async function performPaidFetch(
   // The signer lease, taken in onBeforePaymentCreation (see SignerSource) and given back in the `finally` at the end.
   // (declared with a cast: it is assigned inside a hook, which would otherwise make the compiler believe it is still null below)
   let lease = null as SignerLease | null;
+  // The wallet address the chain was picked with (balances were read for it); null when no balance was read.
+  let balanceAddress = null as string | null;
   // Every requirement the seller offered was removed by our own policy filter (wrong asset or network, a Permit2 request, ...).
   let offerRefusedByPolicy = false;
   // The wallet refused to sign because it was replaced or locked after this request took its signer (WALLET_CHANGED).
@@ -314,17 +433,55 @@ export async function performPaidFetch(
     },
   };
 
-  const client = new x402Client();
+  const isPayable = (r: PaymentRequirements) =>
+    r.scheme === SCHEME &&
+    usesEip3009(r) &&
+    networks.some((n) => r.network === n.caip2 && r.asset.toLowerCase() === n.usdcAddress.toLowerCase());
+
+  // SPEC §6: which chain a payment goes out on is decided HERE, before the SDK chooses, and only for a 402 we are about to pay (a
+  // free resource never gets this far, so it costs no balance read). Nothing has been leased, reserved or signed yet.
+  const client = new PreparingClient(async (required) => {
+    const payable = required.accepts.filter(isPayable);
+    // Nothing we could pay: leave it to the policy below, which reports UNSUPPORTED_PAYMENT.
+    if (payable.length === 0) return required;
+    // What needs no balance is decided first (approval chain, per-request limit, max_price): see narrowOffersWithoutBalance.
+    let keyChain: MoneyKeyRow[] | null = null;
+    try {
+      keyChain = getKeyChain(db, key.id);
+    } catch {
+      // the key is gone or its chain is broken: the policy engine reports that when it reserves
+    }
+    // Only THIS key's approval for THIS request narrows the chain (the policy engine checks it again when it reserves). Another key's
+    // approval_id, or one given for another url or method, narrows nothing: it is the policy engine's to refuse (APPROVAL_INVALID).
+    const found = input.approvalId ? getApproval(db, input.approvalId) : undefined;
+    const approval = found && found.keyId === key.id && found.url === input.url && found.method === input.method ? found : undefined;
+    const narrowed = narrowOffersWithoutBalance(payable, networks, {
+      approval,
+      keyChain,
+      maxPrice: input.maxPrice,
+    });
+    if ("refusal" in narrowed) {
+      ownAbortCode = narrowed.refusal.code as OwnAbortCode;
+      ownAbortLimit = narrowed.refusal.limit;
+      throw narrowed.refusal;
+    }
+    const address = wallet.getAddress();
+    // The address the balances are read for. onBeforePaymentCreation compares it with the signer it is then leased (a wallet replaced
+    // in between would pay out of a wallet nobody looked at).
+    balanceAddress = deps.balanceReader ? address : null;
+    const offers = await orderOffersByBalance(narrowed.offers, networks, address, deps.balanceReader);
+    if (offers.length === 0) {
+      // Every chain this seller accepts is KNOWN to hold less than the price. Not retryable: the wallet needs funds.
+      ownAbortCode = "INSUFFICIENT_FUNDS";
+      throw new MoneySwitchError("INSUFFICIENT_FUNDS");
+    }
+    return { ...required, accepts: offers };
+  });
   for (const enabled of networks) {
     client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(leasedSigner as any));
   }
   client.registerPolicy((_version, reqs) => {
-      const acceptable = reqs.filter(
-        (r: PaymentRequirements) =>
-          r.scheme === SCHEME &&
-          usesEip3009(r) &&
-          networks.some((n) => r.network === n.caip2 && r.asset.toLowerCase() === n.usdcAddress.toLowerCase())
-      );
+      const acceptable = reqs.filter(isPayable);
       // The SDK then throws its own "filtered out by policies" error; remember that WE emptied the list so it is reported as
       // UNSUPPORTED_PAYMENT (nothing was reserved or signed) whatever wording the SDK uses.
       if (acceptable.length === 0) offerRefusedByPolicy = true;
@@ -364,6 +521,12 @@ export async function performPaidFetch(
         if (!lease) {
           ownAbortCode = "WALLET_LOCKED";
           return { abort: true, reason: "WALLET_LOCKED" };
+        }
+        // The chain was picked by the balance of one wallet; if the wallet was replaced since, this signer is another one. Nothing has
+        // been reserved or signed: back off like a replacement in progress (the lease is given back in the `finally`), try again.
+        if (balanceAddress !== null && lease.signer.address.toLowerCase() !== balanceAddress.toLowerCase()) {
+          ownAbortCode = "WALLET_BUSY";
+          return { abort: true, reason: "WALLET_BUSY" };
         }
       }
       try {
@@ -452,6 +615,15 @@ export async function performPaidFetch(
         }
       }
       signed = true;
+      // This signature spends from this wallet on this chain: the balance remembered for it is from before the payment. A request
+      // that arrives within the cache window must not pick a chain this one just emptied (that is the payment SPEC §6 refuses).
+      if (lease) {
+        try {
+          deps.balanceReader?.forget?.(lease.signer.address, network);
+        } catch {
+          // a cache that cannot forget must not turn a signed payment into an error
+        }
+      }
       armTimer(paidMs);
     });
 
@@ -798,6 +970,16 @@ export async function performPaidFetch(
     throw e;
   } finally {
     disarmTimer();
+    // However a SIGNED payment ended (settled, rejected, outcome unknown), it is now decided: forget the balance of that chain once
+    // more. A request that read it between our signature and the settlement cached the number from before the payment, and the
+    // forget at signing time (above) could not reach that read yet.
+    if (signed && lease) {
+      try {
+        deps.balanceReader?.forget?.(lease.signer.address, network);
+      } catch {
+        // a cache that cannot forget must not turn a signed payment's result into an error
+      }
+    }
     lease?.release(); // however the call ended: the wallet may be replaced or locked again
   }
 }
