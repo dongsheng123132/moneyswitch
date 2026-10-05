@@ -99,7 +99,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     "| `headers` | optional object of headers for the seller |",
     "| `body` | optional. A JSON object/array is sent as JSON (`content-type: application/json` unless you set one); a string is sent verbatim |",
     '| `max_price` | optional. Highest USDC price you accept, e.g. `"0.05"` |',
-    "| `approval_id` | only when resending after the user approved a payment |",
+    "| `approval_id` | only when resending after the user approved a price (`kind` `payment`); not needed after a new host was approved |",
     ""
   );
 
@@ -147,7 +147,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     "In PowerShell build every object you send (the request, and a nested `headers` or `body`) with `[ordered]@{...}`: a plain `@{...}` gets a different key order in every PowerShell 7 process, " +
       "and an approval only matches a `body` with the same keys in the same order. " +
       "Always pass `-Depth` (10 or more) to `ConvertTo-Json` when `headers` or `body` are nested; the default depth of 2 silently flattens them. " +
-      'To resend after an approval, send the same request again (same `body`, same key order) with `"approval_id"` added.',
+      'To resend after a price approval, send the same request again (same `body`, same key order) with `"approval_id"` added.',
     ""
   );
 
@@ -163,9 +163,9 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     "|---|---|---|",
     "| `ok` | Request completed; `payment` may be null for a free service. | Use `body`. Report any amount paid, seller host and `tx_hash`. |",
     "| `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `PRICE_INVALID`, `INSUFFICIENT_FUNDS`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. `INSUFFICIENT_FUNDS` means the wallet does not hold enough USDC on any chain this seller accepts: ask the user to top it up, and do not retry before that. The balance is cached for at most 15 seconds, so after a top-up wait a moment, then retry. |",
-    "| `approval_required` | Human approval needed; `approve_url` is the page where the user approves. | Send `approve_url` to the user in your reply and ask them to open it and approve. It asks for their administrator login, so you cannot approve for them and must not try. Then poll `GET " +
+    "| `approval_required` | Human approval needed, for one of two reasons: the host in `url` is not on this key's list yet (nothing has been sent to it), or the price is over the key's approval line. `GET " +
       B +
-      "/v1/approvals/{approval_id}` every 15 seconds (same Authorization) until `status` is `approved`, `denied` or `expired` (about 10 minutes). If approved, resend the exact same request plus `approval_id`. If denied or expired, stop. |",
+      "/v1/approvals/{approval_id}` says which in `kind`: `host` or `payment`. `approve_url` is the page where the user approves. | Send `approve_url` to the user in your reply and ask them to open it and approve. It asks for their administrator login, so you cannot approve for them and must not try. Then poll that `GET` every 15 seconds (same Authorization) until `status` is `approved`, `denied` or `expired` (about 10 minutes). If approved and `kind` is `host`, the host is on this key's list for good: resend the exact same request, without `approval_id`; if the seller's price is then over the approval line you get `approval_required` once more, with a new `approval_id` and `kind` `payment`. If approved and `kind` is `payment`, resend the exact same request plus `approval_id`. If denied or expired, stop. |",
     "| `payment_unknown` | `TIMEOUT_AFTER_PAYMENT` / `UPSTREAM_ERROR_AFTER_PAYMENT`; `charged` is `maybe`. Also applies if your client times out after sending. | **NEVER retry automatically**: payment could repeat. Check `GET " +
       B +
       "/v1/history` later and let the user decide. |",

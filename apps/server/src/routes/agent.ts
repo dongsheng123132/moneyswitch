@@ -10,6 +10,9 @@ import {
   DEFAULT_MAX_KEY_DEPTH,
   limitFields,
   assertNotSsrf,
+  isNonPublicAddress,
+  createHostApproval,
+  getApproval,
   MoneySwitchError,
   ApprovalRequiredError,
   usedToday,
@@ -164,7 +167,23 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
     let chargedSoFar: Charged = "no";
     try {
       checkRateLimit(ctx.db, key);
-      checkHostAllowedForChain(ctx.db, url, key);
+      try {
+        checkHostAllowedForChain(ctx.db, url, key);
+      } catch (e) {
+        // SPEC.md §3: an http(s) host outside a root key's list asks a person instead of failing, before anything is sent to it and
+        // without any DNS look (that is made once, when the host is approved). A child key, another protocol and a literal private,
+        // loopback or special-use address keep failing: no approval could change the answer.
+        if (
+          !(e instanceof MoneySwitchError) ||
+          e.code !== "HOST_NOT_ALLOWED" ||
+          key.parentId != null ||
+          (url.protocol !== "http:" && url.protocol !== "https:") ||
+          isNonPublicAddress(url.hostname)
+        ) {
+          throw e;
+        }
+        throw new ApprovalRequiredError(createHostApproval(ctx.sqlite, ctx.db, { keyId: key.id, url: body.url, method: body.method || "GET", body: body.body }).id);
+      }
       assertNotSsrf(url, { selfPort: ctx.config.port, allowedHosts: key.allowedHosts });
 
       if (!ctx.wallet.isUnlocked()) {
@@ -172,6 +191,11 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       }
 
       const maxPrice = body.max_price != null ? parseUsdcToMicros(body.max_price) : undefined;
+
+      // A new host's approval is done once the host is listed (SPEC.md §3): an approval_id that names THIS key's own host approval is not
+      // a payment approval, so it is ignored. Any other id (another key's, a payment approval, an unknown one) goes to validateApprovalForUse as before.
+      const named = typeof body.approval_id === "string" ? getApproval(ctx.db, body.approval_id) : undefined;
+      const approvalId = named?.kind === "host" && named.keyId === key.id ? null : body.approval_id ?? null;
 
       // The wallet is leased INSIDE performPaidFetch, at the moment a payment is about to be created and until the call is over:
       // a wallet replacement waits (bounded) for payments in flight, refuses new ones meanwhile (WALLET_BUSY, charged no), and a
@@ -183,7 +207,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         headers: body.headers,
         body: body.body,
         maxPrice,
-        approvalId: body.approval_id ?? null,
+        approvalId,
       }, { balanceReader: ctx.balanceReader });
       chargedSoFar = result.charged;
 

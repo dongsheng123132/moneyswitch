@@ -24,7 +24,7 @@ async function createKey(t: TestCtx, allowedHosts: string[]) {
 }
 
 describe("/v1/fetch pre-flight gates", () => {
-  it("HOST_NOT_ALLOWED for a host not in allowed_hosts", async () => {
+  it("a host not in allowed_hosts asks a person (approval_required, charged no) instead of failing with HOST_NOT_ALLOWED", async () => {
     t = await buildTestApp();
     const key = await createKey(t, ["example.com:443"]);
     const res = await t.app.inject({
@@ -35,8 +35,11 @@ describe("/v1/fetch pre-flight gates", () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.status).toBe("denied");
-    expect(body.code).toBe("HOST_NOT_ALLOWED");
+    expect(body.status).toBe("approval_required");
+    expect(body.code).toBe("APPROVAL_REQUIRED");
+    expect(body.charged).toBe("no");
+    expect(body.approval_id).toBeTruthy();
+    expect(body.approve_url).toBe(`http://127.0.0.1:4020/approvals?id=${body.approval_id}`);
   });
 
   it("SSRF_BLOCKED targeting MoneySwitch's own port, even if allow-listed", async () => {
@@ -53,7 +56,7 @@ describe("/v1/fetch pre-flight gates", () => {
     expect(body.code).toBe("SSRF_BLOCKED");
   });
 
-  it("empty allowed_hosts rejects even a free request (allowlist applies to ALL /v1/fetch)", async () => {
+  it("empty allowed_hosts still stops even a free request (allowlist applies to ALL /v1/fetch): it waits for a person, nothing is sent", async () => {
     t = await buildTestApp();
     const key = await createKey(t, []);
     const res = await t.app.inject({
@@ -63,8 +66,9 @@ describe("/v1/fetch pre-flight gates", () => {
       payload: { url: "https://example.com/free" },
     });
     const body = res.json();
-    expect(body.status).toBe("denied");
-    expect(body.code).toBe("HOST_NOT_ALLOWED");
+    expect(body.status).toBe("approval_required");
+    expect(body.charged).toBe("no");
+    expect(body.http_status).toBeNull();
   });
 
   it("WALLET_LOCKED when gates pass but wallet is locked", async () => {

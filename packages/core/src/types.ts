@@ -53,6 +53,9 @@ export interface PaymentRow {
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "used";
 
+/** 'payment': a price over the approval line. 'host': a request to a host outside the key's allowed list (no price yet). */
+export type ApprovalKind = "payment" | "host";
+
 export interface ApprovalRow {
   id: string;
   keyId: string;
@@ -64,6 +67,7 @@ export interface ApprovalRow {
   payTo: string;
   amount: bigint;
   status: ApprovalStatus;
+  kind: ApprovalKind;
   expiresAt: string;
   decidedAt: string | null;
   createdAt: string;

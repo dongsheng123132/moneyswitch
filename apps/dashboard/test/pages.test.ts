@@ -388,6 +388,152 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
       { url: "/v1/approvals/ap-2/deny", method: "POST", auth: "Bearer ms_admin_testtoken" },
     ]);
   });
+
+  describe("a request to a host outside the key's list (SPEC.md §3)", () => {
+    const hostRow = (id: string, over: Record<string, unknown> = {}) =>
+      pendingRow(id, { kind: "host", url: "https://API.NewHost.example/v1/data?x=1", host: "api.newhost.example:443", network: "", asset: "", pay_to: "", amount: "0", ...over });
+    const hostView = (lang: "en" | "zh", over: Record<string, unknown> = {}) =>
+      render(
+        h(ApprovalsModule.ApprovalsView, {
+          pending: [hostRow("ap-h")],
+          all: null,
+          keys: [key as never],
+          highlightId: null,
+          actingId: null,
+          successMsg: null,
+          actionError: null,
+          error: null,
+          now: NOW,
+          onAct() {},
+          ...over,
+        } as never),
+        lang
+      );
+
+    it("is marked 'New host', shows the host:port that will be listed, the URL it came from and the sentence about what approving does; no amount, no payee, no checkbox", () => {
+      const html = hostView("en");
+      assert.ok(html.includes('data-testid="host-approval"'));
+      assert.ok(html.includes(esc(en.approvals.hostBadge)));
+      assert.ok(html.includes("api.newhost.example:443"));
+      assert.ok(html.includes("https://API.NewHost.example/v1/data?x=1"));
+      assert.ok(html.includes(esc(en.approvals.hostSource)));
+      assert.ok(html.includes(fill(en.approvals.hostNote, { host: "api.newhost.example:443" })));
+      assert.ok(!html.includes('class="approval-amount'), "no price yet, so no amount");
+      assert.ok(!html.includes("pay to"), "no payee yet");
+      assert.ok(!html.includes("<input"), "nothing to tick: approving is the one decision");
+      assert.equal(html.split(`>${en.approvals.approve}<`).length - 1, 1);
+      assert.equal(html.split(`>${en.approvals.deny}<`).length - 1, 1);
+    });
+
+    it("the marker, the host:port, the source and the sentence are in Chinese too", async () => {
+      const zh = (await import("../src/i18n/strings/approvals.ts")).approvalsStrings.zh;
+      const html = hostView("zh", { pending: [hostRow("ap-h", { url: "http://Seller.Example:8080/x", host: "seller.example:8080" })] });
+      assert.ok(html.includes(esc(zh.hostBadge)));
+      assert.equal(zh.hostBadge, "新域名");
+      assert.ok(html.includes("seller.example:8080"));
+      assert.ok(html.includes("http://Seller.Example:8080/x"));
+      assert.ok(html.includes(esc(zh.hostSource)));
+      assert.equal(fill(zh.hostNote, { host: "seller.example:8080" }), "批准后，这把 key 以后都可以访问 seller.example:8080；价格要等卖家报价，额度照常检查。");
+      assert.ok(html.includes(fill(zh.hostNote, { host: "seller.example:8080" })));
+    });
+
+    it("a payment approval looks exactly as before: amount and payee, no marker; so does one from a server that sends no kind", () => {
+      for (const row of [pendingRow("ap-p", { kind: "payment" }), pendingRow("ap-q")]) {
+        const html = view({ pending: [row] });
+        assert.ok(!html.includes("host-approval"));
+        assert.ok(!html.includes(esc(en.approvals.hostBadge)));
+        assert.ok(!html.includes("approval-host-note"));
+        assert.ok(html.includes('class="approval-amount num"'));
+        assert.ok(html.includes("0.15"));
+        assert.ok(html.includes("pay to"));
+      }
+    });
+
+    it("the host:port shown is the server's `host` field, as it will be listed: the page reads no URL (IDN, upper case and a trailing dot included)", () => {
+      // the server's reading of this URL (core's hostPortOf, tested there and in the server's tests): punycode, lower case, no trailing dot
+      const url = "https://BÜCHER.Example./x";
+      const html = hostView("en", { pending: [hostRow("ap-h", { url, host: "xn--bcher-kva.example:443" })] });
+      assert.ok(html.includes('data-testid="host-approval"'));
+      assert.ok(html.includes(`<span class="mono">xn--bcher-kva.example:443</span>`));
+      assert.ok(html.includes(fill(en.approvals.hostNote, { host: "xn--bcher-kva.example:443" })));
+      assert.ok(html.includes(esc(url)), "the url it came from is shown as it was asked");
+      // whatever the URL says, the page shows what the server sent: it does not work the host out itself
+      const odd = hostView("en", { pending: [hostRow("ap-h", { url: "https://elsewhere.example/x", host: "listed.example:8443" })] });
+      assert.ok(odd.includes(`<span class="mono">listed.example:8443</span>`));
+      assert.ok(!odd.includes(`<span class="mono">elsewhere.example:443</span>`));
+      assert.equal((ApprovalsModule as Record<string, unknown>).hostPortOf, undefined, "the page has no host:port parser of its own");
+      assert.ok(!fs.readFileSync(path.join(here, "../src/pages/ApprovalsPage.tsx"), "utf8").includes("new URL("), "no URL parsing in the page");
+      // the recently decided list shows the same field
+      const decided = hostView("en", { pending: [], all: [hostRow("ap-d", { url, host: "xn--bcher-kva.example:443", status: "approved", decided_at: "2026-10-04T12:03:00.000Z" })] });
+      assert.ok(decided.includes(`<span class="mono">xn--bcher-kva.example:443</span>`));
+    });
+
+    it("Approve is the same bodiless call for a new host: no allow_host, no content type", async () => {
+      const real = globalThis.fetch;
+      const calls: Array<{ url: string; method?: string; body?: unknown; contentType?: string }> = [];
+      store.set("moneyswitch_admin_token", "ms_admin_testtoken");
+      globalThis.fetch = (async (url: string, init: RequestInit) => {
+        calls.push({ url, method: init.method, body: init.body, contentType: (init.headers as Record<string, string>)["Content-Type"] });
+        return new Response(JSON.stringify({ id: "ap-h", status: "approved" }), { status: 200, headers: { "content-type": "application/json" } });
+      }) as typeof fetch;
+      try {
+        assert.equal(await ApprovalsModule.submitDecision("ap-h", "approve"), "approved");
+      } finally {
+        globalThis.fetch = real;
+      }
+      assert.deepEqual(calls, [{ url: "/v1/approvals/ap-h/approve", method: "POST", body: undefined, contentType: undefined }]);
+      assert.ok(!fs.readFileSync(path.join(here, "../src/api.ts"), "utf8").includes("allow_host"), "the allow_host parameter is gone");
+    });
+
+    it("when the server refuses to approve because of the DNS look, the page says why, in the page's language, and the request stays in the list", async () => {
+      const { ApiError } = await import("../src/api.ts");
+      const zh = (await import("../src/i18n/strings/approvals.ts")).approvalsStrings.zh;
+      const real = globalThis.fetch;
+      store.set("moneyswitch_admin_token", "ms_admin_testtoken");
+      let answer = { error: "ALLOW_HOST_PRIVATE_HOST", message: "api.newhost.example is, or resolves to, a private address" };
+      globalThis.fetch = (async () => new Response(JSON.stringify(answer), { status: 400, headers: { "content-type": "application/json" } })) as typeof fetch;
+      const failure = async () => {
+        try {
+          await ApprovalsModule.submitDecision("ap-h", "approve");
+        } catch (e) {
+          return e;
+        }
+        throw new Error("approving should have been refused");
+      };
+      try {
+        const privateRefusal = await failure();
+        assert.ok(privateRefusal instanceof ApiError && privateRefusal.status === 400);
+        assert.equal(ApprovalsModule.decisionErrorMessage(privateRefusal, "approve", (k) => en.approvals[k]), en.approvals.errHostPrivate);
+        assert.equal(ApprovalsModule.decisionErrorMessage(privateRefusal, "approve", (k) => zh[k]), zh.errHostPrivate);
+
+        answer = { error: "ALLOW_HOST_UNRESOLVED", message: "api.newhost.example could not be resolved in time" };
+        const unresolved = await failure();
+        assert.equal(ApprovalsModule.decisionErrorMessage(unresolved, "approve", (k) => en.approvals[k]), en.approvals.errHostUnresolved);
+        assert.equal(ApprovalsModule.decisionErrorMessage(unresolved, "approve", (k) => zh[k]), zh.errHostUnresolved);
+
+        // any other refusal shows the server's own words
+        answer = { error: "ALLOW_HOST_CHILD_KEY", message: "A child key's hosts cannot be widened here" };
+        assert.equal(ApprovalsModule.decisionErrorMessage(await failure(), "approve", (k) => en.approvals[k]), "A child key's hosts cannot be widened here");
+        assert.equal(ApprovalsModule.decisionErrorMessage(new Error("boom"), "deny", (k) => en.approvals[k]), "boom");
+        assert.equal(ApprovalsModule.decisionErrorMessage("?", "deny", (k) => en.approvals[k]), "deny_failed");
+      } finally {
+        globalThis.fetch = real;
+      }
+      // the page shows the message, and the refused request is still pending in the list with its buttons
+      const html = hostView("en", { actionError: en.approvals.errHostPrivate });
+      assert.ok(html.includes(esc(en.approvals.errHostPrivate)));
+      assert.ok(html.includes('data-testid="host-approval"'));
+      assert.equal(html.split(`>${en.approvals.approve}<`).length - 1, 1);
+      assert.ok(zh.errHostPrivate.includes("未批准") && zh.errHostUnresolved.includes("未批准"));
+    });
+
+    it("in the recently decided list a host request shows its host:port where a payment shows its amount", () => {
+      const decided = hostRow("ap-d", { status: "approved", decided_at: "2026-10-04T12:03:00.000Z" });
+      const html = view({ pending: [], all: [decided, pendingRow("ap-e", { status: "used", decided_at: "2026-10-04T12:02:00.000Z" })] });
+      assert.ok(html.includes("api.newhost.example:443"));
+      assert.ok(html.includes("0.15"));
+    });
+  });
 });
 
 describe("Bills page", () => {

@@ -39,6 +39,13 @@ export async function submitDecision(id: string, decision: Decision): Promise<"a
   return decision === "approve" ? "approved" : "denied";
 }
 
+/** The text under the cards when Approve / Deny fails. The two refusals of a new host's DNS look (SPEC.md §3) are said in the page's own language. */
+export function decisionErrorMessage(e: unknown, decision: Decision, t: (key: "errHostPrivate" | "errHostUnresolved") => string): string {
+  if (e instanceof ApiError && e.error === "ALLOW_HOST_PRIVATE_HOST") return t("errHostPrivate");
+  if (e instanceof ApiError && e.error === "ALLOW_HOST_UNRESOLVED") return t("errHostUnresolved");
+  return e instanceof ApiError ? e.message : e instanceof Error ? e.message : `${decision}_failed`;
+}
+
 /** One pending request. The one the AI's link points at (?id=…) is marked and scrolled into view once. */
 function ApprovalCard({
   approval: a,
@@ -60,6 +67,10 @@ function ApprovalCard({
   const t = useT(approvalsStrings);
   const tc = useT(common);
   const ref = useRef<HTMLDivElement | null>(null);
+  // A request to a host outside the key's list (SPEC.md §3): no price yet, so the host:port stands where the amount does. The server
+  // computes it (the value approving adds to the list); the page only shows it.
+  const isHost = a.kind === "host";
+  const hostPort = a.host ?? "";
   useEffect(() => {
     if (highlight) ref.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
   }, [highlight]);
@@ -84,12 +95,23 @@ function ApprovalCard({
         <Avatar name={keyLabel} size={22} />
         <span className={key_ ? undefined : "mono"}>{keyLabel}</span>
       </div>
-      <div className="approval-amount num">
-        {formatUsdc(a.amount, { maxDecimals: 4 })} {tc("usdc")}
+      {isHost ? (
+        <div className="approval-host" data-testid="host-approval">
+          <Pill tone="blue">{t("hostBadge")}</Pill>
+          <span className="mono">{hostPort}</span>
+        </div>
+      ) : (
+        <div className="approval-amount num">
+          {formatUsdc(a.amount, { maxDecimals: 4 })} {tc("usdc")}
+        </div>
+      )}
+      <div className="approval-url">
+        {isHost && <span className="dim">{t("hostSource")} </span>}
+        {a.url}
       </div>
-      <div className="approval-url">{a.url}</div>
+      {isHost && <div className="approval-host-note">{t("hostNote", { host: hostPort })}</div>}
       <div className="approval-meta">
-        <span>{t("payTo", { addr: shortAddr(a.pay_to) })}</span>
+        {!isHost && <span>{t("payTo", { addr: shortAddr(a.pay_to) })}</span>}
         <span>{countdown}</span>
       </div>
       {key_ && (
@@ -249,7 +271,11 @@ export function ApprovalsView({
                   <span className={key ? undefined : "mono"} style={{ flexShrink: 0 }}>
                     {keyLabel}
                   </span>
-                  <span className="num">{formatUsdc(a.amount, { maxDecimals: 4 })}</span>
+                  {a.kind === "host" ? (
+                    <span className="mono">{a.host}</span>
+                  ) : (
+                    <span className="num">{formatUsdc(a.amount, { maxDecimals: 4 })}</span>
+                  )}
                   <Pill tone={tone}>{t(statusKey)}</Pill>
                   <span className="dim" style={{ marginLeft: "auto" }}>
                     {relTime(a.decided_at ?? a.created_at)}
@@ -265,6 +291,7 @@ export function ApprovalsView({
 }
 
 export default function ApprovalsPage() {
+  const t = useT(approvalsStrings);
   const [searchParams] = useSearchParams();
   const highlightId = searchParams.get("id");
   const { data: pending, error, refresh } = usePolling(() => listApprovals("pending"));
@@ -293,7 +320,7 @@ export default function ApprovalsPage() {
       setSuccessMsg({ id, kind: await submitDecision(id, decision) });
       refresh();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : `${decision}_failed`);
+      setActionError(decisionErrorMessage(e, decision, t));
     } finally {
       setActingId(null);
     }

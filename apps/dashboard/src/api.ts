@@ -157,6 +157,10 @@ export interface ApprovalRow {
   pay_to: string;
   amount: string;
   status: "pending" | "approved" | "denied" | "expired" | "used";
+  /** "payment" = a price over the approval line; "host" = a request to a host outside the key's list (no price yet: amount "0"). */
+  kind: "payment" | "host";
+  /** Only on a "host" approval: the host:port approving it adds to the key's list, spelled by the server (the page shows it, it parses no URL). */
+  host?: string | null;
   expires_at: string;
   decided_at: string | null;
   created_at: string;

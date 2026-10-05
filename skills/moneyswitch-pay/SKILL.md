@@ -31,7 +31,7 @@ When a request returns HTTP 402, or the user asks you to buy or call a paid API,
 | `headers` | optional object of headers for the seller |
 | `body` | optional. A JSON object/array is sent as JSON (`content-type: application/json` unless you set one); a string is sent verbatim |
 | `max_price` | optional. Highest USDC price you accept, e.g. `"0.05"` |
-| `approval_id` | only when resending after the user approved a payment |
+| `approval_id` | only when resending after the user approved a price (`kind` `payment`); not needed after a new host was approved |
 
 ```bash
 curl -sS --max-time 120 "$MONEY_API_BASE/v1/fetch" \
@@ -65,7 +65,7 @@ except urllib.error.HTTPError as e:  # 401 etc. also carry a JSON body
 print(result["status"], result.get("charged"), result.get("code"))
 ```
 
-In PowerShell build every object you send (the request, and a nested `headers` or `body`) with `[ordered]@{...}`: a plain `@{...}` gets a different key order in every PowerShell 7 process, and an approval only matches a `body` with the same keys in the same order. Always pass `-Depth` (10 or more) to `ConvertTo-Json` when `headers` or `body` are nested; the default depth of 2 silently flattens them. To resend after an approval, send the same request again (same `body`, same key order) with `"approval_id"` added.
+In PowerShell build every object you send (the request, and a nested `headers` or `body`) with `[ordered]@{...}`: a plain `@{...}` gets a different key order in every PowerShell 7 process, and an approval only matches a `body` with the same keys in the same order. Always pass `-Depth` (10 or more) to `ConvertTo-Json` when `headers` or `body` are nested; the default depth of 2 silently flattens them. To resend after a price approval, send the same request again (same `body`, same key order) with `"approval_id"` added.
 
 ## Read the result
 
@@ -75,7 +75,7 @@ Read `status`, `code`, `charged`, `payment` (`amount`, `tx_hash`, `network`), `h
 |---|---|---|
 | `ok` | Request completed; `payment` may be null for a free service. | Use `body`. Report any amount paid, seller host and `tx_hash`. |
 | `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `PRICE_INVALID`, `INSUFFICIENT_FUNDS`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. `INSUFFICIENT_FUNDS` means the wallet does not hold enough USDC on any chain this seller accepts: ask the user to top it up, and do not retry before that. The balance is cached for at most 15 seconds, so after a top-up wait a moment, then retry. |
-| `approval_required` | Human approval needed; `approve_url` is the page where the user approves. | Send `approve_url` to the user in your reply and ask them to open it and approve. It asks for their administrator login, so you cannot approve for them and must not try. Then poll `GET $MONEY_API_BASE/v1/approvals/{approval_id}` every 15 seconds (same Authorization) until `status` is `approved`, `denied` or `expired` (about 10 minutes). If approved, resend the exact same request plus `approval_id`. If denied or expired, stop. |
+| `approval_required` | Human approval needed, for one of two reasons: the host in `url` is not on this key's list yet (nothing has been sent to it), or the price is over the key's approval line. `GET $MONEY_API_BASE/v1/approvals/{approval_id}` says which in `kind`: `host` or `payment`. `approve_url` is the page where the user approves. | Send `approve_url` to the user in your reply and ask them to open it and approve. It asks for their administrator login, so you cannot approve for them and must not try. Then poll that `GET` every 15 seconds (same Authorization) until `status` is `approved`, `denied` or `expired` (about 10 minutes). If approved and `kind` is `host`, the host is on this key's list for good: resend the exact same request, without `approval_id`; if the seller's price is then over the approval line you get `approval_required` once more, with a new `approval_id` and `kind` `payment`. If approved and `kind` is `payment`, resend the exact same request plus `approval_id`. If denied or expired, stop. |
 | `payment_unknown` | `TIMEOUT_AFTER_PAYMENT` / `UPSTREAM_ERROR_AFTER_PAYMENT`; `charged` is `maybe`. Also applies if your client times out after sending. | **NEVER retry automatically**: payment could repeat. Check `GET $MONEY_API_BASE/v1/history` later and let the user decide. |
 | `payment_failed` | `PAYMENT_REJECTED` or `PAYMENT_FAILED`. | If `charged` is `maybe`, do not retry. Otherwise report the failure; do not loop. |
 | `error` | `WALLET_LOCKED`, `WALLET_BUSY` (the wallet is being replaced for a moment), invalid/revoked/expired key, or upstream error. | If `charged` is `no`, you may retry once later (`WALLET_BUSY` clears by itself within about a minute; nothing was signed). Wallet/key problems need the user; replace a dead key via "Reset secret and copy skill". |

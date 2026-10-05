@@ -101,7 +101,7 @@ describe("GET /skill.md", () => {
 });
 
 describe("GET /v1/approvals/:id (agent-facing approval status)", () => {
-  it("a MoneyKey reads its own approval: exactly {id,status,amount,currency,url,method,expires_at}", async () => {
+  it("a MoneyKey reads its own approval: exactly {id,status,kind,amount,currency,url,method,expires_at}", async () => {
     t = await buildTestApp();
     const a = await createKey("agent-a");
     const approval = makeApproval(a.id);
@@ -110,6 +110,7 @@ describe("GET /v1/approvals/:id (agent-facing approval status)", () => {
     expect(res.json()).toEqual({
       id: approval.id,
       status: "pending",
+      kind: "payment",
       amount: "0.15",
       currency: "USDC",
       url: "https://example.com/paid",

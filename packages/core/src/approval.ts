@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { dbNumberToMicros, microsToDbNumber } from "./money.js";
 import { encodeRequestBody } from "./request-body.js";
-import type { ApprovalRow } from "./types.js";
+import type { ApprovalKind, ApprovalRow } from "./types.js";
 
 export const APPROVAL_TTL_MS = 10 * 60 * 1000;
 
@@ -19,6 +19,7 @@ function rowToApproval(row: typeof schema.approvals.$inferSelect): ApprovalRow {
     payTo: row.payTo,
     amount: dbNumberToMicros(row.amount),
     status: row.status,
+    kind: row.kind,
     expiresAt: row.expiresAt,
     decidedAt: row.decidedAt,
     createdAt: row.createdAt,
@@ -44,6 +45,8 @@ export interface CreateApprovalInput {
   asset: string;
   payTo: string;
   amount: bigint;
+  /** Default 'payment'. */
+  kind?: ApprovalKind;
 }
 
 export function createApproval(db: MoneySwitchDb, input: CreateApprovalInput): ApprovalRow {
@@ -60,6 +63,7 @@ export function createApproval(db: MoneySwitchDb, input: CreateApprovalInput): A
     payTo: input.payTo,
     amount: microsToDbNumber(input.amount),
     status: "pending" as const,
+    kind: input.kind ?? ("payment" as const),
     expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS).toISOString(),
     decidedAt: null,
     createdAt: now.toISOString(),
@@ -119,7 +123,7 @@ export function decideApproval(
 }
 
 /**
- * Validates that an approval_id supplied on a /v1/fetch retry matches the
+ * Validates that an approval_id supplied on a /v1/fetch retry is a PAYMENT approval (kind 'payment') that matches the
  * current request (same key, url, method, body hash, chain, asset, payTo) and is
  * `approved` and unexpired. Does NOT mark it used — call markApprovalUsed
  * after the policy engine accepts the payment, inside the same transaction.
@@ -131,6 +135,7 @@ export function validateApprovalForUse(
 ): ApprovalRow {
   const approval = getApproval(db, approvalId);
   if (!approval) throw new Error("APPROVAL_INVALID");
+  if (approval.kind !== "payment") throw new Error("APPROVAL_INVALID");
   if (approval.status !== "approved") throw new Error("APPROVAL_INVALID");
   if (new Date(approval.expiresAt).getTime() < Date.now()) throw new Error("APPROVAL_INVALID");
   if (approval.keyId !== ctx.keyId) throw new Error("APPROVAL_INVALID");

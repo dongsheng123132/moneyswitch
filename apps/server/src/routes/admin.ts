@@ -6,6 +6,10 @@ import {
   revokeMoneyKey,
   listApprovals,
   decideApproval,
+  getApproval,
+  approveHostApproval,
+  hostOfApproval,
+  AllowHostError,
   expireStaleApprovals,
   formatMicrosToUsdc,
   childrenCounts,
@@ -123,6 +127,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         pay_to: a.payTo,
         amount: formatMicrosToUsdc(a.amount),
         status: a.status,
+        kind: a.kind,
+        // a new host's host:port as approving it lists it (core's hostPortOf, the one place it is computed): the page shows this, it parses nothing
+        ...(a.kind === "host" ? { host: hostOfApproval(a) } : {}),
         expires_at: a.expiresAt,
         decided_at: a.decidedAt,
         created_at: a.createdAt,
@@ -133,10 +140,13 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post("/v1/approvals/:id/approve", { preHandler: adminGuard }, async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
-      const row = decideApproval(ctx.db, id, "approved");
+      // A new host (SPEC.md §3): one DNS look, then in one transaction the approval is approved and host:port joins the key's allowed hosts.
+      const row =
+        getApproval(ctx.db, id)?.kind === "host" ? (await approveHostApproval(ctx.sqlite, ctx.db, id)).approval : decideApproval(ctx.db, id, "approved");
       writeAudit(ctx.db, "admin", "approval.approve", { approvalId: id });
       return reply.send({ id: row.id, status: row.status });
     } catch (e) {
+      if (e instanceof AllowHostError) return reply.status(400).send({ error: e.code, message: e.message });
       return reply.status(400).send({ error: e instanceof Error ? e.message : "invalid_request" });
     }
   });

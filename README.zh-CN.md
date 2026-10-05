@@ -25,11 +25,11 @@ node apps/server-pkg/dist/cli.js --data-dir ./data
 | 页面 | 做什么 |
 |---|---|
 | **钱包** | 创建钱包，12 个词只显示一次，抄下后勾选「我已抄下」，再转入少量 USDC。重启后自动解锁。 |
-| **Key** | 一个 AI 一把：日额度、总额度、单笔上限、允许的域名、审批线、过期时间。创建后 key 和技能段落只显示一次，把技能段落粘贴给 AI。发出后额度不可改：要改就撤销旧 key、发一把新的。 |
-| **审批** | 批准或拒绝超过审批线的付款。 |
+| **Key** | 一个 AI 一把：日额度、总额度、单笔上限、允许的域名、审批线、过期时间。创建后 key 和技能段落只显示一次，把技能段落粘贴给 AI。发出后额度不可改：要改就撤销旧 key、发一把新的；允许的域名只能在审批新域名时放宽（见下）。 |
+| **审批** | 批准或拒绝超过审批线的付款，或请求了不在某把 key 允许列表里的域名：批准新域名就是把它加进这把 key 的允许域名。 |
 | **账单** | 每一笔：时间、key、金额、网址、链、交易号、扣款状态（yes / no / maybe）。 |
 
-AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，带 `approval_id` 和 `approve_url`（`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`）。技能让 AI 把链接发给你，并每 15 秒查一次 `GET /v1/approvals/:id`。链接本身不含令牌，批准必须先以管理员身份登录；批准后 AI 带 `approval_id` 原样重发。审批 10 分钟过期。不做推送渠道。
+AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，带 `approval_id` 和 `approve_url`（`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`）。技能让 AI 把链接发给你，并每 15 秒查一次 `GET /v1/approvals/:id`。链接本身不含令牌，批准必须先以管理员身份登录；批准后 AI 带 `approval_id` 原样重发。请求的 http(s) 域名不在这把 key 的允许列表里时，同样先返回 `approval_required`，此时还没有向该域名发出任何请求。批准就是把这个 `host:port` 永久加进这把 key 的允许域名，之后 AI 原样重发即可，不用带 `approval_id`；价格仍照常检查，超过审批线会再问一次。批准时会查一次域名：解析到私有地址（或本机自己的地址）、或解析失败 / 超时的会被拒绝，审批保持待批。子 key、非 http(s)、以及私有 / 本机 / 特殊用途地址的字面地址直接返回 `HOST_NOT_ALLOWED`；每把 key 最多 5 条待批的新域名（超过返回 `RATE_LIMITED`）。审批 10 分钟过期。不做推送渠道。
 
 公开的 `GET /skill.md` 是不含 key 的通用说明。接入方式只有「技能 + key」，另外就是直接调用 HTTP 接口。
 

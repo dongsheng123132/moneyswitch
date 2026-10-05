@@ -104,7 +104,10 @@ Only `url` is required; `method` defaults to `GET`.
 - `approval_id` (optional): an id previously returned as `approval_id` when
   a prior identical call (same `url`/`method`/request body) came back with
   `status: "approval_required"` and has since been approved by the
-  administrator in the Dashboard (or through the admin API).
+  administrator in the Dashboard (or through the admin API). Only for an
+  approval of a price (`kind` `"payment"`): after a new host was approved
+  (`kind` `"host"`) the request is simply repeated as it was, and an
+  `approval_id` that names this key's own host approval is ignored, not an error; any other id is judged as a payment approval id.
 
 **Response 200** (always 200 at the HTTP layer; policy outcomes are
 communicated in the `status`/`code` fields, not the HTTP status code):
@@ -134,7 +137,7 @@ communicated in the `status`/`code` fields, not the HTTP status code):
 |---|---|
 | `ok` | Request succeeded (payment made if the resource was priced; `payment` is `null` for free resources). |
 | `denied` | Policy rejected the request before any payment attempt; see `code`. |
-| `approval_required` | Price is between the approval threshold and the per-request limit; `approval_id` and `approve_url` (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, or the address the server itself listens on when that is not set; never the request's Host header) are set. Give the link to a person: it carries no token, and approving needs the administrator login. Poll `GET /v1/approvals/:id` about every 15 s, then retry the same request with that `approval_id` once approved. |
+| `approval_required` | Either the price is between the approval threshold and the per-request limit (the approval has `kind` `"payment"`), or the URL is http(s) and its host is not in a root key's `allowed_hosts` (`kind` `"host"`; nothing has been sent to that host, and no DNS look was made). `approval_id` and `approve_url` (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, or the address the server itself listens on when that is not set; never the request's Host header) are set. Give the link to a person: it carries no token, and approving needs the administrator login. Poll `GET /v1/approvals/:id` about every 15 s. Once a `payment` approval is approved, retry the same request with that `approval_id`. Approving a `host` approval adds the host to the key's `allowed_hosts` for good, so retry the same request as it was, without an `approval_id` (one that is sent is ignored); the price is then checked as usual, and if it is over the approval threshold the retry answers `approval_required` once more, with a new `payment` approval. |
 | `payment_failed` | Payment was attempted and definitively failed (signature/facilitator rejection); any reservation was released. |
 | `error` | An unexpected error (e.g. upstream unreachable, wallet locked). |
 
@@ -149,8 +152,8 @@ against the live Monad testnet facilitator never sets it.
 | `KEY_INVALID` | Bearer token missing, malformed, or not a known key |
 | `KEY_REVOKED` | Key exists but has been revoked |
 | `KEY_EXPIRED` | Key's `expires_at` has passed |
-| `RATE_LIMITED` | Exceeded `max_payments_per_minute` |
-| `HOST_NOT_ALLOWED` | Target host not in the key's `allowed_hosts` |
+| `RATE_LIMITED` | Exceeded `max_payments_per_minute`; or the key already has 5 unexpired pending `host` approvals and this request names a sixth new host (`charged` is `no`, `limit_scope` is `"self"` with the key's `limit_key_prefix`; asking again for a host that is already waiting returns its `approval_id` instead) |
+| `HOST_NOT_ALLOWED` | The URL is not http(s); or the key is a child key (a child's hosts are bound by its parent's list) and the host is not in it; or the host is a literal address that is not public unicast (IPv4 `0/8`, `10/8`, `100.64/10`, `127/8`, `169.254/16`, `172.16/12`, `192.0.0/24`, `192.0.2/24`, `192.168/16`, `198.18/15`, `198.51.100/24`, `203.0.113/24`, `224/4`, `240/4`; IPv6 `::/96` (which holds `::` and `::1`), `100::/64`, `2001::/32` (Teredo), `2001:db8::/32`, `3fff::/20`, `fc00::/7`, `fe80::/10`, `fec0::/10`, `ff00::/8`, all of `64:ff9b:1::/48`, and an IPv4 inside `::ffff:0:0/96`, `::ffff:0:0:0/96`, `64:ff9b::/96` or `2002::/16` judged by the IPv4 rules) or `localhost` / `*.localhost`, and the key does not list it explicitly as `host:port`. No approval is made for any of these. Any other http(s) host that a root key does not list is not refused: it answers `approval_required` first |
 | `SSRF_BLOCKED` | Target resolves to MoneySwitch's own listening address |
 | `UNSUPPORTED_PAYMENT` | No offered payment requirement matches the configured scheme/network/asset |
 | `PRICE_INVALID` | The seller quoted a price that is not a positive whole number of atomic USDC units (zero, negative, fractional or not a number); nothing was reserved or signed, `charged` is `no` |
@@ -159,8 +162,8 @@ against the live Monad testnet facilitator never sets it.
 | `MAX_PRICE_EXCEEDED` | Price exceeds the request's `max_price` |
 | `DAILY_BUDGET_EXCEEDED` | Would exceed the key's remaining daily budget |
 | `TOTAL_BUDGET_EXCEEDED` | Would exceed the key's remaining total budget |
-| `APPROVAL_REQUIRED` | Price is between the approval threshold and the per-request limit |
-| `APPROVAL_INVALID` | `approval_id` given but not valid (wrong key/url/method/body, expired, already used, or not yet approved; also when the seller no longer offers the chain and asset the approval was given for — a resend pays only on that chain) |
+| `APPROVAL_REQUIRED` | Price is between the approval threshold and the per-request limit, or the host is not in a root key's `allowed_hosts` (the approval's `kind` says which: `"payment"` or `"host"`) |
+| `APPROVAL_INVALID` | `approval_id` of a payment approval given but not valid (wrong key/url/method/body, expired, already used, or not yet approved; also when the seller no longer offers the chain and asset the approval was given for — a resend pays only on that chain) |
 | `WALLET_LOCKED` | The server's wallet is locked; cannot sign |
 | `PAYMENT_FAILED` | Payment definitively failed |
 | `PAYMENT_REJECTED` | Seller answered 402 again after we signed and sent payment (its facilitator rejected it); reservation kept `unknown`, held until the signed authorization expires, then auto-released |
@@ -271,7 +274,8 @@ support it.
 | Endpoint | Auth | |
 |---|---|---|
 | `GET /skill.md` | none | The generic skill (never contains a key), `text/markdown; charset=utf-8`. Base URL = `MONEYSWITCH_PUBLIC_URL` when set, else the address the server itself listens on (never the request's Host header; if neither forms a plain http(s) origin the skill is server-agnostic and reads `MONEY_API_BASE` / `MONEY_API_KEY`). |
-| `GET /v1/approvals/:id` | MoneyKey | After `/v1/fetch` answered `approval_required`: the key's own approval, `{ "id", "status": "pending"\|"approved"\|"denied"\|"expired"\|"used", "amount", "currency": "USDC", "url", "method", "expires_at" }`. Another key's id and unknown ids both answer `404 { "status": "error", "code": "APPROVAL_NOT_FOUND" }`. Poll about every 15 s; an approval lives 10 minutes. |
+| `GET /v1/approvals/:id` | MoneyKey | After `/v1/fetch` answered `approval_required`: the key's own approval, `{ "id", "status": "pending"\|"approved"\|"denied"\|"expired"\|"used", "kind": "payment"\|"host", "amount", "currency": "USDC", "url", "method", "expires_at" }` (`kind` `"host"` = the host is not in the key's list yet: `amount` is `"0"`, there is no price until the seller quotes, `status` stays `approved` once approved, and the row also has `"host"`: the `host:port` that approving it lists, see below; a `payment` approval has no `host`). Another key's id and unknown ids both answer `404 { "status": "error", "code": "APPROVAL_NOT_FOUND" }`. Poll about every 15 s; an approval lives 10 minutes. |
+| `POST /v1/approvals/:id/approve` | admin | Approves a pending approval; no request body. For `kind` `"payment"` that is all it does. For `kind` `"host"` it first looks the host up in DNS once (3 s limit), then, in one transaction, sets the approval to `approved`, appends the request's `host:port` (lower-case, port explicit, one trailing dot dropped) to the key's `allowed_hosts` if it is not listed yet (entries and requests are compared lower-case with one trailing dot dropped, so an entry `example.com.:443` lists `example.com`; approving means listing it permanently), and writes an audit row `key.allow_host` `{ keyId, host, approvalId }`. Two refusals leave the approval pending, so that approving again retries it: `400 { "error": "ALLOW_HOST_PRIVATE_HOST", "message" }` (the host is, or any of its DNS answers is, a private / loopback / special-use address or an address of one of this machine's own network interfaces) and `400 { "error": "ALLOW_HOST_UNRESOLVED", "message" }` (the lookup failed, answered nothing or took longer than 3 s; nothing was added). Every other `400` changes nothing either, and approving again will not help: `ALLOW_HOST_CHILD_KEY` (defensive: `/v1/fetch` never creates a host approval for a child key; only a root key's list can be widened), `ALLOW_HOST_KEY_NOT_ACTIVE` (the key is revoked or expired), and `APPROVAL_NOT_PENDING` (already decided or expired, or no approval with that id). `GET /v1/approvals` (admin list) rows carry `kind` too, and a `host` row carries `host` as well: the `host:port` approving it will list, worked out by the server (with the same rules as approving), which is what the Dashboard shows. Known limit: when the DNS look of an approval runs over 3 s it is given up on, but the lookup underneath is not cancelled, so an administrator who approves several unresponsive names in a row can keep resolver threads busy for a while. |
 | `POST /v1/keys/:id/rotate` | admin | Only a hash of a key is stored, so a lost secret cannot be shown again. This issues a new secret for the same key id: budgets, usage history, approvals, child keys and settings are kept, the old secret stops working immediately (a request that authenticated with it just before and is still waiting for the seller is refused with `KEY_INVALID` before anything is reserved or signed), an audit row `key.rotate` (key prefixes only) is written. Returns `{ id, key, name, key_prefix, parent_id, depth }`; `key` (the new plaintext) is shown only here. `404` unknown id, `409 KEY_REVOKED` for a revoked key (rotating never revives a key). |
 
 ## License

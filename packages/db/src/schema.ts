@@ -93,6 +93,8 @@ export const approvals = sqliteTable("approvals", {
   expiresAt: text("expires_at").notNull(),
   decidedAt: text("decided_at"),
   createdAt: text("created_at").notNull(),
+  /** 'payment' = a price over the approval line; 'host' = a request to a host outside the key's allowed list (no price yet: network / asset / pay_to '' and amount 0). Migration 0008. */
+  kind: text("kind", { enum: ["payment", "host"] }).notNull().default("payment"),
   /** LEGACY (push notifications, removed): no longer read or written; the column stays. */
   notifiedAt: text("notified_at"),
   /** Superseded by approval_notify_deliveries (migration 0006); no longer written, kept so 0005 databases stay valid. */

@@ -2,6 +2,7 @@ import { MoneySwitchError } from "./types.js";
 import type { MoneyKeyRow } from "./types.js";
 import { paymentsInLastMinuteSubtree } from "./ledger.js";
 import { getKeyChain, scopeAt } from "./chain.js";
+import { isHostListed } from "./host-approval.js";
 import type { MoneySwitchDb } from "@moneyswitch/db";
 
 /**
@@ -21,14 +22,6 @@ export function checkRateLimit(db: MoneySwitchDb, key: MoneyKeyRow, now = new Da
   });
 }
 
-function hostAllowedFor(url: URL, allowedHosts: string[]): boolean {
-  const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
-  const hostPort = `${url.hostname}:${port}`;
-  return allowedHosts.some(
-    (h) => h.toLowerCase() === hostPort.toLowerCase() || h.toLowerCase() === url.hostname.toLowerCase()
-  );
-}
-
 /**
  * SPEC §6 step 1 + §2.6: URL must be http(s) and host:port must be in
  * allowed_hosts. Applies to ALL /v1/fetch requests including free ones.
@@ -38,7 +31,8 @@ export function checkHostAllowed(url: URL, key: MoneyKeyRow): void {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new MoneySwitchError("HOST_NOT_ALLOWED", "URL must be http or https");
   }
-  if (!hostAllowedFor(url, key.allowedHosts)) {
+  // host-approval.ts: the URL and each entry are spelled alike (lower case, one trailing dot dropped), so "example.com." is "example.com"
+  if (!isHostListed(url, key.allowedHosts)) {
     throw new MoneySwitchError("HOST_NOT_ALLOWED");
   }
 }

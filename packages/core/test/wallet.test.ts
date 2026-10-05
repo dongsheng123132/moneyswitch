@@ -115,7 +115,7 @@ describe("migration 0007_wallet_lifecycle on a database created by the previous 
       const { db, sqlite } = openDb({ filePath: file });
       try {
         const applied = (sqlite.prepare(`SELECT name FROM __migrations ORDER BY name`).all() as { name: string }[]).map((r) => r.name);
-        expect(applied.at(-1)).toBe("0007_wallet_lifecycle.sql");
+        expect(applied[7]).toBe("0007_wallet_lifecycle.sql"); // right after 0006 (later migrations may follow)
         const metaCols = (sqlite.prepare(`PRAGMA table_info(wallet_meta)`).all() as { name: string }[]).map((c) => c.name);
         expect(metaCols).toEqual(["id", "address", "created_at", "backup_confirmed_at", "origin"]);
         const retCols = (sqlite.prepare(`PRAGMA table_info(wallet_retirements)`).all() as { name: string }[]).map((c) => c.name);
