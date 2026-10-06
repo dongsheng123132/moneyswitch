@@ -3,6 +3,7 @@ import { useT } from "../i18n";
 import { skillStrings } from "../i18n/strings/skill";
 import { AGENT_INFO, SKILL_AGENTS, buildInstallText, guessAgentFromName, type SkillAgent } from "../skillText";
 import type { TestPaymentOffer } from "@moneyswitch/skill";
+import type { NetworkMode } from "../api";
 import CopyButton from "./CopyButton";
 import SecretNotice from "./SecretNotice";
 import Callout from "./Callout";
@@ -23,6 +24,7 @@ export default function SkillForAi({
   showNudge = true,
   showLostKeyHint = false,
   testPayment = null,
+  networkMode = null,
 }: {
   baseUrl: string;
   /** The plaintext MoneyKey. Empty/invalid shows a hint instead of a copy button. */
@@ -32,14 +34,19 @@ export default function SkillForAi({
   showNudge?: boolean;
   /** Pages where the key may be a pasted/lost one: point at "Reset secret and copy skill". */
   showLostKeyHint?: boolean;
-  /** The ten-minute path: lets the install text ask for one test payment (only on a testnet, only for a key that may pay the test host). */
+  /** The ten-minute path: lets the install text ask for one test payment (only for a testnet key that may pay the test host). */
   testPayment?: TestPaymentOffer | null;
+  /** The key's network type: the text says whether it pays test tokens or real USDC. null = a key from before network modes. */
+  networkMode?: NetworkMode | null;
 }) {
   const t = useT(skillStrings);
   const pickLabelId = useId();
   const [agent, setAgent] = useState<SkillAgent>(() => guessAgentFromName(keyName) ?? "codex");
 
-  const built = useMemo(() => buildInstallText({ baseUrl, key: secret, keyName, agent, testPayment }), [baseUrl, secret, keyName, agent, testPayment]);
+  const built = useMemo(
+    () => buildInstallText({ baseUrl, key: secret, keyName, agent, testPayment, networkMode }),
+    [baseUrl, secret, keyName, agent, testPayment, networkMode]
+  );
   const info = AGENT_INFO[agent];
   const agentLabel = agent === "other" ? t("agent_other") : info.label;
 

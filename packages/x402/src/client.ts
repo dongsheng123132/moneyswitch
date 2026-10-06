@@ -21,7 +21,7 @@ import {
   resolveRequestBody,
   type MoneyKeyRow,
 } from "@moneyswitch/core";
-import { getActiveNetwork, getEnabledNetworks, SCHEME, type NetworkConfig } from "./networks.js";
+import { getActiveNetwork, getEnabledNetworksFor, getEnabledNetworksForChain, SCHEME, type NetworkConfig } from "./networks.js";
 import type { KnownBalanceReader } from "./balance.js";
 
 /**
@@ -296,6 +296,7 @@ type OwnAbortCode =
   | "KEY_INVALID"
   | "KEY_REVOKED"
   | "KEY_EXPIRED"
+  | "UNSUPPORTED_PAYMENT"
   | "WALLET_LOCKED"
   | "WALLET_BUSY"
   | "PAYMENT_FAILED";
@@ -361,7 +362,17 @@ export async function performPaidFetch(
   input: PaidFetchInput,
   deps: PaidFetchDeps = {}
 ): Promise<PaidFetchResult> {
-  const networks = getEnabledNetworks();
+  // SPEC.md §1, §6: a key pays only on the enabled chains of its own kind, as its chain (read fresh) defines it: a key without a type follows its
+  // parent, and with no type anywhere pays on the enabled chains of the instance's only kind, or on the testnets where both are enabled; a chain
+  // whose types disagree pays on none. Everything below (which offers are payable, the balance-based choice, the SDK's registered chains) works
+  // on this narrowed list, so a seller that accepts only the other kind is UNSUPPORTED_PAYMENT: nothing is read, reserved or signed.
+  let typeChain: MoneyKeyRow[] | null = null;
+  try {
+    typeChain = getKeyChain(db, key.id);
+  } catch {
+    // the key is gone or its chain is broken: the row we were given decides here, and the policy engine reports the rest when it reserves
+  }
+  const networks = typeChain ? getEnabledNetworksForChain(typeChain) : getEnabledNetworksFor(key.networkMode);
   let network = getActiveNetwork();
   const { probeMs, paidMs } = resolvePaidFetchTimeouts();
   let paymentId: string | null = null;
@@ -442,8 +453,12 @@ export async function performPaidFetch(
   // free resource never gets this far, so it costs no balance read). Nothing has been leased, reserved or signed yet.
   const client = new PreparingClient(async (required) => {
     const payable = required.accepts.filter(isPayable);
-    // Nothing we could pay: leave it to the policy below, which reports UNSUPPORTED_PAYMENT.
-    if (payable.length === 0) return required;
+    // Nothing we could pay: leave it to the policy below, which reports UNSUPPORTED_PAYMENT. (A key whose kind of chain the instance does not
+    // enable at all has no chain registered with the SDK, which then stops before any policy runs: say so here.)
+    if (payable.length === 0) {
+      if (networks.length === 0) offerRefusedByPolicy = true;
+      return required;
+    }
     // What needs no balance is decided first (approval chain, per-request limit, max_price): see narrowOffersWithoutBalance.
     let keyChain: MoneyKeyRow[] | null = null;
     try {
@@ -488,7 +503,13 @@ export async function performPaidFetch(
       return acceptable;
     })
     .onBeforePaymentCreation(async (ctx) => {
-      network = networks.find((n) => n.caip2 === ctx.selectedRequirements.network)!;
+      // Only the key's own chains are registered and offered, so the SDK can pick no other; should it ever, nothing is leased, reserved or signed.
+      const selected = networks.find((n) => n.caip2 === ctx.selectedRequirements.network);
+      if (!selected) {
+        ownAbortCode = "UNSUPPORTED_PAYMENT";
+        return { abort: true, reason: "UNSUPPORTED_PAYMENT" };
+      }
+      network = selected;
       // The probe deadline may already have expired: @x402/fetch swallows an
       // aborted read of the 402 body and carries on with the PAYMENT-REQUIRED
       // header, so we can get here after the controller was aborted. Reserve

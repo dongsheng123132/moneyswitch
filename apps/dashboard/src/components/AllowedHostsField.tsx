@@ -6,8 +6,8 @@ import Callout from "./Callout";
 import Term from "./Term";
 
 /**
- * The hosts a new key may pay, with the ten-minute path's checkbox (SPEC.md §0): where the test payment is on offer (the instance's
- * default network is a testnet) the test receiver's host can be added with one tick, checked by default.
+ * The hosts a new key may pay, with the ten-minute path's checkbox (SPEC.md §0): where the test payment is on offer (a testnet key on an
+ * instance that enables the receiver's testnet) the test receiver's host can be added with one tick, checked by default.
  */
 export default function AllowedHostsField({
   value,
@@ -18,7 +18,7 @@ export default function AllowedHostsField({
 }: {
   value: string;
   onChange: (value: string) => void;
-  /** The test payment endpoint is on offer on this instance (see testPaymentAvailable). */
+  /** The test payment endpoint is on offer for this key (see testPaymentAvailable). */
   testAvailable: boolean;
   allowTest: boolean;
   onAllowTestChange: (allow: boolean) => void;

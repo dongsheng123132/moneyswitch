@@ -40,12 +40,28 @@ Remaining budget and key metadata for the authenticated MoneyKey.
   "key_name": "employee-1",
   "key_prefix": "mk_live_ab12",
   "daily_budget": "0.30",
-  "total_budget": "10"
+  "total_budget": "10",
+  "network_mode": "testnet",
+  "networks": ["eip155:10143", "eip155:84532"]
 }
 ```
 
 All amount fields are decimal USDC strings (e.g. `"0.29"`), never floats
 internally. `key_name` may be `null` if the key was created without a name.
+
+`network_mode` (v0.7.2) is the kind of chain this key pays on: `"testnet"`
+(test tokens, no value) or `"mainnet"` (real USDC), fixed when the key was
+issued; `null` for a key with no type anywhere in its chain (issued before
+v0.7.2). `network_mode` is the key's **effective** type: its own, else the first
+one set on an ancestor. `networks` lists the CAIP-2 ids of the chains the key
+can pay on now (the instance's enabled chains of that kind, in
+`MONEYSWITCH_NETWORKS` order; for `null`: every enabled chain where the instance
+enables one kind only, the enabled testnets where it enables both). `network`
+is the instance's default chain when it is among them, else the first of them,
+and **`null` when the key has no payable chain on this instance** (for example
+a mainnet key where only testnets are enabled now, or a chain whose levels have
+different types: then `networks` is `[]` too). See "Network type of a key"
+below.
 
 ## `GET /v1/history?limit=20`
 
@@ -155,7 +171,7 @@ against the live Monad testnet facilitator never sets it.
 | `RATE_LIMITED` | Exceeded `max_payments_per_minute`; or the key already has 5 unexpired pending `host` approvals and this request names a sixth new host (`charged` is `no`, `limit_scope` is `"self"` with the key's `limit_key_prefix`; asking again for a host that is already waiting returns its `approval_id` instead) |
 | `HOST_NOT_ALLOWED` | The URL is not http(s); or the key is a child key (a child's hosts are bound by its parent's list) and the host is not in it; or the host is a literal address that is not public unicast (IPv4 `0/8`, `10/8`, `100.64/10`, `127/8`, `169.254/16`, `172.16/12`, `192.0.0/24`, `192.0.2/24`, `192.168/16`, `198.18/15`, `198.51.100/24`, `203.0.113/24`, `224/4`, `240/4`; IPv6 `::/96` (which holds `::` and `::1`), `100::/64`, `2001::/32` (Teredo), `2001:db8::/32`, `3fff::/20`, `fc00::/7`, `fe80::/10`, `fec0::/10`, `ff00::/8`, all of `64:ff9b:1::/48`, and an IPv4 inside `::ffff:0:0/96`, `::ffff:0:0:0/96`, `64:ff9b::/96` or `2002::/16` judged by the IPv4 rules) or `localhost` / `*.localhost`, and the key does not list it explicitly as `host:port`. No approval is made for any of these. Any other http(s) host that a root key does not list is not refused: it answers `approval_required` first |
 | `SSRF_BLOCKED` | Target resolves to MoneySwitch's own listening address |
-| `UNSUPPORTED_PAYMENT` | No offered payment requirement matches the configured scheme/network/asset |
+| `UNSUPPORTED_PAYMENT` | No offered payment requirement is one this key can pay: nothing matches the scheme (EIP-3009), asset and an enabled chain **of the key's kind**. A testnet key refuses a seller that accepts only mainnets, and a mainnet key one that accepts only testnets (the answer's `reason` says which kind the key pays on and the chains). Nothing was read, reserved or signed, `charged` is `no` |
 | `PRICE_INVALID` | The seller quoted a price that is not a positive whole number of atomic USDC units (zero, negative, fractional or not a number); nothing was reserved or signed, `charged` is `no` |
 | `INSUFFICIENT_FUNDS` | The wallet does not hold enough USDC on any chain this seller accepts (checked on each chain in `MONEYSWITCH_NETWORKS` order): ask a person to top it up, do not retry before that. The balance is cached for at most 15 s, so after a top-up wait a moment, then retry. Nothing was reserved or signed, `charged` is `no` |
 | `PER_REQUEST_LIMIT_EXCEEDED` | Price exceeds the key's `per_request_limit` |
@@ -264,6 +280,46 @@ status, own_used_today, own_used_total` (`used_today`/`used_total` are
 subtree totals); `GET /v1/admin/keys/tree` returns
 `{ "tree": [ { …row, "children": [ … ] } ] }`.
 
+## Network type of a key (v0.7.2)
+
+Mainnets and testnets can be enabled together on one server and one wallet
+(`MONEYSWITCH_NETWORKS`). Every key is a **testnet key** or a **mainnet key**:
+
+- `network_mode`: `"testnet"` | `"mainnet"` | `null`. `null` = a key issued
+  before v0.7.2, with no type: on an instance that enables one kind only it
+  keeps paying on every enabled chain, as before; on an instance that enables
+  **both kinds it pays on the testnets only** (adding a mainnet never lets an
+  old key spend real money). The type of a key is the first one set from the key
+  up through its ancestors (a key without one follows its parent); if two
+  levels have different types the key pays on no chain at all. It is shown
+  by `GET /v1/status`, the admin `GET /v1/keys` rows (with `networks`, the
+  chains the key can pay on now), the `POST /v1/keys` and
+  `POST /v1/keys/children` answers, and the `POST /v1/keys/:id/rotate` answer.
+  It is written when the key is issued and **cannot be changed**: there is no
+  route that changes it. To change it, revoke the key and issue a new one.
+- `POST /v1/keys` (admin) takes `network_mode`. Left out (or `null`): the one
+  kind the instance enables, or, when it enables both kinds,
+  `400 { "error": "NETWORK_MODE_REQUIRED" }`. A kind the instance does not
+  enable: `400 NETWORK_MODE_NOT_ENABLED`. Anything but `"testnet"` or
+  `"mainnet"`: `400 NETWORK_MODE_INVALID`. No key is created in these cases.
+- `POST /v1/keys/children` (a child key): the child always has its parent's
+  effective `network_mode` (with no type anywhere in the parent's chain, none).
+  A `network_mode` in the body is accepted only if it equals that;
+  otherwise `400 INVALID_REQUEST` with `"field": "network_mode"` and
+  `"parent_value"`.
+- `POST /v1/fetch`: the chains a payment may use are the instance's enabled
+  chains of the key's kind (for `null`: see above). The choice by
+  balance, `PRICE_INVALID`, the limits and the approvals all work on that list.
+  A seller that accepts only the other kind: `denied` /
+  `UNSUPPORTED_PAYMENT`, `charged: "no"`, nothing signed or reserved; the
+  envelope's `reason` says which kind the key pays on (also for a key with no
+  type on an instance that enables both kinds, and for a chain whose types
+  disagree).
+- The admin `GET /v1/admin/usage` payments and `GET /v1/approvals` rows carry
+  `network_kind` (`"mainnet"` | `"testnet"`, `null` for a chain the server does
+  not know and for a host approval), taken from the chain table, so a row on a
+  chain that is switched off now keeps its kind.
+
 ## Handing a key to an AI: the skill (`packages/skill`)
 
 The primary way to connect an agent is a paste-able text block (a `SKILL.md`
@@ -276,7 +332,7 @@ support it.
 | `GET /skill.md` | none | The generic skill (never contains a key), `text/markdown; charset=utf-8`. Base URL = `MONEYSWITCH_PUBLIC_URL` when set, else the address the server itself listens on (never the request's Host header; if neither forms a plain http(s) origin the skill is server-agnostic and reads `MONEY_API_BASE` / `MONEY_API_KEY`). |
 | `GET /v1/approvals/:id` | MoneyKey | After `/v1/fetch` answered `approval_required`: the key's own approval, `{ "id", "status": "pending"\|"approved"\|"denied"\|"expired"\|"used", "kind": "payment"\|"host", "amount", "currency": "USDC", "url", "method", "expires_at" }` (`kind` `"host"` = the host is not in the key's list yet: `amount` is `"0"`, there is no price until the seller quotes, `status` stays `approved` once approved, and the row also has `"host"`: the `host:port` that approving it lists, see below; a `payment` approval has no `host`). Another key's id and unknown ids both answer `404 { "status": "error", "code": "APPROVAL_NOT_FOUND" }`. Poll about every 15 s; an approval lives 10 minutes. |
 | `POST /v1/approvals/:id/approve` | admin | Approves a pending approval; no request body. For `kind` `"payment"` that is all it does. For `kind` `"host"` it first looks the host up in DNS once (3 s limit), then, in one transaction, sets the approval to `approved`, appends the request's `host:port` (lower-case, port explicit, one trailing dot dropped) to the key's `allowed_hosts` if it is not listed yet (entries and requests are compared lower-case with one trailing dot dropped, so an entry `example.com.:443` lists `example.com`; approving means listing it permanently), and writes an audit row `key.allow_host` `{ keyId, host, approvalId }`. Two refusals leave the approval pending, so that approving again retries it: `400 { "error": "ALLOW_HOST_PRIVATE_HOST", "message" }` (the host is, or any of its DNS answers is, a private / loopback / special-use address or an address of one of this machine's own network interfaces) and `400 { "error": "ALLOW_HOST_UNRESOLVED", "message" }` (the lookup failed, answered nothing or took longer than 3 s; nothing was added). Every other `400` changes nothing either, and approving again will not help: `ALLOW_HOST_CHILD_KEY` (defensive: `/v1/fetch` never creates a host approval for a child key; only a root key's list can be widened), `ALLOW_HOST_KEY_NOT_ACTIVE` (the key is revoked or expired), and `APPROVAL_NOT_PENDING` (already decided or expired, or no approval with that id). `GET /v1/approvals` (admin list) rows carry `kind` too, and a `host` row carries `host` as well: the `host:port` approving it will list, worked out by the server (with the same rules as approving), which is what the Dashboard shows. Known limit: when the DNS look of an approval runs over 3 s it is given up on, but the lookup underneath is not cancelled, so an administrator who approves several unresponsive names in a row can keep resolver threads busy for a while. |
-| `POST /v1/keys/:id/rotate` | admin | Only a hash of a key is stored, so a lost secret cannot be shown again. This issues a new secret for the same key id: budgets, usage history, approvals, child keys and settings are kept, the old secret stops working immediately (a request that authenticated with it just before and is still waiting for the seller is refused with `KEY_INVALID` before anything is reserved or signed), an audit row `key.rotate` (key prefixes only) is written. Returns `{ id, key, name, key_prefix, parent_id, depth }`; `key` (the new plaintext) is shown only here. `404` unknown id, `409 KEY_REVOKED` for a revoked key (rotating never revives a key). |
+| `POST /v1/keys/:id/rotate` | admin | Only a hash of a key is stored, so a lost secret cannot be shown again. This issues a new secret for the same key id: budgets, usage history, approvals, child keys and settings are kept, the old secret stops working immediately (a request that authenticated with it just before and is still waiting for the seller is refused with `KEY_INVALID` before anything is reserved or signed), an audit row `key.rotate` (key prefixes only) is written. Returns `{ id, key, name, key_prefix, parent_id, depth, network_mode }`; `key` (the new plaintext) is shown only here. `404` unknown id, `409 KEY_REVOKED` for a revoked key (rotating never revives a key). |
 
 ## License
 

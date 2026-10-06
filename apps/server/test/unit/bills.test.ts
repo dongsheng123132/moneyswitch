@@ -42,12 +42,12 @@ describe("GET /v1/admin/usage: every payment, with truncated and total", () => {
     expect(body.payments[COUNT - 1].id).toBe("p0");
   });
 
-  it("each payment keeps exactly the fields it had before (backward compatible)", async () => {
+  it("each payment keeps the fields it had before (backward compatible), plus network_kind (v0.7.2)", async () => {
     const [row] = (await usage()).payments as Array<Record<string, unknown>>;
     expect(Object.keys(row).sort()).toEqual(
-      ["amount", "approval_id", "asset", "created_at", "error_code", "host", "id", "key_id", "kind", "method", "network", "pay_to", "status", "tx_hash", "updated_at", "url"].sort()
+      ["amount", "approval_id", "asset", "created_at", "error_code", "host", "id", "key_id", "kind", "method", "network", "network_kind", "pay_to", "status", "tx_hash", "updated_at", "url"].sort()
     );
-    expect(row).toMatchObject({ key_id: keyId, amount: "0.01", status: "settled", pay_to: "0xb", method: "GET", approval_id: null, kind: "fetch" });
+    expect(row).toMatchObject({ key_id: keyId, amount: "0.01", status: "settled", pay_to: "0xb", method: "GET", approval_id: null, kind: "fetch", network: "eip155:10143", network_kind: "testnet" });
   });
 
   it("still admin-only", async () => {

@@ -5,6 +5,7 @@ import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { listApprovals } from "./api";
 import LangSwitch from "./components/LangSwitch";
+import NetworkBadge from "./components/NetworkBadge";
 import { useT } from "./i18n";
 import { shellStrings } from "./i18n/strings/shell";
 import { common } from "./i18n/strings/common";
@@ -70,10 +71,7 @@ export default function Layout() {
         <header className="topbar">
           <h1 className="topbar-title">{title}</h1>
           <div className="topbar-right">
-            <span className="network-badge">
-              <span className="network-dot" />
-              {meta?.network_label ?? (meta?.is_mainnet ? tc("networkMainnet") : tc("networkTestnet"))}
-            </span>
+            <NetworkBadge meta={meta} />
             <LangSwitch />
           </div>
         </header>

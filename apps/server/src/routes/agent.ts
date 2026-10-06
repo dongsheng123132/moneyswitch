@@ -3,6 +3,7 @@ import {
   checkRateLimit,
   checkHostAllowedForChain,
   getKeyChain,
+  chainNetworkMode,
   effectiveRemaining,
   effectivePerRequestLimit,
   effectiveApprovalThreshold,
@@ -21,10 +22,11 @@ import {
   parseUsdcToMicros,
   listHistoryForKey,
 } from "@moneyswitch/core";
-import { performPaidFetch, type Charged } from "@moneyswitch/x402";
+import { getEnabledNetworks, getEnabledNetworksForChain, performPaidFetch, type Charged } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireMoneyKey } from "../auth.js";
-import { paymentUnknownReason, bodyIncompleteReason } from "../paid-outcomes.js";
+import { paymentUnknownReason, bodyIncompleteReason, unsupportedForKeyReason } from "../paid-outcomes.js";
+import { networkFacts } from "../keyview.js";
 import { publicBase } from "../public-base.js";
 
 const DENIED_CODES = new Set([
@@ -47,9 +49,13 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get("/v1/status", { preHandler: keyGuard }, async (req, reply) => {
     const key = req.moneyKey!;
     const { getActiveNetwork } = await import("@moneyswitch/x402");
-    const network = getActiveNetwork();
     const chain = getKeyChain(ctx.db, key.id);
     const self = chain[0];
+    // SPEC.md §1, §6: the chains this key can pay on (see networkFacts); `network` is the default one when it is among them, else the first, and
+    // null when the key has no payable chain on this instance.
+    const keyNetworks = getEnabledNetworksForChain(chain);
+    const active = getActiveNetwork();
+    const network = keyNetworks.find((n) => n.caip2 === active.caip2) ?? keyNetworks[0] ?? null;
     const eff = effectiveRemaining(ctx.db, chain);
     const maxDepth = ctx.config.maxKeyDepth ?? DEFAULT_MAX_KEY_DEPTH;
     const threshold = effectiveApprovalThreshold(chain);
@@ -60,7 +66,8 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       remaining_total: formatMicrosToUsdc(eff.total),
       per_request_limit: formatMicrosToUsdc(effectivePerRequestLimit(chain)),
       currency: "USDC",
-      network: network.caip2,
+      network: network?.caip2 ?? null,
+      ...networkFacts(chain),
       // SPEC-v0.3-employee.md §B.0
       key_name: self.name,
       key_prefix: self.keyPrefix,
@@ -143,6 +150,22 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         ...(extra.limit ?? {}),
         ...remaining(),
       };
+    }
+
+    // A key tied to one kind of chain says so: the seller may accept only the other kind (SPEC.md §6).
+    function unsupportedReason(): { reason?: string } {
+      try {
+        const chain = getKeyChain(ctx.db, key.id);
+        const enabled = getEnabledNetworks();
+        const text = unsupportedForKeyReason(
+          chainNetworkMode(chain),
+          getEnabledNetworksForChain(chain).map((n) => n.caip2),
+          enabled.some((n) => n.kind === "mainnet") && enabled.some((n) => n.kind === "testnet")
+        );
+        return text ? { reason: text } : {};
+      } catch {
+        return {};
+      }
     }
 
     // v0.4: effective remaining (min over the key and its ancestors).
@@ -304,7 +327,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         }
         const limit = limitFields(e);
         if (DENIED_CODES.has(e.code)) {
-          return reply.send(envelope("denied", e.code, "no", { limit }));
+          return reply.send(envelope("denied", e.code, "no", { limit, ...(e.code === "UNSUPPORTED_PAYMENT" ? unsupportedReason() : {}) }));
         }
         return reply.send(envelope("error", e.code, "no", { limit }));
       }

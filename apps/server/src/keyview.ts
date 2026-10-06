@@ -1,5 +1,7 @@
 import {
   formatMicrosToUsdc,
+  getKeyChain,
+  chainNetworkMode,
   usedToday,
   usedTotal,
   ownUsedToday,
@@ -9,6 +11,19 @@ import {
   type EffectiveKeyStatus,
 } from "@moneyswitch/core";
 import type { MoneySwitchDb } from "@moneyswitch/db";
+import { getEnabledNetworksForChain } from "@moneyswitch/x402";
+
+/**
+ * What a key's chain says about where it pays (SPEC.md §1, §6), as the API shows it: `network_mode` is the key's effective type (its own, else its
+ * parent's, ...; null when no level has one, or when two levels disagree) and `networks` the CAIP-2 chains it can pay on now.
+ */
+export function networkFacts(chain: readonly MoneyKeyRow[]) {
+  const type = chainNetworkMode(chain);
+  return {
+    network_mode: type.conflict ? null : type.mode,
+    networks: getEnabledNetworksForChain(chain).map((n) => n.caip2),
+  };
+}
 
 /**
  * Wire view of a MoneyKey (never includes key_hash or the plaintext key).
@@ -46,8 +61,19 @@ export function keyView(
     depth: row.depth,
     can_delegate: row.canDelegate,
     created_by: row.createdBy,
+    // v0.7.2: the effective network type ('testnet' / 'mainnet', null for a key with none anywhere in its chain) and the chains it can pay on now.
+    ...networkFacts(chainOf(db, row)),
     children_count: extra.childrenCount,
   };
+}
+
+/** The key and its ancestors, read fresh; just the key itself when the chain cannot be read (the views must still render). */
+function chainOf(db: MoneySwitchDb, row: MoneyKeyRow): MoneyKeyRow[] {
+  try {
+    return getKeyChain(db, row.id);
+  } catch {
+    return [row];
+  }
 }
 
 /** Effective status for a key given all keys by id (walks parents in memory; for listings only). */

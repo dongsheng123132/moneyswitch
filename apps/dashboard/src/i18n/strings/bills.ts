@@ -14,6 +14,11 @@ export const billsStrings = defineMessages(
 
     summaryCount: "Payments",
     summaryTotal: "Total amount",
+    summaryTotalMainnet: "Total · mainnet (real USDC)",
+    summaryTotalTestnet: "Total · testnet (test USDC, no value)",
+    summaryTotalOther: "Total · other chains",
+    kindFilterLabel: "Network type",
+    kindAny: "All",
     summaryMaybe: "Charge not known yet",
 
     colTime: "Time",
@@ -54,6 +59,11 @@ export const billsStrings = defineMessages(
 
     summaryCount: "笔数",
     summaryTotal: "总金额",
+    summaryTotalMainnet: "合计 · 主网（真 USDC）",
+    summaryTotalTestnet: "合计 · 测试网（测试 USDC，没有价值）",
+    summaryTotalOther: "合计 · 其他链",
+    kindFilterLabel: "网络类型",
+    kindAny: "全部",
     summaryMaybe: "尚不确定是否扣款",
 
     colTime: "时间",

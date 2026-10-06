@@ -216,50 +216,58 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
   const t = useT(walletStrings);
   const tc = useT(common);
   const limit = wallet.health.float_limit;
-  const anyMainnet = wallet.networks.some((n) => n.is_mainnet);
-  const anyTestnet = wallet.networks.some((n) => !n.is_mainnet);
+  // SPEC.md §2: the balances in two groups, real money first, and only the groups this instance enables. Each group carries its own funding note.
+  const groups = (["mainnet", "testnet"] as const)
+    .map((kind) => ({ kind, networks: wallet.networks.filter((n) => Boolean(n.is_mainnet) === (kind === "mainnet")) }))
+    .filter((g) => g.networks.length > 0);
   return (
     <div className="card">
       <h2>{t("addressTitle")}</h2>
       {wallet.address && <PublicAddress address={wallet.address} qr="toggle" size="lg" />}
       <p className="wallet-lead">{t("addressLead")}</p>
-      <table className="wallet-networks">
-        <thead>
-          <tr>
-            <th>{t("chainCol")}</th>
-            <th className="num">{t("balanceCol")}</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {wallet.networks.map((n) => (
-            <tr key={n.network} data-network={n.network}>
-              <td>{n.label}</td>
-              <td className="num">
-                {n.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(n.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
-                {n.over_float_limit && <div className="wallet-over-limit">{t("overLimit", { limit })}</div>}
-              </td>
-              <td>
-                {wallet.address && (
-                  <a href={`${n.explorer_base}/address/${wallet.address}`} target="_blank" rel="noreferrer">
-                    {t("viewExplorer")}
-                  </a>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {groups.map((g) => (
+        <div className="wallet-group" key={g.kind} data-network-group={g.kind}>
+          <h3 className="wallet-group-title">{t(g.kind === "mainnet" ? "groupMainnet" : "groupTestnet")}</h3>
+          <table className="wallet-networks">
+            <thead>
+              <tr>
+                <th>{t("chainCol")}</th>
+                <th className="num">{t("balanceCol")}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {g.networks.map((n) => (
+                <tr key={n.network} data-network={n.network}>
+                  <td>{n.label}</td>
+                  <td className="num">
+                    {n.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(n.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
+                    {n.over_float_limit && <div className="wallet-over-limit">{t("overLimit", { limit })}</div>}
+                  </td>
+                  <td>
+                    {wallet.address && (
+                      <a href={`${n.explorer_base}/address/${wallet.address}`} target="_blank" rel="noreferrer">
+                        {t("viewExplorer")}
+                      </a>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {g.kind === "testnet" ? (
+            <p className="wallet-lead">
+              {t("fundTestnet")}{" "}
+              <a href={meta?.faucet_url || FAUCET_FALLBACK} target="_blank" rel="noreferrer">
+                {t("fundFaucet")}
+              </a>
+            </p>
+          ) : (
+            <p className="wallet-lead">{t("fundMainnet")}</p>
+          )}
+        </div>
+      ))}
       <p className="wallet-lead">{t("floatNote", { limit })}</p>
-      {anyTestnet && (
-        <p className="wallet-lead">
-          {t("fundTestnet")}{" "}
-          <a href={meta?.faucet_url || FAUCET_FALLBACK} target="_blank" rel="noreferrer">
-            {t("fundFaucet")}
-          </a>
-        </p>
-      )}
-      {anyMainnet && <p className="wallet-lead">{t("fundMainnet")}</p>}
     </div>
   );
 }

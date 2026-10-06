@@ -137,29 +137,33 @@ describe("the ten-minute path: when the test payment is on offer", () => {
   const baseSepolia = { ...monadTestnet, network: "eip155:84532", chain_id: 84532, network_label: "Base Sepolia" };
   const monadMainnet = { ...monadTestnet, network: "eip155:143", chain_id: 143, network_label: "Monad Mainnet", is_mainnet: true };
 
-  it("a testnet default with Monad testnet enabled: yes", () => {
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet] }), true);
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [baseSepolia, monadTestnet] }), true, "Base Sepolia default, Monad testnet enabled too");
+  it("a testnet key on an instance that enables Monad testnet: yes", () => {
+    assert.equal(testPaymentAvailable({ networks: [monadTestnet] }, "testnet"), true);
+    assert.equal(testPaymentAvailable({ networks: [baseSepolia, monadTestnet] }, "testnet"), true, "Base Sepolia first, Monad testnet enabled too");
   });
 
-  it("ONLY when every enabled network is a testnet: a mainnet enabled next to the testnet is no, even with a testnet default", () => {
+  it("a mainnet enabled next to the testnet no longer takes it away: the testnet key still gets it (it only pays on testnets)", () => {
     const baseMainnet = { ...monadTestnet, network: "eip155:8453", chain_id: 8453, network_label: "Base", is_mainnet: true };
-    // the default (is_mainnet describes it) is a testnet, but a mainnet is also enabled: the key is immutable and the test host would be allowed on every chain
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet, monadMainnet] }), false);
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadMainnet, monadTestnet] }), false);
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [baseSepolia, monadTestnet, baseMainnet] }), false);
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet, baseMainnet] }), false);
-    // and still yes when everything enabled is a testnet
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [monadTestnet, baseSepolia] }), true);
+    assert.equal(testPaymentAvailable({ networks: [monadTestnet, monadMainnet] }, "testnet"), true);
+    assert.equal(testPaymentAvailable({ networks: [monadMainnet, monadTestnet] }, "testnet"), true);
+    assert.equal(testPaymentAvailable({ networks: [baseSepolia, monadTestnet, baseMainnet] }, "testnet"), true);
+    assert.equal(testPaymentAvailable({ networks: [monadTestnet, baseSepolia] }, "testnet"), true);
   });
 
-  it("a mainnet default, an unknown instance, or no Monad testnet (the only chain the test receiver accepts): no", () => {
-    assert.equal(testPaymentAvailable({ is_mainnet: true, networks: [monadMainnet, monadTestnet] }), false);
-    assert.equal(testPaymentAvailable(null), false);
-    assert.equal(testPaymentAvailable(undefined), false);
-    assert.equal(testPaymentAvailable({ is_mainnet: undefined, networks: [monadTestnet] }), false);
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: [baseSepolia] }), false);
-    assert.equal(testPaymentAvailable({ is_mainnet: false, networks: undefined }), false);
+  it("a mainnet key never gets it, whatever the instance enables; neither does a key from before network types", () => {
+    assert.equal(testPaymentAvailable({ networks: [monadMainnet, monadTestnet] }, "mainnet"), false);
+    assert.equal(testPaymentAvailable({ networks: [monadTestnet] }, "mainnet"), false);
+    assert.equal(testPaymentAvailable({ networks: [monadMainnet] }, "mainnet"), false);
+    assert.equal(testPaymentAvailable({ networks: [monadTestnet, monadMainnet] }, null), false, "an old key could pay on the mainnet too");
+    assert.equal(testPaymentAvailable({ networks: [monadTestnet] }, undefined), false);
+  });
+
+  it("an unknown instance, or no Monad testnet (the only chain the test receiver accepts): no", () => {
+    assert.equal(testPaymentAvailable(null, "testnet"), false);
+    assert.equal(testPaymentAvailable(undefined, "testnet"), false);
+    assert.equal(testPaymentAvailable({ networks: [baseSepolia] }, "testnet"), false);
+    assert.equal(testPaymentAvailable({ networks: [monadMainnet] }, "testnet"), false);
+    assert.equal(testPaymentAvailable({ networks: undefined }, "testnet"), false);
   });
 
   it("withTestHost: typed hosts stay, the test host is added once when ticked, and never when not", () => {
@@ -168,6 +172,15 @@ describe("the ten-minute path: when the test payment is on offer", () => {
     assert.deepEqual(withTestHost(["APP.MONEYSWITCH.DEV:443"], true), ["APP.MONEYSWITCH.DEV:443"], "no duplicate in another letter case");
     assert.deepEqual(withTestHost(["api.example.com:443"], false), ["api.example.com:443"]);
     assert.deepEqual(withTestHost([], false), []);
+  });
+
+  it("buildInstallText passes the key's network type on: the skill says testnet (test USDC) or mainnet (real USDC)", () => {
+    const testnet = buildInstallText({ baseUrl: BASE, key: KEY, agent: "codex", networkMode: "testnet" });
+    assert.ok(testnet.text!.includes("This is a **testnet** key") && testnet.text!.includes("test USDC with no real value"));
+    const mainnet = buildInstallText({ baseUrl: BASE, key: KEY, agent: "codex", networkMode: "mainnet" });
+    assert.ok(mainnet.text!.includes("This is a **mainnet** key") && mainnet.text!.includes("real USDC, real money"));
+    const old = buildInstallText({ baseUrl: BASE, key: KEY, agent: "codex" });
+    assert.ok(!old.text!.includes("This is a **testnet** key") && !old.text!.includes("This is a **mainnet** key"));
   });
 
   it("buildInstallText passes the offer on: the text asks for the test payment only for a testnet and a key that may pay the host", () => {

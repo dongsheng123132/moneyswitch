@@ -128,3 +128,14 @@
 .wallet-danger form {
   max-width: 560px;
 }
+
+/* the balances in two groups: mainnet (real money) and testnet (no value), SPEC.md §2 */
+.wallet-group + .wallet-group {
+  margin-top: 18px;
+}
+
+.wallet-group-title {
+  font-size: 13px;
+  font-weight: 650;
+  margin: 14px 0 6px;
+}

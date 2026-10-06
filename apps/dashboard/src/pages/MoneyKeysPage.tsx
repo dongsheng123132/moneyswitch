@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus, KeyRound } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listKeys, createKey, revokeKey, rotateKey, ApiError } from "../api";
+import { listKeys, createKey, revokeKey, rotateKey, ApiError, type NetworkMode } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
 import Avatar from "../components/Avatar";
 import Pill from "../components/Pill";
+import KeyNetworkBadge from "../components/KeyNetworkBadge";
+import NetworkModeField from "../components/NetworkModeField";
 import ProgressBar from "../components/ProgressBar";
 import Drawer from "../components/Drawer";
 import Callout from "../components/Callout";
@@ -23,6 +25,7 @@ import { skillStrings } from "../i18n/strings/skill";
 import { skillBaseUrl, testPaymentAvailable, withTestHost } from "../skillText";
 import { handoffFromCreated, rotateToHandoff, type Handoff } from "../keyHandoff";
 import { useAdminMeta } from "../useAdminMeta";
+import { effectiveNetworkMode, enabledNetworkKinds, realMoneyConfirmed } from "../networkMode";
 import "../styles/keys.css";
 
 const CALL_PRICE_MICROS = toMicros("0.01");
@@ -37,8 +40,12 @@ interface FormState {
   allowed_hosts: string;
   max_payments_per_minute: string;
   expires_at: string; // yyyy-mm-dd from <input type="date">
-  /** Ticked by default where the test payment is on offer (a testnet): adds the test receiver's host to the allowed hosts. */
+  /** Ticked by default where the test payment is on offer (a testnet key): adds the test receiver's host to the allowed hosts. */
   allow_test_endpoint: boolean;
+  /** The kind of chain the key pays on; null = not chosen yet, which is the one kind the instance enables, else the testnet. */
+  network_mode: NetworkMode | null;
+  /** A mainnet key must be confirmed: it spends real money. */
+  confirm_real_money: boolean;
 }
 
 function emptyForm(hosts: string): FormState {
@@ -52,6 +59,8 @@ function emptyForm(hosts: string): FormState {
     max_payments_per_minute: "10",
     expires_at: "",
     allow_test_endpoint: true,
+    network_mode: null,
+    confirm_real_money: false,
   };
 }
 
@@ -94,8 +103,6 @@ export default function MoneyKeysPage() {
   const tc = useT(common);
   const relTime = useRelativeTime();
   const meta = useAdminMeta();
-  // The ten-minute path: on a testnet the form offers the test payment endpoint (SPEC.md §0).
-  const testAvailable = testPaymentAvailable(meta);
 
   const { data: keys, error, loading, refresh } = usePolling(listKeys);
 
@@ -113,6 +120,12 @@ export default function MoneyKeysPage() {
   const [rotateTarget, setRotateTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  // The network type the form is on (SPEC.md §2): only the kinds the instance enables are offered, the testnet first.
+  const kinds = enabledNetworkKinds(meta);
+  const networkMode = effectiveNetworkMode(kinds, form.network_mode);
+  // The ten-minute path: a testnet key's form offers the test payment endpoint (SPEC.md §0); a mainnet key's never does.
+  const testAvailable = testPaymentAvailable(meta, networkMode);
+  const chainLabels = new Map((meta?.networks ?? []).map((n) => [n.network, n.network_label] as const));
   useEffect(() => {
     if (!revokeSuccess) return;
     const timer = setTimeout(() => setRevokeSuccess(null), 4000);
@@ -142,8 +155,9 @@ export default function MoneyKeysPage() {
     if (!isPositiveDecimal(form.per_request_limit)) e.per_request_limit = t("errDecimal");
     if (!isPositiveDecimal(form.total_budget)) e.total_budget = t("errDecimal");
     if (!isNonNegativeDecimalOrEmpty(form.approval_threshold)) e.approval_threshold = t("errDecimalOptional");
+    if (!realMoneyConfirmed(networkMode, form.confirm_real_money)) e.confirm_real_money = t("errRealMoney");
     return e;
-  }, [form, t]);
+  }, [form, networkMode, t]);
   const hasErrors = Object.keys(errors).length > 0;
 
   const dailyMicros = toMicros(form.daily_budget);
@@ -173,6 +187,7 @@ export default function MoneyKeysPage() {
         allowed_hosts: withTestHost(form.allowed_hosts.split(","), testAvailable && form.allow_test_endpoint),
         max_payments_per_minute: form.max_payments_per_minute ? Number(form.max_payments_per_minute) : undefined,
         expires_at: expiresIso,
+        network_mode: networkMode,
       });
       setHandoff(handoffFromCreated(res));
       refresh();
@@ -281,6 +296,9 @@ export default function MoneyKeysPage() {
                         <Avatar name={k.name} size={24} />
                         <span className="agent-name">{k.name}</span>
                       </div>
+                      <div className="key-network">
+                        <KeyNetworkBadge mode={k.network_mode} active={k.status === "active"} chains={(k.networks ?? []).map((c) => chainLabels.get(c) ?? c)} />
+                      </div>
                     </td>
                     <td className="mono">{k.key_prefix}••••</td>
                     <td style={{ minWidth: 130 }}>
@@ -335,6 +353,15 @@ export default function MoneyKeysPage() {
       >
         {!handoff ? (
           <form onSubmit={submitCreate}>
+            <NetworkModeField
+              kinds={kinds}
+              value={networkMode}
+              onChange={(network_mode) => setForm({ ...form, network_mode, confirm_real_money: false })}
+              confirmed={form.confirm_real_money}
+              onConfirmedChange={(confirm_real_money) => setForm({ ...form, confirm_real_money })}
+              error={errors.confirm_real_money}
+            />
+
             <div className="preset-row">
               {PRESETS.map((p) => (
                 <button type="button" key={p.key} className="preset-btn" onClick={() => applyPreset(p.patch)}>
@@ -466,7 +493,7 @@ export default function MoneyKeysPage() {
             handoff={handoff}
             skillBase={skillBase}
             apiBase={apiBase}
-            testnet={testAvailable}
+            testnet={testPaymentAvailable(meta, handoff.networkMode)}
             onDone={closeDrawer}
           />
         )}

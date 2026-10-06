@@ -9,6 +9,20 @@ export const keysStrings = defineMessages(
     pageIntroPost: " is a spending API key you hand to an agent instead of a wallet — it can only pay within the limits you set here.",
     createKeyBtn: "Create key",
 
+    // Network type (SPEC.md §1): chosen when the key is issued, never changed
+    networkModeLabel: "Network",
+    networkModeTestnet: "Testnet",
+    networkModeTestnetHint: "Test tokens with no value. Try everything here first; it costs nothing.",
+    networkModeMainnet: "Mainnet",
+    networkModeMainnetHint: "Real money: this key spends real USDC.",
+    networkModeFixed: "Fixed once the key is issued. To change it, revoke the key and issue a new one.",
+    realMoneyLabel: "This key spends real money (mainnet USDC)",
+    errRealMoney: "Tick the box to confirm this key spends real money.",
+    networkLegacy: "Legacy key",
+    networkLegacyChains: "Pays on: {chains}",
+    networkLegacyNoChains: "Pays on: no chain is enabled for it",
+    networkLegacyHint: "Issued before network types existed: it pays only on the chains listed here (the testnets only while this server also enables a mainnet). Revoke it and issue a new testnet or mainnet key.",
+
     // Table
     colAgent: "Agent",
     colKeyPrefix: "Key",
@@ -95,6 +109,20 @@ export const keysStrings = defineMessages(
     pageIntroTerm: "MoneyKey",
     pageIntroPost: "是给 Agent 用的「花钱 API Key」——它只能在你这里设定的额度内付款。",
     createKeyBtn: "新建 Key",
+
+    // 网络类型（SPEC.md §1）：发 key 时选定，之后不能改
+    networkModeLabel: "网络类型",
+    networkModeTestnet: "测试网",
+    networkModeTestnetHint: "测试币，没有价值。先在这里试一遍，不花钱。",
+    networkModeMainnet: "主网",
+    networkModeMainnetHint: "真钱：这把 key 花的是真 USDC。",
+    networkModeFixed: "发出后不能改。要改就撤销这把 key，再发一把新的。",
+    realMoneyLabel: "这把 key 花真钱（主网 USDC）",
+    errRealMoney: "请勾选，确认这把 key 花的是真钱。",
+    networkLegacy: "旧 key",
+    networkLegacyChains: "付款链：{chains}",
+    networkLegacyNoChains: "付款链：当前没有可用的链",
+    networkLegacyHint: "发在网络类型出现之前：它只在这里列出的链上付款（这台服务器同时启用了主网时，只在测试网）。建议撤销后，重发一把测试网或主网 key。",
 
     colAgent: "Agent",
     colKeyPrefix: "Key",

@@ -1,7 +1,7 @@
 /**
- * The test payment of the ten-minute path (SPEC.md §0): on an instance that runs on a testnet, a key may be allowed to pay the
- * testnet receiver MoneySwitch runs (apps/demo-seller/receiver.mjs: one paid endpoint, 0.01 test USDC on Monad testnet, no real
- * value), and the install prompt then asks the AI to make exactly one payment to it and report the transaction hash.
+ * The test payment of the ten-minute path (SPEC.md §0, §6): a testnet key may be allowed to pay the testnet receiver MoneySwitch runs
+ * (apps/demo-seller/receiver.mjs: one paid endpoint, 0.01 test USDC on Monad testnet, no real value) when the instance enables that
+ * testnet, and the install prompt then asks the AI to make exactly one payment to it and report the transaction hash. A mainnet key never.
  */
 export const TEST_PAYMENT_URL = "https://app.moneyswitch.dev/x402-testnet/check";
 /** What goes into a key's allowed hosts to permit TEST_PAYMENT_URL. */
@@ -22,11 +22,11 @@ export function allowsTestPayment(allowedHosts: readonly string[] | null | undef
 export interface TestPaymentOffer {
   /** The key's allowed hosts. */
   allowedHosts: readonly string[];
-  /** Every network the instance enables is a testnet (a mainnet next to a testnet is not enough). */
+  /** The key is a testnet key and the instance enables the receiver's testnet (a mainnet key is never offered the test payment). */
   testnet: boolean;
 }
 
-/** True only when the instance runs on a testnet AND the key may pay the test endpoint's host: nothing is ever offered on mainnet. */
+/** True only for a testnet key on an instance that enables the receiver's testnet AND the key may pay the test endpoint's host: nothing is ever offered on mainnet. */
 export function offersTestPayment(offer: TestPaymentOffer | null | undefined): boolean {
   return Boolean(offer && offer.testnet === true && allowsTestPayment(offer.allowedHosts));
 }

@@ -1,3 +1,6 @@
+/** v0.7.2 (SPEC.md §1): which kind of chain a key pays on; chosen when the key is issued, never changed. */
+export type NetworkMode = "testnet" | "mainnet";
+
 export interface MoneyKeyRow {
   id: string;
   name: string;
@@ -21,6 +24,8 @@ export interface MoneyKeyRow {
   canDelegate: boolean;
   /** v0.4: "admin" or "key:<parentId>". */
   createdBy: string;
+  /** v0.7.2: 'testnet' / 'mainnet'; null = a key issued before v0.7.2, which pays on every enabled network. */
+  networkMode: NetworkMode | null;
 }
 
 export type PaymentStatus = "reserved" | "settled" | "failed" | "unknown";

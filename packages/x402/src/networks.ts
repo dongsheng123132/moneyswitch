@@ -4,6 +4,8 @@
  * the "already verified" testnet facts — do not change them from memory.
  */
 
+import { chainNetworkMode, type MoneyKeyRow, type NetworkMode } from "@moneyswitch/core";
+
 export interface NetworkConfig {
   /** CAIP-2 network id, e.g. "eip155:10143". */
   caip2: string;
@@ -19,6 +21,8 @@ export interface NetworkConfig {
   usdcDecimals: number;
   /** x402 facilitator base URL. */
   facilitatorUrl: string;
+  /** Whether this chain moves real money ("mainnet") or test tokens with no value ("testnet"). Decides which keys may pay on it (SPEC.md §1). */
+  kind: NetworkMode;
   /** Human-readable name shown in the Dashboard/CLI, e.g. "Monad testnet". */
   label: string;
   /** Block explorer base URL (no trailing slash), e.g. "https://testnet.monadvision.com". */
@@ -43,6 +47,7 @@ export const TESTNET: NetworkConfig = {
     "MONEYSWITCH_FACILITATOR_URL",
     "https://x402-facilitator.molandak.org"
   ),
+  kind: "testnet",
   label: env("MONEYSWITCH_TESTNET_LABEL", "Monad testnet"),
   explorerBase: env("MONEYSWITCH_TESTNET_EXPLORER_BASE", "https://testnet.monadvision.com"),
 };
@@ -62,6 +67,7 @@ export const MAINNET: NetworkConfig = {
     "MONEYSWITCH_FACILITATOR_URL",
     "https://x402-facilitator.molandak.org"
   ),
+  kind: "mainnet",
   label: env("MONEYSWITCH_MAINNET_LABEL", "Monad mainnet"),
   explorerBase: env("MONEYSWITCH_MAINNET_EXPLORER_BASE", "https://monadvision.com"),
 };
@@ -76,7 +82,7 @@ export const BASE: NetworkConfig = {
   usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   usdcDomainName: "USD Coin", usdcDomainVersion: "2", usdcDecimals: 6,
   facilitatorUrl: "https://api.cdp.coinbase.com/platform/v2/x402",
-  label: "Base mainnet", explorerBase: "https://basescan.org",
+  kind: "mainnet", label: "Base mainnet", explorerBase: "https://basescan.org",
 };
 
 export const BASE_SEPOLIA: NetworkConfig = {
@@ -85,7 +91,7 @@ export const BASE_SEPOLIA: NetworkConfig = {
   usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   usdcDomainName: "USDC", usdcDomainVersion: "2", usdcDecimals: 6,
   facilitatorUrl: "https://x402.org/facilitator",
-  label: "Base Sepolia", explorerBase: "https://sepolia.basescan.org",
+  kind: "testnet", label: "Base Sepolia", explorerBase: "https://sepolia.basescan.org",
 };
 
 export const NETWORKS: Readonly<Record<string, NetworkConfig>> = Object.freeze(
@@ -107,6 +113,28 @@ export function getEnabledNetworks(): NetworkConfig[] {
   return ids.map(getNetwork);
 }
 
+/**
+ * The enabled networks a key of one network type may pay on (SPEC.md §1, §6): the instance's enabled networks (MONEYSWITCH_NETWORKS order
+ * kept) of that kind. null = a key with no type (issued before v0.7.2): where the instance enables one kind only, every enabled network, as
+ * it always was; where it enables BOTH kinds, the testnets only, so that enabling a mainnet never lets an old key spend real money.
+ */
+export function getEnabledNetworksFor(mode: NetworkMode | null): NetworkConfig[] {
+  const enabled = getEnabledNetworks();
+  if (mode !== null) return enabled.filter((n) => n.kind === mode);
+  const hasMainnet = enabled.some((n) => n.kind === "mainnet");
+  return hasMainnet && enabled.some((n) => n.kind === "testnet") ? enabled.filter((n) => n.kind === "testnet") : enabled;
+}
+
+/**
+ * The enabled networks a key may pay on, from its chain [key, parent, ..., root] read fresh (SPEC.md §6): the type is the first one set
+ * from the key upwards, so a key without a type follows its parent; two different types in one chain leave the key no network at all.
+ * This is the one place a key's chains are worked out: payments, GET /v1/status and the admin views all use it.
+ */
+export function getEnabledNetworksForChain(chain: readonly MoneyKeyRow[]): NetworkConfig[] {
+  const type = chainNetworkMode(chain);
+  return type.conflict ? [] : getEnabledNetworksFor(type.mode);
+}
+
 export function getActiveNetwork(): NetworkConfig {
   const networks = getEnabledNetworks();
   const requested = process.env.MONEYSWITCH_DEFAULT_NETWORK;
@@ -122,7 +150,7 @@ export function isMainnet(): boolean {
 }
 
 export function isMainnetNetwork(network: NetworkConfig): boolean {
-  return network === MAINNET || network === BASE;
+  return network.kind === "mainnet";
 }
 
 export const SCHEME = "exact" as const;

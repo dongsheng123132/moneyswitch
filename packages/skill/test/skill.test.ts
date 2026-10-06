@@ -437,6 +437,117 @@ describe("renderInstallPrompt", () => {
   });
 });
 
+describe("renderSkill: the network type of the key (SPEC.md §1, §6)", () => {
+  const section = (text: string) => {
+    const i = text.indexOf("## Network");
+    return i < 0 ? null : text.slice(i, text.indexOf("\n## ", i + 3) < 0 ? undefined : text.indexOf("\n## ", i + 3));
+  };
+
+  it("a testnet key's text says it is a testnet key: test USDC with no real value, testnets only", () => {
+    const text = renderSkill({ baseUrl: BASE, key: KEY, keyName: "Codex", networkMode: "testnet" });
+    const net = section(text)!;
+    expect(net).toContain("This is a **testnet** key");
+    expect(net).toContain("test USDC that has no real value");
+    expect(net).toContain("UNSUPPORTED_PAYMENT");
+    expect(net).not.toContain("real money");
+    expect(net).not.toContain("**mainnet** key");
+  });
+
+  it("a mainnet key's text says it is a mainnet key: real USDC, real money, mainnets only", () => {
+    const text = renderSkill({ baseUrl: BASE, key: KEY, keyName: "Codex", networkMode: "mainnet" });
+    const net = section(text)!;
+    expect(net).toContain("This is a **mainnet** key");
+    expect(net).toContain("real USDC");
+    expect(net).toContain("real money");
+    expect(net).toContain("UNSUPPORTED_PAYMENT");
+    expect(net).not.toContain("**testnet** key");
+  });
+
+  it("the paragraph comes before the instructions to pay, so it is read first", () => {
+    for (const networkMode of ["testnet", "mainnet"] as const) {
+      const text = renderSkill({ baseUrl: BASE, key: KEY, networkMode });
+      expect(text.indexOf("## Network")).toBeGreaterThan(text.indexOf("## Credentials"));
+      expect(text.indexOf("## Network")).toBeLessThan(text.indexOf("## Call a paid API"));
+    }
+  });
+
+  it("a key from before network types (null / not given) has no such paragraph: its text is what it was", () => {
+    const plain = renderSkill({ baseUrl: BASE, key: KEY, keyName: "Codex" });
+    expect(section(plain)).toBeNull();
+    expect(renderSkill({ baseUrl: BASE, key: KEY, keyName: "Codex", networkMode: null })).toBe(plain);
+  });
+
+  it("the generic skill explains that a key is one of two types and how to tell which (GET /v1/status: network_mode)", () => {
+    const generic = renderSkill({});
+    const net = section(generic)!;
+    expect(net).toContain("**testnet** key");
+    expect(net).toContain("**mainnet** key");
+    expect(net).toContain("real USDC");
+    expect(net).toContain("`network_mode`");
+    expect(net).toContain("pays on the testnets only where the server enables both kinds");
+    expect(net).not.toContain("every chain the server enables");
+    expect(net).toContain("$MONEY_API_BASE/v1/status");
+    expect(net).toContain("UNSUPPORTED_PAYMENT");
+    // it never claims to be one of them, and a network type given to the generic text does not change it
+    expect(generic).not.toContain("This is a **testnet** key");
+    expect(renderSkill({ networkMode: "mainnet" })).toBe(generic);
+    expect(renderSkill({ baseUrl: BASE, networkMode: "testnet" })).toContain("A MoneyKey is one of two types");
+  });
+
+  it("the status call is said to return the network type, and UNSUPPORTED_PAYMENT is explained in the table of results", () => {
+    const text = renderSkill({ baseUrl: BASE, key: KEY, networkMode: "testnet" });
+    expect(text).toContain("`approval_threshold` and `network_mode`");
+    expect(text).toMatch(/`UNSUPPORTED_PAYMENT`: the seller offers no payment this key can make/);
+  });
+
+  it("no network text puts a key anywhere but where it was", () => {
+    for (const networkMode of ["testnet", "mainnet", null] as const) {
+      const text = renderSkill({ baseUrl: BASE, key: KEY, networkMode });
+      expect(text.split(KEY).length - 1).toBe(renderSkill({ baseUrl: BASE, key: KEY }).split(KEY).length - 1);
+    }
+    expect(KEY_SHAPE.test(renderSkill({ networkMode: "mainnet" }))).toBe(false);
+  });
+});
+
+describe("renderInstallPrompt: the network type in the first line and in the skill", () => {
+  const base = { baseUrl: BASE, key: KEY, keyName: "Codex", agent: "codex" as SkillAgent };
+
+  it("a testnet key: the first line says test USDC with no value, and the skill below it is the testnet key's", () => {
+    const p = renderInstallPrompt({ ...base, networkMode: "testnet" });
+    expect(headOf(p).split("\n")[0]).toContain("testnet: test USDC with no real value");
+    expect(p).toContain("This is a **testnet** key");
+    expect(headOf(p)).toContain("do not make a payment during installation");
+  });
+
+  it("a mainnet key: the first line says real USDC, real money; never the test payment", () => {
+    const p = renderInstallPrompt({ ...base, networkMode: "mainnet" });
+    expect(headOf(p).split("\n")[0]).toContain("mainnet: real USDC, real money");
+    expect(headOf(p).split("\n")[0]).not.toContain("testnet");
+    expect(p).toContain("This is a **mainnet** key");
+    // even if a test payment were handed in for it (the dashboard never does), a mainnet key's first line stays a mainnet line
+    const hosts = ["api.example.com:443", TEST_PAYMENT_HOST];
+    const odd = renderInstallPrompt({ ...base, networkMode: "mainnet", testPayment: { allowedHosts: hosts, testnet: false } });
+    expect(odd).not.toContain(TEST_PAYMENT_URL);
+  });
+
+  it("a key from before network types: the first line and the skill say nothing about it, as before", () => {
+    const plain = renderInstallPrompt(base);
+    expect(headOf(plain).split("\n")[0]).not.toMatch(/testnet|mainnet/);
+    expect(plain).not.toContain("This is a **testnet** key");
+    expect(renderInstallPrompt({ ...base, networkMode: null })).toBe(plain);
+  });
+
+  it("a testnet key that is offered the test payment keeps the line it had", () => {
+    const hosts = ["api.example.com:443", TEST_PAYMENT_HOST];
+    const p = renderInstallPrompt({ ...base, networkMode: "testnet", testPayment: { allowedHosts: hosts, testnet: true } });
+    expect(headOf(p).split("\n")[0]).toContain("testnet: test USDC with no real value");
+    expect(headOf(p)).toContain(TEST_PAYMENT_URL);
+    // offered the test payment without a network type (the older call): the line is the testnet line too
+    const old = renderInstallPrompt({ ...base, testPayment: { allowedHosts: hosts, testnet: true } });
+    expect(headOf(old).split("\n")[0]).toContain("testnet: test USDC with no real value");
+  });
+});
+
 describe("agents", () => {
   it("guesses the agent from a key name", () => {
     expect(guessAgentFromName("Codex")).toBe("codex");

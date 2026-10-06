@@ -2,9 +2,10 @@ import React, { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Download, Search } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listBills, listKeys, isMockPayment, type BillsList, type MoneyKeyRow, type PaymentRow } from "../api";
+import { listBills, listKeys, isMockPayment, type BillsList, type MoneyKeyRow, type NetworkMode, type PaymentRow } from "../api";
 import { formatUsdc, sumDecimalStrings, toCsv, downloadCsv, urlPath, isTodayUtc } from "../money";
 import Pill from "../components/Pill";
+import NetworkKindPill from "../components/NetworkKindPill";
 import Callout from "../components/Callout";
 import TxLink from "../components/TxLink";
 import EmptyState from "../components/EmptyState";
@@ -28,10 +29,37 @@ export function chargedOf(p: Pick<PaymentRow, "status">): Charged {
 
 type RangeFilter = "today" | "24h" | "7d" | "all";
 type ChargedFilter = "all" | Charged;
+type KindFilter = "all" | NetworkMode;
 
 const CHARGED_OPTIONS: ChargedFilter[] = ["all", "yes", "no", "maybe"];
 const RANGE_OPTIONS: RangeFilter[] = ["today", "24h", "7d", "all"];
+const KIND_OPTIONS: KindFilter[] = ["all", "mainnet", "testnet"];
 const CHARGED_TONE: Record<Charged, "green" | "gray" | "yellow"> = { yes: "green", no: "gray", maybe: "yellow" };
+
+/** Mainnet money and testnet tokens are never added together (SPEC.md §2); a chain the server does not know is a bucket of its own, never folded into either. */
+export type BillsBucket = NetworkMode | "other";
+
+export function bucketOf(p: Pick<PaymentRow, "network_kind">): BillsBucket {
+  return p.network_kind === "mainnet" || p.network_kind === "testnet" ? p.network_kind : "other";
+}
+
+const BUCKET_ORDER: BillsBucket[] = ["mainnet", "testnet", "other"];
+
+/**
+ * The totals of the bills, one per kind of chain that has a payment in the list (mainnet first); never one number across kinds.
+ * What counts is what the summary always counted: every payment that was not refused for good (charged yes or maybe).
+ */
+export function billsTotalsByKind(payments: PaymentRow[]): Array<{ kind: BillsBucket; total: string }> {
+  return BUCKET_ORDER.filter((kind) => payments.some((p) => bucketOf(p) === kind)).map((kind) => ({
+    kind,
+    total: sumDecimalStrings(payments.filter((p) => bucketOf(p) === kind && chargedOf(p) !== "no").map((p) => p.amount)),
+  }));
+}
+
+/** The Network type filter: every payment, or only those on mainnets, or only those on testnets. */
+export function kindMatches(p: Pick<PaymentRow, "network_kind">, filter: KindFilter): boolean {
+  return filter === "all" || bucketOf(p) === filter;
+}
 
 function withinRange(iso: string, range: RangeFilter, now: number): boolean {
   if (range === "all") return true;
@@ -87,7 +115,9 @@ export function BillsTable({
               </td>
               <td className="num">{formatUsdc(p.amount, { maxDecimals: 4 })}</td>
               <td className="mono bills-url">{`${p.host}${urlPath(p.url)}`}</td>
-              <td>{chainLabels.get(p.network) ?? p.network}</td>
+              <td>
+                {chainLabels.get(p.network) ?? p.network} <NetworkKindPill kind={p.network_kind} />
+              </td>
               <td>
                 <TxLink txHash={p.tx_hash} mock={mock} network={p.network} />
               </td>
@@ -102,6 +132,51 @@ export function BillsTable({
         })}
       </tbody>
     </table>
+  );
+}
+
+/** All / Mainnet / Testnet. */
+export function BillsKindFilter({ value, onChange }: { value: KindFilter; onChange: (kind: KindFilter) => void }) {
+  const t = useT(billsStrings);
+  const tc = useT(common);
+  return (
+    <div className="segmented" role="group" aria-label={t("kindFilterLabel")} data-testid="kind-filter">
+      {KIND_OPTIONS.map((opt) => (
+        <button key={opt} type="button" className={value === opt ? "active" : ""} data-kind-filter={opt} onClick={() => onChange(opt)}>
+          {opt === "all" ? t("kindAny") : tc(opt === "mainnet" ? "kindMainnet" : "kindTestnet")}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The summary above the table: how many payments, one total per kind of chain (never one number across kinds), and how many have an unknown charge. */
+export function BillsSummary({ payments }: { payments: PaymentRow[] }) {
+  const t = useT(billsStrings);
+  const tc = useT(common);
+  const totals = useMemo(() => billsTotalsByKind(payments), [payments]);
+  const maybeCount = payments.filter((p) => chargedOf(p) === "maybe").length;
+  return (
+    <div style={{ display: "flex", gap: 32 }}>
+      <div>
+        <div className="stat-label">{t("summaryCount")}</div>
+        <div className="stat-value num">{payments.length}</div>
+      </div>
+      {(totals.length > 0 ? totals : [{ kind: null, total: "0" }]).map((s) => (
+        <div key={s.kind ?? "none"} data-total-kind={s.kind ?? undefined}>
+          <div className="stat-label">
+            {t(s.kind === "mainnet" ? "summaryTotalMainnet" : s.kind === "testnet" ? "summaryTotalTestnet" : s.kind === "other" ? "summaryTotalOther" : "summaryTotal")}
+          </div>
+          <div className="stat-value num">
+            {formatUsdc(s.total, { maxDecimals: 4 })} {tc("usdc")}
+          </div>
+        </div>
+      ))}
+      <div>
+        <div className="stat-label">{t("summaryMaybe")}</div>
+        <div className="stat-value num">{maybeCount}</div>
+      </div>
+    </div>
   );
 }
 
@@ -131,9 +206,9 @@ export function BillsRenderCap({ shown, matching }: { shown: number; matching: n
   return <Callout tone="info">{t("renderCapNotice", { shown, matching })}</Callout>;
 }
 
-/** The CSV of the bills: the original columns first, in their original order, then pay_to, method and approval_id. */
+/** The CSV of the bills: the original columns first, in their original order, then pay_to, method, approval_id and network_kind (mainnet / testnet, empty when unknown). */
 export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>): string {
-  const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code", "pay_to", "method", "approval_id"];
+  const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code", "pay_to", "method", "approval_id", "network_kind"];
   const rows = payments.map((p) => [
     p.created_at,
     p.key_id,
@@ -148,6 +223,7 @@ export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>):
     p.pay_to,
     p.method,
     p.approval_id ?? "",
+    p.network_kind ?? "",
   ]);
   return toCsv(headers, rows);
 }
@@ -165,6 +241,7 @@ export default function BillsPage() {
   const keyFilter = searchParams.get("key") ?? "all";
   const chargedFilter = (searchParams.get("charged") as ChargedFilter) ?? "all";
   const range = (searchParams.get("range") as RangeFilter) ?? "7d";
+  const kindFilter = (searchParams.get("network") as KindFilter) ?? "all";
   const q = searchParams.get("q") ?? "";
 
   function updateParam(name: string, value: string, defaultValue: string) {
@@ -184,6 +261,7 @@ export default function BillsPage() {
     return payments.filter((p) => {
       if (keyFilter !== "all" && p.key_id !== keyFilter) return false;
       if (chargedFilter !== "all" && chargedOf(p) !== chargedFilter) return false;
+      if (!kindMatches(p, kindFilter)) return false;
       if (!withinRange(p.created_at, range, now)) return false;
       if (needle) {
         const haystack = [p.tx_hash, p.url, p.host, p.id].filter(Boolean).join(" ").toLowerCase();
@@ -191,13 +269,11 @@ export default function BillsPage() {
       }
       return true;
     });
-  }, [payments, keyFilter, chargedFilter, range, q]);
+  }, [payments, keyFilter, chargedFilter, kindFilter, range, q]);
 
   const visible = useMemo(() => visibleBills(filtered), [filtered]);
 
-  const totalAmount = sumDecimalStrings(filtered.filter((p) => chargedOf(p) !== "no").map((p) => p.amount));
-  const maybeCount = filtered.filter((p) => chargedOf(p) === "maybe").length;
-  const hasActiveFilters = keyFilter !== "all" || chargedFilter !== "all" || range !== "7d" || q !== "";
+  const hasActiveFilters = keyFilter !== "all" || chargedFilter !== "all" || kindFilter !== "all" || range !== "7d" || q !== "";
 
   function clearFilters() {
     setSearchParams({}, { replace: true });
@@ -226,6 +302,7 @@ export default function BillsPage() {
               </button>
             ))}
           </div>
+          <BillsKindFilter value={kindFilter} onChange={(kind) => updateParam("network", kind, "all")} />
           <select value={range} onChange={(e) => updateParam("range", e.target.value, "7d")}>
             {RANGE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
@@ -254,22 +331,7 @@ export default function BillsPage() {
       <BillsTruncation bills={bills} />
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 32 }}>
-          <div>
-            <div className="stat-label">{t("summaryCount")}</div>
-            <div className="stat-value num">{filtered.length}</div>
-          </div>
-          <div>
-            <div className="stat-label">{t("summaryTotal")}</div>
-            <div className="stat-value num">
-              {formatUsdc(totalAmount, { maxDecimals: 4 })} {tc("usdc")}
-            </div>
-          </div>
-          <div>
-            <div className="stat-label">{t("summaryMaybe")}</div>
-            <div className="stat-value num">{maybeCount}</div>
-          </div>
-        </div>
+        <BillsSummary payments={filtered} />
       </div>
 
       <div className="card">

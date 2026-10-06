@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { rotateMoneyKeySecret, writeAudit, MoneySwitchError } from "@moneyswitch/core";
+import { rotateMoneyKeySecret, writeAudit, getKeyChain, MoneySwitchError } from "@moneyswitch/core";
 import { renderSkill, normalizeBaseUrl } from "@moneyswitch/skill";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
 import { bindOrigin } from "../public-base.js";
+import { networkFacts } from "../keyview.js";
 
 /**
  * "One paste gives an AI agent payment ability" - the server side.
@@ -68,6 +69,8 @@ export function registerSkillRoutes(app: FastifyInstance, ctx: AppContext) {
         allowed_hosts: res.row.allowedHosts,
         parent_id: res.row.parentId,
         depth: res.row.depth,
+        // the effective type: a key without one of its own follows its parent
+        network_mode: networkFacts(getKeyChain(ctx.db, id)).network_mode,
       });
     } catch (e) {
       if (e instanceof MoneySwitchError && e.code === "KEY_REVOKED") {

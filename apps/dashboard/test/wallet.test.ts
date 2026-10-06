@@ -212,11 +212,70 @@ describe("a wallet: address and balance on every chain", () => {
     assert.ok(!html.includes(esc(en.fundTestnet)));
   });
 
+  it("a mainnet group says the money is real and to pick the right chain, and offers no faucet", () => {
+    const html = view(wallet({ networks: [{ ...NETWORK, network: "eip155:8453", label: "Base mainnet", is_mainnet: true }] }));
+    assert.ok(/real USDC/.test(en.fundMainnet) && /right chain/.test(en.fundMainnet), "it says: real USDC, and choose the right chain");
+    assert.ok(html.includes(esc(en.fundMainnet)));
+    assert.ok(!html.includes('href="https://faucet'));
+  });
+
   it("has no import, reveal, download or unlock form", () => {
     const html = view(wallet());
     assert.ok(!/import|reveal|download/i.test(html));
     assert.ok(!/<input[^>]*type="password"/.test(html));
     assert.ok(!html.includes('data-action-id="wallet.unlock"'));
+  });
+});
+
+describe("the balances come in two groups: mainnet (real money) and testnet (no value), SPEC.md §2", () => {
+  const MAINNET = { ...NETWORK, network: "eip155:143", label: "Monad mainnet", explorer_base: "https://monadvision.com", is_mainnet: true, usdc_balance: "3.00" };
+  const BASE_MAINNET = { ...NETWORK, network: "eip155:8453", label: "Base mainnet", explorer_base: "https://basescan.org", is_mainnet: true, usdc_balance: "1.25" };
+  const SEPOLIA = { ...NETWORK, network: BASE_SEPOLIA, label: "Base Sepolia", explorer_base: "https://sepolia.basescan.org", usdc_balance: "7.00" };
+  const meta = { faucet_url: "https://faucet.example/usdc" } as never;
+  /** The html of one group (its heading, table and funding note) or null when the page has no such group. */
+  const group = (html: string, kind: "mainnet" | "testnet") => html.split('data-network-group="').slice(1).find((segment) => segment.startsWith(kind + '"')) ?? null;
+  const MIXED = wallet({ networks: [NETWORK, MAINNET, SEPOLIA, BASE_MAINNET] });
+
+  it("both kinds enabled: 'Mainnet · real money' first with its chains, then 'Testnet · test tokens, no value' with its chains", () => {
+    const html = view(MIXED, meta);
+    assert.deepEqual([...html.matchAll(/data-network-group="(\w+)"/g)].map((m) => m[1]), ["mainnet", "testnet"]);
+    assert.ok(html.includes(esc(en.groupMainnet)) && html.includes(esc(en.groupTestnet)));
+    assert.equal(en.groupMainnet, "Mainnet · real money");
+    assert.equal(en.groupTestnet, "Testnet · test tokens, no value");
+    const mainnet = group(html, "mainnet")!;
+    const testnet = group(html, "testnet")!;
+    assert.deepEqual([...mainnet.matchAll(/data-network="([^"]+)"/g)].map((m) => m[1]), ["eip155:143", "eip155:8453"]);
+    assert.deepEqual([...testnet.matchAll(/data-network="([^"]+)"/g)].map((m) => m[1]), [TESTNET, BASE_SEPOLIA]);
+    assert.ok(mainnet.includes("3 USDC") && mainnet.includes("1.25 USDC"));
+    assert.ok(testnet.includes("0.52 USDC") && testnet.includes("7 USDC"));
+  });
+
+  it("the faucet belongs to the testnet group and the real-USDC note to the mainnet group", () => {
+    const html = view(MIXED, meta);
+    const mainnet = group(html, "mainnet")!;
+    const testnet = group(html, "testnet")!;
+    assert.ok(testnet.includes(esc(en.fundTestnet)) && testnet.includes('href="https://faucet.example/usdc"'));
+    assert.ok(!mainnet.includes(esc(en.fundTestnet)) && !mainnet.includes("faucet"));
+    assert.ok(mainnet.includes(esc(en.fundMainnet)));
+    assert.ok(!testnet.includes(esc(en.fundMainnet)));
+  });
+
+  it("only the groups the instance enables are shown", () => {
+    const testnetOnly = view(wallet({ networks: [NETWORK, SEPOLIA] }), meta);
+    assert.deepEqual([...testnetOnly.matchAll(/data-network-group="(\w+)"/g)].map((m) => m[1]), ["testnet"]);
+    assert.ok(!testnetOnly.includes(esc(en.groupMainnet)) && !testnetOnly.includes(esc(en.fundMainnet)));
+    const mainnetOnly = view(wallet({ networks: [MAINNET] }), meta);
+    assert.deepEqual([...mainnetOnly.matchAll(/data-network-group="(\w+)"/g)].map((m) => m[1]), ["mainnet"]);
+    assert.ok(!mainnetOnly.includes(esc(en.groupTestnet)) && !mainnetOnly.includes(esc(en.fundTestnet)));
+  });
+
+  it("the headings and the funding notes are in Chinese too", () => {
+    assert.equal(zh.groupMainnet, "主网 · 真钱");
+    assert.equal(zh.groupTestnet, "测试网 · 测试币，没有价值");
+    const html = view(MIXED, meta, "zh");
+    assert.ok(html.includes(zh.groupMainnet) && html.includes(zh.groupTestnet));
+    assert.ok(html.includes(zh.fundTestnet) && html.includes(zh.fundMainnet));
+    assert.ok(/真 USDC/.test(zh.fundMainnet) && /选对链/.test(zh.fundMainnet));
   });
 });
 

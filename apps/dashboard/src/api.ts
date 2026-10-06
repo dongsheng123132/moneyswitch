@@ -68,6 +68,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // because a parent was revoked or expired (child keys exist only through the agent API; the page lists them like any other key and has no UI for them).
 export type MoneyKeyStatus = "active" | "revoked" | "expired" | "ancestor_revoked" | "ancestor_expired";
 
+/** The kind of chain a key pays on (SPEC.md §1): fixed when the key is issued. */
+export type NetworkMode = "testnet" | "mainnet";
+
 export interface MoneyKeyRow {
   id: string;
   name: string;
@@ -90,6 +93,10 @@ export interface MoneyKeyRow {
   depth: number;
   can_delegate: boolean;
   created_by: string; // "admin" | "key:<parentId>"
+  /** The key's effective network type (its own, else its parent's); null = a key with none (issued before v0.7.2): see `networks` for where it pays. */
+  network_mode: NetworkMode | null;
+  /** CAIP-2 ids of the chains this key can pay on now. */
+  networks: string[];
   children_count: number;
   status: MoneyKeyStatus;
   // This key's own spend only (excludes descendants).
@@ -106,6 +113,7 @@ export interface CreateMoneyKeyInput {
   allowed_hosts: string[];
   max_payments_per_minute?: number;
   expires_at?: string | null;
+  network_mode?: NetworkMode;
 }
 
 export interface CreateMoneyKeyResponse extends Omit<MoneyKeyRow, "key_prefix" | "used_today" | "used_total" | "last_used_at" | "created_at"> {
@@ -137,6 +145,7 @@ export interface RotateKeyResponse {
   allowed_hosts: string[];
   parent_id: string | null;
   depth: number;
+  network_mode?: NetworkMode | null;
 }
 
 export async function rotateKey(id: string): Promise<RotateKeyResponse> {
@@ -161,6 +170,8 @@ export interface ApprovalRow {
   kind: "payment" | "host";
   /** Only on a "host" approval: the host:port approving it adds to the key's list, spelled by the server (the page shows it, it parses no URL). */
   host?: string | null;
+  /** Whether `network` is a mainnet or a testnet; null for a host approval (no chain yet) or a chain the server does not know. */
+  network_kind?: NetworkMode | null;
   expires_at: string;
   decided_at: string | null;
   created_at: string;
@@ -191,6 +202,8 @@ export interface PaymentRow {
   host: string;
   method: string;
   network: string;
+  /** Whether `network` is a mainnet or a testnet (the server's configuration table); null for a chain it does not know. */
+  network_kind?: NetworkMode | null;
   asset: string;
   pay_to: string;
   amount: string;
