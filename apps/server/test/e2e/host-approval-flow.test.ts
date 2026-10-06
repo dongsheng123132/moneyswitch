@@ -334,3 +334,72 @@ describe("approve: the host joins the key's list, the AI resends the same reques
     expect(paidRequests()).toHaveLength(1);
   });
 });
+
+/** SPEC.md §3: the person who holds the key, not the administrator, approves: the approval link opens without a login and the key's PIN decides. */
+describe("approved by the person who holds the key, with its PIN and no login", () => {
+  const PIN = "9035";
+  const withPin = (id: string, decision: "approve" | "deny", pin: string) =>
+    app.inject({ method: "POST", url: `/v1/approvals/${id}/${decision}`, payload: { pin } }); // (no Authorization header)
+
+  it("unknown host -> approval_required -> the link shows the request without a login -> a wrong PIN changes nothing -> the right PIN approves -> the resend pays", async () => {
+    const key = await createKey({ approval_pin: PIN });
+    const first = await fetchVia(key);
+    expect(first).toMatchObject({ status: "approval_required", charged: "no" });
+
+    const link = await app.inject({ method: "GET", url: `/v1/approvals?id=${first.approval_id}` }); // what the approval page loads: no Authorization
+    expect(link.statusCode).toBe(200);
+    expect(link.json().approval).toMatchObject({ kind: "host", host: `${FAKE_HOST}:443`, status: "pending", key_name: "e2e", pin_state: "set" });
+
+    const wrong = await withPin(first.approval_id, "approve", "6402");
+    expect(wrong.statusCode).toBe(403);
+    expect(wrong.json()).toMatchObject({ error: "APPROVAL_PIN_WRONG", attempts_left: 4 });
+    expect(getApproval(db, first.approval_id)!.status).toBe("pending");
+    expect(await hostsOf(key)).toEqual(["other.example:443"]);
+    expect(dns.calls).toHaveLength(0); // a wrong PIN looks nothing up
+    expect((await fetchVia(key)).approval_id).toBe(first.approval_id); // the AI's request still waits on the same approval
+
+    const ok = await withPin(first.approval_id, "approve", PIN);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({ id: first.approval_id, status: "approved" });
+    expect(dns.calls).toEqual([FAKE_HOST]); // the same one look as when the administrator approves
+    expect(await hostsOf(key)).toEqual(["other.example:443", `${FAKE_HOST}:443`]);
+    const actors = listAudit(db).filter((e) => (e.detail as any).approvalId === first.approval_id).map((e) => [e.actor, e.action]);
+    expect(actors).toEqual(expect.arrayContaining([[`pin:${keyIds.get(key)}`, "key.allow_host"], [`pin:${keyIds.get(key)}`, "approval.approve"]]));
+    expect(listAudit(db).some((e) => e.actor === "admin" && (e.detail as any).approvalId === first.approval_id)).toBe(false);
+
+    const paid = await fetchVia(key); // as it was: the AI resends
+    expect(paid).toMatchObject({ status: "ok", charged: "yes" });
+    expect(paidRequests()).toHaveLength(1);
+    expect(payments(key)).toHaveLength(1);
+  });
+
+  it("a price over the approval line: the PIN approves it, the resend with approval_id pays once; the key itself cannot approve", async () => {
+    const key = await createKey({ allowed_hosts: [`${FAKE_HOST}:443`], approval_threshold: "0.005", approval_pin: PIN });
+    const ask = await fetchVia(key);
+    expect(ask.status).toBe("approval_required");
+    expect(getApproval(db, ask.approval_id)).toMatchObject({ kind: "payment", status: "pending" });
+
+    // the AI holds the key and the approval id: neither approves
+    const byKey = await app.inject({ method: "POST", url: `/v1/approvals/${ask.approval_id}/approve`, headers: { authorization: `Bearer ${key}` }, payload: { pin: PIN } });
+    expect(byKey.statusCode).toBe(403);
+    expect(getApproval(db, ask.approval_id)!.status).toBe("pending");
+
+    expect((await withPin(ask.approval_id, "approve", PIN)).statusCode).toBe(200);
+    const paid = await fetchVia(key, { approval_id: ask.approval_id });
+    expect(paid).toMatchObject({ status: "ok", charged: "yes", approval_id: ask.approval_id });
+    expect(getApproval(db, ask.approval_id)!.status).toBe("used");
+    expect(paidRequests()).toHaveLength(1);
+    expect(await fetchVia(key, { approval_id: ask.approval_id })).toMatchObject({ status: "denied", code: "APPROVAL_INVALID", charged: "no" });
+    expect(paidRequests()).toHaveLength(1);
+  });
+
+  it("denied with the PIN: nothing is listed or sent", async () => {
+    const key = await createKey({ approval_pin: PIN });
+    const ask = await fetchVia(key);
+    expect((await withPin(ask.approval_id, "deny", PIN)).statusCode).toBe(200);
+    expect(getApproval(db, ask.approval_id)!.status).toBe("denied");
+    expect(await hostsOf(key)).toEqual(["other.example:443"]);
+    expect(seller.requests).toHaveLength(0);
+    expect(sentToFakeHost).toHaveLength(0);
+  });
+});

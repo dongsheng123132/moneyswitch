@@ -153,7 +153,7 @@ communicated in the `status`/`code` fields, not the HTTP status code):
 |---|---|
 | `ok` | Request succeeded (payment made if the resource was priced; `payment` is `null` for free resources). |
 | `denied` | Policy rejected the request before any payment attempt; see `code`. |
-| `approval_required` | Either the price is between the approval threshold and the per-request limit (the approval has `kind` `"payment"`), or the URL is http(s) and its host is not in a root key's `allowed_hosts` (`kind` `"host"`; nothing has been sent to that host, and no DNS look was made). `approval_id` and `approve_url` (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, or the address the server itself listens on when that is not set; never the request's Host header) are set. Give the link to a person: it carries no token, and approving needs the administrator login. Poll `GET /v1/approvals/:id` about every 15 s. Once a `payment` approval is approved, retry the same request with that `approval_id`. Approving a `host` approval adds the host to the key's `allowed_hosts` for good, so retry the same request as it was, without an `approval_id` (one that is sent is ignored); the price is then checked as usual, and if it is over the approval threshold the retry answers `approval_required` once more, with a new `payment` approval. |
+| `approval_required` | Either the price is between the approval threshold and the per-request limit (the approval has `kind` `"payment"`), or the URL is http(s) and its host is not in a root key's `allowed_hosts` (`kind` `"host"`; nothing has been sent to that host, and no DNS look was made). `approval_id` and `approve_url` (`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`, or the address the server itself listens on when that is not set; never the request's Host header) are set. Give the link to the person who gave you this key: it carries no token and opens without a login, and they approve with the key's PIN (or the administrator approves); you never ask for, keep or send a PIN, and never call the approve or deny routes yourself (see "Who approves" below). Poll `GET /v1/approvals/:id` about every 15 s. Once a `payment` approval is approved, retry the same request with that `approval_id`. Approving a `host` approval adds the host to the key's `allowed_hosts` for good, so retry the same request as it was, without an `approval_id` (one that is sent is ignored); the price is then checked as usual, and if it is over the approval threshold the retry answers `approval_required` once more, with a new `payment` approval. |
 | `payment_failed` | Payment was attempted and definitively failed (signature/facilitator rejection); any reservation was released. |
 | `error` | An unexpected error (e.g. upstream unreachable, wallet locked). |
 
@@ -209,7 +209,7 @@ unexpired, per-request limit, daily and total budget — where a key's "used"
 is the settled+reserved+unknown sum of its **whole subtree**. The first
 failing level wins. Revoking/expiring any ancestor disables the whole
 subtree immediately. Any ancestor's `approval_threshold` also triggers
-approval (still decided by the admin).
+approval (still decided by the administrator, or by the root key's PIN: see "Who approves" below).
 
 ### Error bodies carry the limiting level
 
@@ -280,6 +280,68 @@ status, own_used_today, own_used_total` (`used_today`/`used_total` are
 subtree totals); `GET /v1/admin/keys/tree` returns
 `{ "tree": [ { …row, "children": [ … ] } ] }`.
 
+### Who approves: the approval PIN (v0.7.4, SPEC.md §3)
+
+A key cannot approve its own request (the AI holds the same key), so each
+**root** key has a 4-6 digit **approval PIN** (the "confirmation code") for the
+person who holds the key. It is not in the skill text; the AI never has it.
+
+- `POST /v1/keys` (admin) takes `approval_pin`: a string of 4 to 6 ASCII
+  digits. Left out (or `null`) a random 4-digit one is made (never a weak one).
+  Anything else (a number, 3 or 7 digits, letters): `400 { "error": "APPROVAL_PIN_INVALID" }`;
+  a PIN that is too easy to guess (all digits the same, a straight run with no
+  wrap such as 1234 / 4321 / 0123 / 654321, or one of the most common 4-digit
+  PINs such as 2580, 1357, 2468, 1212, 1004, 2000, 6969): `400 { "error":
+  "APPROVAL_PIN_WEAK", "message" }`. No key is created in either case. The answer carries `approval_pin` (the plaintext,
+  shown only here). Only a salted scrypt hash (`scrypt$<salt>$<hash>`) is stored.
+- `POST /v1/keys/:id/approval-pin` (admin; body `{ "approval_pin"? }`, a random
+  4-digit one when left out) sets or replaces the PIN of a root key, answers
+  `{ id, approval_pin }` (`Cache-Control: no-store`) and sets the failure
+  counter back to 0, so it also unlocks. `404` unknown id,
+  `400 APPROVAL_PIN_INVALID`, `400 APPROVAL_PIN_WEAK` (as above; nothing changes, the old
+  PIN and its count stay), `400 APPROVAL_PIN_CHILD_KEY` (a child key has no PIN
+  of its own: its requests use its root key's). Audit row `key.approval_pin_set`
+  (never the PIN). It is the only way to give a key issued before v0.7.4 a PIN
+  (theirs is `NULL`: only the administrator can approve for them).
+  `POST /v1/keys/:id/rotate` does **not** change the PIN.
+- `POST /v1/keys/children` never creates a PIN and ignores an `approval_pin`
+  in the body; its answers never mention one.
+- `GET /v1/keys` and the tree rows (admin) carry `approval_pin_state`:
+  `"set"`, `"none"` (no PIN) or `"locked"` for a root key, `null` for a child; and
+  `approval_pin_failures`: the wrong PINs that root key's PIN has had since it was
+  last set (`null` for a child).
+- `GET /v1/approvals?id=<approval id>` needs **no login**: it answers
+  `{ "approval": { id, key_name, url, method, kind, host?, network,
+  network_kind, network_label, asset, pay_to, amount, status, pin_state,
+  pin_failures, expires_at, decided_at, created_at } }` for that one request (no
+  key id, nothing else; `pin_state` and `pin_failures` are the PIN state and the
+  wrong-try count of its root key's PIN), `404` for an
+  unknown id. Without `id` the route is the administrator's list, as before.
+  The approval link `/approvals?id=…` opens this way.
+- `POST /v1/approvals/:id/approve` and `…/deny` take the administrator
+  (`Authorization: Bearer ms_admin_…`, no body) **or** the person who holds the
+  key: **no** `Authorization` header and `{ "pin": "1234" }` in the body. The PIN
+  is the one of the root key of the request's key. Any `Authorization` that is
+  not the administrator's (a MoneyKey, a stale token) is `403 FORBIDDEN`
+  whatever the body says: a key can never approve. A request that does not
+  exist is `404`; one that is not pending any more (decided or expired) is
+  `400 APPROVAL_NOT_PENDING`; neither costs a try. Refusals:
+  `400 APPROVAL_PIN_INVALID` (not 4-6 digits; not counted),
+  `403 APPROVAL_PIN_WRONG` (with `attempts_left`), `403 APPROVAL_PIN_LOCKED`,
+  `403 APPROVAL_PIN_NOT_SET` (the root key has none) and
+  `403 APPROVAL_KEY_NOT_ACTIVE` (the key or an ancestor is revoked or expired).
+  **Five wrong PINs lock the root key's PIN, counted cumulatively since the PIN
+  was last set**: from then on every PIN, the right one too, is
+  `APPROVAL_PIN_LOCKED` until the administrator sets a PIN. A right PIN does not
+  reset the count; only setting a PIN does. The count is one atomic SQL
+  increment inside the transaction that checks it. The administrator is never locked out. The
+  audit row names who decided: `admin`, or `pin:<root key id>` (also on
+  `key.allow_host`); each counted wrong PIN is `approval.pin_wrong` (actor
+  `anonymous`). The rules for a new host (one DNS look, root keys only, the host
+  is appended) are the same for both.
+- The limits (per-request limit, daily and total budget) are not approvable by
+  anyone: over one the answer is `denied`, with no approval to give.
+
 ## Network type of a key (v0.7.2)
 
 Mainnets and testnets can be enabled together on one server and one wallet
@@ -331,7 +393,7 @@ support it.
 |---|---|---|
 | `GET /skill.md` | none | The generic skill (never contains a key), `text/markdown; charset=utf-8`. Base URL = `MONEYSWITCH_PUBLIC_URL` when set, else the address the server itself listens on (never the request's Host header; if neither forms a plain http(s) origin the skill is server-agnostic and reads `MONEY_API_BASE` / `MONEY_API_KEY`). |
 | `GET /v1/approvals/:id` | MoneyKey | After `/v1/fetch` answered `approval_required`: the key's own approval, `{ "id", "status": "pending"\|"approved"\|"denied"\|"expired"\|"used", "kind": "payment"\|"host", "amount", "currency": "USDC", "url", "method", "expires_at" }` (`kind` `"host"` = the host is not in the key's list yet: `amount` is `"0"`, there is no price until the seller quotes, `status` stays `approved` once approved, and the row also has `"host"`: the `host:port` that approving it lists, see below; a `payment` approval has no `host`). Another key's id and unknown ids both answer `404 { "status": "error", "code": "APPROVAL_NOT_FOUND" }`. Poll about every 15 s; an approval lives 10 minutes. |
-| `POST /v1/approvals/:id/approve` | admin | Approves a pending approval; no request body. For `kind` `"payment"` that is all it does. For `kind` `"host"` it first looks the host up in DNS once (3 s limit), then, in one transaction, sets the approval to `approved`, appends the request's `host:port` (lower-case, port explicit, one trailing dot dropped) to the key's `allowed_hosts` if it is not listed yet (entries and requests are compared lower-case with one trailing dot dropped, so an entry `example.com.:443` lists `example.com`; approving means listing it permanently), and writes an audit row `key.allow_host` `{ keyId, host, approvalId }`. Two refusals leave the approval pending, so that approving again retries it: `400 { "error": "ALLOW_HOST_PRIVATE_HOST", "message" }` (the host is, or any of its DNS answers is, a private / loopback / special-use address or an address of one of this machine's own network interfaces) and `400 { "error": "ALLOW_HOST_UNRESOLVED", "message" }` (the lookup failed, answered nothing or took longer than 3 s; nothing was added). Every other `400` changes nothing either, and approving again will not help: `ALLOW_HOST_CHILD_KEY` (defensive: `/v1/fetch` never creates a host approval for a child key; only a root key's list can be widened), `ALLOW_HOST_KEY_NOT_ACTIVE` (the key is revoked or expired), and `APPROVAL_NOT_PENDING` (already decided or expired, or no approval with that id). `GET /v1/approvals` (admin list) rows carry `kind` too, and a `host` row carries `host` as well: the `host:port` approving it will list, worked out by the server (with the same rules as approving), which is what the Dashboard shows. Known limit: when the DNS look of an approval runs over 3 s it is given up on, but the lookup underneath is not cancelled, so an administrator who approves several unresponsive names in a row can keep resolver threads busy for a while. |
+| `POST /v1/approvals/:id/approve` | admin, or the key's PIN | Approves a pending approval; the administrator sends no body, the person who holds the key sends `{ "pin": "…" }` and no `Authorization` (see "Who approves" above); `…/deny` is the same. For `kind` `"payment"` that is all it does. For `kind` `"host"` it first looks the host up in DNS once (3 s limit), then, in one transaction, sets the approval to `approved`, appends the request's `host:port` (lower-case, port explicit, one trailing dot dropped) to the key's `allowed_hosts` if it is not listed yet (entries and requests are compared lower-case with one trailing dot dropped, so an entry `example.com.:443` lists `example.com`; approving means listing it permanently), and writes an audit row `key.allow_host` `{ keyId, host, approvalId }`. Two refusals leave the approval pending, so that approving again retries it: `400 { "error": "ALLOW_HOST_PRIVATE_HOST", "message" }` (the host is, or any of its DNS answers is, a private / loopback / special-use address or an address of one of this machine's own network interfaces) and `400 { "error": "ALLOW_HOST_UNRESOLVED", "message" }` (the lookup failed, answered nothing or took longer than 3 s; nothing was added). Every other `400` changes nothing either, and approving again will not help: `ALLOW_HOST_CHILD_KEY` (defensive: `/v1/fetch` never creates a host approval for a child key; only a root key's list can be widened), `ALLOW_HOST_KEY_NOT_ACTIVE` (the key is revoked or expired), and `APPROVAL_NOT_PENDING` (already decided or expired, or no approval with that id). `GET /v1/approvals` (admin list) rows carry `kind` too, and a `host` row carries `host` as well: the `host:port` approving it will list, worked out by the server (with the same rules as approving), which is what the Dashboard shows. Known limit: when the DNS look of an approval runs over 3 s it is given up on, but the lookup underneath is not cancelled, so an administrator who approves several unresponsive names in a row can keep resolver threads busy for a while. |
 | `POST /v1/keys/:id/rotate` | admin | Only a hash of a key is stored, so a lost secret cannot be shown again. This issues a new secret for the same key id: budgets, usage history, approvals, child keys and settings are kept, the old secret stops working immediately (a request that authenticated with it just before and is still waiting for the seller is refused with `KEY_INVALID` before anything is reserved or signed), an audit row `key.rotate` (key prefixes only) is written. Returns `{ id, key, name, key_prefix, parent_id, depth, network_mode }`; `key` (the new plaintext) is shown only here. `404` unknown id, `409 KEY_REVOKED` for a revoked key (rotating never revives a key). |
 
 ## License

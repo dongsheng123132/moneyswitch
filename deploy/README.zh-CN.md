@@ -93,4 +93,4 @@ docker compose start server
 
 ## 验收
 
-检查 `/healthz`；首次登录链接能登录并停在钱包页；创建钱包后 12 个词只显示一次；**重启服务后钱包仍是解锁状态且不需要任何密码**；`/data` 里的解锁文件以地址命名且只有服务账户可读（钱包页没有红色警告）；Key 的创建和重置密钥、给 AI 的技能段落；超额度被拦截；超过审批线时 `/v1/fetch` 返回的 `approve_url` 能打开（未登录会先跳登录，登录后回到该审批）、批准后重发只付一次；扣款状态 yes / no / maybe；重启后数据库保留。`docker compose exec server node /app/dist/cli.js reset-admin-token` 能换出新令牌（旧令牌立刻被拒、新令牌能登录、不用重启）。可以运行 `node scripts/deploy-smoke.mjs` 对已构建的包做独立沙箱验收（含这条重置命令），它不会使用已有的钱包。发布记录要写明是否实际验证过 HTTPS、容器重启和真实链上付款，不能把离线模拟当成真钱交易。
+检查 `/healthz`；首次登录链接能登录并停在钱包页；创建钱包后 12 个词只显示一次；**重启服务后钱包仍是解锁状态且不需要任何密码**；`/data` 里的解锁文件以地址命名且只有服务账户可读（钱包页没有红色警告）；Key 的创建和重置密钥、给 AI 的技能段落；超额度被拦截；超过审批线时 `/v1/fetch` 返回的 `approve_url` 能打开（不用登录就能打开，输入这把 key 的确认码即可批准；管理员登录后也能批）、批准后重发只付一次；扣款状态 yes / no / maybe；重启后数据库保留。`docker compose exec server node /app/dist/cli.js reset-admin-token` 能换出新令牌（旧令牌立刻被拒、新令牌能登录、不用重启）。可以运行 `node scripts/deploy-smoke.mjs` 对已构建的包做独立沙箱验收（含这条重置命令），它不会使用已有的钱包。发布记录要写明是否实际验证过 HTTPS、容器重启和真实链上付款，不能把离线模拟当成真钱交易。

@@ -20,18 +20,22 @@ export class ApiError extends Error {
   code?: string | null;
   /** The server's `error` field (e.g. "ADDRESS_MISMATCH", "WALLET_BUSY"). */
   error?: string | null;
-  constructor(status: number, message: string, code?: string | null, error?: string | null) {
+  /** A wrong approval PIN (APPROVAL_PIN_WRONG): how many tries are left before the key's PIN locks. */
+  attemptsLeft?: number | null;
+  constructor(status: number, message: string, code?: string | null, error?: string | null, attemptsLeft?: number | null) {
     super(message);
     this.status = status;
     this.code = code;
     this.error = error ?? null;
+    this.attemptsLeft = attemptsLeft ?? null;
   }
 }
 
 export const GET_TIMEOUT_MS = 30_000;
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getToken();
+/** `anonymous`: send no Authorization even when the administrator is signed in (the approval link's PIN calls, SPEC.md §3). */
+async function request<T>(path: string, init?: RequestInit, opts?: { anonymous?: boolean }): Promise<T> {
+  const token = opts?.anonymous ? null : getToken();
   const headers: Record<string, string> = {
     // Only set Content-Type when there actually is a JSON body. Fastify's JSON body parser rejects a request that declares
     // "Content-Type: application/json" but sends an empty body (this used to break every no-body POST with a 400).
@@ -53,9 +57,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
   if (!res.ok) {
-    const errObj = json as { error?: string; message?: string; code?: string } | null;
+    const errObj = json as { error?: string; message?: string; code?: string; attempts_left?: number } | null;
     const message = errObj?.message || errObj?.error || errObj?.code || res.statusText || "request_failed";
-    throw new ApiError(res.status, message, errObj?.code ?? null, errObj?.error ?? null);
+    throw new ApiError(res.status, message, errObj?.code ?? null, errObj?.error ?? null, errObj?.attempts_left ?? null);
   }
   return json as T;
 }
@@ -102,7 +106,13 @@ export interface MoneyKeyRow {
   // This key's own spend only (excludes descendants).
   own_used_today: string;
   own_used_total: string;
+  /** A root key's approval PIN (SPEC.md §3): "set"; "none" = no PIN (issued before v0.7.4), only the administrator can approve for it; "locked" = five wrong tries in a row. null for a child key (it uses its root key's). */
+  approval_pin_state?: ApprovalPinState | null;
+  /** Wrong PINs since this root key's PIN was last set (a right one does not take them back; 5 lock it); null for a child key. */
+  approval_pin_failures?: number | null;
 }
+
+export type ApprovalPinState = "none" | "set" | "locked";
 
 export interface CreateMoneyKeyInput {
   name: string;
@@ -114,10 +124,13 @@ export interface CreateMoneyKeyInput {
   max_payments_per_minute?: number;
   expires_at?: string | null;
   network_mode?: NetworkMode;
+  /** 4-6 digits for the person who holds the key; left out, the server makes a random 4-digit one. */
+  approval_pin?: string;
 }
 
 export interface CreateMoneyKeyResponse extends Omit<MoneyKeyRow, "key_prefix" | "used_today" | "used_total" | "last_used_at" | "created_at"> {
   key: string; // plaintext key, only ever returned here
+  approval_pin: string; // the PIN for the person who holds the key, only ever returned here (or by setApprovalPin)
 }
 
 export async function listKeys(): Promise<MoneyKeyRow[]> {
@@ -150,6 +163,11 @@ export interface RotateKeyResponse {
 
 export async function rotateKey(id: string): Promise<RotateKeyResponse> {
   return request<RotateKeyResponse>(`/v1/keys/${encodeURIComponent(id)}/rotate`, { method: "POST" });
+}
+
+/** POST /v1/keys/:id/approval-pin — sets (a random 4-digit one when `pin` is left out) or replaces a root key's approval PIN, and unlocks it. The PIN is returned only here. */
+export async function setApprovalPin(id: string, pin?: string): Promise<{ id: string; approval_pin: string }> {
+  return request(`/v1/keys/${encodeURIComponent(id)}/approval-pin`, { method: "POST", ...(pin ? { body: JSON.stringify({ approval_pin: pin }) } : {}) });
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +207,27 @@ export async function approveApproval(id: string): Promise<{ id: string; status:
 
 export async function denyApproval(id: string): Promise<{ id: string; status: string }> {
   return request(`/v1/approvals/${encodeURIComponent(id)}/deny`, { method: "POST" });
+}
+
+/** One request as the approval link shows it to the person who holds the key (no login): GET /v1/approvals?id=… (SPEC.md §3). No key id, no secret. */
+export interface ApprovalLink extends Omit<ApprovalRow, "key_id"> {
+  key_name: string | null;
+  /** The name of the chain the price is on; null for a host approval. */
+  network_label: string | null;
+  /** The PIN of the request's root key: "none" = only the administrator can approve, "locked" = five wrong tries since it was set. */
+  pin_state: ApprovalPinState;
+  /** Wrong tries that PIN has had since it was last set. */
+  pin_failures: number;
+}
+
+export async function getApprovalByLink(id: string): Promise<ApprovalLink> {
+  const res = await request<{ approval: ApprovalLink }>(`/v1/approvals?id=${encodeURIComponent(id)}`, undefined, { anonymous: true });
+  return res.approval;
+}
+
+/** Approve / deny with the key's PIN and no login. Refused with APPROVAL_PIN_WRONG (attemptsLeft), APPROVAL_PIN_LOCKED, APPROVAL_PIN_NOT_SET, APPROVAL_KEY_NOT_ACTIVE, APPROVAL_NOT_PENDING. */
+export async function decideWithPin(id: string, decision: "approve" | "deny", pin: string): Promise<{ id: string; status: string }> {
+  return request(`/v1/approvals/${encodeURIComponent(id)}/${decision}`, { method: "POST", body: JSON.stringify({ pin }) }, { anonymous: true });
 }
 
 // ---------------------------------------------------------------------------

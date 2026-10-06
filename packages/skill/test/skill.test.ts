@@ -142,13 +142,24 @@ describe("renderSkill: content contract", () => {
   it("approval_required: send approve_url to the human, poll GET /v1/approvals/{id} about every 15 s, ~10 min TTL, resend the same request plus approval_id; the AI cannot and must not approve", () => {
     const row = text.split("\n").find((l) => l.startsWith("| `approval_required`"))!;
     expect(text).toContain("`approve_url`, `remaining_today`");
-    expect(row).toContain("Send `approve_url` to the user");
-    expect(row).toContain("administrator login");
+    expect(row).toContain("Send `approve_url` to the person who gave you this key");
+    expect(row).toContain("approve with their PIN");
     expect(row).toContain("must not try");
     expect(row).toContain("/v1/approvals/{approval_id}");
     expect(row).toContain("every 15 seconds");
     expect(row).toContain("10 minutes");
     expect(row).toContain("exact same request plus `approval_id`");
+  });
+
+  it("the person holds the PIN, never the AI: it must never ask for, store, guess or submit one, nor call approve / deny; and no skill text (generic or personalized) carries a PIN or has a place for one", () => {
+    const row = text.split("\n").find((l) => l.startsWith("| `approval_required`"))!;
+    expect(row).toContain("Never ask for, store, guess or submit a PIN");
+    expect(row).toContain("never call the approve or deny endpoints yourself");
+    expect(row).not.toContain("administrator login");
+    for (const t of [text, renderSkill({ baseUrl: BASE, key: KEY, keyName: "Codex" }), renderSkill({ baseUrl: BASE }), renderSkill({})]) {
+      expect(t).not.toMatch(/approval_pin|"pin"|\/approve`|\/deny`/);
+      expect(t).not.toMatch(/\bPIN[:=] ?\d/);
+    }
   });
 
   it("approval_required has two reasons (a host not on the key's list, a price over the line): a new host is resent as it was, without approval_id, and a price over the line can still ask once more", () => {

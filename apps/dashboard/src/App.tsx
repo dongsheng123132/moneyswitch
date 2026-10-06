@@ -8,13 +8,17 @@ import Layout from "./Layout";
 import LoginPage from "./pages/LoginPage";
 import MoneyKeysPage from "./pages/MoneyKeysPage";
 import BillsPage from "./pages/BillsPage";
-import ApprovalsPage from "./pages/ApprovalsPage";
+import ApprovalsPage, { ApprovalLinkPage } from "./pages/ApprovalsPage";
 import WalletPage from "./pages/WalletPage";
 
-/** Without the administrator's session every page asks for the login first and comes back to where it was (an approval link carries no token). */
+/**
+ * Without the administrator's session every page asks for the login first and comes back to where it was. The one exception is an approval
+ * link (/approvals?id=…, SPEC.md §3): it opens for the person who holds the key, shows that one request and asks for the key's PIN, no login.
+ */
 function RequireAdmin({ children }: { children: React.ReactElement }) {
   const { token } = useAuth();
   const location = useLocation();
+  if (!token && location.pathname === "/approvals" && new URLSearchParams(location.search).get("id")) return <ApprovalLinkPage />;
   if (!token) return <Navigate to={loginUrlFor(location.pathname, location.search)} replace />;
   return children;
 }

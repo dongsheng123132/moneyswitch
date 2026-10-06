@@ -35,6 +35,10 @@ export const moneyKeys = sqliteTable("money_keys", {
   createdBy: text("created_by").notNull().default("admin"),
   /** v0.7.2 (migration 0009): 'testnet' or 'mainnet', fixed when the key is issued; NULL = issued before this column existed, pays on every enabled network. */
   networkMode: text("network_mode", { enum: ["testnet", "mainnet"] }),
+  /** v0.7.4 (migration 0010): `scrypt$<salt hex>$<hash hex>` of the 4-6 digit approval PIN of the person who holds a root key; NULL = none (a key issued before v0.7.4, any child key). */
+  approvalPin: text("approval_pin"),
+  /** v0.7.4: wrong approval PINs since the PIN was last set (a right one does not reset it; 5 locks it until the administrator sets a new one). */
+  approvalPinFailures: integer("approval_pin_failures").notNull().default(0),
 });
 
 /** LEGACY (v0.2 model channels of the removed OpenAI-compatible gateway): the table stays, nothing reads or writes it any more. */

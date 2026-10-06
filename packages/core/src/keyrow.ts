@@ -24,5 +24,7 @@ export function rowToMoneyKey(row: typeof schema.moneyKeys.$inferSelect): MoneyK
     canDelegate: row.canDelegate ?? false,
     createdBy: row.createdBy ?? "admin",
     networkMode: row.networkMode ?? null,
+    approvalPin: row.approvalPin ?? null,
+    approvalPinFailures: row.approvalPinFailures ?? 0,
   };
 }

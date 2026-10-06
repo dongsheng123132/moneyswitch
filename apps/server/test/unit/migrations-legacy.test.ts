@@ -312,3 +312,69 @@ function insertKeyNow(sqlite: Database.Database, id: string, prefix: string, net
     )
     .run(id, id, prefix, new Date().toISOString(), networkMode);
 }
+
+/** Migration 0010 added money_keys.approval_pin / approval_pin_failures (v0.7.4); the database is additive-only, so a key issued before it must stay exactly as it was. */
+describe("migration 0010 (money_keys.approval_pin) on an older database", () => {
+  it("every key that existed before has no PIN and no failures afterwards (only the administrator can approve for it); nothing else about it changes", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-mig10-"));
+    const file = path.join(dir, "v073.sqlite");
+    try {
+      // a database as v0.7.3 left it: migrations 0000..0009
+      const old = new Database(file);
+      old.pragma("journal_mode = WAL");
+      old.exec(`CREATE TABLE IF NOT EXISTS __migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`);
+      const upTo0009 = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql") && f < "0010").sort();
+      expect(upTo0009.at(-1)).toBe("0009_network_mode.sql");
+      for (const f of upTo0009) {
+        old.exec(fs.readFileSync(path.join(migrationsDir, f), "utf-8"));
+        old.prepare(`INSERT INTO __migrations (name, applied_at) VALUES (?, ?)`).run(f, new Date().toISOString());
+      }
+      expect((old.prepare(`PRAGMA table_info(money_keys)`).all() as { name: string }[]).map((c) => c.name)).not.toContain("approval_pin");
+      const insertKey = old.prepare(
+        `INSERT INTO money_keys (id, name, key_prefix, key_hash, enabled, total_budget, daily_budget, per_request_limit,
+           approval_threshold, allowed_hosts, max_payments_per_minute, expires_at, created_at, last_used_at, allowed_models,
+           parent_id, depth, can_delegate, created_by, network_mode)
+         VALUES (?, ?, ?, 'hash', 1, 10000000, 5000000, 1000000, 100000, '["api.example.com"]', 10,
+           NULL, ?, NULL, NULL, ?, ?, 0, ?, 'testnet')`
+      );
+      const iso = new Date().toISOString();
+      insertKey.run("k1", "v073-root", "mk_live_v73a", iso, null, 0, "admin");
+      insertKey.run("k2", "v073-child", "mk_live_v73b", iso, "k1", 1, "key:k1");
+      old.close();
+
+      const { sqlite } = openDb({ filePath: file });
+      try {
+        const applied = (sqlite.prepare(`SELECT name FROM __migrations ORDER BY name`).all() as { name: string }[]).map((r) => r.name);
+        expect(applied).toContain("0010_approval_pin.sql");
+        const cols = sqlite.prepare(`PRAGMA table_info(money_keys)`).all() as { name: string; type: string; notnull: number; dflt_value: string | null }[];
+        expect(cols.find((c) => c.name === "approval_pin")).toMatchObject({ type: "TEXT", notnull: 0, dflt_value: null });
+        expect(cols.find((c) => c.name === "approval_pin_failures")).toMatchObject({ type: "INTEGER", notnull: 1, dflt_value: "0" });
+        expect(sqlite.prepare(`SELECT id, name, enabled, total_budget, parent_id, depth, network_mode, approval_pin, approval_pin_failures FROM money_keys ORDER BY id`).all()).toEqual([
+          { id: "k1", name: "v073-root", enabled: 1, total_budget: 10000000, parent_id: null, depth: 0, network_mode: "testnet", approval_pin: null, approval_pin_failures: 0 },
+          { id: "k2", name: "v073-child", enabled: 1, total_budget: 10000000, parent_id: "k1", depth: 1, network_mode: "testnet", approval_pin: null, approval_pin_failures: 0 },
+        ]);
+        // a row written without naming the columns has no PIN either
+        insertKeyNow(sqlite, "k3", "mk_live_v74a", null);
+        expect(sqlite.prepare(`SELECT approval_pin, approval_pin_failures FROM money_keys WHERE id = 'k3'`).get()).toEqual({ approval_pin: null, approval_pin_failures: 0 });
+      } finally {
+        sqlite.close();
+      }
+
+      // re-opening does not apply it twice and loses nothing
+      const again = openDb({ filePath: file });
+      expect(again.sqlite.prepare(`SELECT count(*) AS n FROM __migrations WHERE name = '0010_approval_pin.sql'`).get()).toEqual({ n: 1 });
+      expect(again.sqlite.prepare(`SELECT count(*) AS n FROM money_keys WHERE approval_pin IS NULL`).get()).toEqual({ n: 3 });
+      again.sqlite.close();
+    } finally {
+      removeQuietly(dir);
+    }
+  });
+
+  it("a fresh database has the columns from the start", () => {
+    const { sqlite } = openDb({ filePath: ":memory:" });
+    const cols = sqlite.prepare(`PRAGMA table_info(money_keys)`).all() as { name: string; notnull: number; dflt_value: string | null }[];
+    expect(cols.find((c) => c.name === "approval_pin")).toMatchObject({ notnull: 0, dflt_value: null });
+    expect(cols.find((c) => c.name === "approval_pin_failures")).toMatchObject({ notnull: 1, dflt_value: "0" });
+    sqlite.close();
+  });
+});

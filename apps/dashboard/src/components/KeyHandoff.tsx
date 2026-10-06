@@ -6,6 +6,7 @@ import { skillStrings } from "../i18n/strings/skill";
 import type { Handoff } from "../keyHandoff";
 import type { TestPaymentOffer } from "@moneyswitch/skill";
 import { restFetchCurl } from "../snippets";
+import ApprovalPinNotice from "./ApprovalPinNotice";
 import CopyButton from "./CopyButton";
 import SecretNotice from "./SecretNotice";
 import Snippet from "./Snippet";
@@ -15,7 +16,8 @@ import SkillForAi from "./SkillForAi";
  * The body of the Money Keys drawer once a secret exists (a new key, or the new
  * secret of "Reset secret and copy skill"): the key once, then HOW to give it to
  * an AI. There are exactly two ways: the skill (one block of text for the AI,
- * the default) and one raw HTTP example for POST /v1/fetch.
+ * the default) and one raw HTTP example for POST /v1/fetch. A new key also shows
+ * its approval PIN once (SPEC.md §3): for a person, apart from the key and the skill.
  *
  * Mount it with `key={handoff.id}`: a new secret starts again on the skill tab.
  */
@@ -53,6 +55,8 @@ export default function KeyHandoff({
           <CopyButton text={handoff.key} />
         </div>
       </SecretNotice>
+
+      {handoff.approvalPin && <ApprovalPinNotice pin={handoff.approvalPin} />}
 
       <div className="next-heading">{t("nextHeading")}</div>
 

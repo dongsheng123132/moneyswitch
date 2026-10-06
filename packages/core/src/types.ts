@@ -26,6 +26,10 @@ export interface MoneyKeyRow {
   createdBy: string;
   /** v0.7.2: 'testnet' / 'mainnet'; null = a key issued before v0.7.2, which pays on every enabled network. */
   networkMode: NetworkMode | null;
+  /** v0.7.4: the salted scrypt hash of the approval PIN (`scrypt$<salt>$<hash>`); null = none (a key issued before v0.7.4, and every child key: it uses its root key's). */
+  approvalPin: string | null;
+  /** v0.7.4: wrong approval PINs since the PIN was last set (a right one does not reset it); APPROVAL_PIN_MAX_FAILURES locks the PIN. */
+  approvalPinFailures: number;
 }
 
 export type PaymentStatus = "reserved" | "settled" | "failed" | "unknown";

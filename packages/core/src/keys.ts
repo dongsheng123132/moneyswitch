@@ -12,6 +12,7 @@ import type { MoneyKeyRow, NetworkMode } from "./types.js";
 import { MoneySwitchError } from "./types.js";
 import { getKeyChain, assertChainUsable } from "./chain.js";
 import { rowToMoneyKey } from "./keyrow.js";
+import { hashApprovalPin, resolveApprovalPin } from "./approval-pin.js";
 
 export { rowToMoneyKey };
 
@@ -28,18 +29,20 @@ export interface CreateMoneyKeyInput {
   canDelegate?: boolean;
   /** v0.7.2 (SPEC.md §1): the kind of chain this key pays on, fixed for life. Omitted = null, the pre-v0.7.2 "every enabled chain" behaviour (the server always passes one). */
   networkMode?: NetworkMode | null;
+  /** v0.7.4 (SPEC.md §3): the 4-6 digit approval PIN for the person who holds the key. Omitted = a random 4-digit one; anything else that is not 4-6 digits throws ApprovalPinError. */
+  approvalPin?: string | null;
 }
 
 /**
  * Creates a new ROOT MoneyKey (admin path: parent_id NULL, depth 0,
  * created_by "admin"). Child keys are created only via createChildKey
  * (delegation.ts), which enforces the parent-bound constraints.
- * Returns the plaintext key (only available here) plus the stored row.
+ * Returns the plaintext key and the plaintext approval PIN (only available here; only a salted hash of the PIN is stored) plus the stored row.
  */
 export function createMoneyKey(
   db: MoneySwitchDb,
   input: CreateMoneyKeyInput
-): { plaintextKey: string; row: MoneyKeyRow } {
+): { plaintextKey: string; approvalPin: string; row: MoneyKeyRow } {
   if (
     input.approvalThreshold != null &&
     input.approvalThreshold > input.perRequestLimit
@@ -52,6 +55,7 @@ export function createMoneyKey(
   if (input.expiresAt != null && Number.isNaN(new Date(input.expiresAt).getTime())) {
     throw new MoneySwitchError("FORBIDDEN", "expires_at must be an ISO-8601 date-time");
   }
+  const approvalPin = resolveApprovalPin(input.approvalPin);
   const plaintextKey = generateMoneyKey();
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -77,11 +81,12 @@ export function createMoneyKey(
       canDelegate: input.canDelegate ?? false,
       createdBy: "admin",
       networkMode: input.networkMode ?? null,
+      approvalPin: hashApprovalPin(approvalPin),
     })
     .run();
   const row = db.select().from(schema.moneyKeys).where(eq(schema.moneyKeys.id, id)).get();
   if (!row) throw new Error("failed to read back created key");
-  return { plaintextKey, row: rowToMoneyKey(row) };
+  return { plaintextKey, approvalPin, row: rowToMoneyKey(row) };
 }
 
 export function listMoneyKeys(db: MoneySwitchDb): MoneyKeyRow[] {
