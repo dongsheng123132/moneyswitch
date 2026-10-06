@@ -51,8 +51,8 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       explorer_base: network.explorerBase,
       network_label: network.label,
       is_mainnet: isMainnet(),
-      // Circle's faucet only mints testnet USDC — pointing it at mainnet would be misleading.
-      faucet_url: isMainnet() ? null : FAUCET_URL,
+      // Circle's faucet only mints testnet USDC: offered whenever a testnet is enabled (the page shows it in the testnet group only).
+      faucet_url: getEnabledNetworks().some((n) => !isMainnetNetwork(n)) ? FAUCET_URL : null,
       wallet_password_from_env: Boolean(ctx.config.walletPassword),
       // The base URL the skill is written for (MONEYSWITCH_PUBLIC_URL, else the address the server listens on: never the request's Host).
       wallet_address: ctx.wallet.getAddress(),

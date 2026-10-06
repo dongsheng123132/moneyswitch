@@ -42,7 +42,10 @@ export const walletStrings = defineMessages(
     floatNote: "Keep only a small amount here: the limit is {limit} USDC per chain (MONEYSWITCH_WALLET_FLOAT_LIMIT).",
     fundTestnet: "To fund a test wallet, get free test USDC from the faucet. No gas token is needed: the facilitator pays the gas.",
     fundFaucet: "Open the USDC faucet",
-    fundMainnet: "This chain uses real USDC. Send only what you are willing to let your AI spend.",
+    fundMainnet:
+      "Send real USDC to this address, and pick the right chain: the address is the same on every chain, but each chain keeps its own balance, so USDC sent on another chain does not show up here. Send only what you are willing to let your AI spend.",
+    groupMainnet: "Mainnet · real money",
+    groupTestnet: "Testnet · test tokens, no value",
 
     checksTitle: "State",
     checkUnlock: "Unlocks itself after a restart",
@@ -143,7 +146,9 @@ export const walletStrings = defineMessages(
     floatNote: "这里只放小钱：每条链上限 {limit} USDC（MONEYSWITCH_WALLET_FLOAT_LIMIT）。",
     fundTestnet: "给测试钱包充值：到水龙头领免费测试 USDC。不需要 gas 代币，gas 由 facilitator 代付。",
     fundFaucet: "打开 USDC 水龙头",
-    fundMainnet: "这条链用的是真实 USDC。只转你愿意让 AI 花的数额。",
+    fundMainnet: "往这个地址转真 USDC，注意选对链：各条链上的地址相同，但余额各算各的，转到别的链上的 USDC 不会出现在这里。只转你愿意让 AI 花的数额。",
+    groupMainnet: "主网 · 真钱",
+    groupTestnet: "测试网 · 测试币，没有价值",
 
     checksTitle: "状态",
     checkUnlock: "重启后能自己解锁",

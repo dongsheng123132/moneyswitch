@@ -273,6 +273,12 @@ button {
   box-shadow: 0 0 0 3px var(--green-bg);
 }
 
+/* both kinds enabled: the dot is in the real-money colour (SPEC.md §6) */
+.network-dot-real {
+  background: var(--yellow);
+  box-shadow: 0 0 0 3px var(--yellow-bg);
+}
+
 .main {
   flex: 1;
   padding: 24px 28px 48px;

@@ -9,11 +9,13 @@ export interface InstallPromptInput {
   keyName?: string | null;
   agent: SkillAgent;
   /**
-   * The ten-minute path: when the instance runs on a testnet and this key may pay the testnet receiver, the prompt asks the AI for one test
+   * The ten-minute path: when this is a testnet key on an instance that enables the receiver's testnet and the key may pay the testnet receiver, the prompt asks the AI for one test
    * payment after the status call and for its transaction hash. Anything else (no offer, mainnet, the host not allowed) leaves the prompt as it
    * always was: no payment during installation.
    */
   testPayment?: TestPaymentOffer | null;
+  /** The key's network type (SPEC.md §1): written into the skill and the first line. null / undefined = a key from before network modes: nothing is said. */
+  networkMode?: "testnet" | "mainnet" | null;
 }
 
 export const SKILL_BEGIN_MARKER = `-----BEGIN MONEYSWITCH SKILL (${SKILL_NAME}/SKILL.md)-----`;
@@ -27,8 +29,14 @@ export function renderInstallPrompt(input: InstallPromptInput): string {
   const base = normalizeBaseUrl(input.baseUrl);
   assertKey(input.key);
   const info = AGENT_INFO[input.agent] ?? AGENT_INFO.other;
-  const skill = renderSkill({ baseUrl: base, key: input.key, keyName: input.keyName }).replace(/\n+$/, "");
+  const skill = renderSkill({ baseUrl: base, key: input.key, keyName: input.keyName, networkMode: input.networkMode }).replace(/\n+$/, "");
   const testPay = offersTestPayment(input.testPayment);
+  const networkNote =
+    input.networkMode === "mainnet"
+      ? " · 主网，真 USDC，真钱 / mainnet: real USDC, real money"
+      : input.networkMode === "testnet" || testPay
+        ? " · 测试网，测试 USDC 无真实价值 / testnet: test USDC with no real value"
+        : "";
 
   const where: string[] = [];
   if (info.path) {
@@ -41,8 +49,7 @@ export function renderInstallPrompt(input: InstallPromptInput): string {
   }
 
   return [
-    `[MoneySwitch${info.label === "Other" ? "" : " / " + info.label}] 给你付费能力 / Give yourself a payment ability` +
-      (testPay ? " · 测试网，测试 USDC 无真实价值 / testnet: test USDC with no real value" : ""),
+    `[MoneySwitch${info.label === "Other" ? "" : " / " + info.label}] 给你付费能力 / Give yourself a payment ability` + networkNote,
     "",
     "请原样保存为你自己的 skill / Save everything between the BEGIN and END markers, verbatim, at:",
     "",

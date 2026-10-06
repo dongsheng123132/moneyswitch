@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { rowToMoneyKey } from "./keyrow.js";
-import type { MoneyKeyRow, LimitScope } from "./types.js";
+import type { MoneyKeyRow, LimitScope, NetworkMode } from "./types.js";
 import { MoneySwitchError } from "./types.js";
 
 /**
@@ -51,6 +51,25 @@ export function getKeyChain(db: MoneySwitchDb, keyId: string): MoneyKeyRow[] {
     nextId = key.parentId;
   }
   return chain;
+}
+
+/** The network type a chain of keys has: `conflict` when two typed levels of it disagree. */
+export type ChainNetworkMode = { conflict: false; mode: NetworkMode | null } | { conflict: true };
+
+/**
+ * SPEC.md §1, §6: a key's network type as its chain defines it: the first non-null network_mode from the key up through its ancestors, so a
+ * key without one of its own (issued before v0.7.2) follows its parent. Two typed levels that differ are a `conflict`: no code path makes one
+ * (a child always gets its parent's type), but the chain is read fresh and a payment must not guess which level is right. No typed level at
+ * all gives mode null.
+ */
+export function chainNetworkMode(chain: readonly MoneyKeyRow[]): ChainNetworkMode {
+  let mode: NetworkMode | null = null;
+  for (const key of chain) {
+    if (key.networkMode == null) continue;
+    if (mode !== null && mode !== key.networkMode) return { conflict: true };
+    mode = key.networkMode;
+  }
+  return { conflict: false, mode };
 }
 
 export function scopeAt(index: number): LimitScope {

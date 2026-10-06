@@ -8,7 +8,7 @@ import {
   keyPrefix12,
   verifySecretAgainstHash,
 } from "./moneykey.js";
-import type { MoneyKeyRow } from "./types.js";
+import type { MoneyKeyRow, NetworkMode } from "./types.js";
 import { MoneySwitchError } from "./types.js";
 import { getKeyChain, assertChainUsable } from "./chain.js";
 import { rowToMoneyKey } from "./keyrow.js";
@@ -26,6 +26,8 @@ export interface CreateMoneyKeyInput {
   expiresAt?: string | null;
   /** v0.4 (SPEC-v0.4 §A): may this (root) key create child keys? Default false. */
   canDelegate?: boolean;
+  /** v0.7.2 (SPEC.md §1): the kind of chain this key pays on, fixed for life. Omitted = null, the pre-v0.7.2 "every enabled chain" behaviour (the server always passes one). */
+  networkMode?: NetworkMode | null;
 }
 
 /**
@@ -74,6 +76,7 @@ export function createMoneyKey(
       depth: 0,
       canDelegate: input.canDelegate ?? false,
       createdBy: "admin",
+      networkMode: input.networkMode ?? null,
     })
     .run();
   const row = db.select().from(schema.moneyKeys).where(eq(schema.moneyKeys.id, id)).get();

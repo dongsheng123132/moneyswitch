@@ -31,7 +31,7 @@ export default function KeyHandoff({
   /** Address written into the skill (MONEYSWITCH_PUBLIC_URL, else the page origin). */
   skillBase: string;
   apiBase: string;
-  /** The instance runs on a testnet where the test payment is on offer (see testPaymentAvailable). */
+  /** The test payment is on offer for this key: a testnet key on an instance that enables the receiver's testnet (see testPaymentAvailable). */
   testnet?: boolean;
   onDone: () => void;
   /** Which way is shown first. Always "skill" in the app; a render test sets "other" to check the raw HTTP example is still there. */
@@ -66,7 +66,7 @@ export default function KeyHandoff({
         </button>
       </div>
 
-      {topTab === "skill" && <SkillForAi baseUrl={skillBase} secret={handoff.key} keyName={handoff.name} testPayment={testPayment} />}
+      {topTab === "skill" && <SkillForAi baseUrl={skillBase} secret={handoff.key} keyName={handoff.name} testPayment={testPayment} networkMode={handoff.networkMode} />}
 
       {topTab === "other" && (
         <div>

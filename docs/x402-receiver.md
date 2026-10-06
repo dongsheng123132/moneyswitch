@@ -11,7 +11,7 @@
 
 ## 使用
 
-在付款端创建 MoneyKey（测试网实例的建 Key 表单里勾选「允许测试付款接口」即可，它会加上允许域名 `app.moneyswitch.dev:443`），每笔和总额可先设为 `0.01`。向付款端的 `POST /v1/fetch` 发送下面的 JSON，并用该 Key 认证：
+在付款端创建 MoneyKey（实例启用了 Monad 测试网时，建 **测试网 key** 的表单里勾选「允许测试付款接口」即可，它会加上允许域名 `app.moneyswitch.dev:443`；主网 key 不提供这个选项），每笔和总额可先设为 `0.01`。向付款端的 `POST /v1/fetch` 发送下面的 JSON，并用该 Key 认证：
 
 ```json
 {"url":"https://app.moneyswitch.dev/x402-testnet/check","method":"GET","max_price":"0.01"}

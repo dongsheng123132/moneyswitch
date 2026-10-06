@@ -4,10 +4,10 @@ import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { microsToDbNumber } from "./money.js";
 import { generateMoneyKey, sha256Hex, keyPrefix12 } from "./moneykey.js";
 import { rowToMoneyKey } from "./keyrow.js";
-import { getKeyChain, assertChainUsable } from "./chain.js";
+import { getKeyChain, assertChainUsable, chainNetworkMode } from "./chain.js";
 import { usedToday, usedTotal } from "./ledger.js";
 import { revokeMoneyKey } from "./keys.js";
-import type { MoneyKeyRow } from "./types.js";
+import type { MoneyKeyRow, NetworkMode } from "./types.js";
 
 /**
  * v0.4 (SPEC-v0.4 §A): child MoneyKeys / multi-level delegation.
@@ -22,6 +22,7 @@ import type { MoneyKeyRow } from "./types.js";
  *   - child expires_at <= parent's effective expiry
  *   - child approval_threshold <= parent's effective threshold (or omitted = inherit)
  *   - child max_payments_per_minute <= parent's
+ *   - child network_mode = parent's (inherited; a child cannot pay on the other kind of chain)
  */
 
 /** Default SPEC value: root + 3 levels of children. */
@@ -78,6 +79,8 @@ export interface CreateChildKeyInput {
   canDelegate?: boolean;
   /** undefined = the parent's value. */
   maxPaymentsPerMinute?: number;
+  /** undefined/null = the parent's network mode (always inherited); any other value than the parent's is rejected. */
+  networkMode?: NetworkMode | null;
 }
 
 export interface CreateChildKeyOptions {
@@ -318,6 +321,17 @@ export function createChildKey(
     );
   }
 
+  // network_mode: the parent's, as its chain defines it (a key from before v0.7.2 follows its own parent; with no type anywhere the child has
+  // none either). Naming the parent's own value is harmless; anything else, or a parent whose chain disagrees with itself, is refused.
+  const parentType = chainNetworkMode(parentChain);
+  const parentMode = parentType.conflict ? undefined : parentType.mode;
+  if ((input.networkMode != null && input.networkMode !== parentMode) || parentType.conflict) {
+    throw new DelegationError("INVALID_REQUEST", "network_mode cannot differ from the parent key's: a child key pays on the same kind of chain", {
+      field: "network_mode",
+      parentValue: parentMode ?? null,
+    });
+  }
+
   const plaintextKey = generateMoneyKey();
   const id = randomUUID();
   db.insert(schema.moneyKeys)
@@ -340,6 +354,7 @@ export function createChildKey(
       depth: childDepth,
       canDelegate,
       createdBy: `key:${parent.id}`,
+      networkMode: parentMode ?? null,
     })
     .run();
   const row = db.select().from(schema.moneyKeys).where(eq(schema.moneyKeys.id, id)).get();

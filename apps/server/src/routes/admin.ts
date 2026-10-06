@@ -18,12 +18,31 @@ import {
   parseUsdcToMicros,
   listPaymentsForBills,
   writeAudit,
+  type NetworkMode,
 } from "@moneyswitch/core";
+import { getEnabledNetworks, NETWORKS } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
-import { keyView, statusFromIndex } from "../keyview.js";
+import { keyView, networkFacts, statusFromIndex } from "../keyview.js";
 import { runReconcileOnce } from "../reconcileJob.js";
 import { registerWalletRoutes } from "./wallet.js";
+
+/**
+ * SPEC.md §1, §6: the network type a new key is issued with. Given: it must be one the instance enables. Omitted (or null): the one kind the
+ * instance enables; with both kinds enabled the admin has to choose (NETWORK_MODE_REQUIRED), never a silent default.
+ */
+function resolveNetworkMode(requested: unknown): { mode: NetworkMode } | { code: string; message: string } {
+  if (requested !== undefined && requested !== null && requested !== "testnet" && requested !== "mainnet") {
+    return { code: "NETWORK_MODE_INVALID", message: 'network_mode must be "testnet" or "mainnet"' };
+  }
+  const enabled = new Set(getEnabledNetworks().map((n) => n.kind));
+  if (requested === "testnet" || requested === "mainnet") {
+    if (!enabled.has(requested)) return { code: "NETWORK_MODE_NOT_ENABLED", message: `no ${requested} network is enabled on this server (MONEYSWITCH_NETWORKS)` };
+    return { mode: requested };
+  }
+  if (enabled.size === 1) return { mode: [...enabled][0] };
+  return { code: "NETWORK_MODE_REQUIRED", message: 'both testnet and mainnet networks are enabled: say which one this key pays on ("testnet" or "mainnet")' };
+}
 
 export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
@@ -39,10 +58,13 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       max_payments_per_minute?: number;
       expires_at?: string | null;
       can_delegate?: boolean;
+      network_mode?: unknown;
     };
     if (body?.can_delegate !== undefined && typeof body.can_delegate !== "boolean") {
       return reply.status(400).send({ error: "can_delegate must be a boolean" });
     }
+    const networkMode = resolveNetworkMode(body?.network_mode);
+    if ("code" in networkMode) return reply.status(400).send({ error: networkMode.code, message: networkMode.message });
     try {
       const { plaintextKey, row } = createMoneyKey(ctx.db, {
         name: body.name,
@@ -55,8 +77,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         maxPaymentsPerMinute: body.max_payments_per_minute,
         expiresAt: body.expires_at ?? null,
         canDelegate: body.can_delegate === true,
+        networkMode: networkMode.mode,
       });
-      writeAudit(ctx.db, "admin", "key.create", { keyId: row.id, name: row.name, canDelegate: row.canDelegate });
+      writeAudit(ctx.db, "admin", "key.create", { keyId: row.id, name: row.name, canDelegate: row.canDelegate, networkMode: row.networkMode });
       return reply.send({
         id: row.id,
         key: plaintextKey,
@@ -72,6 +95,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         depth: row.depth,
         can_delegate: row.canDelegate,
         created_by: row.createdBy,
+        ...networkFacts([row]),
       });
     } catch (e) {
       return reply.status(400).send({ error: e instanceof Error ? e.message : "invalid_request" });
@@ -123,6 +147,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         url: a.url,
         method: a.method,
         network: a.network,
+        // 'mainnet' / 'testnet'; null for a host approval (no chain yet) or a chain the configuration table does not know
+        network_kind: NETWORKS[a.network]?.kind ?? null,
         asset: a.asset,
         pay_to: a.payTo,
         amount: formatMicrosToUsdc(a.amount),
@@ -174,6 +200,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         host: p.host,
         method: p.method,
         network: p.network,
+        // 'mainnet' / 'testnet' by the configuration table (not only the enabled chains: a row on a chain that is switched off now keeps its kind); null for a chain it does not know
+        network_kind: NETWORKS[p.network]?.kind ?? null,
         asset: p.asset,
         pay_to: p.payTo,
         amount: formatMicrosToUsdc(p.amount),

@@ -33,6 +33,8 @@ export const moneyKeys = sqliteTable("money_keys", {
   canDelegate: integer("can_delegate", { mode: "boolean" }).notNull().default(false),
   /** v0.4: "admin" or "key:<parentId>". */
   createdBy: text("created_by").notNull().default("admin"),
+  /** v0.7.2 (migration 0009): 'testnet' or 'mainnet', fixed when the key is issued; NULL = issued before this column existed, pays on every enabled network. */
+  networkMode: text("network_mode", { enum: ["testnet", "mainnet"] }),
 });
 
 /** LEGACY (v0.2 model channels of the removed OpenAI-compatible gateway): the table stays, nothing reads or writes it any more. */

@@ -8,6 +8,12 @@ export interface RenderSkillInput {
   key?: string | null;
   /** Name of the key in the dashboard, e.g. "Codex". Only shown in the personalized variant. */
   keyName?: string | null;
+  /**
+   * Which kind of chain the key pays on (SPEC.md §1). The personalized variant says so; null / undefined (a key issued before network modes,
+   * which pays on the server's only kind of chain, or on the testnets where both kinds are enabled) says nothing, so an old key's text stays as it
+   * was. The generic variant always explains both.
+   */
+  networkMode?: "testnet" | "mainnet" | null;
 }
 
 /** Frontmatter description: English triggers first, Chinese trigger words after. Kept under the 1024-char Agent Skills limit. */
@@ -81,6 +87,35 @@ export function renderSkill(input: RenderSkillInput = {}): string {
       "A timeout after sending a paid request is different: do not resend it with another client.",
     ""
   );
+
+  // --- Network -----------------------------------------------------------
+  if (!personal) {
+    push(
+      "## Network",
+      "",
+      "A MoneyKey is one of two types, chosen by the user when the key was issued and never changed: a **testnet** key pays test USDC that has no real value, only on test networks; " +
+        "a **mainnet** key pays **real USDC** (real money), only on mainnets. " +
+        "`GET " + B + "/v1/status` returns `network_mode` (`testnet` or `mainnet`; `null` for an older key from before key types, which pays on the testnets only where the server enables both kinds) and `networks` (the chains this key can pay on; `network` is `null` when there is none). " +
+        "A seller that accepts only the other type is refused (`UNSUPPORTED_PAYMENT`, nothing charged). Do not look for another way to pay it.",
+      ""
+    );
+  } else if (input.networkMode === "testnet") {
+    push(
+      "## Network",
+      "",
+      "This is a **testnet** key: it pays only on test networks, in test USDC that has no real value. " +
+        "A seller that accepts only a mainnet is refused (`UNSUPPORTED_PAYMENT`, nothing charged). Do not look for another way to pay it.",
+      ""
+    );
+  } else if (input.networkMode === "mainnet") {
+    push(
+      "## Network",
+      "",
+      "This is a **mainnet** key: it pays **real USDC** (real money), only on mainnets. " +
+        "A seller that accepts only a testnet is refused (`UNSUPPORTED_PAYMENT`, nothing charged). Pay only for what the user asked for, and tell the user every amount you spent.",
+      ""
+    );
+  }
 
   // --- When / how --------------------------------------------------------
   push("## Call a paid API", "");
@@ -162,7 +197,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     "| status | what it means | what you do |",
     "|---|---|---|",
     "| `ok` | Request completed; `payment` may be null for a free service. | Use `body`. Report any amount paid, seller host and `tx_hash`. |",
-    "| `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `PRICE_INVALID`, `INSUFFICIENT_FUNDS`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. `INSUFFICIENT_FUNDS` means the wallet does not hold enough USDC on any chain this seller accepts: ask the user to top it up, and do not retry before that. The balance is cached for at most 15 seconds, so after a top-up wait a moment, then retry. |",
+    "| `denied` | Refused; `charged` is `no`. Codes include `PER_REQUEST_LIMIT_EXCEEDED`, `MAX_PRICE_EXCEEDED`, `DAILY_BUDGET_EXCEEDED`, `TOTAL_BUDGET_EXCEEDED`, `HOST_NOT_ALLOWED`, `RATE_LIMITED`, `SSRF_BLOCKED`, `UNSUPPORTED_PAYMENT`, `PRICE_INVALID`, `INSUFFICIENT_FUNDS`, `APPROVAL_INVALID`. | Report the limit. Do not retry or bypass it with another host, higher price or key. `INSUFFICIENT_FUNDS` means the wallet does not hold enough USDC on any chain this seller accepts: ask the user to top it up, and do not retry before that. The balance is cached for at most 15 seconds, so after a top-up wait a moment, then retry. `UNSUPPORTED_PAYMENT`: the seller offers no payment this key can make (for example only a mainnet, for a testnet key); nothing was signed or charged, so do not try another key or another way. |",
     "| `approval_required` | Human approval needed, for one of two reasons: the host in `url` is not on this key's list yet (nothing has been sent to it), or the price is over the key's approval line. `GET " +
       B +
       "/v1/approvals/{approval_id}` says which in `kind`: `host` or `payment`. `approve_url` is the page where the user approves. | Send `approve_url` to the user in your reply and ask them to open it and approve. It asks for their administrator login, so you cannot approve for them and must not try. Then poll that `GET` every 15 seconds (same Authorization) until `status` is `approved`, `denied` or `expired` (about 10 minutes). If approved and `kind` is `host`, the host is on this key's list for good: resend the exact same request, without `approval_id`; if the seller's price is then over the approval line you get `approval_required` once more, with a new `approval_id` and `kind` `payment`. If approved and `kind` is `payment`, resend the exact same request plus `approval_id`. If denied or expired, stop. |",
@@ -183,7 +218,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
   push(
     "- Before a task that may need several paid calls: `GET " +
       B +
-      "/v1/status` (same `Authorization` header) returns `remaining_today`, `remaining_total`, `per_request_limit` and `approval_threshold`. Plan within them.",
+      "/v1/status` (same `Authorization` header) returns `remaining_today`, `remaining_total`, `per_request_limit`, `approval_threshold` and `network_mode`. Plan within them.",
     "- `GET " + B + "/v1/history` lists recent payments (`status`, `amount`, `tx_hash`).",
     "- After any paid work, tell the user the total you spent (sum of `payment.amount`) and what is left.",
     "- Never try to get more budget, another key, or to pay any other way. If the budget is not enough, say so and stop."

@@ -23,5 +23,6 @@ export function rowToMoneyKey(row: typeof schema.moneyKeys.$inferSelect): MoneyK
     depth: row.depth ?? 0,
     canDelegate: row.canDelegate ?? false,
     createdBy: row.createdBy ?? "admin",
+    networkMode: row.networkMode ?? null,
   };
 }

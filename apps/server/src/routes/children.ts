@@ -14,6 +14,7 @@ import {
   DEFAULT_MAX_KEY_DEPTH,
   limitFields,
   type CreateChildKeyInput,
+  type NetworkMode,
 } from "@moneyswitch/core";
 import type { AppContext } from "../context.js";
 import { requireMoneyKey } from "../auth.js";
@@ -40,6 +41,7 @@ type Body = {
   expires_at?: unknown;
   can_delegate?: unknown;
   max_payments_per_minute?: unknown;
+  network_mode?: unknown;
 };
 
 function parseAmount(body: Body, field: keyof Body, required: boolean): bigint | null {
@@ -81,6 +83,9 @@ function parseBody(body: Body): CreateChildKeyInput {
   if (body.expires_at !== undefined && body.expires_at !== null && typeof body.expires_at !== "string") {
     throw new DelegationError("INVALID_REQUEST", "expires_at must be an ISO-8601 string", { field: "expires_at" });
   }
+  if (body.network_mode !== undefined && body.network_mode !== null && body.network_mode !== "testnet" && body.network_mode !== "mainnet") {
+    throw new DelegationError("INVALID_REQUEST", 'network_mode must be "testnet" or "mainnet"', { field: "network_mode" });
+  }
   let maxPerMinute: number | undefined;
   if (body.max_payments_per_minute !== undefined && body.max_payments_per_minute !== null) {
     if (typeof body.max_payments_per_minute !== "number") {
@@ -100,6 +105,7 @@ function parseBody(body: Body): CreateChildKeyInput {
     expiresAt: (body.expires_at as string | null | undefined) ?? null,
     canDelegate: body.can_delegate === true,
     maxPaymentsPerMinute: maxPerMinute,
+    networkMode: (body.network_mode as NetworkMode | null | undefined) ?? null,
   };
 }
 
@@ -142,6 +148,7 @@ export function registerChildKeyRoutes(app: FastifyInstance, ctx: AppContext) {
         name: row.name,
         depth: row.depth,
         canDelegate: row.canDelegate,
+        networkMode: row.networkMode,
         dailyBudget: formatMicrosToUsdc(row.dailyBudget),
         totalBudget: formatMicrosToUsdc(row.totalBudget),
         perRequestLimit: formatMicrosToUsdc(row.perRequestLimit),

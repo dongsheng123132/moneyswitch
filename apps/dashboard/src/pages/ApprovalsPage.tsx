@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ShieldCheck, Check, X } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listApprovals, approveApproval, denyApproval, listKeys, ApiError, type ApprovalRow, type MoneyKeyRow } from "../api";
+import { listApprovals, approveApproval, denyApproval, listKeys, ApiError, type AdminMeta, type ApprovalRow, type MoneyKeyRow } from "../api";
+import { useAdminMeta } from "../useAdminMeta";
 import { formatUsdc, shortAddr } from "../money";
 import { SkeletonBlock } from "../components/Skeleton";
 import Avatar from "../components/Avatar";
 import Callout from "../components/Callout";
 import EmptyState from "../components/EmptyState";
 import Pill from "../components/Pill";
+import NetworkKindPill from "../components/NetworkKindPill";
 import Term from "../components/Term";
 import { useT } from "../i18n";
 import { common } from "../i18n/strings/common";
@@ -55,6 +57,7 @@ function ApprovalCard({
   success,
   now,
   onAct,
+  chainLabel,
 }: {
   approval: ApprovalRow;
   key_: MoneyKeyRow | undefined;
@@ -63,6 +66,8 @@ function ApprovalCard({
   success: "approved" | "denied" | null;
   now: number;
   onAct: (id: string, decision: Decision) => void;
+  /** The name of the chain the price is on (CAIP-2 when the server does not list it any more). */
+  chainLabel: string;
 }) {
   const t = useT(approvalsStrings);
   const tc = useT(common);
@@ -103,6 +108,11 @@ function ApprovalCard({
       ) : (
         <div className="approval-amount num">
           {formatUsdc(a.amount, { maxDecimals: 4 })} {tc("usdc")}
+        </div>
+      )}
+      {!isHost && (
+        <div className="approval-chain" data-testid="approval-chain">
+          <span>{chainLabel}</span> <NetworkKindPill kind={a.network_kind} />
         </div>
       )}
       <div className="approval-url">
@@ -157,6 +167,7 @@ export function ApprovalsView({
   error,
   now,
   onAct,
+  networks,
 }: {
   /** Pending requests; null while they load. */
   pending: ApprovalRow[] | null;
@@ -171,10 +182,13 @@ export function ApprovalsView({
   error: string | null;
   now: number;
   onAct: (id: string, decision: Decision) => void;
+  /** The chains the server enables (GET /v1/admin/meta), for the chain names. */
+  networks?: AdminMeta["networks"];
 }) {
   const t = useT(approvalsStrings);
   const tc = useT(common);
   const relTime = useRelativeTime();
+  const chainLabels = useMemo(() => new Map((networks ?? []).map((n) => [n.network, n.network_label] as const)), [networks]);
   const keyById = useMemo(() => new Map((keys ?? []).map((k) => [k.id, k] as const)), [keys]);
 
   const recentlyDecided = (all ?? [])
@@ -249,6 +263,7 @@ export function ApprovalsView({
               success={successMsg?.id === a.id ? successMsg.kind : null}
               now={now}
               onAct={onAct}
+              chainLabel={chainLabels.get(a.network) ?? a.network}
             />
           ))}
         </div>
@@ -297,6 +312,7 @@ export default function ApprovalsPage() {
   const { data: pending, error, refresh } = usePolling(() => listApprovals("pending"));
   const { data: all } = usePolling(() => listApprovals());
   const { data: keys } = usePolling(listKeys);
+  const meta = useAdminMeta();
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<{ id: string; kind: "approved" | "denied" } | null>(null);
@@ -338,6 +354,7 @@ export default function ApprovalsPage() {
       error={error}
       now={now}
       onAct={act}
+      networks={meta?.networks}
     />
   );
 }

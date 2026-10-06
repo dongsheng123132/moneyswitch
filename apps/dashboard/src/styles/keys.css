@@ -123,3 +123,47 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+/* The network type of a new key (SPEC.md §1, §2): one radio per kind the instance enables, and the real-money confirmation for a mainnet key. */
+.network-mode-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.network-mode-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 200px;
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.network-mode-option.is-active {
+  border-color: var(--accent);
+}
+
+.network-mode-title {
+  font-weight: 600;
+}
+
+.keys-real-money {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.key-legacy-hint {
+  max-width: 260px;
+  margin-top: 4px;
+}
+
+.key-network {
+  margin-top: 4px;
+}

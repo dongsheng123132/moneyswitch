@@ -1,7 +1,7 @@
 // The skill / install-prompt text is produced by @moneyswitch/skill (browser-safe, shared with the
 // server's GET /skill.md). This file adds the few Dashboard-side helpers around it.
 import { TEST_PAYMENT_HOST, TEST_PAYMENT_NETWORK, isValidBaseUrl, normalizeBaseUrl, renderInstallPrompt, type SkillAgent, type TestPaymentOffer } from "@moneyswitch/skill";
-import type { AdminMeta } from "./api";
+import type { AdminMeta, NetworkMode } from "./api";
 
 export {
   renderSkill,
@@ -16,15 +16,13 @@ export {
 } from "@moneyswitch/skill";
 
 /**
- * The ten-minute path (SPEC.md §0): is the test payment on offer on this instance? Only when EVERY network it enables is a testnet,
- * and Monad testnet (the one chain the test receiver accepts) is among them. A mainnet enabled next to a testnet is a no even when the
- * default is the testnet: the allowed host is not tied to a chain and a key cannot be edited later, so the test host would stay
- * allowed on the mainnet for the life of the key. Unknown (meta not loaded) counts as no.
+ * The ten-minute path (SPEC.md §0, §6): is the test payment on offer for a key of this network type? Only for a testnet key, and only
+ * when the instance enables Monad testnet (the one chain the test receiver accepts); a mainnet key (or one from before network modes,
+ * which could pay on a mainnet) never gets it, whatever else the instance enables. Unknown (meta not loaded) counts as no.
  */
-export function testPaymentAvailable(meta: Pick<AdminMeta, "is_mainnet" | "networks"> | null | undefined): boolean {
-  if (!meta || meta.is_mainnet !== false) return false;
-  const networks = meta.networks ?? [];
-  return networks.every((n) => !n.is_mainnet) && networks.some((n) => n.network === TEST_PAYMENT_NETWORK);
+export function testPaymentAvailable(meta: Pick<AdminMeta, "networks"> | null | undefined, networkMode: NetworkMode | null | undefined): boolean {
+  if (!meta || networkMode !== "testnet") return false;
+  return (meta.networks ?? []).some((n) => n.network === TEST_PAYMENT_NETWORK);
 }
 
 /** The hosts a new key gets: what was typed plus, when it is on offer and ticked, the test receiver's host. No duplicates (any letter case). */
@@ -73,11 +71,18 @@ export interface InstallTextResult {
  * Builds the install text for the Dashboard, turning renderer exceptions into a small error code.
  * The address is checked first: it does not depend on the key, and no key can fix it.
  */
-export function buildInstallText(p: { baseUrl: string; key: string; keyName?: string | null; agent: SkillAgent; testPayment?: TestPaymentOffer | null }): InstallTextResult {
+export function buildInstallText(p: {
+  baseUrl: string;
+  key: string;
+  keyName?: string | null;
+  agent: SkillAgent;
+  testPayment?: TestPaymentOffer | null;
+  networkMode?: NetworkMode | null;
+}): InstallTextResult {
   if (!isValidBaseUrl(p.baseUrl)) return { text: null, display: null, error: "bad_url" };
   const key = p.key.trim();
   if (!key) return { text: null, display: null, error: "no_key" };
   if (!looksLikeMoneyKey(key)) return { text: null, display: null, error: "bad_key" };
-  const text = renderInstallPrompt({ baseUrl: p.baseUrl, key, keyName: p.keyName, agent: p.agent, testPayment: p.testPayment });
+  const text = renderInstallPrompt({ baseUrl: p.baseUrl, key, keyName: p.keyName, agent: p.agent, testPayment: p.testPayment, networkMode: p.networkMode });
   return { text, display: maskedForDisplay(text, key), error: null };
 }

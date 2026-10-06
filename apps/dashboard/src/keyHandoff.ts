@@ -2,7 +2,7 @@
 // a freshly created key, or the new secret of "Reset secret and copy skill".
 // Plain data + one small async helper, so the state transition is testable
 // without a DOM (see test/keyHandoff.test.ts).
-import type { CreateMoneyKeyResponse, RotateKeyResponse } from "./api";
+import type { CreateMoneyKeyResponse, NetworkMode, RotateKeyResponse } from "./api";
 
 export interface Handoff {
   /** Unique per handoff; use it as the React key so a new secret starts a fresh view (never use the secret itself as a key). */
@@ -13,16 +13,18 @@ export interface Handoff {
   name: string;
   /** The hosts the key may pay: whether the install prompt may ask for the test payment depends on them. */
   allowedHosts: string[];
+  /** The key's network type: the skill says which, and the test payment is only offered to a testnet key. null = a key from before network modes. */
+  networkMode: NetworkMode | null;
 }
 
 let nextId = 1;
 
-export function handoffFromCreated(res: Pick<CreateMoneyKeyResponse, "key" | "name" | "allowed_hosts">): Handoff {
-  return { id: nextId++, kind: "created", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [] };
+export function handoffFromCreated(res: Pick<CreateMoneyKeyResponse, "key" | "name" | "allowed_hosts"> & { network_mode?: NetworkMode | null }): Handoff {
+  return { id: nextId++, kind: "created", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [], networkMode: res.network_mode ?? null };
 }
 
-export function handoffFromRotated(res: Pick<RotateKeyResponse, "key" | "name" | "allowed_hosts">): Handoff {
-  return { id: nextId++, kind: "rotated", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [] };
+export function handoffFromRotated(res: Pick<RotateKeyResponse, "key" | "name" | "allowed_hosts"> & { network_mode?: NetworkMode | null }): Handoff {
+  return { id: nextId++, kind: "rotated", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [], networkMode: res.network_mode ?? null };
 }
 
 export type RotateOutcome = { ok: true; handoff: Handoff } | { ok: false; message: string };

@@ -56,6 +56,16 @@ describe("rotateToHandoff", () => {
     assert.deepEqual(odd, { ok: false, message: "rotate_failed" });
   });
 
+  it("the handoff carries the key's network type (the skill says which), null for a key from before network types", async () => {
+    const created = handoffFromCreated({ key: OLD_KEY, name: "a", allowed_hosts: [], network_mode: "mainnet" });
+    assert.equal(created.networkMode, "mainnet");
+    assert.equal(handoffFromCreated({ key: OLD_KEY, name: "a", allowed_hosts: [] }).networkMode, null);
+    const outcome = await rotateToHandoff("key-1", async () => rotatedResponse({ network_mode: "testnet" }));
+    assert.ok(outcome.ok && outcome.handoff.networkMode === "testnet", "a reset keeps the kind of the key");
+    const old = await rotateToHandoff("key-1", async () => rotatedResponse());
+    assert.ok(old.ok && old.handoff.networkMode === null);
+  });
+
   it("every handoff has its own id (the React key that restarts the view on the skill tab)", () => {
     const a = handoffFromCreated({ key: OLD_KEY, name: "a", allowed_hosts: [] });
     const b = handoffFromRotated({ key: NEW_KEY, name: "a", allowed_hosts: [] });
