@@ -3,6 +3,24 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
+## v0.7.2 — 2026-10-06
+
+**Testnet keys and mainnet keys on one server** (SPEC §1, §2, §6). Real use runs a testnet first and then a little real money, often on the
+same server and wallet (the user and the judges on app.moneyswitch.dev).
+
+- **Each key has a network type, testnet or mainnet**, chosen at issue and never changed (`network_mode`; migration `0009_network_mode`,
+  additive). A key pays only on enabled chains of its kind; a seller that only accepts the other kind gives `UNSUPPORTED_PAYMENT`,
+  `charged: no`, nothing leased, reserved or signed. `POST /v1/keys` infers the type on a single-kind instance and needs it when both kinds
+  are enabled (`NETWORK_MODE_REQUIRED`, `NETWORK_MODE_NOT_ENABLED`, `NETWORK_MODE_INVALID`). Child keys follow their parent; a key and its
+  ancestors are read together, and two different types along the chain pay nowhere.
+- **Keys issued before v0.7.2** keep working: unchanged on a single-kind instance, **testnets only** when both kinds are enabled, so adding a
+  mainnet never lets an old key you handed out spend real money. The Dashboard marks them "Legacy key" with the chains they pay on.
+- **Shown apart:** wallet balances in a mainnet (real money) and a testnet (no value) group; bills mark each row, keep the totals of the
+  two kinds apart, filter by kind and export `network_kind`; approvals and key badges show the kind; the top bar says "Mainnet + Testnet"
+  on a mixed instance. Issuing a mainnet key needs the "this key spends real money" tick.
+- **The test payment** (the ten-minute path) is offered to testnet keys whenever Monad testnet is enabled, also next to a mainnet.
+- **Rolling back below v0.7.2** widens every key to every enabled chain: set `MONEYSWITCH_NETWORKS` to one kind first (deploy README).
+
 ## v0.7.1 — 2026-10-06
 
 Positioning, settled 2026-10-04 (SPEC §0, §8): **one MoneySwitch spends for one payer.** Open sign-up, per-user balances, deposits,
