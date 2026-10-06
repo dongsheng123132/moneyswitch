@@ -3,6 +3,19 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
+## v0.7.4 — 2026-10-06
+
+**The person who holds a key approves its requests, with a 4–6 digit PIN** (SPEC §2, §3). Found in a real test: approval links needed the
+administrator's token, so every employee's new site and every payment over the line landed on the administrator.
+
+- Each root key has a PIN (`approval_pin`, salted scrypt; migration `0010_approval_pin`, additive), set by the administrator when issuing the
+  key (the employee may pick it) or generated, shown once, and replaceable without rotating the key (`POST /v1/keys/:id/approval-pin`).
+  Weak PINs (1111, 1234, 4321, common ones) are refused. Child keys use their root key's PIN; keys issued before v0.7.4 stay
+  administrator-only until a PIN is set.
+- The approval link opens without login and shows that one request; the PIN approves or denies it. A key can never approve. Wrong PINs
+  count since the PIN was last set and five lock it until the administrator sets a new one; the count is shown on the page and the key list.
+- The page warns never to tell the PIN to the AI or paste it into a chat; the skill text tells the AI never to ask for or submit one.
+
 ## v0.7.3 — 2026-10-06
 
 - **The key form says what happens to an unlisted site.** Since v0.7.1 a site the key does not list asks for approval once, but the
