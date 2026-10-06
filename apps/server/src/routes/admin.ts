@@ -18,11 +18,16 @@ import {
   parseUsdcToMicros,
   listPaymentsForBills,
   writeAudit,
+  setApprovalPin,
+  approvalPinState,
+  approvalPinStatusOfKey,
+  ApprovalPinError,
+  type ApprovalRow,
   type NetworkMode,
 } from "@moneyswitch/core";
 import { getEnabledNetworks, NETWORKS } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
-import { requireAdmin } from "../auth.js";
+import { requireAdmin, requireAdminOrApprovalPin } from "../auth.js";
 import { keyView, networkFacts, statusFromIndex } from "../keyview.js";
 import { runReconcileOnce } from "../reconcileJob.js";
 import { registerWalletRoutes } from "./wallet.js";
@@ -46,6 +51,7 @@ function resolveNetworkMode(requested: unknown): { mode: NetworkMode } | { code:
 
 export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
+  const adminOrPinGuard = requireAdminOrApprovalPin(ctx);
 
   app.post("/v1/keys", { preHandler: adminGuard }, async (req, reply) => {
     const body = req.body as {
@@ -59,6 +65,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       expires_at?: string | null;
       can_delegate?: boolean;
       network_mode?: unknown;
+      approval_pin?: unknown;
     };
     if (body?.can_delegate !== undefined && typeof body.can_delegate !== "boolean") {
       return reply.status(400).send({ error: "can_delegate must be a boolean" });
@@ -66,7 +73,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     const networkMode = resolveNetworkMode(body?.network_mode);
     if ("code" in networkMode) return reply.status(400).send({ error: networkMode.code, message: networkMode.message });
     try {
-      const { plaintextKey, row } = createMoneyKey(ctx.db, {
+      const { plaintextKey, approvalPin, row } = createMoneyKey(ctx.db, {
         name: body.name,
         totalBudget: parseUsdcToMicros(body.total_budget),
         dailyBudget: parseUsdcToMicros(body.daily_budget),
@@ -78,11 +85,14 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         expiresAt: body.expires_at ?? null,
         canDelegate: body.can_delegate === true,
         networkMode: networkMode.mode,
+        approvalPin: body.approval_pin as string | null | undefined,
       });
       writeAudit(ctx.db, "admin", "key.create", { keyId: row.id, name: row.name, canDelegate: row.canDelegate, networkMode: row.networkMode });
       return reply.send({
         id: row.id,
         key: plaintextKey,
+        // the PIN of the person who holds the key (SPEC.md §3): shown once, here; only a salted hash of it is kept
+        approval_pin: approvalPin,
         name: row.name,
         total_budget: formatMicrosToUsdc(row.totalBudget),
         daily_budget: formatMicrosToUsdc(row.dailyBudget),
@@ -98,18 +108,25 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
         ...networkFacts([row]),
       });
     } catch (e) {
+      if (e instanceof ApprovalPinError) return reply.status(400).send({ error: e.code, message: e.message });
       return reply.status(400).send({ error: e instanceof Error ? e.message : "invalid_request" });
     }
   });
 
-  /** v0.4: every key with parent_id/depth/can_delegate/children_count/status (flat, oldest first). */
+  /**
+   * v0.4: every key with parent_id/depth/can_delegate/children_count/status (flat, oldest first). v0.7.4: `approval_pin_state` for a root key
+   * ("none" = only the administrator can approve for it, "set", "locked") and `approval_pin_failures` (wrong PINs since it was last set); both
+   * null for a child key, which uses its root key's PIN.
+   */
   function allKeyViews() {
     const rows = listMoneyKeys(ctx.db);
     const byId = new Map(rows.map((r) => [r.id, r]));
     const counts = childrenCounts(ctx.db);
-    return rows.map((row) =>
-      keyView(ctx.db, row, { childrenCount: counts.get(row.id) ?? 0, status: statusFromIndex(row, byId) })
-    );
+    return rows.map((row) => ({
+      ...keyView(ctx.db, row, { childrenCount: counts.get(row.id) ?? 0, status: statusFromIndex(row, byId) }),
+      approval_pin_state: row.parentId == null ? approvalPinState(row) : null,
+      approval_pin_failures: row.parentId == null ? row.approvalPinFailures : null,
+    }));
   }
 
   app.get("/v1/keys", { preHandler: adminGuard }, async (_req, reply) => {
@@ -136,40 +153,84 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.send({ id, revoked: true });
   });
 
-  app.get("/v1/approvals", { preHandler: adminGuard }, async (req, reply) => {
-    expireStaleApprovals(ctx.db);
-    const { status } = req.query as { status?: string };
-    const rows = listApprovals(ctx.db, status);
-    return reply.send({
-      approvals: rows.map((a) => ({
-        id: a.id,
-        key_id: a.keyId,
-        url: a.url,
-        method: a.method,
-        network: a.network,
-        // 'mainnet' / 'testnet'; null for a host approval (no chain yet) or a chain the configuration table does not know
-        network_kind: NETWORKS[a.network]?.kind ?? null,
-        asset: a.asset,
-        pay_to: a.payTo,
-        amount: formatMicrosToUsdc(a.amount),
-        status: a.status,
-        kind: a.kind,
-        // a new host's host:port as approving it lists it (core's hostPortOf, the one place it is computed): the page shows this, it parses nothing
-        ...(a.kind === "host" ? { host: hostOfApproval(a) } : {}),
-        expires_at: a.expiresAt,
-        decided_at: a.decidedAt,
-        created_at: a.createdAt,
-      })),
-    });
+  // SPEC.md §3: the person who holds a root key has a 4-6 digit PIN for its approvals. Setting one (a random 4-digit one when none is given)
+  // replaces the old and unlocks; resetting the key's secret never touches it. A child key has none (400): it uses its root key's.
+  app.post("/v1/keys/:id/approval-pin", { preHandler: adminGuard }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const res = setApprovalPin(ctx.db, id, (req.body as { approval_pin?: unknown } | null | undefined)?.approval_pin);
+      if (!res) return reply.status(404).send({ error: "not_found" });
+      writeAudit(ctx.db, "admin", "key.approval_pin_set", { keyId: id, name: res.row.name });
+      return reply.header("cache-control", "no-store").send({ id, approval_pin: res.approvalPin });
+    } catch (e) {
+      if (e instanceof ApprovalPinError) return reply.status(400).send({ error: e.code, message: e.message });
+      throw e;
+    }
   });
 
-  app.post("/v1/approvals/:id/approve", { preHandler: adminGuard }, async (req, reply) => {
+  /** One approval as the list and the approval link show it. */
+  function approvalFields(a: ApprovalRow) {
+    return {
+      id: a.id,
+      key_id: a.keyId,
+      url: a.url,
+      method: a.method,
+      network: a.network,
+      // 'mainnet' / 'testnet'; null for a host approval (no chain yet) or a chain the configuration table does not know
+      network_kind: NETWORKS[a.network]?.kind ?? null,
+      asset: a.asset,
+      pay_to: a.payTo,
+      amount: formatMicrosToUsdc(a.amount),
+      status: a.status,
+      kind: a.kind,
+      // a new host's host:port as approving it lists it (core's hostPortOf, the one place it is computed): the page shows this, it parses nothing
+      ...(a.kind === "host" ? { host: hostOfApproval(a) } : {}),
+      expires_at: a.expiresAt,
+      decided_at: a.decidedAt,
+      created_at: a.createdAt,
+    };
+  }
+
+  // The administrator's list; with ?id=<approval id> no login is needed and the answer is that one request (SPEC.md §3: the approval link opens
+  // for the person who holds the key). The id is a random UUID the AI was given with the request: it is what lets one look at this request and
+  // nothing else; deciding it still takes the key's PIN or the administrator. `pin_state` ("set" / "none" / "locked") and `pin_failures` (wrong
+  // tries since it was last set) are those of its root key's PIN.
+  app.get(
+    "/v1/approvals",
+    { preHandler: async (req, reply) => ((req.query as { id?: unknown }).id === undefined ? adminGuard(req, reply) : undefined) },
+    async (req, reply) => {
+      expireStaleApprovals(ctx.db);
+      const { status, id } = req.query as { status?: string; id?: unknown };
+      if (id !== undefined) {
+        const a = typeof id === "string" ? getApproval(ctx.db, id) : undefined;
+        if (!a) return reply.status(404).send({ error: "not_found" });
+        const { key_id: _keyId, ...fields } = approvalFields(a);
+        const pin = approvalPinStatusOfKey(ctx.db, a.keyId);
+        return reply.send({
+          approval: {
+            ...fields,
+            key_name: getMoneyKeyById(ctx.db, a.keyId)?.name ?? null,
+            network_label: NETWORKS[a.network]?.label ?? null,
+            pin_state: pin.state,
+            pin_failures: pin.failures,
+          },
+        });
+      }
+      return reply.send({ approvals: listApprovals(ctx.db, status).map(approvalFields) });
+    }
+  );
+
+  // Approve / deny: the administrator, or the person who holds the key with its PIN in the body (requireAdminOrApprovalPin); the audit row says which.
+  app.post("/v1/approvals/:id/approve", { preHandler: adminOrPinGuard }, async (req, reply) => {
     const { id } = req.params as { id: string };
+    const actor = req.approvalActor!;
     try {
       // A new host (SPEC.md §3): one DNS look, then in one transaction the approval is approved and host:port joins the key's allowed hosts.
       const row =
-        getApproval(ctx.db, id)?.kind === "host" ? (await approveHostApproval(ctx.sqlite, ctx.db, id)).approval : decideApproval(ctx.db, id, "approved");
-      writeAudit(ctx.db, "admin", "approval.approve", { approvalId: id });
+        getApproval(ctx.db, id)?.kind === "host"
+          ? (await approveHostApproval(ctx.sqlite, ctx.db, id, actor)).approval
+          : decideApproval(ctx.db, id, "approved");
+      writeAudit(ctx.db, actor, "approval.approve", { approvalId: id });
       return reply.send({ id: row.id, status: row.status });
     } catch (e) {
       if (e instanceof AllowHostError) return reply.status(400).send({ error: e.code, message: e.message });
@@ -177,11 +238,12 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     }
   });
 
-  app.post("/v1/approvals/:id/deny", { preHandler: adminGuard }, async (req, reply) => {
+  app.post("/v1/approvals/:id/deny", { preHandler: adminOrPinGuard }, async (req, reply) => {
     const { id } = req.params as { id: string };
+    const actor = req.approvalActor!;
     try {
       const row = decideApproval(ctx.db, id, "denied");
-      writeAudit(ctx.db, "admin", "approval.deny", { approvalId: id });
+      writeAudit(ctx.db, actor, "approval.deny", { approvalId: id });
       return reply.send({ id: row.id, status: row.status });
     } catch (e) {
       return reply.status(400).send({ error: e instanceof Error ? e.message : "invalid_request" });

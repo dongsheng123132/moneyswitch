@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import fs from "node:fs";
 import { Writable } from "node:stream";
 import Fastify from "fastify";
+import { createApproval, listAudit } from "@moneyswitch/core";
 import { unlockSecretPath } from "@moneyswitch/wallet";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { registerAdminRoutes } from "../../src/routes/admin.js";
@@ -98,6 +99,40 @@ describe("Log redaction", () => {
     expect(captured).toContain("/v1/admin/wallet/replace"); // the requests really were logged
     for (const secret of [created.recovery_phrase, replaced.recovery_phrase, words.slice(0, 4).join(" "), unlockSecret, "redaction-wallet-password", t.adminToken]) {
       expect(captured).not.toContain(secret);
+    }
+  });
+
+  it("an approval PIN never appears in log output (issuing a key, setting a PIN, approving with it)", async () => {
+    t = await buildTestApp();
+    let captured = "";
+    const stream = new Writable({
+      write(chunk, _enc, cb) {
+        captured += chunk.toString();
+        cb();
+      },
+    });
+    const loggedApp = Fastify({ logger: { stream, level: "trace" } });
+    registerAdminRoutes(loggedApp, t.ctx);
+    await loggedApp.ready();
+    const headers = { authorization: `Bearer ${t.adminToken}` };
+
+    const created = await loggedApp.inject({
+      method: "POST",
+      url: "/v1/keys",
+      headers,
+      payload: { name: "pin", total_budget: "5", daily_budget: "1", per_request_limit: "1", allowed_hosts: ["example.com:443"], approval_pin: "739155" },
+    });
+    const id = created.json().id as string;
+    await loggedApp.inject({ method: "POST", url: `/v1/keys/${id}/approval-pin`, headers, payload: { approval_pin: "620417" } });
+    const approval = createApproval(t.ctx.db, { keyId: id, url: "https://example.com/x", method: "GET", body: undefined, network: "n", asset: "a", payTo: "p", amount: 1n });
+    await loggedApp.inject({ method: "POST", url: `/v1/approvals/${approval.id}/approve`, payload: { pin: "111111" } }); // wrong, counted
+    await loggedApp.inject({ method: "POST", url: `/v1/approvals/${approval.id}/approve`, payload: { pin: "620417" } });
+    await loggedApp.close();
+
+    expect(captured).toContain("/approval-pin"); // the requests really were logged
+    for (const pin of ["739155", "620417", "111111"]) {
+      expect(captured).not.toContain(pin);
+      expect(JSON.stringify(listAudit(t.ctx.db, 200))).not.toContain(pin);
     }
   });
 });

@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus, KeyRound } from "lucide-react";
 import { usePolling } from "../usePolling";
-import { listKeys, createKey, revokeKey, rotateKey, ApiError, type NetworkMode } from "../api";
+import { listKeys, createKey, revokeKey, rotateKey, setApprovalPin, ApiError, type NetworkMode } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
 import Avatar from "../components/Avatar";
 import Pill from "../components/Pill";
+import { pinProblem } from "../approvalPin";
+import ApprovalPinField from "../components/ApprovalPinField";
+import ApprovalPinNotice from "../components/ApprovalPinNotice";
 import KeyNetworkBadge from "../components/KeyNetworkBadge";
+import KeyPinState from "../components/KeyPinState";
 import NetworkModeField from "../components/NetworkModeField";
 import ProgressBar from "../components/ProgressBar";
 import Drawer from "../components/Drawer";
@@ -46,6 +50,8 @@ interface FormState {
   network_mode: NetworkMode | null;
   /** A mainnet key must be confirmed: it spends real money. */
   confirm_real_money: boolean;
+  /** The approval PIN for the person who holds the key (SPEC.md §3): 4-6 digits, or empty for a random one. */
+  approval_pin: string;
 }
 
 function emptyForm(hosts: string): FormState {
@@ -61,6 +67,7 @@ function emptyForm(hosts: string): FormState {
     allow_test_endpoint: true,
     network_mode: null,
     confirm_real_money: false,
+    approval_pin: "",
   };
 }
 
@@ -120,6 +127,12 @@ export default function MoneyKeysPage() {
   const [rotateTarget, setRotateTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  // "Set confirmation code" (the key's approval PIN, SPEC.md §3): the dialog target and what it typed, then the new PIN shown once.
+  const [pinTarget, setPinTarget] = useState<{ id: string; name: string } | null>(null);
+  const [pinInput, setPinInput] = useState("");
+  const [pinSetting, setPinSetting] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinNotice, setPinNotice] = useState<{ name: string; pin: string } | null>(null);
   // The network type the form is on (SPEC.md §2): only the kinds the instance enables are offered, the testnet first.
   const kinds = enabledNetworkKinds(meta);
   const networkMode = effectiveNetworkMode(kinds, form.network_mode);
@@ -156,6 +169,8 @@ export default function MoneyKeysPage() {
     if (!isPositiveDecimal(form.total_budget)) e.total_budget = t("errDecimal");
     if (!isNonNegativeDecimalOrEmpty(form.approval_threshold)) e.approval_threshold = t("errDecimalOptional");
     if (!realMoneyConfirmed(networkMode, form.confirm_real_money)) e.confirm_real_money = t("errRealMoney");
+    const pinIssue = pinProblem(form.approval_pin);
+    if (pinIssue) e.approval_pin = pinIssue === "weak" ? t("pinWeak") : t("errPin");
     return e;
   }, [form, networkMode, t]);
   const hasErrors = Object.keys(errors).length > 0;
@@ -188,11 +203,12 @@ export default function MoneyKeysPage() {
         max_payments_per_minute: form.max_payments_per_minute ? Number(form.max_payments_per_minute) : undefined,
         expires_at: expiresIso,
         network_mode: networkMode,
+        approval_pin: form.approval_pin ? form.approval_pin : undefined,
       });
       setHandoff(handoffFromCreated(res));
       refresh();
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "create_failed");
+      setCreateError(err instanceof ApiError && err.error === "APPROVAL_PIN_WEAK" ? t("pinWeak") : err instanceof ApiError ? err.message : err instanceof Error ? err.message : "create_failed");
     } finally {
       setCreating(false);
     }
@@ -210,6 +226,32 @@ export default function MoneyKeysPage() {
       setRevokeError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : "revoke_failed");
     } finally {
       setRevokingId(null);
+    }
+  }
+
+  async function onSetPin() {
+    if (!pinTarget) return;
+    const pinIssue = pinProblem(pinInput);
+    if (pinIssue) {
+      setPinError(pinIssue === "weak" ? t("pinWeak") : t("errPin"));
+      return;
+    }
+    setPinSetting(true);
+    setPinError(null);
+    try {
+      const res = await setApprovalPin(pinTarget.id, pinInput || undefined);
+      setPinNotice({ name: pinTarget.name, pin: res.approval_pin });
+      setPinTarget(null);
+      setPinInput("");
+      refresh();
+    } catch (e) {
+      setPinError(
+        e instanceof ApiError && e.error === "APPROVAL_PIN_WEAK"
+          ? t("pinWeak")
+          : t("pinSetFailed", { message: e instanceof ApiError ? e.message : e instanceof Error ? e.message : "set_failed" })
+      );
+    } finally {
+      setPinSetting(false);
     }
   }
 
@@ -250,6 +292,19 @@ export default function MoneyKeysPage() {
       {error && <Callout tone="error">{error}</Callout>}
       {revokeError && <Callout tone="error">{revokeError}</Callout>}
       {revokeSuccess && <Callout tone="success">{revokeSuccess}</Callout>}
+      {pinNotice && (
+        <Callout
+          tone="success"
+          title={t("pinSetDoneTitle", { name: pinNotice.name })}
+          action={
+            <button type="button" className="btn small secondary" onClick={() => setPinNotice(null)}>
+              {tc("done")}
+            </button>
+          }
+        >
+          <ApprovalPinNotice pin={pinNotice.pin} />
+        </Callout>
+      )}
 
       <div className="card">
         {loading && !keys ? (
@@ -299,6 +354,7 @@ export default function MoneyKeysPage() {
                       <div className="key-network">
                         <KeyNetworkBadge mode={k.network_mode} active={k.status === "active"} chains={(k.networks ?? []).map((c) => chainLabels.get(c) ?? c)} />
                       </div>
+                      {k.status === "active" && <KeyPinState state={k.approval_pin_state} failures={k.approval_pin_failures} />}
                     </td>
                     <td className="mono">{k.key_prefix}••••</td>
                     <td style={{ minWidth: 130 }}>
@@ -332,6 +388,15 @@ export default function MoneyKeysPage() {
                           setRotateError(null);
                           setRotateTarget({ id: k.id, name: k.name });
                         }}
+                        onSetPin={
+                          k.parent_id == null
+                            ? () => {
+                                setPinError(null);
+                                setPinInput("");
+                                setPinTarget({ id: k.id, name: k.name });
+                              }
+                            : undefined
+                        }
                         onAskRevoke={() => setRevokeConfirmId(k.id)}
                         onRevoke={() => onRevoke(k.id)}
                         onCancelRevoke={() => setRevokeConfirmId(null)}
@@ -376,6 +441,14 @@ export default function MoneyKeysPage() {
               <div className="field-hint">{t("nameHint")}</div>
               {errors.name && <div className="field-error">{errors.name}</div>}
             </div>
+
+            <ApprovalPinField
+              id="key-approval-pin"
+              value={form.approval_pin}
+              onChange={(approval_pin) => setForm({ ...form, approval_pin })}
+              error={errors.approval_pin}
+              hint
+            />
 
             <AllowedHostsField
               value={form.allowed_hosts}
@@ -498,6 +571,23 @@ export default function MoneyKeysPage() {
           />
         )}
       </Drawer>
+
+      <ConfirmDialog
+        open={pinTarget !== null}
+        title={t("pinSetTitle", { name: pinTarget?.name ?? "" })}
+        confirmLabel={pinSetting ? t("pinSetting") : t("pinSetConfirm")}
+        busy={pinSetting}
+        danger={false}
+        error={pinError}
+        onConfirm={onSetPin}
+        onCancel={() => {
+          setPinTarget(null);
+          setPinError(null);
+        }}
+      >
+        <p>{t("pinSetBody")}</p>
+        <ApprovalPinField id="set-approval-pin" value={pinInput} onChange={setPinInput} error={pinProblem(pinInput) === "weak" ? t("pinWeak") : undefined} />
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={rotateTarget !== null}

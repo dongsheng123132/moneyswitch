@@ -281,12 +281,14 @@ async function assertHostIsPublic(hostname: string): Promise<void> {
  *
  * Refused (AllowHostError, nothing changed, the approval stays pending) unless it is a pending, unexpired 'host' approval of a usable
  * ROOT key and the host passes the look. Async only for that look, made before the transaction opens; the transaction re-checks
- * everything it decides on.
+ * everything it decides on. `actor` is who approved, as the audit row names them: "admin", or `pin:<root key id>` for the person who
+ * holds the key (SPEC.md §3); the rules above are the same for both.
  */
 export async function approveHostApproval(
   sqlite: { exec(sql: string): unknown },
   db: MoneySwitchDb,
-  approvalId: string
+  approvalId: string,
+  actor = "admin"
 ): Promise<{ approval: ApprovalRow; host: string }> {
   await assertHostIsPublic(normalizedHostname(new URL(approvableHost(db, approvalId).row.url)));
   sqlite.exec("BEGIN IMMEDIATE");
@@ -301,7 +303,7 @@ export async function approveHostApproval(
         .run();
     }
     const approval = decideApproval(db, approvalId, "approved");
-    writeAudit(db, "admin", "key.allow_host", { keyId: key.id, host, approvalId });
+    writeAudit(db, actor, "key.allow_host", { keyId: key.id, host, approvalId });
     sqlite.exec("COMMIT");
     return { approval, host };
   } catch (e) {

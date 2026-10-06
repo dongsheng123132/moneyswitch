@@ -15,16 +15,28 @@ export interface Handoff {
   allowedHosts: string[];
   /** The key's network type: the skill says which, and the test payment is only offered to a testnet key. null = a key from before network modes. */
   networkMode: NetworkMode | null;
+  /** The approval PIN of the person who holds the key (SPEC.md §3): shown once next to the key, for a person, never in the skill text. null for a reset: a reset never changes the PIN. */
+  approvalPin: string | null;
 }
 
 let nextId = 1;
 
-export function handoffFromCreated(res: Pick<CreateMoneyKeyResponse, "key" | "name" | "allowed_hosts"> & { network_mode?: NetworkMode | null }): Handoff {
-  return { id: nextId++, kind: "created", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [], networkMode: res.network_mode ?? null };
+export function handoffFromCreated(
+  res: Pick<CreateMoneyKeyResponse, "key" | "name" | "allowed_hosts"> & { network_mode?: NetworkMode | null; approval_pin?: string | null }
+): Handoff {
+  return {
+    id: nextId++,
+    kind: "created",
+    key: res.key,
+    name: res.name,
+    allowedHosts: res.allowed_hosts ?? [],
+    networkMode: res.network_mode ?? null,
+    approvalPin: res.approval_pin ?? null,
+  };
 }
 
 export function handoffFromRotated(res: Pick<RotateKeyResponse, "key" | "name" | "allowed_hosts"> & { network_mode?: NetworkMode | null }): Handoff {
-  return { id: nextId++, kind: "rotated", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [], networkMode: res.network_mode ?? null };
+  return { id: nextId++, kind: "rotated", key: res.key, name: res.name, allowedHosts: res.allowed_hosts ?? [], networkMode: res.network_mode ?? null, approvalPin: null };
 }
 
 export type RotateOutcome = { ok: true; handoff: Handoff } | { ok: false; message: string };

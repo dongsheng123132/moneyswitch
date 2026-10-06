@@ -313,8 +313,8 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       );
     } catch (e) {
       if (e instanceof ApprovalRequiredError) {
-        // The page where the human approves (SPEC.md §3). The link carries no token and no secret: approving needs the administrator's
-        // own login, so an AI that holds this link (and its own key) still cannot approve anything.
+        // The page where the human approves (SPEC.md §3). The link carries no token and no secret: approving needs the PIN of the person who
+        // holds the key (or the administrator's login), so an AI that holds this link (and its own key) still cannot approve anything.
         const approveUrl = `${publicBase(ctx)}/approvals?id=${encodeURIComponent(e.approvalId)}`;
         return reply.send(envelope("approval_required", "APPROVAL_REQUIRED", "no", { approval_id: e.approvalId, approve_url: approveUrl }));
       }

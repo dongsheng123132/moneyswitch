@@ -7,11 +7,14 @@ import { requireMoneyKey } from "../auth.js";
  * Agent-facing, read-only approval lookup: after /v1/fetch answers
  * `approval_required`, the agent polls this until the human has decided.
  *
- * Distinct from the admin `GET /v1/approvals` list (routes/admin.ts), which
- * needs ms_admin_xxx and sees every key's approvals. This one needs
- * mk_live_xxx and only ever returns an approval that was created for *that*
- * MoneyKey. Every other case (another key's id, unknown id) answers the same
- * 404, so a MoneyKey can never learn whether an id belongs to someone else.
+ * Distinct from the approvals routes of the people (routes/admin.ts): the
+ * administrator's `GET /v1/approvals` list (ms_admin_xxx, every key's approvals),
+ * the approval link's read (`GET /v1/approvals?id=…`, no login) and approve /
+ * deny (the administrator, or the key's PIN, which the AI never has). This one
+ * needs mk_live_xxx, can only read, and only ever returns an approval that was
+ * created for *that* MoneyKey. Every other case (another key's id, unknown id)
+ * answers the same 404, so a MoneyKey can never learn whether an id belongs to
+ * someone else.
  *
  * Response (the cross-package contract): {id, status, kind, amount, currency, url, method, expires_at}, plus `host` for a "host" approval.
  * `kind` is "payment" (a price over the approval line) or "host" (a host outside the key's allowed list; amount is then 0 because

@@ -7,6 +7,7 @@ export * from "./delegation.js";
 export * from "./ledger.js";
 export * from "./audit.js";
 export * from "./approval.js";
+export * from "./approval-pin.js";
 export * from "./host-approval.js";
 export * from "./request-body.js";
 export * from "./policy.js";

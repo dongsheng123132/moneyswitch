@@ -103,6 +103,26 @@ export const keysStrings = defineMessages(
     keyFieldLabel: "Your Money Key",
     nextHeading: "Next: hand this key to the agent",
 
+    // Approval PIN (SPEC.md §3): a 4-6 digit confirmation code for the person who holds the key; the AI never has it
+    pinFieldLabel: "Confirmation code for the person who uses this key (4–6 digits; leave empty to generate one)",
+    pinFieldPlaceholder: "e.g. 4827",
+    pinFieldHint: "When the AI meets a new site or a payment over the approval line, it sends an approval link to whoever holds the key, and they type this code to approve. It is never in the skill text, so the AI cannot approve for itself.",
+    errPin: "The confirmation code is 4 to 6 digits (or leave it empty).",
+    pinWeak: "Too easy to guess, pick another",
+    pinFailures: "Wrong tries so far: {n} ({max} lock it)",
+    pinHandoffTitle: "Confirmation code (for a person, do not give it to the AI)",
+    pinHandoffNote:
+      "Never give it to the AI or paste it into a chat. When the AI meets a new site or a payment over the approval line, it sends the approval link to the person who holds the key; they open it and type this code to approve. Give it to whoever uses this key, or keep it yourself (then only you approve). It is shown only now.",
+    pinNone: "No confirmation code · only the administrator can approve",
+    pinLocked: "Confirmation code locked · set it again to unlock",
+    pinSetBtn: "Set confirmation code",
+    pinSetTitle: "Set the confirmation code for \"{name}\"",
+    pinSetBody: "Type 4 to 6 digits (not an easy one like 1234 or 1111), or leave empty for a random 4-digit code. The old code stops working and a locked code is unlocked. The key itself does not change. Never give the code to the AI or paste it into a chat.",
+    pinSetConfirm: "Set code",
+    pinSetting: "Setting…",
+    pinSetDoneTitle: "New confirmation code for \"{name}\"",
+    pinSetFailed: "Could not set the confirmation code: {message}",
+
   },
   {
     pageIntroPre: "",
@@ -196,6 +216,26 @@ export const keysStrings = defineMessages(
     createdBanner: "这是唯一一次显示完整 Key，现在就复制 —— MoneySwitch 只存哈希。",
     keyFieldLabel: "你的 Money Key",
     nextHeading: "接下来：把这把 Key 交给 Agent",
+
+    // 确认码（SPEC.md §3）：给持这把 key 的人用的 4–6 位数字；AI 永远拿不到
+    pinFieldLabel: "确认码（给用这把 key 的人，4–6 位数字；留空则随机生成）",
+    pinFieldPlaceholder: "例如 4827",
+    pinFieldHint: "AI 遇到新网站或超过审批线时，会把审批链接发给持这把 key 的人，他输入这个确认码就能批准。技能段落里没有它，所以 AI 批不了自己的请求。",
+    errPin: "确认码是 4 到 6 位数字（也可以留空）。",
+    pinWeak: "太好猜了，换一个",
+    pinFailures: "已输错 {n} 次（{max} 次锁定）",
+    pinHandoffTitle: "确认码（给人，不要发给 AI）",
+    pinHandoffNote:
+      "不要把确认码告诉 AI，也不要贴进聊天。AI 遇到新网站或超过审批线时会把审批链接发给持 key 的人，打开后输入这个确认码就能批准。把它交给用这把 key 的人，或自己留着（那就只由你来批）。只显示这一次。",
+    pinNone: "无确认码 · 只能管理员批",
+    pinLocked: "确认码已锁定 · 重新设置即可解锁",
+    pinSetBtn: "设置确认码",
+    pinSetTitle: "为「{name}」设置确认码",
+    pinSetBody: "输入 4 到 6 位数字（不要 1234、1111 这类太好猜的），留空则随机生成 4 位。旧确认码立刻失效，已锁定的确认码会解锁。key 本身不变。不要把确认码告诉 AI，也不要贴进聊天。",
+    pinSetConfirm: "设置",
+    pinSetting: "设置中…",
+    pinSetDoneTitle: "「{name}」的新确认码",
+    pinSetFailed: "没能设置确认码：{message}",
 
   }
 );

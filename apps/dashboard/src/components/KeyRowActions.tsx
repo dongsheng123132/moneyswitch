@@ -8,7 +8,8 @@ import { skillStrings } from "../i18n/strings/skill";
  * Row actions of the Money Keys list: "Reset secret and copy skill" and Revoke
  * (with its inline confirmation). Only an active key gets them; a revoked,
  * expired or ancestor-disabled key is already dead for good (no un-revoke, no
- * new secret, SPEC-v0.4 §A), so its cell stays empty.
+ * new secret, SPEC-v0.4 §A), so its cell stays empty. A root key also gets
+ * "Set confirmation code" (its approval PIN, SPEC.md §3); a child key has none.
  */
 export default function KeyRowActions({
   status,
@@ -16,6 +17,7 @@ export default function KeyRowActions({
   confirmingRevoke,
   revoking,
   onRotate,
+  onSetPin,
   onAskRevoke,
   onRevoke,
   onCancelRevoke,
@@ -25,6 +27,8 @@ export default function KeyRowActions({
   confirmingRevoke: boolean;
   revoking: boolean;
   onRotate: () => void;
+  /** Only a root key has an approval PIN to set. */
+  onSetPin?: () => void;
   onAskRevoke: () => void;
   onRevoke: () => void;
   onCancelRevoke: () => void;
@@ -38,6 +42,11 @@ export default function KeyRowActions({
       <button type="button" className="btn small secondary" onClick={onRotate}>
         {ts("rotateBtn")}
       </button>
+      {onSetPin && (
+        <button type="button" className="btn small secondary" onClick={onSetPin}>
+          {t("pinSetBtn")}
+        </button>
+      )}
       {confirmingRevoke ? (
         <div className="keys-revoke-confirm">
           <span>{childrenCount > 0 ? t("revokeConfirmTextWithChildren", { n: childrenCount }) : t("revokeConfirmText")}</span>

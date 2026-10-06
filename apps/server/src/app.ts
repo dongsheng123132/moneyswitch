@@ -36,6 +36,8 @@ export function buildApp(ctx: AppContext): FastifyInstance {
           'req.body.mnemonic',
           'req.body.words',
           'req.body.setup_token',
+          'req.body.pin',
+          'req.body.approval_pin',
           'req.body["mk_live_"]',
         ],
         censor: "[REDACTED]",

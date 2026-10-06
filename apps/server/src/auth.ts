@@ -1,5 +1,18 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { verifyAdminToken, authenticateMoneyKey, touchLastUsed, MoneySwitchError, limitFields } from "@moneyswitch/core";
+import {
+  verifyAdminToken,
+  authenticateMoneyKey,
+  touchLastUsed,
+  MoneySwitchError,
+  limitFields,
+  expireStaleApprovals,
+  getApproval,
+  checkApprovalPin,
+  isValidApprovalPin,
+  writeAudit,
+  APPROVAL_PIN_MAX_FAILURES,
+  type ApprovalPinRefusal,
+} from "@moneyswitch/core";
 import type { MoneyKeyRow } from "@moneyswitch/core";
 import type { AppContext } from "./context.js";
 
@@ -10,20 +23,76 @@ function extractBearer(req: FastifyRequest): string | null {
   return match ? match[1] : null;
 }
 
+/** Is this request the administrator's (ms_admin_xxx)? A MoneyKey (mk_live_xxx) never is. */
+function isAdminRequest(ctx: AppContext, req: FastifyRequest): boolean {
+  const token = extractBearer(req);
+  return Boolean(token) && !token!.startsWith("mk_live_") && verifyAdminToken(ctx.db, token!);
+}
+
 /** Admin routes only accept ms_admin_xxx. A MoneyKey (mk_live_xxx) is always 403. */
 export function requireAdmin(ctx: AppContext) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    const token = extractBearer(req);
-    if (!token || token.startsWith("mk_live_") || !verifyAdminToken(ctx.db, token)) {
-      return reply.status(403).send({ error: "FORBIDDEN" });
-    }
+    if (!isAdminRequest(ctx, req)) return reply.status(403).send({ error: "FORBIDDEN" });
   };
 }
 
 declare module "fastify" {
   interface FastifyRequest {
     moneyKey?: MoneyKeyRow;
+    /** Who decides the approval of this request (requireAdminOrApprovalPin): "admin", or `pin:<root key id>`; the name the audit row carries. */
+    approvalActor?: string;
   }
+}
+
+const PIN_REFUSAL_MESSAGES: Record<ApprovalPinRefusal, string> = {
+  WRONG: "That PIN is not right.",
+  LOCKED: `This key's PIN is locked after ${APPROVAL_PIN_MAX_FAILURES} wrong tries. Only the administrator can approve now, and setting a new PIN unlocks it.`,
+  NOT_SET: "This key has no PIN: only the administrator can approve its requests.",
+  KEY_NOT_ACTIVE: "The key this request belongs to is revoked or expired.",
+};
+const PIN_REFUSAL_CODES: Record<ApprovalPinRefusal, string> = {
+  WRONG: "APPROVAL_PIN_WRONG",
+  LOCKED: "APPROVAL_PIN_LOCKED",
+  NOT_SET: "APPROVAL_PIN_NOT_SET",
+  KEY_NOT_ACTIVE: "APPROVAL_KEY_NOT_ACTIVE",
+};
+
+/**
+ * Who may approve or deny request `:id` (SPEC.md §3): the administrator (Authorization: Bearer ms_admin_…), or the person who holds the key:
+ * no Authorization, and the PIN of the request's root key as `{"pin": "1234"}` in the body. Any Authorization that is not the
+ * administrator's (a MoneyKey, a stale token) is a plain 403 whatever the body says: a key can never approve. A PIN is only looked at for a
+ * request that exists and is still pending (404 / APPROVAL_NOT_PENDING cost no try); a wrong one is counted (cumulatively since the PIN was
+ * set: a right one resets nothing) and audited, and the fifth locks the key's PIN. Sets req.approvalActor.
+ */
+export function requireAdminOrApprovalPin(ctx: AppContext) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    if (isAdminRequest(ctx, req)) {
+      req.approvalActor = "admin";
+      return;
+    }
+    const pin = (req.body as { pin?: unknown } | null | undefined)?.pin;
+    if (req.headers["authorization"] || pin === undefined) return reply.status(403).send({ error: "FORBIDDEN" });
+    if (!isValidApprovalPin(pin)) return reply.status(400).send({ error: "APPROVAL_PIN_INVALID", message: "pin must be 4 to 6 digits" });
+
+    expireStaleApprovals(ctx.db);
+    const { id } = req.params as { id: string };
+    const approval = getApproval(ctx.db, id);
+    if (!approval) return reply.status(404).send({ error: "not_found" });
+    if (approval.status !== "pending") return reply.status(400).send({ error: "APPROVAL_NOT_PENDING" });
+
+    const check = checkApprovalPin(ctx.db, approval.keyId, pin);
+    if (!check.ok) {
+      if (check.counted) {
+        writeAudit(ctx.db, "anonymous", "approval.pin_wrong", { approvalId: id, keyId: check.rootKeyId, attemptsLeft: check.attemptsLeft, locked: check.reason === "LOCKED" });
+      }
+      return reply.status(403).send({
+        error: PIN_REFUSAL_CODES[check.reason],
+        message: PIN_REFUSAL_MESSAGES[check.reason],
+        ...(check.reason === "WRONG" ? { attempts_left: check.attemptsLeft } : {}),
+      });
+    }
+    req.approvalActor = `pin:${check.rootKeyId}`;
+  };
 }
 
 /** Agent routes only accept mk_live_xxx. */
