@@ -3,6 +3,13 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
+## v0.7.3 — 2026-10-06
+
+- **The key form says what happens to an unlisted site.** Since v0.7.1 a site the key does not list asks for approval once, but the
+  form still said such payments are refused and warned that an empty list refuses everything. Form, hints and glossary now describe
+  the three outcomes (paid without asking / asked through a link / refused without asking); an empty list is shown as information.
+  SPEC §3 states the three outcomes, §0 that the testnet stays part of the product.
+
 ## v0.7.2 — 2026-10-06
 
 **Testnet keys and mainnet keys on one server** (SPEC §1, §2, §6). Real use runs a testnet first and then a little real money, often on the
