@@ -39,7 +39,7 @@ export default function AllowedHostsField({
         </label>
       )}
       {testIncluded && <div className="field-hint">{t("testEndpointHint")}</div>}
-      {value.trim() === "" && !testIncluded && <Callout tone="warn">{t("allowedHostsHintEmpty")}</Callout>}
+      {value.trim() === "" && !testIncluded && <Callout tone="info">{t("allowedHostsHintEmpty")}</Callout>}
     </div>
   );
 }
