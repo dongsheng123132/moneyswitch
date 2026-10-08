@@ -13,6 +13,7 @@
 <meta property="og:title" content="多台设备，多个 AI，一个由你控制的支出钱包">
 <meta property="og:description" content="MoneySwitch 早期试用：自部署、测试网付款、独立额度和人工审批。">
 <meta property="og:url" content="https://moneyswitch.dev/pilot/zh/">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/launch-2026-10/cover-zh.png">
 <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../../assets/css/site.css">
 <link rel="stylesheet" href="../../assets/css/pilot.css">
@@ -44,6 +45,7 @@
   </ul><p>目前支付范围是受支持的 USDC / x402 服务，不是代付所有 AI 订阅或任意网站。</p></article>
 </div></section>
 <section class="pilot-section" id="try"><div class="wrap narrow">
+  <figure class="pilot-visual"><img src="../../assets/img/launch-2026-10/wallet-flow.webp" width="1672" height="941" loading="lazy" alt="产品示意：三台设备各持 MoneyKey，共用自托管 MoneySwitch 钱包支付 x402 API。"><figcaption>产品示意：每个 Agent 拿独立的花钱权限，签名与策略检查留在你的服务端。</figcaption></figure>
   <p class="eyebrow">一次完整的小实验</p><h2>让两个 Agent 各拿一把 Key</h2>
   <ol class="pilot-steps">
     <li><h3>部署自己的钱包服务</h3><p>按<a href="https://github.com/dongsheng123132/moneyswitch/blob/main/deploy/README.zh-CN.md">云服务器部署指南</a>配置 Docker 与 HTTPS，或按<a href="https://github.com/dongsheng123132/moneyswitch/blob/main/README.zh-CN.md">源码启动说明</a>运行。服务与 Agent 使用隔离的机器或系统权限，让 Agent 只能通过网络使用 MoneyKey。</p><p>首次启动的管理员登录链接只供你使用。在钱包页创建钱包，自己保存恢复词，使用钱包页的水龙头指引领取 <strong>Monad 测试网 USDC</strong>。不要充值主网资金来完成这次试用。</p></li>
@@ -62,15 +64,15 @@
   <h2>开始前你可能想知道</h2>
   <details><summary>“云钱包”是谁在保管？</summary><p>服务部署在你自己的服务器，由你管理钱包和数据。Agent 获得的是受额度限制的访问 Key。谁能读取服务器的钱包数据和解锁文件，谁就能动用钱包；自托管需要你保护服务器，后续使用主网时也适合作为小额支出钱包。</p></details>
   <details><summary>每个 Agent 都有独立钱包地址吗？</summary><p>它们使用同一出资方的钱包，各有独立 Key 和限额。Key 的额度是支出上限，不是为它单独存入的一份余额。同一钱包地址在不同链上的余额也彼此独立。</p></details>
-  <details><summary>需要转发、好评或交费吗？</summary><p>反馈没有转发或好评要求，也没有承诺的现金、API 额度或徽章奖励。测试币没有真实价值；服务器等自备环境可能产生费用。</p></details>
+  <details><summary>有奖励吗？需要转发或好评吗？</summary><p>我们会视试用与反馈情况，酌情给予奖励；具体形式与标准另行说明，不承诺参与即得或固定金额。反馈没有转发或好评要求，负面体验同样欢迎。测试币没有真实价值；服务器等自备环境可能产生费用。</p></details>
   <details><summary>现在还缺什么？</summary><p>任务用途备注和按任务汇总的成本报表还没有做。子 Key 目前只有后端接口，没有创建界面。当前通过 Skill 和 HTTP 接入，不提供 MCP 接口，也不是开放注册的多租户托管服务。</p></details>
 </div></section>
 <section class="pilot-section pilot-feedback" id="feedback"><div class="wrap narrow pilot-card">
   <p class="eyebrow">我们最想听到真实的使用经过</p><h2>试完了，或卡住了，都告诉我们</h2>
-  <p>写清用了哪些 Agent、试到哪一步、原本期待什么、实际发生什么，以及下一次会不会用它。负面体验同样有帮助。</p>
+  <p>写清用了哪些 Agent、试到哪一步、原本期待什么、实际发生什么，以及下一次会不会用它。负面体验同样有帮助。我们会视试用与反馈情况酌情给予奖励，具体形式与标准另行说明。</p>
   <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">在 GitHub 提交反馈 ↗</a><a class="btn btn-ghost" href="../../blog/one-wallet-many-agents/zh/">了解我们为什么做它</a></div>
   <p class="pilot-note">反馈通过 GitHub Issue 提交，需要 GitHub 账号，内容公开可见。请只提供脱敏的现象与错误码，不要贴 Key、确认码、恢复词、管理员登录链接或完整日志。安全漏洞请走<a href="https://github.com/dongsheng123132/moneyswitch/security/advisories/new">私密报告入口</a>。</p>
 </div></section>
 </main>
-<footer class="footer"><div class="wrap foot"><a href="../../?lang=zh">← MoneySwitch</a><a href="https://github.com/dongsheng123132/moneyswitch">开源代码 ↗</a></div></footer>
+<footer class="footer"><div class="wrap foot"><a href="../../?lang=zh">← MoneySwitch</a><a href="../../media/">查看和下载配图</a><a href="https://github.com/dongsheng123132/moneyswitch">开源代码 ↗</a></div></footer>
 </body></html>

@@ -1,5 +1,7 @@
 # Help test MoneySwitch with two agents and one self-hosted wallet
 
+![Many agents, one spending wallet you control. MoneySwitch early trial.](https://moneyswitch.dev/assets/img/launch-2026-10/cover-en.webp)
+
 Do you run Codex on one computer, Claude Code on another, or agents split between your own machines and the cloud? We are looking for developers to try MoneySwitch in that kind of setup and tell us where it breaks down.
 
 **MoneySwitch is a programmable spending wallet for multiple agents that you host yourself.** Its server holds the wallet; each agent receives a separate MoneyKey with a spending policy. Today it pays compatible x402 APIs in USDC on Monad and Base, with testnets enabled by default.
@@ -12,7 +14,7 @@ This is an early self-hosted trial. You deploy and control the service, and one 
 - You can deploy a service yourself and keep its system permissions separate from your agents.
 - You want to test budgets and approvals for agent purchases, and can describe what did and did not work.
 
-You do not need to put real money into the trial. The suggested payment uses **0.01 test USDC on Monad testnet**. Test USDC has no monetary value. This first trial has no monetary reward and does not offer dollar-denominated API credits or model subscriptions.
+You do not need to put real money into the trial. The suggested payment uses **0.01 test USDC on Monad testnet**. Test USDC has no monetary value. We may offer rewards at our discretion based on trial participation and feedback. Reward details and criteria will be announced separately; participation does not guarantee a reward or a fixed amount. Honest criticism is welcome too.
 
 ## What to try
 

@@ -1,0 +1,28 @@
+{
+  "generationTool": "Codex built-in image_gen",
+  "date": "2026-10-08",
+  "requestedModel": "Images 2.5",
+  "modelSelectionNote": "The built-in tool has no model or tier selector and does not return a backend model identifier. No separate API provider was invoked.",
+  "assets": [
+    {
+      "id": "cover-zh",
+      "prompt": "Create a finished premium editorial article cover image for MoneySwitch, landscape 16:9, generous margins, crisp readable typography, polished startup publication quality. Dark almost black violet background #07060d, electric lavender #a896ff, acid-lime accents #b4ff4a, off-white type. Sophisticated restrained 3D cutaway technical illustration with a luminous central wallet-shaped server core, connected by thin clear luminous paths to a laptop terminal, a desktop terminal, and small cloud servers. The wallet is a spending control service on the owner's server, not a physical consumer credit card or cryptocurrency trading app. No money rain, coins, banknotes, rockets, people, robot heads, Bitcoin marks, fake UI screenshots, transaction numbers or seals of approval. Left 55% typography, right 45% illustration. Include only this exact text, with hierarchy: small brand 'MoneySwitch'; very large Chinese headline on two or three lines '多台设备，多个 AI' and '一个支出钱包'; smaller subtitle '可云自托管的可编程多 Agent 支出钱包'; bottom small line '独立额度 · 人工审批 · 统一账单'; bottom-right site 'moneyswitch.dev'. Keep the headline dominant and uncluttered, sharp correct Chinese glyphs, precise spelling. The visual should feel like a real carefully typeset technology magazine cover, not a generic AI neon poster. Fully opaque background.",
+      "transparent_background": false
+    },
+    {
+      "id": "cover-en",
+      "prompt": "Design a finished premium editorial cover for the open-source product MoneySwitch. Landscape 16:9, high resolution and crisp text, entirely English. Dark almost-black violet #07060d background, lavender #a896ff and acid lime #b4ff4a accents, off-white typography. Use refined editorial composition: headline in left 55%, a luminous 3D wallet-shaped server core in right 45%, connecting three tasteful minimal device silhouettes: laptop terminal, desktop terminal and cloud server. Imply one owner-operated spending service with separate access keys. Quiet technical precision, restrained lighting, roomy margins. Include exact readable text ONLY: brand 'MoneySwitch'; oversized main headline 'Many agents.' and 'One spending wallet.'; supporting line 'Self-hosted. Programmable. Yours.'; small bottom line 'Separate budgets · Human approvals · Shared payment history'; website 'moneyswitch.dev'. No crypto coins, charts, financial promises, fake UI or transaction receipts, no existing brand logos. Fully opaque background.",
+      "transparent_background": false
+    },
+    {
+      "id": "wallet-flow",
+      "prompt": "Create a beautifully art-directed product explainer illustration for MoneySwitch, landscape 16:9. It must be a precise conceptual architecture diagram with premium softly lit 3D device illustrations integrated into clean flat typographic cards, not an actual dashboard screenshot. Palette: near-black violet #07060d, lavender #a896ff, acid lime #b4ff4a, off-white Chinese/English labels. Main title top left exactly '多个 Agent，共用一个你掌控的钱包'. Three source nodes vertically stacked on left, clearly labelled '电脑 A · Codex', '电脑 B · Claude Code', '云端 Agent'. Each source has one small unique visually distinct key token labelled 'MoneyKey A', 'MoneyKey B', 'MoneyKey C'. Three arrows converge into ONE central large wallet/server component labelled 'MoneySwitch' with subtitle '你的服务器 · 你的钱包'. Within this component a simple readable checklist: '独立额度', '人工审批', '可撤销 Key', '付款账单'. ONE clear outgoing arrow from central component to right node labelled '付费 API' with secondary 'x402 · USDC'. Small bottom note exactly 'Agent 拿花钱权限，钱包签名留在服务端'. Footer small '产品示意 · moneyswitch.dev'. All arrows flow left to right. Do NOT draw arrows directly from device to paid API. No claims of universal subscriptions, no task auditing, no guaranteed security icons. Clean line connections not a chaotic network. Precise Chinese glyphs and spacing, ample negative space, readable even in an article. Fully opaque background.",
+      "transparent_background": false
+    },
+    {
+      "id": "pilot-poster-zh",
+      "prompt": "Create a finished Chinese recruitment poster for early testers of MoneySwitch. PORTRAIT 2:3 aspect ratio, designed for mobile social media, exceptionally crisp correct Chinese typography and a clear hierarchy. Premium technology editorial aesthetic matching an open-source developer product: almost-black violet #07060d, lavender #a896ff, electric lime #b4ff4a, white text. Top brand 'MoneySwitch'. Very large headline exactly '多 Agent 支出钱包' followed by '邀请你来试用'. Secondary text '可云自托管 · 每个 Agent 独立额度'. Center illustration: three minimal computer/cloud terminal devices linked to one luminous wallet-shaped server, sophisticated soft 3D rendering, not a literal screenshot. Below illustration three compact concise lines with numbered accent markers: '接入两个 Agent', '试一次付款与审批', '告诉我们哪里卡住'. A clearly visible but restrained highlight strip says exactly '视试用与反馈情况，酌情给予奖励'. Beneath strip readable small text '具体形式与标准另行说明' and '自部署体验 · 测试币无真实价值'. Bottom website prominent 'moneyswitch.dev/pilot/zh/'. Short closing text '真实反馈，包括不好用的地方'. Do not add money amounts, cash, gifts, badges, deadlines, scarcity, fake testimonials, payment promises, QR codes or platform logos. Use no extra words beyond the requested copy. Spacious safe margins and exact legible Chinese. Fully opaque background.",
+      "transparent_background": false
+    }
+  ]
+}

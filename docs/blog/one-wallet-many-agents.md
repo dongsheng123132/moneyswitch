@@ -1,5 +1,7 @@
 # One self-hosted spending wallet for agents across your computers
 
+![MoneySwitch: many agents, one spending wallet. Product concept illustration.](https://moneyswitch.dev/assets/img/launch-2026-10/cover-en.webp)
+
 You have Codex on a laptop, Claude Code on a desktop, and another agent working on a cloud server. Each can call tools and APIs. Sooner or later, one of those tools asks for payment.
 
 Now you have a different problem: which agent can spend, how much, and who can stop it?

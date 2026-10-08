@@ -13,6 +13,9 @@
 .blog-article p:first-of-type { margin-top: 4px; }
 .blog-article p em { color: var(--text); font-style: italic; }
 .blog-article strong { color: var(--text); font-weight: 650; }
+.article-figure { margin: 28px 0; }
+.article-figure img { display: block; width: auto; height: auto; max-width: 100%; max-height: 760px; margin: 0 auto; border: 1px solid var(--line); border-radius: 12px; }
+.article-figure figcaption { margin-top: 10px; color: var(--faint); font-size: 13px; line-height: 1.65; }
 
 .blog-article ul,
 .blog-article ol { margin-top: 16px; padding-left: 22px; color: var(--dim); font-size: 16.5px; line-height: 1.75; }

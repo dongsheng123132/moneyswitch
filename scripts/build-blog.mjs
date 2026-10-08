@@ -16,14 +16,16 @@ const ARTICLES = [
   {
     slug: 'agent-wallet-trial',
     date: '2026-10-08',
+    shareImage: { en: 'cover-en', zh: 'cover-zh' },
     description: {
-      en: 'Try MoneySwitch with two agents, independent spending keys, a 0.01 test-USDC payment, human approval and bills. An early self-hosted trial with no monetary reward.',
-      zh: '邀请多 Agent 开发者试用 MoneySwitch：自部署、两把独立额度 key、0.01 测试 USDC 付款、人工审批与账单反馈。首轮不设金钱奖励。',
+      en: 'Try MoneySwitch with two agents, independent spending keys, a 0.01 test-USDC payment, human approval and bills. Rewards may be offered at our discretion based on trial participation and feedback.',
+      zh: '邀请多 Agent 开发者试用 MoneySwitch：自部署、两把独立额度 key、0.01 测试 USDC 付款、人工审批与账单反馈。视试用与反馈情况酌情给予奖励。',
     },
   },
   {
     slug: 'one-wallet-many-agents',
     date: '2026-10-08',
+    shareImage: { en: 'cover-en', zh: 'cover-zh' },
     description: {
       en: 'Why we are building a programmable, self-hosted spending wallet for agents across computers: one wallet service, separate budgets and human approvals over x402.',
       zh: '多台电脑上的 Codex、Claude Code 和云端 Agent，如何通过自己托管的钱包服务共享资金、分配独立额度，并在需要时交给人审批。',
@@ -114,6 +116,15 @@ export function renderMarkdown(md) {
     const line = lines[i];
     if (!line.trim()) { i++; continue; }
 
+    const illustration = line.match(/^!\[([^\]]*)\]\(([^\s)]+)\)$/);
+    if (illustration && safeHref(illustration[2])) {
+      const imageUrl = new URL(illustration[2], ORIGIN);
+      const src = imageUrl.origin === ORIGIN ? imageUrl.pathname : imageUrl.href;
+      html += `<figure class="article-figure"><img src="${escapeHtml(src)}" alt="${escapeHtml(illustration[1])}" loading="lazy" decoding="async"><figcaption>${escapeHtml(illustration[1])}</figcaption></figure>\n`;
+      i++;
+      continue;
+    }
+
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       const level = heading[1].length;
@@ -167,7 +178,7 @@ const LOCALES = {
   zh: { htmlLang: 'zh-CN', suffix: 'zh/', label: '中文', blog: '博客', published: '发布于', skip: '跳到正文', home: 'MoneySwitch 首页', pilot: '用两个 Agent 试一试', indexTitle: 'MoneySwitch 博客', indexIntro: '一个自己托管的多 Agent 支出钱包：产品思路、早期试用与已记录的付款实验。', read: '阅读全文' },
 };
 
-function pageShell({ lang, title, description, canonicalPath, alternatePath, article, content }) {
+function pageShell({ lang, title, description, canonicalPath, alternatePath, article, content, shareImage }) {
   const l = LOCALES[lang];
   const otherLang = lang === 'en' ? 'zh' : 'en';
   const canonical = ORIGIN + canonicalPath;
@@ -190,13 +201,13 @@ function pageShell({ lang, title, description, canonicalPath, alternatePath, art
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:url" content="${canonical}">
-<meta property="og:image" content="${ORIGIN}/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:image" content="${ORIGIN}${shareImage ? `/assets/img/launch-2026-10/${shareImage}.png` : '/og.png'}">
+<meta property="og:image:width" content="${shareImage ? '1672' : '1200'}">
+<meta property="og:image:height" content="${shareImage ? '941' : '630'}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
-<meta name="twitter:image" content="${ORIGIN}/og.png">
+<meta name="twitter:image" content="${ORIGIN}${shareImage ? `/assets/img/launch-2026-10/${shareImage}.png` : '/og.png'}">
 <link rel="stylesheet" href="/assets/css/site.css">
 <link rel="stylesheet" href="/assets/css/blog.css">
 </head>
@@ -233,6 +244,7 @@ function articlePage(entry, lang, rendered) {
   return pageShell({
     lang,
     title: rendered.title,
+    shareImage: entry.shareImage?.[lang],
     description: entry.description[lang],
     canonicalPath: `/blog/${entry.slug}/${l.suffix}`,
     alternatePath: `/blog/${entry.slug}/${lang === 'en' ? 'zh/' : ''}`,

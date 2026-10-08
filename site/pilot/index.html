@@ -13,6 +13,7 @@
 <meta property="og:title" content="Many devices. Many agents. One spending wallet you control.">
 <meta property="og:description" content="An early MoneySwitch trial: self-host, pay with test tokens, and try separate budgets and human approvals.">
 <meta property="og:url" content="https://moneyswitch.dev/pilot/">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/launch-2026-10/cover-en.png">
 <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/css/site.css">
 <link rel="stylesheet" href="../assets/css/pilot.css">
@@ -44,6 +45,7 @@
   </ul><p>Payments currently cover supported USDC / x402 services. This does not pay arbitrary websites or existing AI subscriptions.</p></article>
 </div></section>
 <section class="pilot-section" id="try"><div class="wrap narrow">
+  <figure class="pilot-visual"><img src="../assets/img/launch-2026-10/cover-en.webp" width="1672" height="941" loading="lazy" alt="MoneySwitch concept illustration: many agents share one self-hosted spending wallet."><figcaption>Concept illustration: separate spending permissions, one wallet service you operate.</figcaption></figure>
   <p class="eyebrow">A small end-to-end experiment</p><h2>Give two agents a key each</h2>
   <ol class="pilot-steps">
     <li><h3>Run your own wallet service</h3><p>Follow the <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/deploy/README.zh-CN.md">Docker + HTTPS deployment guide (Chinese)</a> or the <a href="https://github.com/dongsheng123132/moneyswitch#run-it">source quickstart</a>. Isolate the service from your agents' machines or system permissions so the agents can only access it over the network with MoneyKeys.</p><p>Keep the administrator sign-in link from the first start private. Create a wallet, save its recovery phrase yourself, and use the wallet page's faucet instructions to obtain <strong>Monad testnet USDC</strong>. You do not need mainnet funds for this trial.</p></li>
@@ -62,12 +64,12 @@
   <h2>Before you start</h2>
   <details><summary>Who holds this cloud wallet?</summary><p>You run the service and manage the wallet and its data on your own server. Agents receive budget-limited access keys. Anyone who can read the server's wallet data and unlock file can use the wallet; protect the server and treat any future mainnet deployment as a small spending wallet.</p></details>
   <details><summary>Does every agent get a wallet address?</summary><p>Agents share one payer's wallet, with separate keys and limits. A key's budget is a spending ceiling, not a separately funded balance. The same wallet address has independent balances on each supported chain.</p></details>
-  <details><summary>Do I have to share a post, leave a positive review or pay?</summary><p>Feedback has no sharing or positive-review requirement. No cash, API-credit or badge reward is promised. Test tokens have no real value; your own hosting or runtime may incur costs.</p></details>
+  <details><summary>Are there rewards? Do I need to share a post or leave a positive review?</summary><p>We may offer rewards at our discretion based on trial participation and feedback. Reward details and criteria will be announced separately; participation does not guarantee a reward or a fixed amount. There is no sharing or positive-review requirement, and criticism is welcome. Test tokens have no real value; your own hosting or runtime may incur costs.</p></details>
   <details><summary>What is still missing?</summary><p>Per-payment purpose notes and task-level cost reports are not implemented. Child keys have backend APIs but no creation UI. Integration is through a skill and HTTP, without MCP or a public multi-tenant hosted service.</p></details>
 </div></section>
 <section class="pilot-section pilot-feedback" id="feedback"><div class="wrap narrow pilot-card">
   <p class="eyebrow">Tell us what actually happened</p><h2>Finished or stuck? Both are useful.</h2>
-  <p>Tell us which agents you used, how far you got, what you expected, what happened, and whether you would use this again. Negative feedback is welcome.</p>
+  <p>Tell us which agents you used, how far you got, what you expected, what happened, and whether you would use this again. Negative feedback is welcome. We may offer discretionary rewards based on participation and feedback, with details announced separately.</p>
   <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">Share feedback on GitHub ↗</a><a class="btn btn-ghost" href="../blog/one-wallet-many-agents/">Why we are building this</a></div>
   <p class="pilot-note">GitHub Issues require a GitHub account and are public. Share redacted observations and error codes only, without keys, PINs, recovery phrases, administrator links or raw logs. Report security vulnerabilities through the <a href="https://github.com/dongsheng123132/moneyswitch/security/advisories/new">private reporting channel</a>.</p>
 </div></section>

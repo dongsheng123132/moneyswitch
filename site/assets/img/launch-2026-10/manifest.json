@@ -1,0 +1,30 @@
+[
+  {
+    "id": "cover-zh",
+    "width": 1672,
+    "height": 941,
+    "png_bytes": 1667661,
+    "webp_bytes": 124988
+  },
+  {
+    "id": "cover-en",
+    "width": 1672,
+    "height": 941,
+    "png_bytes": 1488149,
+    "webp_bytes": 104502
+  },
+  {
+    "id": "wallet-flow",
+    "width": 1672,
+    "height": 941,
+    "png_bytes": 1649484,
+    "webp_bytes": 141926
+  },
+  {
+    "id": "pilot-poster-zh",
+    "width": 1024,
+    "height": 1536,
+    "png_bytes": 1655815,
+    "webp_bytes": 152480
+  }
+]

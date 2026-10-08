@@ -17,13 +17,13 @@
 <meta property="og:title" content="多台电脑、多个 Agent，共用一个自己托管的支出钱包">
 <meta property="og:description" content="多台电脑上的 Codex、Claude Code 和云端 Agent，如何通过自己托管的钱包服务共享资金、分配独立额度，并在需要时交给人审批。">
 <meta property="og:url" content="https://moneyswitch.dev/blog/one-wallet-many-agents/zh/">
-<meta property="og:image" content="https://moneyswitch.dev/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/launch-2026-10/cover-zh.png">
+<meta property="og:image:width" content="1672">
+<meta property="og:image:height" content="941">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="多台电脑、多个 Agent，共用一个自己托管的支出钱包">
 <meta name="twitter:description" content="多台电脑上的 Codex、Claude Code 和云端 Agent，如何通过自己托管的钱包服务共享资金、分配独立额度，并在需要时交给人审批。">
-<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
+<meta name="twitter:image" content="https://moneyswitch.dev/assets/img/launch-2026-10/cover-zh.png">
 <link rel="stylesheet" href="/assets/css/site.css">
 <link rel="stylesheet" href="/assets/css/blog.css">
 </head>
@@ -45,6 +45,7 @@
 <article class="section blog-article"><div class="wrap narrow">
 <p class="eyebrow">发布于 <time datetime="2026-10-08">2026-10-08</time></p>
 <h1>多台电脑、多个 Agent，共用一个自己托管的支出钱包</h1>
+<figure class="article-figure"><img src="/assets/img/launch-2026-10/cover-zh.webp" alt="MoneySwitch：多台设备、多个 AI，一个支出钱包。产品概念插画。" loading="lazy" decoding="async"><figcaption>MoneySwitch：多台设备、多个 AI，一个支出钱包。产品概念插画。</figcaption></figure>
 <p>笔记本上跑着 Codex，台式机上开着 Claude Code，云服务器上还有一个后台 Agent。它们都能调工具、访问 API。等某个工具开始收费，就会遇到一个新问题：谁能花钱，能花多少，出了问题怎么停？</p>
 <p>给每个 bot 单独建钱包，意味着在多台机器之间管理余额、凭据和交易记录。你自己可能已经在用 MetaMask 这样的交互式钱包，但不一定想给每个无人值守的 Agent 都重复一遍配置。</p>
 <p>我们正在做的 MoneySwitch，定位就是：<strong>可云自托管的可编程多 Agent 支出钱包。</strong></p>
@@ -61,6 +62,7 @@
 <p>它们通过 HTTP 接口向同一个 MoneySwitch 服务请求付款。你在一个地方管理各自的支出权限；每把 key 附带的技能说明告诉 Agent 怎样调用，不需要逐台安装浏览器钱包。</p>
 <p>产品目前是<strong>早期自部署软件</strong>，一台实例只替一个出钱的人或组织花钱。这里说的“云钱包”，是你可以把钱包服务部署到自己的云服务器，配置 HTTPS 和持久化存储。你不需要向 MoneySwitch 注册一个账户、把资金存进我们的账户里。</p>
 <h2>“可编程”现在具体能做什么</h2>
+<figure class="article-figure"><img src="/assets/img/launch-2026-10/wallet-flow.webp" alt="产品示意：不同设备上的 Agent 各持 MoneyKey，经过自托管钱包的额度与审批规则，再请求付款。" loading="lazy" decoding="async"><figcaption>产品示意：不同设备上的 Agent 各持 MoneyKey，经过自托管钱包的额度与审批规则，再请求付款。</figcaption></figure>
 <p>每把 key 可以设置日额度、总额度、单笔上限、允许域名、审批线和过期时间。服务在付款签名之前检查规则。</p>
 <ul>
 <li>在额度内、访问已允许的域名、金额低于审批线，可以自动付款。</li>

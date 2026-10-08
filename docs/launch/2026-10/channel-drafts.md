@@ -1,6 +1,6 @@
 # MoneySwitch 渠道短稿
 
-以下为供本人审阅、修改和发布的草稿。链接指向本次准备的新页面，需等网站上线后再发。首轮无金钱奖励。
+以下为供本人审阅、修改和发布的草稿。链接指向本次准备的新页面，需等网站上线后再发。奖励视试用与反馈情况酌情给予，具体形式与标准另行说明，不承诺参与即得或固定金额。
 
 ## 微信群 / 定向邀请
 
@@ -12,7 +12,7 @@ MoneySwitch 是可云自托管的可编程多 Agent 支出钱包：自己部署�
 
 现在支持的是 USDC / x402 付费服务。这轮先用没有真实价值的测试币，体验两把 Key、付款、审批和账单。需要自己部署；还没有公开注册的托管版。
 
-如果你也在多个设备上用 Agent，欢迎试试，告诉我哪里卡住、有没有一个真实任务会用到它。不需要转发或好评，没跑通也欢迎反馈。
+如果你也在多个设备上用 Agent，欢迎试试，告诉我哪里卡住、有没有一个真实任务会用到它。不需要转发或好评，没跑通也欢迎反馈。我们会视试用与反馈情况酌情给予奖励，具体形式与标准另行说明。
 
 试用步骤：https://moneyswitch.dev/pilot/zh/
 
@@ -22,7 +22,7 @@ MoneySwitch 是可云自托管的可编程多 Agent 支出钱包：自己部署�
 
 我在做 MoneySwitch：可云自托管的多 Agent 支出钱包。每个 AI 一把有额度的 Key，达到审批线由人决定，付款记录集中查看。
 
-想找正在使用 Agent、愿意自部署的朋友试一轮。先用测试币，不用主网资金；反馈真实的卡点就好，不要求转发或好评。目前支付范围是受支持的 USDC / x402 服务。
+想找正在使用 Agent、愿意自部署的朋友试一轮。先用测试币，不用主网资金；反馈真实的卡点就好，不要求转发或好评。会视试用与反馈情况酌情给予奖励。目前支付范围是受支持的 USDC / x402 服务。
 
 详情：https://moneyswitch.dev/pilot/zh/
 
@@ -38,7 +38,7 @@ MoneySwitch 是可云自托管的可编程多 Agent 支出钱包：自己部署�
 
 目前还是早期版本，支付支持 USDC / x402 接口，需要自行部署，不是所有 AI 订阅都能付。想邀请有这个场景的开发者用测试币试一遍，尤其想听哪里不好用。
 
-不设金钱奖励，也不要求好评。安装就卡住了，也是一条有用反馈。
+会视试用与反馈情况酌情给予奖励，具体形式与标准另行说明。不要求好评，安装就卡住了，也是一条有用反馈。
 
 项目：moneyswitch.dev
 
@@ -58,7 +58,7 @@ The use case is several agents across a laptop and cloud machines, spending from
 
 It currently pays supported USDC / x402 APIs on Monad and Base. It doesn't pay arbitrary subscriptions, and it isn't a hosted account service. The first trial uses testnet USDC with no real value.
 
-I'd like feedback from people who already run multiple agents or self-host their tools: can you connect two agents, follow an approval, and understand the bill? A failed setup is useful feedback too.
+I'd like feedback from people who already run multiple agents or self-host their tools: can you connect two agents, follow an approval, and understand the bill? A failed setup is useful feedback too. We may offer discretionary rewards based on trial participation and feedback; details will be announced separately, with no guaranteed reward or fixed amount.
 
 Trial guide: https://moneyswitch.dev/pilot/
 Source: https://github.com/dongsheng123132/moneyswitch

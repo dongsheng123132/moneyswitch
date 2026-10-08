@@ -30,6 +30,9 @@
 .pilot-section summary { cursor: pointer; font-weight: 600; }
 .pilot-section details p { margin-top: 12px; }
 .pilot-feedback { margin-bottom: 48px; }
+.pilot-visual { margin: 0 0 36px; }
+.pilot-visual img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); }
+.pilot-visual figcaption { font-size: 13px; color: var(--dim); margin-top: 10px; }
 @media (max-width: 700px) {
   .pilot-hero { padding-top: 42px; }
   .pilot-grid { grid-template-columns: 1fr; }
