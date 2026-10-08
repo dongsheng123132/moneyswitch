@@ -10,9 +10,16 @@ import Pill from "./Pill";
  * chains it really pays on (the API says: the testnets only where the server enables both kinds), and while it is still active the list
  * suggests revoking it and issuing a new one.
  */
-export default function KeyNetworkBadge({ mode, active, chains }: { mode: NetworkMode | null | undefined; active: boolean; chains?: readonly string[] }) {
+export default function KeyNetworkBadge({ mode, active, chains, compact = false }: { mode: NetworkMode | null | undefined; active: boolean; chains?: readonly string[]; compact?: boolean }) {
   const t = useT(keysStrings);
   if (mode === "testnet" || mode === "mainnet") return <NetworkKindPill kind={mode} />;
+  if (compact) return (
+    <details className="key-legacy-details">
+      <summary><Pill tone="gray">{t("networkLegacy")}</Pill></summary>
+      <div className="field-hint key-legacy-chains">{chains?.length ? t("networkLegacyChains", { chains: chains.join(", ") }) : t("networkLegacyNoChains")}</div>
+      {active && <div className="field-hint key-legacy-hint">{t("networkLegacyHint")}</div>}
+    </details>
+  );
   return (
     <>
       <span data-network-kind="legacy" title={t("networkLegacyHint")}>

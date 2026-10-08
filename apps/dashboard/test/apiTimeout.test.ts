@@ -1,5 +1,5 @@
 // usePolling skips a scheduled tick while a request is in flight, so a GET that never answers must not hold that slot forever:
-// every GET carries a timeout signal; requests that change something (POST) are never cut short by the client.
+// Every GET carries a timeout signal. Key creation also has bounded waiting because its dialog blocks closing while pending.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
@@ -11,9 +11,34 @@ const fakeStorage = {
 };
 Object.assign(globalThis, { localStorage: fakeStorage, sessionStorage: fakeStorage });
 
-const { GET_TIMEOUT_MS, listBills, revokeKey } = await import("../src/api.ts");
+const { GET_TIMEOUT_MS, CREATE_KEY_TIMEOUT_MS, listBills, revokeKey, createKey } = await import("../src/api.ts");
 
 describe("request timeout", () => {
+  it("a stalled key creation times out once without automatically retrying the write", async () => {
+    const realFetch = globalThis.fetch;
+    const realTimeout = AbortSignal.timeout;
+    let calls = 0;
+    let timeout = 0;
+    globalThis.fetch = ((_url: string, init: RequestInit) => {
+      calls++;
+      return new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+    }) as typeof fetch;
+    AbortSignal.timeout = (ms) => {
+      timeout = ms;
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("signal timed out", "TimeoutError")), 10);
+      return controller.signal;
+    };
+    try {
+      await assert.rejects(createKey({ name: "test", daily_budget: "1", total_budget: "5", per_request_limit: "0.1", allowed_hosts: [], network_mode: "testnet" }), (error: Error) => error.name === "TimeoutError");
+      assert.equal(timeout, CREATE_KEY_TIMEOUT_MS);
+      assert.equal(timeout, 30_000);
+      assert.equal(calls, 1);
+    } finally {
+      globalThis.fetch = realFetch;
+      AbortSignal.timeout = realTimeout;
+    }
+  });
   it("a GET gets a timeout signal; a POST does not", async () => {
     const real = globalThis.fetch;
     const seen: Array<{ url: string; method?: string; signal?: AbortSignal | null }> = [];

@@ -32,6 +32,7 @@ export class ApiError extends Error {
 }
 
 export const GET_TIMEOUT_MS = 30_000;
+export const CREATE_KEY_TIMEOUT_MS = 30_000;
 
 /** `anonymous`: send no Authorization even when the administrator is signed in (the approval link's PIN calls, SPEC.md §3). */
 async function request<T>(path: string, init?: RequestInit, opts?: { anonymous?: boolean }): Promise<T> {
@@ -141,6 +142,7 @@ export async function listKeys(): Promise<MoneyKeyRow[]> {
 export async function createKey(input: CreateMoneyKeyInput): Promise<CreateMoneyKeyResponse> {
   return request<CreateMoneyKeyResponse>("/v1/keys", {
     method: "POST",
+    signal: AbortSignal.timeout(CREATE_KEY_TIMEOUT_MS),
     body: JSON.stringify(input),
   });
 }

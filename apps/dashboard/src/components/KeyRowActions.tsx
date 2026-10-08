@@ -1,4 +1,5 @@
 import React from "react";
+import { Ellipsis } from "lucide-react";
 import { useT } from "../i18n";
 import { common } from "../i18n/strings/common";
 import { keysStrings } from "../i18n/strings/keys";
@@ -21,6 +22,7 @@ export default function KeyRowActions({
   onAskRevoke,
   onRevoke,
   onCancelRevoke,
+  compact = false,
 }: {
   status: string;
   childrenCount: number;
@@ -32,12 +34,13 @@ export default function KeyRowActions({
   onAskRevoke: () => void;
   onRevoke: () => void;
   onCancelRevoke: () => void;
+  compact?: boolean;
 }) {
   const t = useT(keysStrings);
   const ts = useT(skillStrings);
   const tc = useT(common);
   if (status !== "active") return null;
-  return (
+  const actions = (
     <div className="keys-row-actions">
       <button type="button" className="btn small secondary" onClick={onRotate}>
         {ts("rotateBtn")}
@@ -63,5 +66,12 @@ export default function KeyRowActions({
         </button>
       )}
     </div>
+  );
+  if (!compact) return actions;
+  return (
+    <details className="key-actions-menu">
+      <summary aria-label={t("moreActions")} title={t("moreActions")}><Ellipsis size={18} aria-hidden="true" /></summary>
+      {actions}
+    </details>
   );
 }
