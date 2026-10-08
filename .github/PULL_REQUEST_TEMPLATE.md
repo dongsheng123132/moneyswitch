@@ -1,29 +1,25 @@
-## What does this PR do?
+## What changed? / 改了什么？
 
-<!-- One or two sentences. Link the issue this addresses, if any. -->
+<!-- Describe the problem and the resulting behavior in a sentence or two.
+Link a related issue if there is one. / 说明具体问题、修改后的效果，可附关联 Issue。 -->
 
-## Which component(s)?
+## Verification / 如何验证？
 
-<!-- apps/server, apps/dashboard, apps/server-pkg (moneyswitch-server npm package), packages/*, docs -->
+<!-- List what you ran and the results, plus anything not checked.
+Follow CONTRIBUTING.md: T1 for PRs, T2 for payment/x402 changes, and tests for
+new behavior. For website changes, include a visual check where useful.
+写清实际执行的检查、结果及未验证部分；测试要求见 CONTRIBUTING.md。 -->
 
-## Spec impact
+## Spec impact / 规格影响
 
-<!-- Does this change documented behavior in SPEC.md, or add an external
-route (which must also be added to the route inventory test)? If yes, SPEC.md
-is changed first and this PR contains that change. If no, say "none". -->
-
-## Testing
-
-<!-- What did you run, and what was the result? Paste the tail of the
-relevant `pnpm test` / `pnpm test:e2e` output. New behavior needs a new
-test in the same PR — see CONTRIBUTING.md's T1/T2/T3 section. -->
-
-- [ ] `pnpm test` passes locally
-- [ ] `pnpm test:e2e` passes locally (if this touches payment/x402 logic)
-- [ ] Added/updated tests for the new behavior
-- [ ] Updated `SPEC.md` first, and the route inventory test for a new route (or N/A)
-- [ ] No secrets, `.env` files, or real private keys included in the diff
+<!-- Say "none" if behavior is unchanged. Otherwise update SPEC.md first;
+new external routes also need the route inventory test updated.
+行为未变可写“无”；改变行为先改 SPEC.md，新增外部路由要更新路由清单测试。
+Before submitting, inspect the diff for secrets and wallet data.
+提交前检查 diff，避免包含凭据或钱包数据。 -->
 
 ## CLA
 
-- [ ] I have read and agree to [CLA.md](../CLA.md)
+<!-- Read the CLA yourself; check this box only if you agree.
+请本人阅读 CLA，同意后自行勾选。不要让工具代你接受协议。 -->
+- [ ] I have read and agree to / 我已阅读并同意 [CLA.md](https://github.com/dongsheng123132/moneyswitch/blob/main/CLA.md).

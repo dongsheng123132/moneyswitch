@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A programmable Web3 cloud wallet for AI bots — MoneySwitch</title>
+<meta name="description" content="Help build a programmable Web3 cloud wallet for AI bots: self-hosted USDC payments over x402, separate spending keys and human approvals. Try it and contribute a PR.">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/blog/cloud-wallet-for-ai-bots/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/cloud-wallet-for-ai-bots/">
+<link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/cloud-wallet-for-ai-bots/zh/">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="A programmable Web3 cloud wallet for AI bots">
+<meta property="og:description" content="Help build a programmable Web3 cloud wallet for AI bots: self-hosted USDC payments over x402, separate spending keys and human approvals. Try it and contribute a PR.">
+<meta property="og:url" content="https://moneyswitch.dev/blog/cloud-wallet-for-ai-bots/">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.webp">
+<meta property="og:image:width" content="1672">
+<meta property="og:image:height" content="941">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="A programmable Web3 cloud wallet for AI bots">
+<meta name="twitter:description" content="Help build a programmable Web3 cloud wallet for AI bots: self-hosted USDC payments over x402, separate spending keys and human approvals. Try it and contribute a PR.">
+<meta name="twitter:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.webp">
+<link rel="stylesheet" href="/assets/css/site.css">
+<link rel="stylesheet" href="/assets/css/blog.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/" aria-label="MoneySwitch home">
+      <span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span>
+    </a>
+    <nav class="nav-links" aria-label="Blog">
+      <a href="/blog/">← Blog</a>
+      <a href="/pilot/">Try with two agents</a>
+    </nav>
+    <div class="nav-actions"><div class="lang" role="group" aria-label="Language"><a href="/blog/cloud-wallet-for-ai-bots/zh/" lang="zh-CN">中文</a></div></div>
+  </div>
+</header>
+<main id="main">
+<article class="section blog-article"><div class="wrap narrow">
+<p class="eyebrow">Published <time datetime="2026-10-08">2026-10-08</time></p>
+<h1>A programmable Web3 cloud wallet for AI bots</h1>
+<p>An AI bot can write code, deploy a service and decide which API might answer a question. When that API asks for payment, what permission should the bot have?</p>
+<p>“Give it a wallet” leaves a lot unanswered. How much can it spend today? Which services can it pay? When should it ask a person? How do you stop one bot without shutting down every other bot you run?</p>
+<p>These are the questions behind <strong>MoneySwitch: a programmable Web3 cloud wallet for AI bots that you host and control.</strong> We are building it in the open, and we would like you to help shape it through real use, clear bug reports and pull requests.</p>
+<figure class="article-figure"><img src="/assets/img/cloud-wallet-2026-10/cover-en.webp" alt="MoneySwitch: a self-hosted Web3 cloud wallet gives separate spending permissions to AI bots across devices." loading="lazy" decoding="async"><figcaption>MoneySwitch: a self-hosted Web3 cloud wallet gives separate spending permissions to AI bots across devices.</figcaption></figure>
+<h2>Give the bot spending permission</h2>
+<p>Imagine a research agent finding a paid data endpoint. You want it to buy the data if the price fits its budget. You also want a coding agent on your laptop to have a different budget, and a background agent on your server to stop spending when its work ends.</p>
+<p>MoneySwitch puts the wallet in one service and gives each agent a separate <strong>MoneyKey</strong>. A key authorizes spending requests under a policy; it does not contain the wallet&#39;s private key. One payer funds the wallet, while each agent has its own permission and limits.</p>
+<p>The service checks daily and total budgets, a per-payment cap, allowed hosts and an approval threshold before signing a payment. A payment at or above the approval threshold waits for a person. A hard spending cap still applies after approval. Revoke a key and that agent&#39;s future requests are refused, while the other agents retain their own permissions.</p>
+<p>That is what we mean by programmable: the rules are enforced by the service that signs the payment. They are more than instructions asking a model to be careful. A key&#39;s budget is a spending ceiling, not a separate funded balance.</p>
+<h2>“Cloud wallet” means a service you run</h2>
+<p>Your agents might run in Codex on a laptop, Claude Code on a desktop, or a custom process in the cloud. They can reach the same MoneySwitch service through HTTP and the skill instructions generated for each key.</p>
+<p>The cloud part is where you choose to run that service. You deploy it on infrastructure you control, keep its data, and manage the wallet. The current product is early self-hosted software: one instance spends for one payer, such as you or your organization. There is no MoneySwitch account where different customers deposit their funds.</p>
+<p>The server is a trusted part of this setup. It holds a hot wallet and can sign payments. Keeping the private key off agent machines does not protect against a compromised wallet server. Separate the service&#39;s system permissions from the agents: an agent that can edit its database or wallet files can undermine the spending rules.</p>
+<h2>What Web3 means here</h2>
+<p>Today the payment path is <strong>USDC over x402</strong>, with support for Monad and Base and testnets enabled by default.</p>
+<p>An agent requests an API through MoneySwitch. A compatible seller responds with an HTTP 402 payment requirement. MoneySwitch checks the key&#39;s policy, obtains human approval if needed, signs an allowed payment, and retries with payment authorization. The agent receives the response and payment status.</p>
+<p>The seller must accept a supported chain and payment scheme, and the wallet needs a balance on that chain. This does not make every website payable, support every blockchain, or buy a Claude or Codex subscription. The bots are callers of the wallet; their model provider&#39;s billing remains separate.</p>
+<p>When a payment settles, a bill can show the key, amount, URL, chain and transaction hash. Responses distinguish <code>charged: yes</code>, <code>no</code> and <code>maybe</code>. An uncertain result needs investigation, not an automatic retry that might pay twice. These details matter as much as the successful payment: a bot&#39;s operator needs to know what happened.</p>
+<h2>Help build the wallet your bots actually need</h2>
+<p>We want this product to be shaped by developers running their own bots. A useful contribution can start with something small:</p>
+<ul>
+<li><strong>Fix a deployment instruction.</strong> If a step fails or assumes knowledge the guide never explains, reproduce the problem and propose a clearer instruction.</li>
+<li><strong>Make a failure reproducible.</strong> Describe the expected result, actual result and a minimal testnet example. A failing test or a focused fix is even more useful when you can provide one.</li>
+<li><strong>Improve an agent connection.</strong> Try the generated skill and HTTP flow with your own agent. Show where setup or error handling was confusing, then propose an example or documentation change that another developer can use.</li>
+<li><strong>Make a payment decision clearer.</strong> If an approval or bill leaves you unsure what will happen, bring that specific situation into the discussion before proposing a new feature.</li>
+</ul>
+<p>You do not need to build a large integration to contribute. A small pull request that removes a real obstacle gives us something concrete to review. For changes to payment behavior or permissions, start by discussing the scope so the implementation and its tests can follow an agreed boundary.</p>
+<h2>Start with test coins and one complete workflow</h2>
+<p>The trial uses two agent keys, each making one payment of 0.01 test USDC on Monad testnet. One key can pay within its policy; the other asks for approval. You then inspect the bills and revoke a key to check that future requests stop. Test USDC has no monetary value.</p>
+<p>Follow the trial guide for the exact setup and generated first-payment flow. If deployment or connection fails, report that step; a successful payment is not a prerequisite for useful feedback. Share only redacted details, never keys, approval PINs, recovery phrases or administrator credentials.</p>
+<p>We may offer rewards at our discretion based on trial participation and feedback. Submitting or merging a pull request does not automatically qualify for a reward.</p>
+<p><strong><a href="https://moneyswitch.dev/contribute/" rel="noopener">Help build a Web3 cloud wallet for AI bots — read the contribution guide and submit a PR</a>.</strong> If you want to try it first, <a href="https://moneyswitch.dev/pilot/" rel="noopener">start the two-agent testnet trial</a>.</p>
+<p>We have an initial implementation. The next useful step is to put it beside the bots you already run, find the missing pieces, and improve them together.</p>
+</div></article>
+</main>
+<footer class="footer">
+  <div class="wrap foot">
+    <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a><p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p></div>
+    <nav class="blog-footer-links" aria-label="Blog"><a href="/blog/">← Blog</a><a href="/pilot/">Try with two agents</a></nav>
+  </div>
+</footer>
+</body>
+</html>

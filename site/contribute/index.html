@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contribute a PR — MoneySwitch Web3 cloud wallet for AI bots</title>
+<meta name="description" content="Help improve MoneySwitch, a programmable Web3 cloud wallet for AI bots. Find a small docs, integration or code issue, fork the repository, verify your change and open a pull request.">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/contribute/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/contribute/">
+<link rel="alternate" hreflang="zh-CN" href="https://moneyswitch.dev/contribute/zh/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="Help build the Web3 cloud wallet for AI bots">
+<meta property="og:description" content="Try it, find a problem, and contribute a fix. A practical first-PR guide for MoneySwitch.">
+<meta property="og:url" content="https://moneyswitch.dev/contribute/">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<link rel="stylesheet" href="../assets/css/contribute.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav"><div class="wrap nav-inner">
+  <a class="brand" href="../?lang=en"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
+  <nav class="nav-actions contrib-nav" aria-label="Guide navigation"><a href="../pilot/">Try it</a><a class="contrib-nav-blog" href="../blog/">Blog</a><a class="contrib-lang" href="zh/" lang="zh-CN">中文</a></nav>
+</div></header>
+<main id="main">
+<section class="contrib-hero"><div class="wrap">
+  <p class="pill"><span class="dot" aria-hidden="true"></span>Open source · A small fix is a good start</p>
+  <h1>Help build the <span class="hl">Web3 cloud wallet</span><br>for AI bots.</h1>
+  <p class="lead">MoneySwitch is a programmable cloud wallet you host on your own server: one payer, multiple agents, separate spending keys. Improve the docs, smooth an agent integration, or fix a bug you found while trying it.</p>
+  <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/compare">Open a pull request on GitHub ↗</a><a class="btn btn-ghost" href="https://github.com/dongsheng123132/moneyswitch/fork">Fork the repository</a><a class="btn btn-contribute" href="../pilot/">Try the wallet first</a></div>
+  <p class="contrib-note">Already have a branch? Open the comparison and select it. First contribution? Fork the repository and follow the steps below. You can read this guide without signing in; GitHub requires an account to fork, post an issue or submit a PR.</p>
+  <div class="contrib-road" aria-label="Contribution path"><span>Try it</span><b aria-hidden="true">→</b><span>Find a problem</span><b aria-hidden="true">→</b><span>Issue or PR</span><b aria-hidden="true">→</b><span>Maintainer review</span></div>
+</div></section>
+<section class="contrib-section"><div class="wrap">
+  <p class="eyebrow">Pick a useful change</p><h2>Three ways to help</h2>
+  <div class="contrib-grid">
+    <article class="contrib-card"><span class="contrib-tag">01 / DOCS &amp; EXPERIENCE</span><h3>Make the next step clearer</h3><p>Fix a confusing setup step, a broken link, a translation or an agent integration example. A small, specific correction can go straight to a PR.</p><a class="contrib-link" href="https://github.com/dongsheng123132/moneyswitch/edit/main/site/pilot/zh/index.html">Edit the Chinese trial guide on GitHub ↗</a><p class="small">GitHub can guide you through creating a fork and proposing the edit. Preview the page before submitting.</p></article>
+    <article class="contrib-card"><span class="contrib-tag">02 / BUGS</span><h3>Show what went wrong</h3><p>Share the steps, expected result and actual result. A minimal reproduction helps; if you have a fix, include the relevant verification in your PR.</p><a class="contrib-link" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">Share trial feedback ↗</a></article>
+    <article class="contrib-card"><span class="contrib-tag">03 / IMPROVEMENTS</span><h3>Propose the change first</h3><p>For a new feature or a substantial change, describe the use case before building it. This helps keep contributions aligned with the wallet’s scope.</p><a class="contrib-link" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=contribution_proposal.yml">Propose a contribution ↗</a></article>
+  </div>
+</div></section>
+<section class="contrib-section" id="first-pr"><div class="wrap narrow">
+  <p class="eyebrow">Your first pull request</p><h2>From your fork to upstream main</h2>
+  <ol class="contrib-steps">
+    <li><h3>Choose one small problem</h3><p>Start with something you can reproduce or explain in a sentence. Read <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>. For deployment or payment behavior changes, also read <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SPEC.md">SPEC.md</a> and discuss substantial changes first.</p></li>
+    <li><h3>Fork, then clone your own repository</h3><p>Click <a href="https://github.com/dongsheng123132/moneyswitch/fork">Fork</a>. Replace <code>YOUR_GITHUB_USER</code> below with your GitHub username, or copy the clone URL from your fork’s Code menu.</p><pre><code>git clone https://github.com/YOUR_GITHUB_USER/moneyswitch.git
+cd moneyswitch
+git remote add upstream https://github.com/dongsheng123132/moneyswitch.git
+git switch -c docs/my-first-fix</code></pre></li>
+    <li><h3>Edit the source and verify the result</h3><p>Change only what your fix needs. The homepage, trial and contribution pages live in <code>site/</code>. Blog text lives in <code>docs/blog/</code>; after editing it, run <code>node scripts/build-blog.mjs</code> and include the generated pages.</p><p>Follow the test requirements in <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/CONTRIBUTING.md#test-layers-t1t2t3">CONTRIBUTING.md</a>. Preview website changes in both languages and at phone width. Say what you actually checked, and what you could not check.</p></li>
+    <li><h3>Commit and push to your fork</h3><p>Review the diff first. Replace the example path with the files you intentionally changed; keep credentials and local wallet data out of the commit.</p><pre><code>git diff
+git add path/to/changed-file
+git commit -m "docs: clarify the trial setup"
+git push -u origin docs/my-first-fix</code></pre></li>
+    <li><h3>Compare across forks and submit</h3><p>Open <a href="https://github.com/dongsheng123132/moneyswitch/compare">the upstream comparison</a> and choose <strong>compare across forks</strong>. Use <code>dongsheng123132/moneyswitch</code> with <strong>base: main</strong>; use your fork as the head repository and <code>docs/my-first-fix</code> as the compare branch.</p><p>Review the diff, explain what changed and how you verified it, and personally read the CLA before checking its agreement box. Submitting a PR starts maintainer review; it does not mean the change is approved or merged.</p></li>
+  </ol>
+  <div class="contrib-check"><h3>A helpful PR explains the result</h3><p>“The trial guide repeated a payment instruction. I clarified that the generated skill already makes that request, and checked both language pages.” That is more useful than “improve docs.” Include screenshots when they help explain a visual change.</p></div>
+</div></section>
+<section class="contrib-section"><div class="wrap narrow">
+  <h2>A few things to know</h2>
+  <div class="contrib-faq">
+    <details><summary>Do I need to buy tokens or use mainnet to contribute?</summary><p>No mainnet payment is required. Start with the <a href="../pilot/">testnet trial</a> or a documentation issue. Follow the contribution guide for offline tests; live-payment testing uses your own test wallet, never a maintainer’s shared wallet.</p></details>
+    <details><summary>What is this wallet’s scope?</summary><p>One deployment spends for one payer using budget-limited MoneyKeys. Payments currently cover supported x402 APIs in USDC. This is a self-hosted hot wallet: access to its wallet data and unlock file grants access to funds. Changes to payment policy, deployment or trust boundaries need to follow the spec.</p></details>
+    <details><summary>Who agrees to the CLA?</summary><p>The contributor personally reads <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/CLA.md">CLA.md</a> and checks the PR agreement box if they agree. Reading this page does not sign anything, and the guide does not accept terms on your behalf.</p></details>
+    <details><summary>Does a PR qualify for a reward?</summary><p>Rewards may be offered at our discretion based on participation and feedback, with details announced separately. Opening or merging a PR does not guarantee a reward or a fixed amount.</p></details>
+    <details><summary>What should stay out of a public issue or PR?</summary><p>MoneyKeys, approval PINs, recovery phrases, private keys, administrator tokens and sign-in links, raw logs containing credentials, and wallet data. Share redacted examples. Report vulnerabilities through <a href="https://github.com/dongsheng123132/moneyswitch/security/advisories/new">private security reporting</a>, following <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SECURITY.md">SECURITY.md</a>.</p></details>
+  </div>
+</div></section>
+<section class="contrib-section contrib-final"><div class="wrap narrow">
+  <h2>A clear report is a contribution too.</h2><p class="lead">You do not need a fix to tell us where setup failed or which agent workflow is missing.</p>
+  <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/compare">Open a pull request ↗</a><a class="btn btn-ghost" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">Share feedback</a></div>
+</div></section>
+</main>
+<footer class="footer"><nav class="wrap contrib-footer" aria-label="Footer"><a href="../?lang=en">← MoneySwitch</a><a href="../blog/cloud-wallet-for-ai-bots/">Why a cloud wallet for AI bots</a><a href="../pilot/">Try it</a><a href="https://github.com/dongsheng123132/moneyswitch">GitHub repository ↗</a></nav></footer>
+</body>
+</html>

@@ -1,9 +1,12 @@
 /* Chinese strings. English lives in index.html itself (captured at startup). */
 window.MS_I18N_ZH = {
   'nav.pilot': "参与试用",
+  'nav.contribute': "参与贡献",
   'cta.pilot': "参与首批试用 →",
+  'cta.contribute': "提交 PR",
+  'hero.contribute': "发现文档或 Agent 接入问题？从贡献指南开始，把你的改进变成一个 PR。",
   'cta.source': "查看源码 ↗",
-  'hero.read': "为什么做这个：<a href=\"blog/one-wallet-many-agents/zh/\">一个钱包，多个 Agent →</a>",
+  'hero.read': "为什么做这个：<a href=\"blog/cloud-wallet-for-ai-bots/zh/\">给 AI Bot 用的 Web3 云钱包 →</a>",
   'map.h': "多台设备，共用一个你掌控的钱包。",
   'map.tag': "架构示意",
   'map.local': "你的电脑",
@@ -24,9 +27,9 @@ window.MS_I18N_ZH = {
   'ba.scope': "当前支付范围是用 USDC 付款的 x402 API，不包含普通模型订阅，也不覆盖所有网站的结账页面。",
   'payment.eyebrow': "付款过程",
   'payment.h': "Agent 发起请求，钱包先检查规则。",
-  'final.note': "试一笔测试网付款，再接入一个 Agent，告诉我们哪里不好用。",
-  'meta.title': "MoneySwitch — 可云自托管的可编程多 Agent 支出钱包",
-  'meta.desc': "多台电脑、云端和本地的多个 AI Agent，共用一个由你部署和控制的支出钱包。每个 Agent 一把有额度、可撤销的 MoneyKey，统一管理预算、审批和账单。当前支持 USDC 支付 x402 API，默认测试网。",
+  'final.note': "试一笔测试网付款，反馈遇到的问题，也欢迎提交 PR，改进文档和 Agent 接入。",
+  'meta.title': "MoneySwitch — 给 AI Bot 用的可编程 Web3 云钱包",
+  'meta.desc': "给 AI Bot 用的可编程 Web3 云钱包，部署在你自己的云服务器上。一个出资方、多个 Agent，各持有限额的 MoneyKey，统一管理审批和账单。当前支持 USDC 支付 x402 API，默认测试网。",
   'skip': '跳到正文',
   'nav.how': '工作原理',
   'nav.guard': "支出控制",
@@ -36,8 +39,8 @@ window.MS_I18N_ZH = {
   'nav.blog': '博客',
   'star': 'Star',
   'hero.badge': "v0.7.6 · 开源 · 自托管 · 默认测试网",
-  'hero.title': "一个<span class=\"hl\">支出钱包。</span><br>供你的多个 Agent 使用。",
-  'hero.sub': "可云自托管的可编程多 Agent 支出钱包。电脑上的 Codex、Claude Code，以及云端任务，都可以连接你自己部署的钱包服务。每个 Agent 一把有额度的 MoneyKey。",
+  'hero.title': "AI Bot 的<br><span class=\"hl\">可编程 Web3 云钱包。</span>",
+  'hero.sub': "把钱包部署在你自己的云服务器上。电脑上的 Codex、Claude Code 和云端 Agent，共用一个由你或你的组织出资的钱包。每个 Bot 各持一把有限额的 MoneyKey，审批和账单在一处管理。",
   'hero.compare': "<span>钱包由你控制，Agent 各有预算。</span><span class=\"lime\">审批和账单在一处查看。</span>",
   'cta.star': '在 GitHub 上 Star',
   'cta.start': "自行部署 MoneySwitch",
@@ -153,8 +156,8 @@ window.MS_I18N_ZH = {
   'lic.a.p': '<code>packages/skill</code>（生成告诉 AI 怎么付款的文字）、<code>packages/net</code>（出站代理处理）和 <code>apps/demo-seller</code>（x402 测试 API）。',
   'lic.b.t': '服务端与 Dashboard',
   'lic.b.p': '服务端、Dashboard，以及 core、db、wallet、x402 包保持 copyleft：托管修改版的人，必须向使用这项服务的人提供对应源码。',
-  'final.h': "一起把多个 Agent 的<br>支出钱包做好。",
-  'foot.tag': "可云自托管的可编程多 Agent 支出钱包。",
+  'final.h': "一起把 AI Bot 的<br>云钱包做好。",
+  'foot.tag': "给 AI Bot 用的可编程 Web3 云钱包，可在自己的云上部署。",
   'foot.warn': 'v0.7 默认只开测试网。启用主网意味着真钱 USDC：钱包里只放小钱。',
   'foot.sec': '安全',
   'foot.lic': 'AGPL-3.0-only（服务端、Dashboard 与 core）· Apache-2.0（skill、net 与 demo seller）'
@@ -175,6 +178,9 @@ window.MS_I18N_ZH = {
     });
     document.querySelectorAll('meta[property="og:title"], meta[name="twitter:title"], meta[property="og:image:alt"]').forEach(function (meta) { meta.content = localizedTitle; });
     document.querySelectorAll('meta[property="og:description"], meta[name="twitter:description"]').forEach(function (meta) { meta.content = localizedDesc; });
+    document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]').forEach(function (meta) {
+      meta.content = 'https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-' + (zh ? 'zh' : 'en') + '.png';
+    });
     if (schema) {
       var data = JSON.parse(schema.textContent);
       data.description = localizedDesc;

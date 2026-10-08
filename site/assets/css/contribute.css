@@ -1,0 +1,44 @@
+/* Contribution guide: the shared site theme plus a scoped, static layout. */
+.contrib-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; font-size: 14px; }
+.contrib-lang { padding: 5px 10px; border: 1px solid var(--line2); border-radius: 8px; color: var(--text); }
+.contrib-hero { padding: 66px 0 52px; }
+.contrib-hero h1 { margin-top: 22px; max-width: 22ch; font-size: clamp(36px, 5.3vw, 64px); line-height: 1.1; }
+html[lang="zh-CN"] .contrib-hero h1 { max-width: 22ch; line-height: 1.25; }
+.contrib-hero .lead { max-width: 820px; }
+.contrib-note { margin-top: 18px; color: var(--dim); font-size: 14px; max-width: 840px; }
+.contrib-road { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 30px; }
+.contrib-road span { border: 1px solid var(--line2); border-radius: 99px; padding: 7px 13px; font-size: 13px; color: var(--text); background: var(--panel); }
+.contrib-road b { color: var(--purple-2); font-weight: 400; }
+.contrib-section { padding: 56px 0; border-top: 1px solid var(--line); }
+.contrib-section h2 { font-size: clamp(28px, 3.4vw, 42px); line-height: 1.2; }
+.contrib-section h3 { font-size: 20px; line-height: 1.35; }
+.contrib-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 28px; }
+.contrib-card { padding: 25px; border: 1px solid var(--line2); border-radius: 16px; background: var(--panel); min-width: 0; }
+.contrib-card p { margin-top: 14px; color: var(--dim); }
+.contrib-card .contrib-link { display: inline-block; margin-top: 18px; color: var(--lime); font-weight: 600; }
+.contrib-tag { display: inline-block; margin-bottom: 16px; color: var(--purple-2); font: 12px var(--mono); }
+.contrib-steps { list-style: none; counter-reset: contribution; padding: 0; margin: 34px 0 0; }
+.contrib-steps > li { counter-increment: contribution; padding: 0 0 32px 52px; position: relative; }
+.contrib-steps > li::before { content: counter(contribution, decimal-leading-zero); position: absolute; top: 0; left: 0; color: var(--lime); font: 600 16px/1.65 var(--mono); }
+.contrib-steps p { margin-top: 12px; color: var(--dim); }
+.contrib-steps pre { margin: 16px 0 0; padding: 18px; background: rgba(0, 0, 0, .4); border: 1px solid var(--line2); border-radius: 12px; overflow-x: auto; font: 13px/1.8 var(--mono); }
+.contrib-steps p code { white-space: normal; overflow-wrap: anywhere; }
+.contrib-check { padding: 24px; border: 1px solid rgba(180, 255, 74, .3); border-radius: 16px; background: rgba(180, 255, 74, .04); }
+.contrib-check p { margin-top: 14px; color: var(--dim); }
+.contrib-faq { margin-top: 28px; }
+.contrib-faq details { border-top: 1px solid var(--line); padding: 18px 0; }
+.contrib-faq summary { cursor: pointer; color: var(--text); font-size: 17px; font-weight: 600; }
+.contrib-faq details p { margin-top: 12px; color: var(--dim); max-width: 820px; }
+.contrib-final { background: radial-gradient(750px 350px at 100% 100%, rgba(131, 110, 249, .15), transparent 70%); }
+.contrib-footer { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; font-size: 14px; }
+@media (max-width: 800px) { .contrib-grid { grid-template-columns: 1fr; } .contrib-hero { padding-top: 42px; } }
+@media (max-width: 520px) {
+  .contrib-nav { gap: 12px; }
+  .contrib-nav .contrib-nav-blog { display: none; }
+  .contrib-section { padding: 42px 0; }
+  .contrib-steps > li { padding-left: 36px; }
+  .contrib-steps pre { margin-left: -36px; font-size: 12px; padding: 14px; }
+  .contrib-card { padding: 20px; }
+  .contrib-hero .pill { font-size: 12px; }
+  .contrib-hero .btn { height: auto; min-height: 46px; padding-top: 10px; padding-bottom: 10px; }
+}

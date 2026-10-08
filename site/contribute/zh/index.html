@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>提交 PR，一起改进 AI Bot 的 Web3 云钱包 — MoneySwitch</title>
+<meta name="description" content="一起改进 MoneySwitch：给 AI Bot 用的可编程 Web3 云钱包。从文档、接入体验或一个小 Bug 开始，Fork 仓库、验证修改，再提交 PR。这里有完整的首次贡献步骤。">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/contribute/zh/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/contribute/">
+<link rel="alternate" hreflang="zh-CN" href="https://moneyswitch.dev/contribute/zh/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="一起改进 AI Bot 的可编程 Web3 云钱包">
+<meta property="og:description" content="试用、发现问题、提 Issue 或 PR。从一个小改进开始，这里有 MoneySwitch 首次贡献指南。">
+<meta property="og:url" content="https://moneyswitch.dev/contribute/zh/">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-zh.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../assets/css/site.css">
+<link rel="stylesheet" href="../../assets/css/contribute.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+<header class="nav"><div class="wrap nav-inner">
+  <a class="brand" href="../../?lang=zh"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
+  <nav class="nav-actions contrib-nav" aria-label="指南导航"><a href="../../pilot/zh/">参与试用</a><a class="contrib-nav-blog" href="../../blog/zh/">博客</a><a class="contrib-lang" href="../" lang="en">EN</a></nav>
+</div></header>
+<main id="main">
+<section class="contrib-hero"><div class="wrap">
+  <p class="pill"><span class="dot" aria-hidden="true"></span>开源共建 · 从一个小改进开始</p>
+  <h1>一起做好 AI Bot 的<br><span class="hl">可编程 Web3 云钱包。</span></h1>
+  <p class="lead">MoneySwitch 部署在你自己的云服务器上：一个出资方、多个 Agent，各有自己的限额 Key。欢迎改进文档、完善 Agent 接入，或修复试用中遇到的 Bug。</p>
+  <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/compare">去 GitHub 提交 PR ↗</a><a class="btn btn-ghost" href="https://github.com/dongsheng123132/moneyswitch/fork">Fork 仓库</a><a class="btn btn-contribute" href="../../pilot/zh/">先试用钱包</a></div>
+  <p class="contrib-note">已有修改分支，可以直接打开比较页选择分支；第一次贡献，先 Fork，再按下方步骤操作。阅读本指南不需要登录，Fork、提 Issue 或提交 PR 时需要 GitHub 账号。</p>
+  <div class="contrib-road" aria-label="贡献流程"><span>试用</span><b aria-hidden="true">→</b><span>发现问题</span><b aria-hidden="true">→</b><span>提 Issue 或 PR</span><b aria-hidden="true">→</b><span>维护者审查</span></div>
+</div></section>
+<section class="contrib-section"><div class="wrap">
+  <p class="eyebrow">选一个具体的小改进</p><h2>这三类贡献都欢迎</h2>
+  <div class="contrib-grid">
+    <article class="contrib-card"><span class="contrib-tag">01 / 文档与体验</span><h3>让下一步更好理解</h3><p>修正难懂的部署说明、失效链接、翻译或 Agent 接入示例。小而明确的修正，可以直接提 PR。</p><a class="contrib-link" href="https://github.com/dongsheng123132/moneyswitch/edit/main/site/pilot/zh/index.html">在 GitHub 编辑中文试用指南 ↗</a><p class="small">GitHub 会引导你建立 Fork 并提出修改。提交前先预览页面。</p></article>
+    <article class="contrib-card"><span class="contrib-tag">02 / BUG 修复</span><h3>把问题复现出来</h3><p>说明操作步骤、预期结果和实际结果，能给最小复现更好。如果已有修复，请在 PR 中写清验证结果。</p><a class="contrib-link" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">提交试用反馈 ↗</a></article>
+    <article class="contrib-card"><span class="contrib-tag">03 / 功能改进</span><h3>先把使用场景讲清楚</h3><p>新功能或较大改动，先开一个 Issue 讨论要解决的问题，让实现与钱包的范围一致，再投入开发。</p><a class="contrib-link" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=contribution_proposal.yml">提出贡献计划 ↗</a></article>
+  </div>
+</div></section>
+<section class="contrib-section" id="first-pr"><div class="wrap narrow">
+  <p class="eyebrow">第一次提 PR</p><h2>从你的 Fork，到上游 main</h2>
+  <ol class="contrib-steps">
+    <li><h3>选择一个小问题</h3><p>从能复现、能用一句话解释的问题开始。先看 <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>；涉及部署或付款行为，还要读 <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SPEC.md">SPEC.md</a>。较大改动先讨论。</p></li>
+    <li><h3>Fork，再克隆你自己的仓库</h3><p>点击 <a href="https://github.com/dongsheng123132/moneyswitch/fork">Fork</a>。把下方 <code>YOUR_GITHUB_USER</code> 替换为你的 GitHub 用户名，或直接从自己 Fork 的 Code 菜单复制地址。</p><pre><code>git clone https://github.com/YOUR_GITHUB_USER/moneyswitch.git
+cd moneyswitch
+git remote add upstream https://github.com/dongsheng123132/moneyswitch.git
+git switch -c docs/my-first-fix</code></pre></li>
+    <li><h3>修改源文件，验证结果</h3><p>只改这次问题需要的内容。首页、试用页和贡献页直接维护在 <code>site/</code>；博客正文在 <code>docs/blog/</code>，修改后运行 <code>node scripts/build-blog.mjs</code>，把生成页面一并提交。</p><p>按 <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/CONTRIBUTING.md#test-layers-t1t2t3">CONTRIBUTING.md</a> 的要求运行检查。网站改动要预览中英文与手机宽度，写清实际验证了什么、还有什么没有验证。</p></li>
+    <li><h3>提交改动，推送到自己的 Fork</h3><p>先看 diff，把示例路径换成你确实要提交的文件。凭据和本地钱包数据不要放进提交。</p><pre><code>git diff
+git add path/to/changed-file
+git commit -m "docs: clarify the trial setup"
+git push -u origin docs/my-first-fix</code></pre></li>
+    <li><h3>选择跨 Fork 比较，提交 PR</h3><p>打开<a href="https://github.com/dongsheng123132/moneyswitch/compare">上游比较页</a>，选择 <strong>compare across forks</strong>。base repository 选 <code>dongsheng123132/moneyswitch</code>，<strong>base 选 main</strong>；head repository 选自己的 Fork，compare 选 <code>docs/my-first-fix</code>。</p><p>检查 diff，写清改了什么、如何验证。本人阅读 CLA 并同意后，再勾选相应项。提交 PR 是进入维护者审查，并不代表已经获批或合并。</p></li>
+  </ol>
+  <div class="contrib-check"><h3>好的 PR，说明具体结果就够了</h3><p>例如：“试用说明重复要求付款。我改成了观察技能自动发起的那一次请求，并检查了中英文页面。”比只写“优化文档”更容易审查。界面改动有必要时附上截图。</p></div>
+</div></section>
+<section class="contrib-section"><div class="wrap narrow">
+  <h2>提交前，了解这几件事</h2>
+  <div class="contrib-faq">
+    <details><summary>贡献代码，需要购买代币或使用主网吗？</summary><p>不需要做主网付款。可以从<a href="../../pilot/zh/">测试网试用</a>或文档问题开始。离线测试按贡献指南操作；需要链上付款验证时，使用自己的测试钱包，不使用维护者的共享钱包。</p></details>
+    <details><summary>这个云钱包的边界是什么？</summary><p>一套部署为一个出资方花钱，Agent 各自使用有限额的 MoneyKey。目前支付范围是支持的 USDC / x402 API。这仍是自托管热钱包：能读钱包数据和解锁文件的人就能动用资金。改变付款策略、部署方式或信任边界，要遵循规格说明。</p></details>
+    <details><summary>CLA 由谁确认？</summary><p>由提交者本人阅读 <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/CLA.md">CLA.md</a>，同意后在 PR 中勾选。阅读本页面不会签署协议，指南也不会代你接受条款。</p></details>
+    <details><summary>提交 PR，一定会有奖励吗？</summary><p>我们可能根据参与和反馈情况酌情给予奖励，具体安排另行说明。提交或合并 PR 都不保证获得奖励，也没有承诺固定金额。</p></details>
+    <details><summary>哪些信息不能发在公开 Issue 或 PR？</summary><p>MoneyKey、审批 PIN、恢复词、私钥、管理员令牌与登录链接、含凭据的原始日志，以及钱包数据。请提供脱敏示例；安全漏洞通过<a href="https://github.com/dongsheng123132/moneyswitch/security/advisories/new">私密安全报告入口</a>反馈，并遵循 <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SECURITY.md">SECURITY.md</a>。</p></details>
+  </div>
+</div></section>
+<section class="contrib-section contrib-final"><div class="wrap narrow">
+  <h2>一个清楚的问题报告，也是一份贡献。</h2><p class="lead">暂时没有修复方案也没关系。告诉我们部署卡在哪一步，或你希望接入哪个 Agent 工作流。</p>
+  <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/compare">去 GitHub 提交 PR ↗</a><a class="btn btn-ghost" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">提交反馈</a></div>
+</div></section>
+</main>
+<footer class="footer"><nav class="wrap contrib-footer" aria-label="页脚"><a href="../../?lang=zh">← MoneySwitch</a><a href="../../blog/cloud-wallet-for-ai-bots/zh/">为什么做 AI Bot 的云钱包</a><a href="../../pilot/zh/">参与试用</a><a href="https://github.com/dongsheng123132/moneyswitch">GitHub 仓库 ↗</a></nav></footer>
+</body>
+</html>

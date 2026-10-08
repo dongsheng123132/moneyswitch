@@ -1,15 +1,88 @@
 # Contributing to MoneySwitch
 
-Thanks for considering a contribution. MoneySwitch moves real money (USDC
-on a live testnet, and eventually mainnet), so correctness and security
-review matter more here than in most projects — please read this whole
-document before opening a PR.
+MoneySwitch is a programmable Web3 cloud wallet for AI bots, self-hosted
+on the payer's own server. Documentation fixes, clearer agent integration
+instructions, bug reports and focused code improvements are welcome.
+It can move real USDC on mainnet, so payment correctness and security
+review matter. Read the relevant requirements below before opening a PR.
+
+## First PR
+
+Read the step-by-step website guide in
+[English](https://moneyswitch.dev/contribute/) or
+[中文](https://moneyswitch.dev/contribute/zh/). No login is needed to read
+the guide; GitHub requires an account when you fork or submit an issue or PR.
+
+1. Choose one small problem. A typo, broken link or clear documentation
+   correction can go straight to a PR. For a substantial change, first
+   [propose it in an issue](https://github.com/dongsheng123132/moneyswitch/issues/new?template=contribution_proposal.yml).
+   Deployment and payment behavior changes must follow `SPEC.md`.
+2. [Fork this repository](https://github.com/dongsheng123132/moneyswitch/fork).
+   Clone **your own fork**, replacing `YOUR_GITHUB_USER` below with your
+   GitHub username, and create a branch:
+
+   ```bash
+   git clone https://github.com/YOUR_GITHUB_USER/moneyswitch.git
+   cd moneyswitch
+   git remote add upstream https://github.com/dongsheng123132/moneyswitch.git
+   git switch -c docs/my-first-fix
+   ```
+
+3. Edit the source files, review the diff, and follow the existing test
+   requirements below. For site changes, also preview both languages and
+   a phone-sized viewport. Record what you actually verified.
+4. Commit only the intended files and push the branch to your fork:
+
+   ```bash
+   git diff
+   git add path/to/changed-file
+   git commit -m "docs: clarify the trial setup"
+   git push -u origin docs/my-first-fix
+   ```
+
+   Replace the example file path and commit message with your actual change.
+5. Open the [upstream comparison](https://github.com/dongsheng123132/moneyswitch/compare)
+   and choose **compare across forks**. The base repository is
+   `dongsheng123132/moneyswitch`, **base: main**. The head repository is
+   your fork; the compare branch is your branch. Explain the change and
+   verification, personally read the CLA, then check its agreement box
+   if you agree. Opening a PR starts review; it does not approve the change.
+
+For a small edit to the Chinese trial page, the
+[GitHub editor](https://github.com/dongsheng123132/moneyswitch/edit/main/site/pilot/zh/index.html)
+can guide you through a fork and proposed change. A clear
+[trial report](https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml)
+is useful even if you do not have a fix.
+
+### Website and blog source files
+
+| Content | Edit here | Generated output |
+| --- | --- | --- |
+| Homepage | `site/index.html`, `site/assets/js/i18n.js`, `site/assets/css/site.css` | None; maintain English and Chinese together |
+| Trial and contribution guides | `site/pilot/`, `site/contribute/`, their styles in `site/assets/css/` | None; keep both language pages consistent |
+| Blog articles | `docs/blog/<slug>.md` and `docs/blog/<slug>.zh.md` | `site/blog/` |
+| Blog dates, search descriptions and article registration | `scripts/build-blog.mjs` | Blog indexes and article metadata |
+
+After changing blog sources or their manifest, run:
+
+```bash
+node scripts/build-blog.mjs
+```
+
+Include the relevant generated output in your PR. Do not edit generated
+`site/blog/` HTML alone: the next build would overwrite it. Do not replace
+published transaction hashes or claim a feature exists without checking it.
+
+Rewards may be offered at the maintainers' discretion based on participation
+and feedback, with details announced separately. Submitting or merging a PR
+does not guarantee a reward or a fixed amount.
 
 ## Before you start
 
 - **Contributions require agreeing to the [CLA](CLA.md)** (see below —
   it's short). The CLA is what lets the project keep offering the
-  dual-license terms in the [README](README.md#license).
+  dual-license terms in the [README](README.md#license). Read and agree
+  personally; no guide or automated tool checks that box on your behalf.
 - For anything non-trivial, open an issue first describing what you want to
   change and why, so it can be discussed before you spend time on an
   implementation that might not fit the spec (`SPEC.md` is the only

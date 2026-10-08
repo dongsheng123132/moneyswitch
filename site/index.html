@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MoneySwitch — One spending wallet for all your agents</title>
-<meta name="description" content="A programmable spending wallet for multiple AI agents, self-hosted on your cloud server. Give each agent a capped, revocable MoneyKey; manage budgets, approvals and bills in one place. USDC payments to x402 APIs, testnet by default.">
+<title>MoneySwitch — Programmable Web3 cloud wallet for AI bots</title>
+<meta name="description" content="A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.">
 <meta name="theme-color" content="#07060d">
 <link rel="canonical" href="https://moneyswitch.dev/">
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
@@ -13,17 +13,17 @@
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="MoneySwitch">
-<meta property="og:title" content="MoneySwitch — One spending wallet for all your agents">
-<meta property="og:description" content="A programmable spending wallet for multiple AI agents, self-hosted on your cloud server. Give each agent a capped, revocable MoneyKey; manage budgets, approvals and bills in one place. USDC payments to x402 APIs, testnet by default.">
+<meta property="og:title" content="MoneySwitch — Programmable Web3 cloud wallet for AI bots">
+<meta property="og:description" content="A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.">
 <meta property="og:url" content="https://moneyswitch.dev/">
-<meta property="og:image" content="https://moneyswitch.dev/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="MoneySwitch — One spending wallet for all your agents">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.png">
+<meta property="og:image:width" content="1672">
+<meta property="og:image:height" content="941">
+<meta property="og:image:alt" content="MoneySwitch — Programmable Web3 cloud wallet for AI bots">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="MoneySwitch — One spending wallet for all your agents">
-<meta name="twitter:description" content="A programmable spending wallet for multiple AI agents, self-hosted on your cloud server. Give each agent a capped, revocable MoneyKey; manage budgets, approvals and bills in one place. USDC payments to x402 APIs, testnet by default.">
-<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
+<meta name="twitter:title" content="MoneySwitch — Programmable Web3 cloud wallet for AI bots">
+<meta name="twitter:description" content="A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.">
+<meta name="twitter:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.png">
 
 <link rel="stylesheet" href="assets/css/site.css">
 <script>
@@ -42,7 +42,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
   "name": "MoneySwitch",
-  "description": "A programmable spending wallet for multiple AI agents, self-hosted on your cloud server. Give each agent a capped, revocable MoneyKey; manage budgets, approvals and bills in one place. USDC payments to x402 APIs, testnet by default.",
+  "description": "A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.",
   "codeRepository": "https://github.com/dongsheng123132/moneyswitch",
   "programmingLanguage": "TypeScript",
   "license": ["https://www.apache.org/licenses/LICENSE-2.0", "https://www.gnu.org/licenses/agpl-3.0.html"],
@@ -67,6 +67,7 @@
       <a href="#start" data-i18n="nav.start">Quickstart</a>
       <a href="blog/" data-href-en="blog/" data-href-zh="blog/zh/" data-i18n="nav.blog">Blog</a>
       <a href="pilot/" data-href-en="pilot/" data-href-zh="pilot/zh/" data-i18n="nav.pilot">Try it</a>
+      <a class="nav-contribute" href="contribute/" data-href-en="contribute/" data-href-zh="contribute/zh/" data-i18n="nav.contribute">Contribute</a>
     </nav>
     <div class="nav-actions">
       <div class="lang" role="group" aria-label="Language">
@@ -88,15 +89,16 @@
 <section class="hero">
   <div class="wrap">
     <p class="pill"><span class="dot" aria-hidden="true"></span><span data-i18n="hero.badge">v0.7.6 · Open source · Self-hosted · Testnet by default</span></p>
-    <h1 class="hero-title" data-i18n="hero.title">One <span class="hl">spending wallet.</span><br>For all your agents.</h1>
-    <p class="hero-sub" data-i18n="hero.sub">A programmable wallet for multiple AI agents, self-hosted on your cloud server. Connect agents on your computers and cloud machines to one wallet you control. Give each agent its own MoneyKey with a spending limit.</p>
+    <h1 class="hero-title" data-i18n="hero.title">The programmable Web3<br><span class="hl">cloud wallet</span> for AI bots.</h1>
+    <p class="hero-sub" data-i18n="hero.sub">Self-host the wallet on your own cloud server. Connect Codex, Claude Code and your cloud agents to one wallet funded by you or your organization. Give each bot a separate MoneyKey with spending limits, and manage approvals and bills in one place.</p>
     <p class="hero-compare" data-i18n="hero.compare"><span>Your wallet. Separate agent budgets.</span> <span class="lime">One place for approvals and bills.</span></p>
     <div class="cta-row">
       <a class="btn btn-primary" href="pilot/" data-href-en="pilot/" data-href-zh="pilot/zh/" data-i18n="cta.pilot">Join the early testers →</a>
       <a class="btn btn-ghost" href="#start" data-i18n="cta.start">Self-host MoneySwitch</a>
-      <a class="hero-source" href="https://github.com/dongsheng123132/moneyswitch" rel="noopener" data-i18n="cta.source">Explore the source ↗</a>
+      <a class="btn btn-contribute" href="contribute/" data-href-en="contribute/" data-href-zh="contribute/zh/" data-i18n="cta.contribute">Contribute a PR</a>
     </div>
-    <p class="hero-read" data-i18n="hero.read">Why we built it: <a href="blog/one-wallet-many-agents/">one wallet, many agents →</a></p>
+    <p class="hero-contribute-note" data-i18n="hero.contribute">Found a docs issue or an agent integration gap? The contribution guide helps you turn it into a pull request.</p>
+    <p class="hero-read" data-i18n="hero.read">Why we built it: <a href="blog/cloud-wallet-for-ai-bots/">a Web3 cloud wallet for AI bots →</a></p>
     <div class="wallet-map" aria-labelledby="wallet-map-h">
       <div class="wallet-map-head"><h2 id="wallet-map-h" data-i18n="map.h">Many devices. One wallet you control.</h2><span class="chip" data-i18n="map.tag">Architecture · example</span></div>
       <div class="wallet-path">
@@ -350,12 +352,13 @@
 <!-- ============ FINAL CTA ============ -->
 <section class="final">
   <div class="wrap center">
-    <h2 class="final-h" data-i18n="final.h">Help shape a wallet<br>for your agent fleet.</h2>
+    <h2 class="final-h" data-i18n="final.h">Build the cloud wallet<br>your AI bots need.</h2>
     <div class="cta-row center">
       <a class="btn btn-primary" href="pilot/" data-href-en="pilot/" data-href-zh="pilot/zh/" data-i18n="cta.pilot">Join the early testers →</a>
       <a class="btn btn-ghost" href="#start" data-i18n="cta.start">Self-host MoneySwitch</a>
+      <a class="btn btn-contribute" href="contribute/" data-href-en="contribute/" data-href-zh="contribute/zh/" data-i18n="cta.contribute">Contribute a PR</a>
     </div>
-    <p class="final-note" data-i18n="final.note">Try a testnet payment, connect another agent, and tell us where you got stuck.</p>
+    <p class="final-note" data-i18n="final.note">Try a testnet payment, share where you got stuck, or send a PR that improves the docs or an agent integration.</p>
   </div>
 </section>
 
@@ -365,11 +368,12 @@
   <div class="wrap foot">
     <div>
       <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
-      <p class="dim small" data-i18n="foot.tag">A self-hosted, programmable spending wallet for multiple agents.</p>
+      <p class="dim small" data-i18n="foot.tag">The self-hosted, programmable Web3 cloud wallet for AI bots.</p>
       <p class="dim small" data-i18n="foot.warn">v0.7 enables testnets only by default. A mainnet means real USDC: keep only a small float in the wallet.</p>
       <p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p>
     </div>
     <nav class="foot-links" aria-label="Footer">
+      <a class="foot-contribute" href="contribute/" data-href-en="contribute/" data-href-zh="contribute/zh/" data-i18n="cta.contribute">Contribute a PR</a>
       <a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">GitHub</a>
       <a href="https://github.com/dongsheng123132/moneyswitch#readme" rel="noopener">README</a>
       <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SPEC.md" rel="noopener">Spec</a>

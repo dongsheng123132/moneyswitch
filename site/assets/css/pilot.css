@@ -33,7 +33,18 @@
 .pilot-visual { margin: 0 0 36px; }
 .pilot-visual img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); }
 .pilot-visual figcaption { font-size: 13px; color: var(--dim); margin-top: 10px; }
+.pilot-contribution .pilot-card { width: calc(100% - 48px); max-width: 1112px; border-color: var(--purple); background: linear-gradient(135deg, rgba(168,150,255,.12), var(--panel) 75%); }
+.pilot-contribution-path { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+.pilot-contribution-path li { display: flex; gap: 12px; align-items: center; padding: 15px; border: 1px solid var(--line2); border-radius: 10px; }
+.pilot-contribution-path li + li { margin-top: 0; }
+.pilot-contribution-path b { color: var(--lime); font-family: var(--mono); }
+.pilot-text-link { padding: 12px 0; }
 @media (max-width: 700px) {
+  .pilot-contribution .pilot-card { width: calc(100% - 36px); }
+  .pilot-contribution-path { grid-template-columns: 1fr; }
+  .pilot-hero .btn { height: auto; min-height: 46px; padding: 10px 16px; }
+  .nav-actions { gap: 12px; }
+  .nav-actions a { font-size: 13px; }
   .pilot-hero { padding-top: 42px; }
   .pilot-grid { grid-template-columns: 1fr; }
   .pilot-card { padding: 22px; }

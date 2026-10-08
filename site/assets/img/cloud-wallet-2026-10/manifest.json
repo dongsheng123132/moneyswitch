@@ -1,0 +1,30 @@
+{
+  "created": "2026-10-08",
+  "type": "AI-generated concept illustrations, not product screenshots",
+  "images": [
+    {
+      "id": "cover-zh",
+      "width": 1672,
+      "height": 941,
+      "pngBytes": 1681663,
+      "webpBytes": 135628,
+      "sha256": "cec42baac2f5f990bf8f0d2652484f0ac1c9a2aefb408a0bd30dec96b769c278"
+    },
+    {
+      "id": "cover-en",
+      "width": 1672,
+      "height": 941,
+      "pngBytes": 1729957,
+      "webpBytes": 127356,
+      "sha256": "36ef57b4f61e7071e63063b0a563da4660823e0eb6e0174a92999995d61e3565"
+    },
+    {
+      "id": "contribute-zh",
+      "width": 1024,
+      "height": 1536,
+      "pngBytes": 1878352,
+      "webpBytes": 183750,
+      "sha256": "9c209ac94f9965b6734638303f5b981c3e9b0d7a28bd046cb2d68e8744364ffd"
+    }
+  ]
+}

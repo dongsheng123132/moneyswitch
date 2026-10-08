@@ -14,6 +14,15 @@ const ORIGIN = 'https://moneyswitch.dev';
 
 const ARTICLES = [
   {
+    slug: 'cloud-wallet-for-ai-bots',
+    date: '2026-10-08',
+    shareImage: { en: '/assets/img/cloud-wallet-2026-10/cover-en.webp', zh: '/assets/img/cloud-wallet-2026-10/cover-zh.webp' },
+    description: {
+      en: 'Help build a programmable Web3 cloud wallet for AI bots: self-hosted USDC payments over x402, separate spending keys and human approvals. Try it and contribute a PR.',
+      zh: '一起打造给 AI Bot 用的可编程 Web3 云钱包：自托管、USDC/x402、独立花钱权限和人工审批。欢迎试用、复现问题、改进接入体验与提交 PR。',
+    },
+  },
+  {
     slug: 'agent-wallet-trial',
     date: '2026-10-08',
     shareImage: { en: 'cover-en', zh: 'cover-zh' },
@@ -182,6 +191,10 @@ function pageShell({ lang, title, description, canonicalPath, alternatePath, art
   const l = LOCALES[lang];
   const otherLang = lang === 'en' ? 'zh' : 'en';
   const canonical = ORIGIN + canonicalPath;
+  // Full asset paths support new campaigns; existing short names keep their
+  // original launch images and generated article metadata unchanged.
+  const shareImagePath = shareImage?.startsWith('/') ? shareImage
+    : shareImage ? `/assets/img/launch-2026-10/${shareImage}.png` : '/og.png';
   return `<!doctype html>
 <html lang="${l.htmlLang}" data-lang="${lang}">
 <head>
@@ -201,13 +214,13 @@ function pageShell({ lang, title, description, canonicalPath, alternatePath, art
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:url" content="${canonical}">
-<meta property="og:image" content="${ORIGIN}${shareImage ? `/assets/img/launch-2026-10/${shareImage}.png` : '/og.png'}">
+<meta property="og:image" content="${ORIGIN}${escapeHtml(shareImagePath)}">
 <meta property="og:image:width" content="${shareImage ? '1672' : '1200'}">
 <meta property="og:image:height" content="${shareImage ? '941' : '630'}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
-<meta name="twitter:image" content="${ORIGIN}${shareImage ? `/assets/img/launch-2026-10/${shareImage}.png` : '/og.png'}">
+<meta name="twitter:image" content="${ORIGIN}${escapeHtml(shareImagePath)}">
 <link rel="stylesheet" href="/assets/css/site.css">
 <link rel="stylesheet" href="/assets/css/blog.css">
 </head>

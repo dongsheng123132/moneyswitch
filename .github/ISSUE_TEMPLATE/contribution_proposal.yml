@@ -1,0 +1,41 @@
+name: Contribution proposal / 贡献计划
+description: Discuss a feature or substantial change before building it / 开始较大改动前先讨论
+title: "[Proposal] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A small docs fix can go straight to a PR. Use this form to discuss a larger change.
+        小的文档修正可以直接提 PR；较大改动请先说明要解决的问题。
+
+        Do not include credentials or wallet data. Report vulnerabilities [privately](https://github.com/dongsheng123132/moneyswitch/security/advisories/new).
+        请勿附带凭据或钱包数据，安全漏洞请使用上方私密报告入口。
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Area / 改进方向
+      options:
+        - Documentation or integration experience / 文档与接入体验
+        - Bug fix / Bug 修复
+        - Feature or behavior change / 功能或行为改进
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve? / 想解决什么问题？
+      description: Describe a concrete workflow or reproduction, with no secrets. / 描述具体场景或复现过程，不含凭据。
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed change / 计划怎样改？
+      description: Explain the expected result and any spec impact. A rough proposal is enough. / 说明预期效果与可能的规格影响，初步想法即可。
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification idea or help needed / 验证思路或需要的帮助
+      description: Optional; say whether you would like to implement it. / 选填，也可说明是否愿意动手实现。
