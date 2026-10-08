@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help test MoneySwitch with two agents and one self-hosted wallet — MoneySwitch</title>
+<meta name="description" content="Try MoneySwitch with two agents, independent spending keys, a 0.01 test-USDC payment, human approval and bills. An early self-hosted trial with no monetary reward.">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/blog/agent-wallet-trial/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/agent-wallet-trial/">
+<link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/agent-wallet-trial/zh/">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="Help test MoneySwitch with two agents and one self-hosted wallet">
+<meta property="og:description" content="Try MoneySwitch with two agents, independent spending keys, a 0.01 test-USDC payment, human approval and bills. An early self-hosted trial with no monetary reward.">
+<meta property="og:url" content="https://moneyswitch.dev/blog/agent-wallet-trial/">
+<meta property="og:image" content="https://moneyswitch.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Help test MoneySwitch with two agents and one self-hosted wallet">
+<meta name="twitter:description" content="Try MoneySwitch with two agents, independent spending keys, a 0.01 test-USDC payment, human approval and bills. An early self-hosted trial with no monetary reward.">
+<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
+<link rel="stylesheet" href="/assets/css/site.css">
+<link rel="stylesheet" href="/assets/css/blog.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/" aria-label="MoneySwitch home">
+      <span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span>
+    </a>
+    <nav class="nav-links" aria-label="Blog">
+      <a href="/blog/">← Blog</a>
+      <a href="/pilot/">Try with two agents</a>
+    </nav>
+    <div class="nav-actions"><div class="lang" role="group" aria-label="Language"><a href="/blog/agent-wallet-trial/zh/" lang="zh-CN">中文</a></div></div>
+  </div>
+</header>
+<main id="main">
+<article class="section blog-article"><div class="wrap narrow">
+<p class="eyebrow">Published <time datetime="2026-10-08">2026-10-08</time></p>
+<h1>Help test MoneySwitch with two agents and one self-hosted wallet</h1>
+<p>Do you run Codex on one computer, Claude Code on another, or agents split between your own machines and the cloud? We are looking for developers to try MoneySwitch in that kind of setup and tell us where it breaks down.</p>
+<p><strong>MoneySwitch is a programmable spending wallet for multiple agents that you host yourself.</strong> Its server holds the wallet; each agent receives a separate MoneyKey with a spending policy. Today it pays compatible x402 APIs in USDC on Monad and Base, with testnets enabled by default.</p>
+<p>This is an early self-hosted trial. You deploy and control the service, and one instance spends for one payer. There is no hosted signup account or shared customer balance.</p>
+<h2>Who this trial is for</h2>
+<ul>
+<li>You already use at least two agents, or the same kind of agent on different machines.</li>
+<li>You can deploy a service yourself and keep its system permissions separate from your agents.</li>
+<li>You want to test budgets and approvals for agent purchases, and can describe what did and did not work.</li>
+</ul>
+<p>You do not need to put real money into the trial. The suggested payment uses <strong>0.01 test USDC on Monad testnet</strong>. Test USDC has no monetary value. This first trial has no monetary reward and does not offer dollar-denominated API credits or model subscriptions.</p>
+<h2>What to try</h2>
+<p>The <a href="https://moneyswitch.dev/pilot/" rel="noopener">trial page</a> has the setup path. We would like you to exercise these steps:</p>
+<ol>
+<li><strong>Deploy your wallet service.</strong> Follow the current self-hosting instructions, keep testnets enabled, and create a wallet in the dashboard. Use its faucet instructions to obtain Monad testnet USDC. Keep the agent away from the server&#39;s wallet files, database and administrator credentials.</li>
+<li><strong>Connect two agents.</strong> Create a separate testnet key for each, with the test endpoint allowed. For each, set the total budget to 0.05, daily budget to 0.05 and per-payment cap to 0.02, all in test USDC. Leave agent A&#39;s approval threshold empty and set agent B&#39;s to 0.01 when creating the keys. Give each agent its own generated skill instructions. Keep the confirmation PIN with the person responsible for that key.</li>
+<li><strong>Observe the first test payment.</strong> The generated instructions guide agent A through the 0.01 test-USDC payment on Monad testnet. Check its result and transaction hash; do not manually repeat the same test. If payment status is uncertain, inspect it before trying again.</li>
+<li><strong>Try a human decision.</strong> Agent B&#39;s payment reaches its 0.01 approval threshold and should wait. Open the link and use the key&#39;s PIN, or approve as an administrator, then let the agent continue the same request. Also check whether the rejection path is clear.</li>
+<li><strong>Read the bill and revoke a key.</strong> Can you identify the key, amount, URL, chain, transaction hash and charged status? Revoke A&#39;s key, then have A only request <code>GET /v1/status</code> and confirm that it is refused. No further payment is needed. The other agent has its own key; revocation does not reverse a completed payment.</li>
+</ol>
+<p>If a step fails, that is useful feedback. You do not need to force a successful result to participate.</p>
+<h2>The feedback we want</h2>
+<p>Tell us what you were trying to do, which agents and machines you used, and the first point where the product stopped making sense. In particular:</p>
+<ul>
+<li>Was self-hosting clear enough, including connecting an agent from another machine?</li>
+<li>Did the key limits and the approval request match what you expected?</li>
+<li>Could you tell the difference between paid, not paid and uncertain?</li>
+<li>After revoking a key, was it obvious what had stopped and what had already happened?</li>
+<li>What real API would you want an agent to pay for, and does it offer a compatible payment method?</li>
+</ul>
+<p>We are looking for concrete friction and missing workflows. Honest reports of “I do not need this” are useful too.</p>
+<h2>What to expect from the current product</h2>
+<p>MoneySwitch does not pay arbitrary model subscriptions. Its supported payment path is x402, and a seller must accept a compatible payment scheme and chain. Bills record payment details; they do not yet explain an agent&#39;s whole task or judge whether its purchase was useful.</p>
+<p>The wallet is a server-side hot wallet. Keeping the private key off agent machines reduces what those machines need to hold, but the wallet service remains trusted. A server compromise can put funds at risk. Use testnet for this trial and read the deployment and security documentation before considering mainnet.</p>
+<h2>Start the trial and send feedback</h2>
+<p><strong><a href="https://moneyswitch.dev/pilot/" rel="noopener">Open the MoneySwitch trial guide</a></strong>, then <a href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml" rel="noopener">open a GitHub feedback issue</a> with your setup, expected result, actual result and reproduction steps. A screenshot or redacted response is helpful when it explains the problem.</p>
+<p>Never post a MoneyKey, approval PIN, administrator token, recovery phrase, or private key. Remove sensitive request URLs and personal information from public feedback. For a security vulnerability, follow the repository&#39;s <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SECURITY.md" rel="noopener">security reporting instructions</a> instead of publishing exploit details in an issue.</p>
+<p>The question behind this trial is simple: does one wallet with separate spending permissions fit how you actually run your agents? Your experience will help us decide what to fix next.</p>
+</div></article>
+</main>
+<footer class="footer">
+  <div class="wrap foot">
+    <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a><p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p></div>
+    <nav class="blog-footer-links" aria-label="Blog"><a href="/blog/">← Blog</a><a href="/pilot/">Try with two agents</a></nav>
+  </div>
+</footer>
+</body>
+</html>

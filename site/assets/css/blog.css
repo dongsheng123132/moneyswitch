@@ -9,6 +9,7 @@
 .blog-article h2 + p { margin-top: 14px; }
 
 .blog-article p { margin-top: 16px; color: var(--dim); font-size: 16.5px; line-height: 1.75; }
+.blog-article p, .blog-article li, .blog-list-item { overflow-wrap: anywhere; }
 .blog-article p:first-of-type { margin-top: 4px; }
 .blog-article p em { color: var(--text); font-style: italic; }
 .blog-article strong { color: var(--text); font-weight: 650; }
@@ -33,7 +34,7 @@
 .blog-article a { color: var(--purple-2); text-decoration: none; }
 .blog-article a:hover { color: #cfc5ff; text-decoration: underline; text-underline-offset: 3px; }
 
-.blog-article code { font-family: var(--mono); font-size: .88em; background: rgba(131, 110, 249, .14); border: 1px solid rgba(131, 110, 249, .22); padding: .05em .38em; border-radius: 6px; color: #e3dcff; white-space: nowrap; }
+.blog-article code { font-family: var(--mono); font-size: .88em; background: rgba(131, 110, 249, .14); border: 1px solid rgba(131, 110, 249, .22); padding: .05em .38em; border-radius: 6px; color: #e3dcff; white-space: normal; overflow-wrap: anywhere; }
 
 .blog-index .blog-list { list-style: none; margin: 32px 0 0; padding: 0; }
 .blog-index .blog-list-item { padding: 22px 0; border-top: 1px solid var(--line); }
@@ -42,6 +43,11 @@
 .blog-index .blog-list-item h2 a { color: var(--text); }
 .blog-index .blog-list-item h2 a:hover { color: var(--purple-2); }
 .blog-index .blog-list-item p { margin-top: 8px; font-size: 14.5px; }
+.blog-index .blog-list-item .eyebrow { margin-bottom: 8px; font-size: 11px; }
+.blog-index .blog-list-item p a { color: var(--purple-2); }
+.blog-footer-links { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+.nav .lang a { display: inline-block; padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--text); }
+.blog-article a:focus-visible, .blog-index a:focus-visible, .blog-footer-links a:focus-visible, .nav .lang a:focus-visible { outline: 2px solid var(--purple-2); outline-offset: 4px; border-radius: 3px; }
 
 @media (max-width: 640px) {
   .blog-article table { font-size: 13px; }

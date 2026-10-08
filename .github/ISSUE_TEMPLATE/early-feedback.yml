@@ -1,0 +1,63 @@
+name: Early trial feedback / 早期试用反馈
+description: Tell us where you got stuck or how you would use a shared agent wallet.
+title: "[Trial] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying MoneySwitch. You can report a blocker even if you have not made a payment.
+        感谢试用 MoneySwitch；还没付成第一笔也可以反馈。
+        **This issue is public / 此反馈公开可见。** Do not include MoneyKeys, PINs, recovery phrases, admin tokens, private endpoints or raw logs. 不要提交密钥、确认码、恢复词、管理员令牌、内部地址或原始日志。
+        For vulnerabilities use [private security reporting](https://github.com/dongsheng123132/moneyswitch/security/advisories/new).
+  - type: dropdown
+    id: source
+    attributes:
+      label: Where did you find us? / 从哪里看到
+      options:
+        - Website / 官网
+        - Zhihu / 知乎
+        - WeChat or Xiaohongshu / 微信或小红书
+        - English blog / 英文博客
+        - Hacker News
+        - GitHub
+        - Personal invitation / 朋友邀请
+        - Other / 其他
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup / 使用场景
+      description: Agent names, number of devices, local or cloud; no internal addresses. 使用哪些 Agent、几台设备、本地还是云端，不需要内部地址。
+      placeholder: "Codex on a laptop + Claude Code on a cloud VM; one wallet for my own projects."
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: How far did you get? / 试到哪一步
+      options:
+        - Exploring the idea / 还在了解
+        - Deployment blocked / 卡在部署
+        - Wallet or faucet blocked / 卡在钱包或领测试币
+        - Key or agent setup blocked / 卡在发 Key 或接入 Agent
+        - Payment blocked / 卡在付款
+        - Completed a testnet payment / 已完成测试网付款
+        - Tried approvals or revocation / 已试审批或撤销
+    validations:
+      required: true
+  - type: textarea
+    id: observation
+    attributes:
+      label: What happened? / 实际体验
+      description: What did you try, expect, and observe? Include version/commit and a redacted error code if relevant. 写下操作、期望和实际结果；遇错可附版本和脱敏错误码。
+    validations:
+      required: true
+  - type: textarea
+    id: next-use
+    attributes:
+      label: What would you use it for next? / 下一次会用在哪里
+      description: A real task or paid service, or the reason you would not use it again. 具体任务或想购买的服务；暂时用不上也欢迎直说。
+  - type: textarea
+    id: friction
+    attributes:
+      label: One thing to improve / 最想改的一处
+      description: A confusing step, missing capability, or unnecessary step. 一个困惑、缺失功能或多余步骤。

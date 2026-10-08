@@ -9,10 +9,9 @@
 <link rel="canonical" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/">
 <link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/">
 <link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/">
-<link rel="icon" href="../../../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="../../../assets/img/favicon-32.png" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="../../../assets/img/apple-touch-icon.png">
-
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="MoneySwitch">
 <meta property="og:title" content="我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据">
@@ -25,34 +24,26 @@
 <meta name="twitter:title" content="我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据">
 <meta name="twitter:description" content="Qwen 3.8 Max 拿到一把 0.09 美元预算的 MoneyKey，通过 x402 在 Monad 主网上自己买了 Nansen 的数据 —— 五笔真实的 USDC 付款，全程没有碰到私钥。">
 <meta name="twitter:image" content="https://moneyswitch.dev/og.png">
-
-<link rel="stylesheet" href="../../../assets/css/site.css">
-<link rel="stylesheet" href="../../../assets/css/blog.css">
+<link rel="stylesheet" href="/assets/css/site.css">
+<link rel="stylesheet" href="/assets/css/blog.css">
 </head>
 <body>
 <a class="skip" href="#main">跳到正文</a>
-
 <header class="nav" id="top">
   <div class="wrap nav-inner">
-    <a class="brand" href="../../../index.html" aria-label="MoneySwitch home">
-      <span class="brand-mark" aria-hidden="true"><i></i></span>
-      <span class="brand-name">Money<b>Switch</b></span>
+    <a class="brand" href="/?lang=zh" aria-label="MoneySwitch 首页">
+      <span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span>
     </a>
-    <nav class="nav-links" aria-label="Blog">
-      <a href="../index.html">← 博客</a>
+    <nav class="nav-links" aria-label="博客">
+      <a href="/blog/zh/">← 博客</a>
+      <a href="/pilot/zh/">用两个 Agent 试一试</a>
     </nav>
-    <div class="nav-actions">
-      <div class="lang" role="group" aria-label="Language">
-        <a href="../">EN</a>
-      </div>
-    </div>
+    <div class="nav-actions"><div class="lang" role="group" aria-label="语言"><a href="/blog/qwen-agent-pays-nansen/" lang="en">English</a></div></div>
   </div>
 </header>
-
 <main id="main">
-<article class="section blog-article">
-  <div class="wrap narrow">
-    <p class="eyebrow">发布于 2026-09-27</p>
+<article class="section blog-article"><div class="wrap narrow">
+<p class="eyebrow">发布于 <time datetime="2026-09-27">2026-09-27</time></p>
 <h1>我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据</h1>
 <p><em>Monad Metropolis 黑客松稿件（Qwen 3.8 Max 与 Nansen 赏金）。文中每一笔交易都在 Monad 主网上，可以在 monadvision.com 查到。</em></p>
 <h2>问题</h2>
@@ -115,16 +106,12 @@
 <p>给 Agent 用的付费 API 正在到来，x402 已经把「付钱」这一步变简单了。难的是「授权」这一步：这个 Agent 能花多少、能花在哪、怎么叫停。MoneyKey 用开发者早就熟悉的方式回答这个问题：它就像一个 API Key，有预算、有白名单、有一键吊销，而且策略在任何签名<strong>之前</strong>就执行。</p>
 <p>Qwen 3.8 Max 展示了另一半：给它预算和价目表，一个能干的模型花起钱来像分析师，而不是像一个死循环。</p>
 <p><strong>试一试：</strong> 自托管 <code>npx moneyswitch-server</code> · 代码：<a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">https://github.com/dongsheng123132/moneyswitch</a> · Agent：<code>apps/qwen-agent</code> · 操作手册：<code>docs/nansen-mainnet.md</code></p>
-  </div>
-</article>
+</div></article>
 </main>
-
 <footer class="footer">
   <div class="wrap foot">
-    <div>
-      <a class="brand" href="../../../index.html"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
-      <p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p>
-    </div>
+    <div><a class="brand" href="/?lang=zh"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a><p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p></div>
+    <nav class="blog-footer-links" aria-label="博客"><a href="/blog/zh/">← 博客</a><a href="/pilot/zh/">用两个 Agent 试一试</a></nav>
   </div>
 </footer>
 </body>

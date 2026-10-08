@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One self-hosted spending wallet for agents across your computers — MoneySwitch</title>
+<meta name="description" content="Why we are building a programmable, self-hosted spending wallet for agents across computers: one wallet service, separate budgets and human approvals over x402.">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/blog/one-wallet-many-agents/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/one-wallet-many-agents/">
+<link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/one-wallet-many-agents/zh/">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="One self-hosted spending wallet for agents across your computers">
+<meta property="og:description" content="Why we are building a programmable, self-hosted spending wallet for agents across computers: one wallet service, separate budgets and human approvals over x402.">
+<meta property="og:url" content="https://moneyswitch.dev/blog/one-wallet-many-agents/">
+<meta property="og:image" content="https://moneyswitch.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="One self-hosted spending wallet for agents across your computers">
+<meta name="twitter:description" content="Why we are building a programmable, self-hosted spending wallet for agents across computers: one wallet service, separate budgets and human approvals over x402.">
+<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
+<link rel="stylesheet" href="/assets/css/site.css">
+<link rel="stylesheet" href="/assets/css/blog.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/" aria-label="MoneySwitch home">
+      <span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span>
+    </a>
+    <nav class="nav-links" aria-label="Blog">
+      <a href="/blog/">← Blog</a>
+      <a href="/pilot/">Try with two agents</a>
+    </nav>
+    <div class="nav-actions"><div class="lang" role="group" aria-label="Language"><a href="/blog/one-wallet-many-agents/zh/" lang="zh-CN">中文</a></div></div>
+  </div>
+</header>
+<main id="main">
+<article class="section blog-article"><div class="wrap narrow">
+<p class="eyebrow">Published <time datetime="2026-10-08">2026-10-08</time></p>
+<h1>One self-hosted spending wallet for agents across your computers</h1>
+<p>You have Codex on a laptop, Claude Code on a desktop, and another agent working on a cloud server. Each can call tools and APIs. Sooner or later, one of those tools asks for payment.</p>
+<p>Now you have a different problem: which agent can spend, how much, and who can stop it?</p>
+<p>Setting up a separate wallet for each bot means managing balances, credentials and transaction history across machines. You may already use an interactive wallet such as MetaMask yourself, but you do not necessarily want to repeat that setup for every unattended agent.</p>
+<p>That is the problem we are building MoneySwitch around: <strong>a programmable spending wallet for multiple agents, self-hosted on a server you control.</strong></p>
+<h2>One wallet, separate spending permissions</h2>
+<p>MoneySwitch runs as a service. You create its wallet, keep a small balance there, and issue a separate MoneyKey to each agent. A MoneyKey looks like an API key. It gives the holder permission to request payments within a policy; it does not contain the wallet&#39;s private key.</p>
+<p>A setup might look like this:</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Agent</th><th>Where it runs</th><th>What it receives</th></tr></thead>
+<tbody>
+<tr><td>Codex</td><td>Your laptop</td><td>A MoneyKey with its own budget and allowed hosts</td></tr>
+<tr><td>Claude Code</td><td>Your desktop</td><td>A different MoneyKey with its own limits</td></tr>
+<tr><td>A background agent</td><td>Your cloud server</td><td>Another MoneyKey that you can revoke independently</td></tr>
+</tbody></table></div>
+<p>All three send payment requests to your MoneySwitch service. You manage their spending permissions in one place. This works across machines through the HTTP interface and the instructions supplied with each key; it does not depend on installing a browser wallet on each machine.</p>
+<p>The current product is <strong>early self-hosted software</strong>. One instance spends for one payer: you, or your organization. “Cloud wallet” here means a wallet service you can deploy on your own cloud server, with HTTPS and persistent storage. It is not an account where you deposit money with MoneySwitch.</p>
+<h2>What “programmable” means today</h2>
+<p>Each key has a daily budget, a total budget, a per-payment cap, allowed hosts, an approval threshold and an expiry. The service checks the policy before signing a payment.</p>
+<ul>
+<li>A request within the limits, to an allowed host, and below the approval threshold can proceed automatically.</li>
+<li>A payment <strong>at or above</strong> the approval threshold pauses for a person. A request to a new public host also needs approval before MoneySwitch contacts it; approving that host adds it to this key&#39;s allowlist.</li>
+<li>A payment beyond a hard cap is rejected. Human approval does not override the daily, total or per-payment limit.</li>
+<li>You can revoke an individual key when its work is finished or its permission should end. Revocation blocks future requests; it does not undo an already signed or settled payment.</li>
+</ul>
+<p>The person responsible for a key can open the approval link and enter that key&#39;s 4–6 digit confirmation PIN. A logged-in administrator can also approve or reject requests. Keep that PIN with the person, outside the agent&#39;s prompt and configuration.</p>
+<p>The distinction matters: the agent asks to spend, the server enforces the limits, and a person handles the requests that need a decision.</p>
+<h2>The payment path is x402</h2>
+<p>Today MoneySwitch pays compatible x402 APIs in USDC. An agent calls <code>POST /v1/fetch</code> with its MoneyKey and the API request. If the seller returns an HTTP 402 payment requirement, MoneySwitch checks the request against the key&#39;s policy, signs an allowed payment, and retries the request with the payment authorization.</p>
+<p>Supported networks are Monad and Base, with testnets enabled by default. The seller has to accept a supported chain and payment scheme, and your wallet needs a balance on that chain. This is not a way to pay for every model API or an existing Claude, Codex or other subscription. Those agents are possible callers of the wallet; their subscription billing is a separate system.</p>
+<p>We have published a <a href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/" rel="noopener">recorded Qwen and Nansen experiment</a> with five Monad mainnet transactions and a $0.09 budget. That is evidence for a specific payment flow. The wider question we want to test now is whether a shared wallet service makes day-to-day work with multiple agents easier.</p>
+<h2>A bill should tell you what happened</h2>
+<p>The dashboard records the key, amount, requested URL, chain, transaction hash when available, and <code>charged: yes | no | maybe</code>. Mainnet and testnet amounts are kept separate.</p>
+<p>That lets you inspect a payment and follow its chain transaction. It does not tell you whether the agent&#39;s purchase was useful, and it is not a task-level expense report. If the result is uncertain, an agent must not blindly retry and risk another payment.</p>
+<p>We want feedback on that boundary too: is the current bill enough to understand the purchase, or do you still have to reconstruct too much from the agent&#39;s conversation?</p>
+<h2>Self-hosting still has a trust boundary</h2>
+<p>The private key stays on the MoneySwitch server. The server must be able to sign unattended payments, so this is a <strong>server-side hot wallet</strong>. A compromised server can put its funds at risk; “the agent does not receive the private key” is not a promise that the wallet cannot be compromised.</p>
+<p>Keep the service and the agents isolated by system permissions. An agent that can edit the server&#39;s database or wallet files can bypass the intended boundary. Use a separate server or properly isolated service, protect its administrative access, and keep only a small spending balance when you eventually use mainnet.</p>
+<p>Start on testnet. Test USDC has no monetary value, and it is enough to check the payment, approval and revocation flows.</p>
+<h2>Help us test the actual workflow</h2>
+<p>We are inviting developers who already run agents on more than one machine, or run multiple agents locally and in the cloud. Connect two agents, make a small testnet payment, try an approval, inspect the bill and revoke a key.</p>
+<p>Then tell us where you got stuck and whether this is a wallet you would want to keep running. We are especially interested in the steps that still require you to act as the agent&#39;s manual payment operator.</p>
+<p><strong><a href="https://moneyswitch.dev/pilot/" rel="noopener">Try MoneySwitch with two agents</a></strong>. The trial page has the current setup path and feedback instructions. You can also read the <a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">source and deployment documentation</a> or <a href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml" rel="noopener">open a feedback issue</a>.</p>
+</div></article>
+</main>
+<footer class="footer">
+  <div class="wrap foot">
+    <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a><p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p></div>
+    <nav class="blog-footer-links" aria-label="Blog"><a href="/blog/">← Blog</a><a href="/pilot/">Try with two agents</a></nav>
+  </div>
+</footer>
+</body>
+</html>

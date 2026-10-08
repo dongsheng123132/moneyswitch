@@ -1,0 +1,40 @@
+/* Early trial guide: shares the main site's type and colour system. */
+.pilot-hero { padding: 72px 0 40px; }
+.pilot-hero h1 { max-width: 880px; font-size: clamp(34px, 5.3vw, 62px); margin: 18px 0; }
+.pilot-hero .lead { max-width: 800px; }
+.pilot-section { padding: 38px 0; }
+.pilot-section h2 { font-size: clamp(24px, 3.1vw, 34px); margin-bottom: 18px; }
+.pilot-section p + p { margin-top: 14px; }
+.pilot-section p, .pilot-section li { color: var(--dim); }
+.pilot-section strong { color: var(--text); }
+.pilot-section li + li { margin-top: 10px; }
+.pilot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.pilot-card { padding: 26px; border: 1px solid var(--line2); border-radius: 16px; background: var(--panel); }
+.pilot-card h3 { font-size: 21px; margin-bottom: 12px; }
+.pilot-card ol, .pilot-card ul { padding-left: 22px; }
+.pilot-card .cta-row { margin-top: 20px; }
+.pilot-note { border-left: 3px solid var(--purple); padding: 8px 0 8px 18px; margin-top: 24px; max-width: 860px; }
+.pilot-steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+.pilot-steps > li { counter-increment: step; padding: 24px 0 24px 58px; position: relative; border-top: 1px solid var(--line); }
+.pilot-steps > li::before { content: counter(step, decimal-leading-zero); position: absolute; left: 0; top: 24px; color: var(--lime); font: 600 20px var(--mono); }
+.pilot-steps h3 { margin-bottom: 12px; color: var(--text); }
+.pilot-section .table-scroll { overflow-x: auto; border: 1px solid var(--line2); border-radius: 12px; margin: 18px 0; }
+.pilot-section table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pilot-section th, .pilot-section td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--line); }
+.pilot-section th { color: var(--text); }
+.pilot-section td { color: var(--dim); }
+.pilot-section tr:last-child td { border-bottom: 0; }
+.pilot-section code { white-space: normal; overflow-wrap: anywhere; }
+.pilot-lang { padding: 8px 12px; color: var(--text); font-size: 14px; }
+.pilot-section details { border-top: 1px solid var(--line); padding: 18px 0; }
+.pilot-section summary { cursor: pointer; font-weight: 600; }
+.pilot-section details p { margin-top: 12px; }
+.pilot-feedback { margin-bottom: 48px; }
+@media (max-width: 700px) {
+  .pilot-hero { padding-top: 42px; }
+  .pilot-grid { grid-template-columns: 1fr; }
+  .pilot-card { padding: 22px; }
+  .pilot-steps > li { padding-left: 44px; }
+  .pilot-section th, .pilot-section td { padding: 10px; }
+  .pilot-section .btn { height: auto; min-height: 46px; padding: 10px 16px; }
+}

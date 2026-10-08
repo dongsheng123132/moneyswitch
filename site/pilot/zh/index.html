@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>邀请你试用多 Agent 支出钱包 — MoneySwitch</title>
+<meta name="description" content="用你自己的服务器和测试币，试试让两台设备上的 AI 共用一个 MoneySwitch 钱包：独立额度、人工审批、账单与撤销。欢迎反馈卡住的地方。">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/pilot/zh/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/pilot/">
+<link rel="alternate" hreflang="zh-CN" href="https://moneyswitch.dev/pilot/zh/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="多台设备，多个 AI，一个由你控制的支出钱包">
+<meta property="og:description" content="MoneySwitch 早期试用：自部署、测试网付款、独立额度和人工审批。">
+<meta property="og:url" content="https://moneyswitch.dev/pilot/zh/">
+<link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../assets/css/site.css">
+<link rel="stylesheet" href="../../assets/css/pilot.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+<header class="nav"><div class="wrap nav-inner">
+  <a class="brand" href="../../?lang=zh"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
+  <div class="nav-actions"><a href="../../blog/zh/">博客</a><a class="pilot-lang" href="../" lang="en">English</a></div>
+</div></header>
+<main id="main">
+<section class="pilot-hero"><div class="wrap">
+  <p class="pill"><span class="dot" aria-hidden="true"></span>早期试用 · 自部署 · 测试币体验</p>
+  <h1>你的 AI 分散在多台设备上，<br>花钱能不能由<span class="hl">一个钱包</span>来管？</h1>
+  <p class="lead">我们在做 MoneySwitch：可云自托管的可编程多 Agent 支出钱包。邀请你用自己的 Agent 试一遍，告诉我们哪个环节有用、哪个环节卡住了。</p>
+  <div class="cta-row"><a class="btn btn-primary" href="#try">开始测试网体验 ↓</a><a class="btn btn-ghost" href="#feedback">提交体验反馈</a></div>
+  <p class="pilot-note dim">当前需要自行部署，不提供公开注册的托管账户。试用使用没有真实价值的测试 USDC；需要自己的运行环境，并按钱包页指引领取测试币。这不是美元 API 额度赠送活动。</p>
+</div></section>
+<section class="pilot-section"><div class="wrap pilot-grid">
+  <article class="pilot-card"><h2>这次想邀请谁</h2><ul>
+    <li>同时使用 Codex、Claude Code、OpenClaw，或自己写的 Agent。</li>
+    <li>Agent 分布在电脑、服务器或云端，希望集中管理付费调用。</li>
+    <li>能运行自托管服务，愿意尝试 x402 付费 API，并记录一次真实体验。</li>
+  </ul><p>只有一个 Agent 也可以参与；还没部署成功的反馈同样有用。</p></article>
+  <article class="pilot-card"><h2>你会试到什么</h2><ul>
+    <li>一个由你控制的钱包，为不同 Agent 发不同额度的 MoneyKey。</li>
+    <li>达到或超过审批线，先交给人决定。</li>
+    <li>按 Key 查付款记录，并撤销不再需要的 Key。</li>
+  </ul><p>目前支付范围是受支持的 USDC / x402 服务，不是代付所有 AI 订阅或任意网站。</p></article>
+</div></section>
+<section class="pilot-section" id="try"><div class="wrap narrow">
+  <p class="eyebrow">一次完整的小实验</p><h2>让两个 Agent 各拿一把 Key</h2>
+  <ol class="pilot-steps">
+    <li><h3>部署自己的钱包服务</h3><p>按<a href="https://github.com/dongsheng123132/moneyswitch/blob/main/deploy/README.zh-CN.md">云服务器部署指南</a>配置 Docker 与 HTTPS，或按<a href="https://github.com/dongsheng123132/moneyswitch/blob/main/README.zh-CN.md">源码启动说明</a>运行。服务与 Agent 使用隔离的机器或系统权限，让 Agent 只能通过网络使用 MoneyKey。</p><p>首次启动的管理员登录链接只供你使用。在钱包页创建钱包，自己保存恢复词，使用钱包页的水龙头指引领取 <strong>Monad 测试网 USDC</strong>。不要充值主网资金来完成这次试用。</p></li>
+    <li><h3>分别给 Agent A 和 B 发测试网 Key</h3><p>在 Key 页创建两把命名不同的 Key，例如 <code>laptop-codex</code> 和 <code>cloud-claude</code>。都选择“测试网”，保留“允许测试付款接口”。下面是一组可选的测试参数，单位都是测试 USDC：</p>
+      <div class="table-scroll"><table><thead><tr><th>参数</th><th>Agent A</th><th>Agent B</th></tr></thead><tbody>
+        <tr><td>总额度 / 日额度</td><td>0.05 / 0.05</td><td>0.05 / 0.05</td></tr>
+        <tr><td>单笔上限</td><td>0.02</td><td>0.02</td></tr>
+        <tr><td>审批线</td><td>留空</td><td>0.01</td></tr>
+      </tbody></table></div>
+      <p>把各自的技能段落交给对应的 Agent，确认它能访问你的 HTTPS 服务地址。<strong>确认码只给人，管理员令牌、恢复词和 Key 的确认码都不放进 Agent 技能里。</strong>只有一个 Agent 时，也可以先后试两把 Key。</p></li>
+    <li><h3>观察付款和审批</h3><p>勾选测试接口后，技能会引导 Agent 查询额度，并向 <code>https://app.moneyswitch.dev/x402-testnet/check</code> 发起一次 <strong>0.01 测试 USDC</strong>付款。不要再手动重复同一笔测试。</p><p>A 应在额度内完成付款；B 的金额达到审批线，应先返回审批链接。你用这把 Key 的确认码批准，或由管理员在后台批准，然后 Agent 按技能说明继续该请求。保留成功的交易号；如果出现 <code>charged: maybe</code> 或超时，先查看账单，不要自动重试。</p></li>
+    <li><h3>查账、撤销，再说说体验</h3><p>在账单页核对两把 Key 的记录：金额、URL、链、扣款状态，以及已确认付款的交易号。撤销 A 的 Key，再让 A 只查询状态 <code>GET /v1/status</code>，应被拒绝；不需要再付一笔钱。</p><p>记下最不清楚的一步、遇到的错误，以及你实际想让 Agent 购买的服务。测试币领不到、服务器部署不起来，都可以直接反馈。</p></li>
+  </ol>
+</div></section>
+<section class="pilot-section"><div class="wrap narrow">
+  <h2>开始前你可能想知道</h2>
+  <details><summary>“云钱包”是谁在保管？</summary><p>服务部署在你自己的服务器，由你管理钱包和数据。Agent 获得的是受额度限制的访问 Key。谁能读取服务器的钱包数据和解锁文件，谁就能动用钱包；自托管需要你保护服务器，后续使用主网时也适合作为小额支出钱包。</p></details>
+  <details><summary>每个 Agent 都有独立钱包地址吗？</summary><p>它们使用同一出资方的钱包，各有独立 Key 和限额。Key 的额度是支出上限，不是为它单独存入的一份余额。同一钱包地址在不同链上的余额也彼此独立。</p></details>
+  <details><summary>需要转发、好评或交费吗？</summary><p>反馈没有转发或好评要求，也没有承诺的现金、API 额度或徽章奖励。测试币没有真实价值；服务器等自备环境可能产生费用。</p></details>
+  <details><summary>现在还缺什么？</summary><p>任务用途备注和按任务汇总的成本报表还没有做。子 Key 目前只有后端接口，没有创建界面。当前通过 Skill 和 HTTP 接入，不提供 MCP 接口，也不是开放注册的多租户托管服务。</p></details>
+</div></section>
+<section class="pilot-section pilot-feedback" id="feedback"><div class="wrap narrow pilot-card">
+  <p class="eyebrow">我们最想听到真实的使用经过</p><h2>试完了，或卡住了，都告诉我们</h2>
+  <p>写清用了哪些 Agent、试到哪一步、原本期待什么、实际发生什么，以及下一次会不会用它。负面体验同样有帮助。</p>
+  <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">在 GitHub 提交反馈 ↗</a><a class="btn btn-ghost" href="../../blog/one-wallet-many-agents/zh/">了解我们为什么做它</a></div>
+  <p class="pilot-note">反馈通过 GitHub Issue 提交，需要 GitHub 账号，内容公开可见。请只提供脱敏的现象与错误码，不要贴 Key、确认码、恢复词、管理员登录链接或完整日志。安全漏洞请走<a href="https://github.com/dongsheng123132/moneyswitch/security/advisories/new">私密报告入口</a>。</p>
+</div></section>
+</main>
+<footer class="footer"><div class="wrap foot"><a href="../../?lang=zh">← MoneySwitch</a><a href="https://github.com/dongsheng123132/moneyswitch">开源代码 ↗</a></div></footer>
+</body></html>

@@ -3,57 +3,73 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Blog — MoneySwitch</title>
-<meta name="description" content="MoneySwitch blog: write-ups on paying x402 APIs with USDC on Monad, agent budgets and real on-chain settlements.">
+<title>MoneySwitch blog — MoneySwitch</title>
+<meta name="description" content="Building a self-hosted spending wallet for agents: product notes, early trials and recorded payments.">
 <meta name="theme-color" content="#07060d">
 <link rel="canonical" href="https://moneyswitch.dev/blog/">
-<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="../assets/img/favicon-32.png" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
-
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/">
+<link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/zh/">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="MoneySwitch">
-<meta property="og:title" content="Blog — MoneySwitch">
-<meta property="og:description" content="MoneySwitch blog: write-ups on paying x402 APIs with USDC on Monad, agent budgets and real on-chain settlements.">
+<meta property="og:title" content="MoneySwitch blog">
+<meta property="og:description" content="Building a self-hosted spending wallet for agents: product notes, early trials and recorded payments.">
 <meta property="og:url" content="https://moneyswitch.dev/blog/">
 <meta property="og:image" content="https://moneyswitch.dev/og.png">
-
-<link rel="stylesheet" href="../assets/css/site.css">
-<link rel="stylesheet" href="../assets/css/blog.css">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="MoneySwitch blog">
+<meta name="twitter:description" content="Building a self-hosted spending wallet for agents: product notes, early trials and recorded payments.">
+<meta name="twitter:image" content="https://moneyswitch.dev/og.png">
+<link rel="stylesheet" href="/assets/css/site.css">
+<link rel="stylesheet" href="/assets/css/blog.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-
 <header class="nav" id="top">
   <div class="wrap nav-inner">
-    <a class="brand" href="../index.html" aria-label="MoneySwitch home">
-      <span class="brand-mark" aria-hidden="true"><i></i></span>
-      <span class="brand-name">Money<b>Switch</b></span>
+    <a class="brand" href="/" aria-label="MoneySwitch home">
+      <span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span>
     </a>
+    <nav class="nav-links" aria-label="Blog">
+      <a href="/blog/">Blog</a>
+      <a href="/pilot/">Try with two agents</a>
+    </nav>
+    <div class="nav-actions"><div class="lang" role="group" aria-label="Language"><a href="/blog/zh/" lang="zh-CN">中文</a></div></div>
   </div>
 </header>
-
 <main id="main">
-<section class="section blog-index">
-  <div class="wrap narrow">
-    <p class="eyebrow">Blog · 博客</p>
-    <h1 class="h2">MoneySwitch blog</h1>
-    <ul class="blog-list">
-      <li class="blog-list-item">
-        <h2><a href="qwen-agent-pays-nansen/">I gave Qwen 3.8 Max a $0.09 budget and a MoneyKey. It bought its own Nansen data on Monad mainnet.</a></h2>
-        <p class="dim">Qwen 3.8 Max buys its own Nansen data over x402 on Monad mainnet, under a hard USDC budget. <a href="qwen-agent-pays-nansen/">Read in English</a> · <a href="qwen-agent-pays-nansen/zh/">阅读中文版</a></p>
-      </li>
-    </ul>
-  </div>
-</section>
+<section class="section blog-index"><div class="wrap narrow">
+<p class="eyebrow">Blog · 博客</p>
+<h1 class="h2">MoneySwitch blog</h1>
+<p class="lead">Building a self-hosted spending wallet for agents: product notes, early trials and recorded payments.</p>
+<ul class="blog-list"><li class="blog-list-item">
+  <p class="eyebrow"><time datetime="2026-10-08">2026-10-08</time></p>
+  <h2><a href="/blog/agent-wallet-trial/">Help test MoneySwitch with two agents and one self-hosted wallet</a></h2>
+  <p class="dim">Try MoneySwitch with two agents, independent spending keys, a 0.01 test-USDC payment, human approval and bills. An early self-hosted trial with no monetary reward.</p>
+  <p><a href="/blog/agent-wallet-trial/">Read article →</a> · <a href="/blog/agent-wallet-trial/zh/" lang="zh-CN">阅读中文版</a></p>
+</li>
+<li class="blog-list-item">
+  <p class="eyebrow"><time datetime="2026-10-08">2026-10-08</time></p>
+  <h2><a href="/blog/one-wallet-many-agents/">One self-hosted spending wallet for agents across your computers</a></h2>
+  <p class="dim">Why we are building a programmable, self-hosted spending wallet for agents across computers: one wallet service, separate budgets and human approvals over x402.</p>
+  <p><a href="/blog/one-wallet-many-agents/">Read article →</a> · <a href="/blog/one-wallet-many-agents/zh/" lang="zh-CN">阅读中文版</a></p>
+</li>
+<li class="blog-list-item">
+  <p class="eyebrow"><time datetime="2026-09-27">2026-09-27</time></p>
+  <h2><a href="/blog/qwen-agent-pays-nansen/">I gave Qwen 3.8 Max a $0.09 budget and a MoneyKey. It bought its own Nansen data on Monad mainnet.</a></h2>
+  <p class="dim">Qwen 3.8 Max was given a $0.09 MoneyKey budget and bought its own Nansen data on Monad mainnet over x402 — five real USDC payments, no private key.</p>
+  <p><a href="/blog/qwen-agent-pays-nansen/">Read article →</a> · <a href="/blog/qwen-agent-pays-nansen/zh/" lang="zh-CN">阅读中文版</a></p>
+</li></ul>
+</div></section>
 </main>
-
 <footer class="footer">
   <div class="wrap foot">
-    <div>
-      <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
-      <p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p>
-    </div>
+    <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a><p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p></div>
+    <nav class="blog-footer-links" aria-label="Blog"><a href="/blog/">← Blog</a><a href="/pilot/">Try with two agents</a></nav>
   </div>
 </footer>
 </body>

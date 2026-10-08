@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Try a shared spending wallet for your agents — MoneySwitch</title>
+<meta name="description" content="Try MoneySwitch on your own server with test tokens: two agents, separate spending keys, a testnet payment, human approval and a shared payment history. Tell us where you get stuck.">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/pilot/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/pilot/">
+<link rel="alternate" hreflang="zh-CN" href="https://moneyswitch.dev/pilot/zh/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Many devices. Many agents. One spending wallet you control.">
+<meta property="og:description" content="An early MoneySwitch trial: self-host, pay with test tokens, and try separate budgets and human approvals.">
+<meta property="og:url" content="https://moneyswitch.dev/pilot/">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<link rel="stylesheet" href="../assets/css/pilot.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav"><div class="wrap nav-inner">
+  <a class="brand" href="../?lang=en"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a>
+  <div class="nav-actions"><a href="../blog/">Blog</a><a class="pilot-lang" href="zh/" lang="zh-CN">中文</a></div>
+</div></header>
+<main id="main">
+<section class="pilot-hero"><div class="wrap">
+  <p class="pill"><span class="dot" aria-hidden="true"></span>Early trial · Self-hosted · Test tokens</p>
+  <h1>Your agents run everywhere.<br>Can their spending share <span class="hl">one wallet</span>?</h1>
+  <p class="lead">MoneySwitch is a programmable spending wallet for multiple AI agents, self-hosted on your own server. Try it with your agents and tell us what helps and where you get stuck.</p>
+  <div class="cta-row"><a class="btn btn-primary" href="#try">Try it on a testnet ↓</a><a class="btn btn-ghost" href="#feedback">Share feedback</a></div>
+  <p class="pilot-note dim">You currently need your own deployment; there is no public hosted-account signup. The trial uses test USDC with no real value. Bring a runtime and follow the wallet's faucet instructions to obtain test tokens. This is not a dollar-denominated API credit offer.</p>
+</div></section>
+<section class="pilot-section"><div class="wrap pilot-grid">
+  <article class="pilot-card"><h2>Who this is for</h2><ul>
+    <li>You use Codex, Claude Code, OpenClaw or agents you built yourself.</li>
+    <li>Your agents run across computers and cloud servers, and need paid services.</li>
+    <li>You can run a self-hosted service and want to try x402 API payments.</li>
+  </ul><p>One agent is enough to start. Feedback about a failed setup is useful too.</p></article>
+  <article class="pilot-card"><h2>What you can try</h2><ul>
+    <li>One wallet you control, with a separate budget-limited MoneyKey per agent.</li>
+    <li>Human approval at or above a configured payment threshold.</li>
+    <li>A shared payment history and the ability to revoke a key.</li>
+  </ul><p>Payments currently cover supported USDC / x402 services. This does not pay arbitrary websites or existing AI subscriptions.</p></article>
+</div></section>
+<section class="pilot-section" id="try"><div class="wrap narrow">
+  <p class="eyebrow">A small end-to-end experiment</p><h2>Give two agents a key each</h2>
+  <ol class="pilot-steps">
+    <li><h3>Run your own wallet service</h3><p>Follow the <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/deploy/README.zh-CN.md">Docker + HTTPS deployment guide (Chinese)</a> or the <a href="https://github.com/dongsheng123132/moneyswitch#run-it">source quickstart</a>. Isolate the service from your agents' machines or system permissions so the agents can only access it over the network with MoneyKeys.</p><p>Keep the administrator sign-in link from the first start private. Create a wallet, save its recovery phrase yourself, and use the wallet page's faucet instructions to obtain <strong>Monad testnet USDC</strong>. You do not need mainnet funds for this trial.</p></li>
+    <li><h3>Issue a testnet key to agent A and agent B</h3><p>On the Keys page, use distinct names such as <code>laptop-codex</code> and <code>cloud-claude</code>. Select Testnet for both and keep the test payment endpoint enabled. Here is one suggested policy; all amounts are test USDC:</p>
+      <div class="table-scroll"><table><thead><tr><th>Setting</th><th>Agent A</th><th>Agent B</th></tr></thead><tbody>
+        <tr><td>Total / daily budget</td><td>0.05 / 0.05</td><td>0.05 / 0.05</td></tr>
+        <tr><td>Per-request limit</td><td>0.02</td><td>0.02</td></tr>
+        <tr><td>Approval threshold</td><td>Leave empty</td><td>0.01</td></tr>
+      </tbody></table></div>
+      <p>Give each agent its own skill paragraph and check that it can reach your HTTPS service URL. <strong>Keep the approval PIN with a person. Do not put a PIN, administrator token or recovery phrase in an agent's skill.</strong> With one agent, try the two keys one after another.</p></li>
+    <li><h3>Observe payment and approval</h3><p>When the test endpoint is enabled, the skill instructs the agent to check its budget and make one <strong>0.01 test USDC</strong> payment to <code>https://app.moneyswitch.dev/x402-testnet/check</code>. Do not repeat that payment manually.</p><p>A should pay within its limits. B reaches its approval threshold and should return an approval link first. Use that key's PIN to approve, or approve as the administrator in the dashboard; the agent then follows the skill to continue the request. Save the successful transaction hash. If you see <code>charged: maybe</code> or a timeout, check Bills before taking further action; do not retry automatically.</p></li>
+    <li><h3>Check the history and revoke a key</h3><p>Look for each key in Bills: amount, URL, chain, charge status, and a transaction hash for a confirmed payment. Revoke A's key and ask A only to check <code>GET /v1/status</code>; it should be rejected. No further payment is needed.</p><p>Note the least clear step, any error, and a real service you would want an agent to buy. If you cannot get test tokens or finish deployment, report that too.</p></li>
+  </ol>
+</div></section>
+<section class="pilot-section"><div class="wrap narrow">
+  <h2>Before you start</h2>
+  <details><summary>Who holds this cloud wallet?</summary><p>You run the service and manage the wallet and its data on your own server. Agents receive budget-limited access keys. Anyone who can read the server's wallet data and unlock file can use the wallet; protect the server and treat any future mainnet deployment as a small spending wallet.</p></details>
+  <details><summary>Does every agent get a wallet address?</summary><p>Agents share one payer's wallet, with separate keys and limits. A key's budget is a spending ceiling, not a separately funded balance. The same wallet address has independent balances on each supported chain.</p></details>
+  <details><summary>Do I have to share a post, leave a positive review or pay?</summary><p>Feedback has no sharing or positive-review requirement. No cash, API-credit or badge reward is promised. Test tokens have no real value; your own hosting or runtime may incur costs.</p></details>
+  <details><summary>What is still missing?</summary><p>Per-payment purpose notes and task-level cost reports are not implemented. Child keys have backend APIs but no creation UI. Integration is through a skill and HTTP, without MCP or a public multi-tenant hosted service.</p></details>
+</div></section>
+<section class="pilot-section pilot-feedback" id="feedback"><div class="wrap narrow pilot-card">
+  <p class="eyebrow">Tell us what actually happened</p><h2>Finished or stuck? Both are useful.</h2>
+  <p>Tell us which agents you used, how far you got, what you expected, what happened, and whether you would use this again. Negative feedback is welcome.</p>
+  <div class="cta-row"><a class="btn btn-primary" href="https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml">Share feedback on GitHub ↗</a><a class="btn btn-ghost" href="../blog/one-wallet-many-agents/">Why we are building this</a></div>
+  <p class="pilot-note">GitHub Issues require a GitHub account and are public. Share redacted observations and error codes only, without keys, PINs, recovery phrases, administrator links or raw logs. Report security vulnerabilities through the <a href="https://github.com/dongsheng123132/moneyswitch/security/advisories/new">private reporting channel</a>.</p>
+</div></section>
+</main>
+<footer class="footer"><div class="wrap foot"><a href="../?lang=en">← MoneySwitch</a><a href="https://github.com/dongsheng123132/moneyswitch">Source on GitHub ↗</a></div></footer>
+</body></html>
