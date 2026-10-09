@@ -3,6 +3,17 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
+## v0.7.5 — 2026-10-09
+
+**A clearer Money Key setup and management flow.** The centered creation dialog groups network, name, expiry and spending limits;
+payment approvals, allowed sites, confirmation codes and rate limits expand under Payment controls with a visible rule summary.
+
+- Search keys by name or prefix; see network, status, usage, limits and UTC expiry together. Row actions and legacy-key details expand on demand.
+- Keep mainnet confirmation, testnet-only test payments and the separate, one-time human PIN handoff. Amount approval being off no longer implies that new sites can pay without approval.
+- Fix the Conservative preset's approval threshold exceeding its per-payment limit. Invalid thresholds and rate limits are blocked before submission.
+- Bound key creation to 30 seconds without retrying the write automatically; on timeout, check the refreshed list before retrying or resetting the secret.
+- Regenerate the bundled Dashboard for source builds and self-hosted installations. No database migration or payment-policy change.
+
 ## v0.7.4 — 2026-10-06
 
 **The person who holds a key approves its requests, with a 4–6 digit PIN** (SPEC §2, §3). Found in a real test: approval links needed the

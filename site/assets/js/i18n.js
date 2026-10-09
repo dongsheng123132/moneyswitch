@@ -10,7 +10,7 @@ window.MS_I18N_ZH = {
   'nav.start': '快速开始',
   'nav.blog': '博客',
   'star': 'Star',
-  'hero.badge': 'v0.7.4 · 开源 · Monad + Base · 默认测试网',
+  'hero.badge': 'v0.7.5 · 开源 · Monad + Base · 默认测试网',
   'hero.title': '让 AI 花钱，像用 <span class="hl">API Key</span> 一样。',
   'hero.sub': 'AI 拿到的是一把有额度的 key；超过审批线的付款要等人来批，私钥永远不交给 AI。MoneySwitch 在每一笔付款签名<em>之前</em>先按这把 key 的额度检查，再用 USDC 支付 x402 计价的 API。',
   'hero.compare': '<span>一台 MoneySwitch 只替一个出钱的人花钱。</span><span class="lime">key 由管理员发，没有注册。</span>',
