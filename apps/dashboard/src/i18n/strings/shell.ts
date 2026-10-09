@@ -9,6 +9,11 @@ export const shellStrings = defineMessages(
     nav_approvals: "Approvals",
     nav_bills: "Bills",
     skipToContent: "Skip to content",
+    community: "Open source and feedback",
+    github: "GitHub",
+    reportIssue: "Report an issue",
+    contributePr: "Contribute a PR",
+    opensNewTab: "Opens in a new tab",
 
     login_tagline: "Give your AI an API key for money.",
     login_label: "Administrator token",
@@ -41,6 +46,11 @@ export const shellStrings = defineMessages(
     nav_approvals: "审批",
     nav_bills: "账单",
     skipToContent: "跳到正文",
+    community: "开源与反馈",
+    github: "GitHub",
+    reportIssue: "反馈问题",
+    contributePr: "贡献 PR",
+    opensNewTab: "在新标签页打开",
 
     login_tagline: "给你的 AI 一把花钱的 API Key。",
     login_label: "管理员令牌",

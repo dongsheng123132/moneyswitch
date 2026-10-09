@@ -115,6 +115,7 @@ button {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
 }
 
 .sidebar .brand {
@@ -202,8 +203,22 @@ button {
   padding: 0 5px;
 }
 
-.sidebar .logout {
+.sidebar-footer {
   margin-top: auto;
+  padding-top: 16px;
+}
+
+.sidebar-footer nav {
+  border-top: 1px solid var(--panel-border-soft);
+  padding-top: 10px;
+}
+
+.sidebar-footer .community-external {
+  margin-left: auto;
+  color: var(--text-faint);
+}
+
+.sidebar .logout {
   display: flex;
   align-items: center;
   gap: 10px;

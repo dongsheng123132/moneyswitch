@@ -3,6 +3,11 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
+## v0.7.6 — 2026-10-09
+
+- Add GitHub, issue reporting and pull request links to the bottom of the Dashboard sidebar, available on every admin page in English and Chinese.
+- Open community links in a new tab so the current task stays in place. Include the updated Dashboard in the self-hosted bundle.
+
 ## v0.7.5 — 2026-10-09
 
 **A clearer Money Key setup and management flow.** The centered creation dialog groups network, name, expiry and spending limits;

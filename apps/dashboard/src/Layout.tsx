@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { KeyRound, Receipt, ShieldAlert, Wallet, LogOut } from "lucide-react";
+import { KeyRound, Receipt, ShieldAlert, Wallet, LogOut, CodeXml, MessageSquare, GitPullRequest, ExternalLink } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { listApprovals } from "./api";
@@ -62,10 +62,25 @@ export default function Layout() {
             );
           })}
         </nav>
-        <button className="logout" onClick={logout}>
-          <LogOut size={16} strokeWidth={2} aria-hidden />
-          <span>{tc("signOut")}</span>
-        </button>
+        <div className="sidebar-footer">
+          <nav aria-label={t("community")}>
+            {[
+              { label: "github" as const, url: "https://github.com/dongsheng123132/moneyswitch", icon: CodeXml },
+              { label: "reportIssue" as const, url: "https://github.com/dongsheng123132/moneyswitch/issues/new/choose", icon: MessageSquare },
+              { label: "contributePr" as const, url: "https://github.com/dongsheng123132/moneyswitch/compare?expand=1", icon: GitPullRequest },
+            ].map(({ label, url, icon: Icon }) => (
+              <a key={label} href={url} target="_blank" rel="noopener noreferrer" title={t("opensNewTab")} data-action-id={`community.${label}`}>
+                <Icon size={16} strokeWidth={2} aria-hidden />
+                <span>{t(label)}</span>
+                <ExternalLink className="community-external" size={12} aria-hidden />
+              </a>
+            ))}
+          </nav>
+          <button className="logout" onClick={logout}>
+            <LogOut size={16} strokeWidth={2} aria-hidden />
+            <span>{tc("signOut")}</span>
+          </button>
+        </div>
       </aside>
       <div className="app-main-col">
         <header className="topbar">
