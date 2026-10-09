@@ -1,12 +1,83 @@
 # MoneySwitch
 
-**An AI spends from a capped key. Anything over the approval line waits for a human. The private key is never given to the AI.**
+**A programmable, self-hosted Web3 cloud wallet for AI bots.**
 
-[Website](https://moneyswitch.dev) · [中文](README.zh-CN.md) · [Spec](SPEC.md) · [Self-hosting guide](deploy/README.zh-CN.md)
+[Website](https://moneyswitch.dev) · [Watch the demo](https://moneyswitch.dev/videos/technical-demo/) · [Try it](https://moneyswitch.dev/pilot/) · [Contribute a PR](CONTRIBUTING.md#first-pr) · [中文](README.zh-CN.md)
+
+[![MoneySwitch: a programmable Web3 cloud wallet for AI bots. Your cloud. Your wallet. Your rules.](site/assets/img/cloud-wallet-2026-10/cover-en.webp)](https://moneyswitch.dev)
+
+Your agents run across laptops, desktops and cloud servers. Give each one a **MoneyKey** with its own spending rules, connected to one wallet service on your own server. The AI calls an HTTP API; the wallet's private key stays on the server.
+
+- **One key per agent:** daily, total and per-request limits, allowed hosts, expiry and revocation.
+- **Human control:** payments at or above a configured approval threshold wait for approval; hard spending limits still apply.
+- **Traceable payments:** per-key bills, payment outcomes and transaction links for compatible x402 services, using USDC on Monad or Base.
+
+## Watch it work
+
+Click either preview to watch in your browser. No sign-in is needed.
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="https://moneyswitch.dev/videos/technical-demo/"><img src="site/assets/video/technical-demo-poster.jpg" alt="Watch the real MoneySwitch testnet demo: keys, payments, human approval, bills and revocation" width="480"></a>
+      <p><a href="https://moneyswitch.dev/videos/technical-demo/"><strong>▶ Product demo · 2:02</strong></a><br>Two MoneyKeys, a direct payment, a human-approved payment, transaction records and key revocation.</p>
+    </td>
+    <td width="50%">
+      <a href="https://moneyswitch.dev/videos/pitch/"><img src="site/assets/video/pitch-poster.jpg" alt="Watch the MoneySwitch pitch: a cloud wallet for AI bots, created by hecare" width="480"></a>
+      <p><a href="https://moneyswitch.dev/videos/pitch/"><strong>▶ Why a cloud wallet? · 1:38</strong></a><br>The multi-device agent problem, the product and its creator, 贺去病 / hecare.</p>
+    </td>
+  </tr>
+</table>
+
+The product demo is a real Dashboard recording on **Monad testnet**, with two scripted HTTP clients making real testnet payments. Test USDC has no monetary value. Both videos have English narration and captions. [Video library](https://moneyswitch.dev/videos/) · [Download MP4s](https://github.com/dongsheng123132/moneyswitch/releases/tag/metropolis-videos-2026-10-09)
+
+## How the cloud wallet fits together
+
+```mermaid
+flowchart TB
+    A["Laptop · agent A"] -->|MoneyKey A| W
+    B["Desktop · agent B"] -->|MoneyKey B| W
+    C["Cloud server · agent C"] -->|MoneyKey C| W
+    W["MoneySwitch · your self-hosted cloud wallet<br/>Key policies · budgets · server-side signing"]
+    H["Human owner / administrator"] -->|"Issue or revoke keys · approve gated requests"| W
+    W -->|"x402 + USDC on Monad / Base"| S["Compatible paid APIs"]
+    W --> L["Per-key bills<br/>Payment status + transaction links"]
+    classDef wallet fill:#ede9fe,stroke:#7c3aed,color:#29134f,stroke-width:2px
+    classDef human fill:#ecfccb,stroke:#65a30d,color:#254000
+    class W wallet
+    class H human
+```
+
+The owner controls the deployment and funds. Agents receive spending keys, not wallet private keys. Keep the wallet service isolated from the agents' operating-system permissions; see the [self-hosting guide](deploy/README.zh-CN.md).
+
+## Inside the Dashboard
+
+Actual v0.7.6 screens from the October 9, 2026 testnet demo. Click a screenshot to inspect it at full size. The cover above is a concept illustration; the screens below are the running product.
+
+**1. Give each agent its own budget and approval rules.**
+
+[![Keys page showing separate MoneyKeys for Agent A and Agent B, spending limits and approval settings](docs/media/dashboard-keys.png)](docs/media/dashboard-keys.png)
+
+**2. Review a payment that reaches its approval threshold.**
+
+[![Approvals page showing a pending 0.01 test USDC payment with Approve and Deny controls](docs/media/dashboard-approval.png)](docs/media/dashboard-approval.png)
+
+**3. See which agent paid, how much and the resulting transaction.**
+
+[![Bills page showing two settled Monad testnet payments, totaling 0.02 test USDC, with transaction links](docs/media/dashboard-bills.png)](docs/media/dashboard-bills.png)
+
+## Try it, report it, open a PR
+
+| Start here | What to do |
+| --- | --- |
+| [Testnet trial guide](https://moneyswitch.dev/pilot/) | Deploy your instance, issue a testnet key and make your first test payment. |
+| [Send trial feedback](https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml) | Tell us what you tried, what happened and what would make it useful. |
+| [Make your first PR](CONTRIBUTING.md#first-pr) | Follow the fork → change → test → PR steps. Docs, integration instructions and focused fixes are welcome. |
+| [Get articles, images and videos](https://moneyswitch.dev/media/) | Find the official media kit for sharing MoneySwitch. |
 
 **One MoneySwitch spends for one payer.** You on your own machine, a company issuing keys to its staff's AIs, a company running its own bots: each is one payer, and every coin in the wallet belongs to whoever deployed the server. The administrator issues the keys; there is no sign-up and there are no user accounts.
 
-[SPEC.md](SPEC.md) is the only specification. This file says how to run it.
+[SPEC.md](SPEC.md) is the authoritative specification. Setup and payment details follow below.
 
 ## Run it
 

@@ -1,12 +1,83 @@
 # MoneySwitch
 
-**AI 拿一把有额度的 key 去付 x402，超过审批线找人批，私钥永远不交给 AI。**
+**给 AI bot 用的可编程 Web3 云钱包，部署在你自己的服务器上。**
 
-官网：[moneyswitch.dev](https://moneyswitch.dev) · [English](README.md) · [规格](SPEC.md) · [自建部署](deploy/README.zh-CN.md)
+[官网](https://moneyswitch.dev) · [看产品演示](https://moneyswitch.dev/videos/technical-demo/) · [开始试用](https://moneyswitch.dev/pilot/zh/) · [贡献 PR](https://moneyswitch.dev/contribute/zh/) · [English](README.md)
+
+[![MoneySwitch：给 AI bot 用的可编程 Web3 云钱包，你的云、你的钱包、你的规则](site/assets/img/cloud-wallet-2026-10/cover-zh.webp)](https://moneyswitch.dev)
+
+你的多个 AI agent 分布在笔记本、台式机和云服务器上。给每个 agent 一把有独立支出规则的 **MoneyKey**，统一连接你自托管的云钱包。AI 通过 HTTP API 请求付款，钱包私钥留在服务端。
+
+- **一个 agent 一把 key：** 日额度、总额度、单笔上限、允许的域名、有效期，随时可撤销。
+- **人掌握支出权限：** 达到或超过设定审批线的付款等待人工批准；硬性额度限制仍然生效。
+- **每笔支出可追溯：** 按 key 查看账单、扣款结果和交易链接，通过 Monad 或 Base 上的 USDC 支付兼容的 x402 服务。
+
+## 先看产品怎么用
+
+点击预览图即可在浏览器观看，无需登录。
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="https://moneyswitch.dev/videos/technical-demo/"><img src="site/assets/video/technical-demo-poster.jpg" alt="观看 MoneySwitch 真实测试网演示：独立 key、付款、人工审批、账单与撤销" width="480"></a>
+      <p><a href="https://moneyswitch.dev/videos/technical-demo/"><strong>▶ 产品实录 · 2 分 02 秒</strong></a><br>两把 MoneyKey、直接付款、人工审批后付款、交易记录，以及撤销 key。</p>
+    </td>
+    <td width="50%">
+      <a href="https://moneyswitch.dev/videos/pitch/"><img src="site/assets/video/pitch-poster.jpg" alt="观看 MoneySwitch 项目介绍：为什么 AI bot 需要云钱包，创作者贺去病 hecare" width="480"></a>
+      <p><a href="https://moneyswitch.dev/videos/pitch/"><strong>▶ 为什么要做云钱包 · 1 分 38 秒</strong></a><br>多设备、多 agent 的支出难题、产品方案，以及创作者贺去病 / hecare。</p>
+    </td>
+  </tr>
+</table>
+
+产品实录是在 **Monad 测试网**上的真实 Dashboard 录屏，由两个脚本化 HTTP 客户端完成真实测试网交易；测试 USDC 没有货币价值。两段视频均有英文旁白和字幕。[全部视频](https://moneyswitch.dev/videos/) · [下载 MP4](https://github.com/dongsheng123132/moneyswitch/releases/tag/metropolis-videos-2026-10-09)
+
+## 云钱包怎样连接多个 agent
+
+```mermaid
+flowchart TB
+    A["笔记本 · agent A"] -->|MoneyKey A| W
+    B["台式机 · agent B"] -->|MoneyKey B| W
+    C["云服务器 · agent C"] -->|MoneyKey C| W
+    W["MoneySwitch · 你的自托管云钱包<br/>Key 权限 · 支出额度 · 服务端签名"]
+    H["出资人 / 管理员"] -->|"发放或撤销 key · 审批需要批准的请求"| W
+    W -->|"x402 + USDC · Monad / Base"| S["兼容的付费 API"]
+    W --> L["按 key 归集账单<br/>扣款状态 + 交易链接"]
+    classDef wallet fill:#ede9fe,stroke:#7c3aed,color:#29134f,stroke-width:2px
+    classDef human fill:#ecfccb,stroke:#65a30d,color:#254000
+    class W wallet
+    class H human
+```
+
+部署者控制服务和自己的资金，agent 拿到的是受限支出 key。云钱包应与 agent 的操作系统权限隔离，详见[自托管部署指南](deploy/README.zh-CN.md)。
+
+## 真实产品界面
+
+以下是 2026 年 10 月 9 日测试网演示中的 v0.7.6 实际界面，点击图片可查看原图。上方封面是概念插画，下方截图来自正在运行的产品。
+
+**1. 给不同 agent 设置各自的额度和审批规则。**
+
+[![Key 页面：Agent A 与 Agent B 各自独立的 MoneyKey、支出上限和审批设置](docs/media/dashboard-keys.png)](docs/media/dashboard-keys.png)
+
+**2. 达到审批线的付款，等待人来批准。**
+
+[![审批页面：一笔待批准的 0.01 测试 USDC 付款，以及批准和拒绝按钮](docs/media/dashboard-approval.png)](docs/media/dashboard-approval.png)
+
+**3. 看清哪个 agent 花了多少钱，对应哪笔链上交易。**
+
+[![账单页面：两笔已结算的 Monad 测试网付款，合计 0.02 测试 USDC，附交易链接](docs/media/dashboard-bills.png)](docs/media/dashboard-bills.png)
+
+## 试用、反馈，也欢迎直接提 PR
+
+| 入口 | 可以做什么 |
+| --- | --- |
+| [测试网试用指南](https://moneyswitch.dev/pilot/zh/) | 部署自己的实例、创建测试网 key、完成第一笔测试付款。 |
+| [提交试用反馈](https://github.com/dongsheng123132/moneyswitch/issues/new?template=early-feedback.yml) | 写下你的使用场景、遇到的问题和改进建议。 |
+| [第一次提 PR](https://moneyswitch.dev/contribute/zh/) | 跟着 Fork → 修改 → 验证 → PR 的步骤参与；欢迎文档、接入说明和小范围修复。 |
+| [文章、图片和视频素材](https://moneyswitch.dev/media/) | 从官网素材中心获取可分享的 MoneySwitch 介绍。 |
 
 **一台 MoneySwitch 只替一个出钱的人花钱。** 你自己在自己的机器上用、公司给员工的 AI 发 key、公司给自己的 bot 用，都是一个出钱的人：钱包里的钱全是部署者自己的。key 由管理员发，没有注册，没有用户账号。
 
-[SPEC.md](SPEC.md) 是唯一有效的规格。本文只说怎么跑起来。
+[SPEC.md](SPEC.md) 是唯一有效的规格。下方是运行方式和支付细节。
 
 ## 从代码运行
 
