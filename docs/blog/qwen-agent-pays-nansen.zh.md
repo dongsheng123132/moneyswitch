@@ -1,6 +1,6 @@
 # 我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据
 
-*Monad Metropolis 黑客松稿件（Qwen 3.8 Max 与 Nansen 赏金）。文中每一笔交易都在 Monad 主网上，可以在 monadvision.com 查到。*
+*Monad Metropolis 黑客松公开案例（Qwen 3.8 Max 与 Nansen 赏金）。本文记录 2026 年 9 月 27 日的实验；文中每一笔交易都在 Monad 主网上，可以在 monadvision.com 查到。*
 
 ## 问题
 
@@ -86,4 +86,4 @@ Qwen 的判断是：*「几乎全是稳定币和包装资产，谈不上『热�
 
 Qwen 3.8 Max 展示了另一半：给它预算和价目表，一个能干的模型花起钱来像分析师，而不是像一个死循环。
 
-**试一试：** 自托管 `npx moneyswitch-server` · 代码：https://github.com/dongsheng123132/moneyswitch · Agent：`apps/qwen-agent` · 操作手册：`docs/nansen-mainnet.md`
+**试一试：** [自托管与测试网指南](https://moneyswitch.dev/pilot/zh/) · [源代码](https://github.com/dongsheng123132/moneyswitch) · [Qwen Agent](https://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent) · [实验操作手册](https://github.com/dongsheng123132/moneyswitch/blob/main/docs/nansen-mainnet.md)

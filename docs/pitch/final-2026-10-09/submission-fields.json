@@ -7,7 +7,7 @@
     "local": "2026-10-14T11:59:00+08:00",
     "source": "User-provided official submission screenshots"
   },
-  "formEvidence": "User-provided official submission screenshots and read-only inspection of the public submission JavaScript confirm the recorded text limits; the expanded Alibaba link field remains to be verified.",
+  "formEvidence": "User-provided official submission screenshots and read-only inspection of the public submission JavaScript confirm the recorded text limits; the expanded Alibaba field was subsequently confirmed by the user screenshot to require a published article describing Qwen use and value.",
   "sourceOfTruth": "This JSON supplies the English form values; submission.en.md is the readable rendering. Do not insert live secrets into either tracked file.",
   "fields": {
     "primaryTrack": {
@@ -156,10 +156,11 @@
       "status": "Optional video; no actual URL supplied"
     },
     "qwenRequiredLink": {
-      "label": "Alibaba / Qwen 3.8 Max required link (exact form label pending verification)",
+      "label": "Published article describing how Qwen was used and what value Qwen brought to the project",
       "required": true,
-      "value": null,
-      "status": "Do not guess whether the field requests a demo, source, product or other evidence link; inspect the expanded field before choosing the value"
+      "value": "https://moneyswitch.dev/blog/qwen-agent-pays-nansen/",
+      "status": "Exact published-article requirement confirmed from the user screenshot on 2026-10-09. Existing English case study explains the Qwen integration and its value; public access verified. Actual form save remains with the signed-in user.",
+      "characterCount": 52
     },
     "productAdUrl": {
       "label": "Product ad URL",
@@ -192,10 +193,9 @@
     "role": "Research agent chooses and buys Nansen data within a MoneyKey budget",
     "sourceUrl": "https://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent",
     "recordedExperimentUrl": "https://moneyswitch.dev/blog/qwen-agent-pays-nansen/",
-    "note": "Supporting evidence only; not a substitute for the still-unverified required link field"
+    "note": "The recordedExperimentUrl is the published article required by the expanded Alibaba field; sourceUrl is additional supporting source evidence."
   },
   "blockingGaps": [
-    "Inspect the expanded Alibaba / Qwen required link field and supply the correct real URL.",
     "Verify the deployed app version, authenticated access, testnet-only judging configuration and dedicated judge credentials."
   ],
   "finalReview": [

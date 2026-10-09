@@ -45,7 +45,7 @@
 <article class="section blog-article"><div class="wrap narrow">
 <p class="eyebrow">发布于 <time datetime="2026-09-27">2026-09-27</time></p>
 <h1>我给 Qwen 3.8 Max 一把 MoneyKey 和 0.09 美元预算，它在 Monad 主网上自己买了 Nansen 的数据</h1>
-<p><em>Monad Metropolis 黑客松稿件（Qwen 3.8 Max 与 Nansen 赏金）。文中每一笔交易都在 Monad 主网上，可以在 monadvision.com 查到。</em></p>
+<p><em>Monad Metropolis 黑客松公开案例（Qwen 3.8 Max 与 Nansen 赏金）。本文记录 2026 年 9 月 27 日的实验；文中每一笔交易都在 Monad 主网上，可以在 monadvision.com 查到。</em></p>
 <h2>问题</h2>
 <p>「Monad 上最近 24 小时什么最热？聪明钱在买吗？」</p>
 <p>这个问题问起来容易，答好却要花钱。数据是现成的：Nansen 有代币排行、资金流向、聪明钱标签，也都支持 Monad，但它是按次收费的。所以真正的问题是：<strong>AI Agent 能不能自己判断哪些数据值得买，自己付钱，并且不超出人给它设的预算？</strong></p>
@@ -105,7 +105,7 @@
 <h2>这件事为什么重要</h2>
 <p>给 Agent 用的付费 API 正在到来，x402 已经把「付钱」这一步变简单了。难的是「授权」这一步：这个 Agent 能花多少、能花在哪、怎么叫停。MoneyKey 用开发者早就熟悉的方式回答这个问题：它就像一个 API Key，有预算、有白名单、有一键吊销，而且策略在任何签名<strong>之前</strong>就执行。</p>
 <p>Qwen 3.8 Max 展示了另一半：给它预算和价目表，一个能干的模型花起钱来像分析师，而不是像一个死循环。</p>
-<p><strong>试一试：</strong> 自托管 <code>npx moneyswitch-server</code> · 代码：<a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">https://github.com/dongsheng123132/moneyswitch</a> · Agent：<code>apps/qwen-agent</code> · 操作手册：<code>docs/nansen-mainnet.md</code></p>
+<p><strong>试一试：</strong> <a href="https://moneyswitch.dev/pilot/zh/" rel="noopener">自托管与测试网指南</a> · <a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">源代码</a> · <a href="https://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent" rel="noopener">Qwen Agent</a> · <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/docs/nansen-mainnet.md" rel="noopener">实验操作手册</a></p>
 </div></article>
 </main>
 <footer class="footer">

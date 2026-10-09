@@ -1,6 +1,6 @@
 # I gave Qwen 3.8 Max a $0.09 budget and a MoneyKey. It bought its own Nansen data on Monad mainnet.
 
-*Draft for the Monad Metropolis hackathon (Qwen 3.8 Max and Nansen bounties). Every transaction below is on Monad mainnet and can be checked on monadvision.com.*
+*Published case study for the Monad Metropolis hackathon (Qwen 3.8 Max and Nansen bounties). This article documents the September 27, 2026 experiment; every transaction below is on Monad mainnet and can be checked on monadvision.com.*
 
 ## The question
 
@@ -86,4 +86,4 @@ Paid APIs for agents are coming — x402 makes the payment part simple. The hard
 
 Qwen 3.8 Max showed the other half: given a budget and a price list, a capable model spends like an analyst, not like a loop.
 
-**Try it:** self-host with `npx moneyswitch-server` · code: https://github.com/dongsheng123132/moneyswitch · agent: `apps/qwen-agent` · runbook: `docs/nansen-mainnet.md`
+**Try it:** [self-hosting and testnet guide](https://moneyswitch.dev/pilot/) · [source code](https://github.com/dongsheng123132/moneyswitch) · [Qwen agent](https://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent) · [experiment runbook](https://github.com/dongsheng123132/moneyswitch/blob/main/docs/nansen-mainnet.md)

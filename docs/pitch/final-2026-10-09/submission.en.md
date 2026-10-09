@@ -173,9 +173,11 @@ https://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent
 
 Upload / media requirements: {"maximumDurationSeconds":120}.
 
-## Alibaba / Qwen 3.8 Max required link (exact form label pending verification)
+## Published article describing how Qwen was used and what value Qwen brought to the project
 
-**Missing:** Do not guess whether the field requests a demo, source, product or other evidence link; inspect the expanded field before choosing the value
+https://moneyswitch.dev/blog/qwen-agent-pays-nansen/
+
+Author note: Confirmed by the expanded Alibaba screenshot. This published English case study describes the Qwen integration and the value it brought.
 
 ## Product ad URL
 
@@ -187,7 +189,7 @@ Upload / media requirements: {"maximumDurationSeconds":30}.
 
 **Missing:** Actual profile has not been supplied; do not substitute an inferred username
 
-## Alibaba / Qwen supporting evidence — field mapping pending
+## Alibaba / Qwen published article and supporting source
 
 The Qwen 3.8 Max integration is the research agent described in the Nansen explanation. It uses `qwen3.8-max` through Alibaba Cloud DashScope, with `money_status` and `nansen_query` tools. The model selects the purchases; MoneySwitch enforces the key policy.
 
@@ -195,7 +197,7 @@ Source: https://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent
 
 Recorded run: https://moneyswitch.dev/blog/qwen-agent-pays-nansen/
 
-These are real existing evidence links. Do not assume either satisfies the required Alibaba field until its exact label and instructions have been checked.
+The expanded official field asks for a published article about Qwen use and value. Use the recorded-run article URL above; the source link is supporting evidence.
 
 ## Bounty selection — author action required
 
@@ -211,7 +213,6 @@ The app homepage, `/healthz` and test-endpoint HTTP 402 response passed anonymou
 
 ## Remaining required work
 
-- Inspect the expanded Alibaba / Qwen required link field and supply the correct real URL.
 - Verify the deployed app version, authenticated access, testnet-only judging configuration and dedicated judge credentials.
 
 Only new work completed during the six-week hackathon window counts. The public repository history should be used to identify the eligible work.

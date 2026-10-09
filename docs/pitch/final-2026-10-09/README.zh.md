@@ -4,7 +4,7 @@
 
 ## 材料怎么用
 
-- `submission-fields.json`：英文表单值的真相源，包含字符数、已知限制和缺口。两段必填视频已补入官网链接；X 账号和未确认的 Alibaba 字段保持 `null`。
+- `submission-fields.json`：英文表单值的真相源，包含字符数、已知限制和缺口。两段必填视频已补入官网链接；Alibaba 字段已按最新截图补入公开文章链接；未提供的 X 账号保持 `null`。
 - `submission.en.md`：相同英文内容的可读版本。复制时只取相应字段正文，不把 `Author note`、字符计数、上传要求等编辑说明粘进表单。
 - 本文件：中文填写说明、待补事项和英文录制口播稿。
 - `submission-workbench.html`：逐字段复制工作台，通过本地 HTTP 服务打开；启动方式见 `deployment-status.md`。直接双击 HTML 时浏览器可能拦截读取 JSON，离线取稿可用上面的 Markdown。
@@ -34,7 +34,7 @@
 | Judge access instructions | 已写自托管评估路线；隔离的托管评委实例与私密凭证仍待配置 |
 | Nansen explanation | 已写研究流程、五笔主网交易和源码证据 |
 | Nansen demo URL | 可选，最多 2 分钟；尚无实际 URL |
-| Alibaba / Qwen 必填链接 | **等待展开后的准确字段说明，不能猜是视频、产品还是源码链接** |
+| Alibaba / Qwen 必填链接 | 已确认要求公开文章，填写 [https://moneyswitch.dev/blog/qwen-agent-pays-nansen/](https://moneyswitch.dev/blog/qwen-agent-pays-nansen/) |
 | Product ad URL | 可选，最多 30 秒；尚无实际 URL |
 | X profile | 可选；真实账号未提供，保持空值 |
 
@@ -103,4 +103,4 @@ Logo 使用 `site/assets/img/moneyswitch-logo-512.png`，官网路径为 `https:
 
 ## 最终提交前剩余动作
 
-上传已验证的 Logo，补齐两个必填视频 URL，并展开确认 Alibaba 链接字段。官网文章、试用、贡献和素材链接已上线核验；继续确认应用版本、登录流程，并准备隔离的测试网评委环境；需要提供的凭证只进入私密表单栏，准备评审后的撤销或轮换方式。由本人按已确认身份录制介绍，不推断团队规模，并确认六周内新增工作的范围。完成这些后再审一遍字段和赏金选择，最后执行提交；本材料没有执行任何外部提交。
+两段必填视频和 Alibaba 公开文章链接均已准备好。用户已报告其他文案填写完成；在赛事页面检查 Logo、视频与文章 URL、源码仓库，并移除未实现的 Mera 赏金。评委访问若需私密凭证，只填官方私密栏。确认六周内新增工作的范围后保存并检查 Review Entry；本材料没有代填或执行赛事提交。
