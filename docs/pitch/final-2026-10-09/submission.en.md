@@ -1,6 +1,6 @@
 # MoneySwitch — Metropolis submission copy
 
-Prepared on 2026-10-09 for the current self-hosted release. This is a local submission draft, not a record of submission. Values come from `submission-fields.json`. No actual video URL or private credential has been invented.
+Prepared on 2026-10-09 for the current self-hosted release. This is a local submission draft, not a record of submission. Values come from `submission-fields.json`. Two completed videos now have official-site player URLs and MP4 downloads. No private credential is included.
 
 ## Primary track
 
@@ -96,15 +96,19 @@ Author note: The app homepage, /healthz and the test endpoint HTTP 402 response 
 
 ## Technical demo URL
 
-**Missing:** Video and real accessible URL are not yet provided
+https://moneyswitch.dev/videos/technical-demo/
 
-Upload / media requirements: {"maximumDurationSeconds":180,"content":"Actual product demonstration, not a slide presentation or code walkthrough"}.
+Author note: Completed video with English synthetic narration and captions; public player and MP4 download. Submission-form save has not been performed by this tool. Duration: 121.680 seconds.
+
+Direct MP4: https://moneyswitch.dev/assets/video/moneyswitch-technical-demo-20261009.mp4
 
 ## Pitch URL
 
-**Missing:** Video and real accessible URL are not yet provided
+https://moneyswitch.dev/videos/pitch/
 
-Upload / media requirements: {"maximumDurationSeconds":120,"content":"Actual team introduction, problem and why this project"}.
+Author note: Completed video with English synthetic narration and captions; public player and MP4 download. Submission-form save has not been performed by this tool. Duration: 97.800 seconds.
+
+Direct MP4: https://moneyswitch.dev/assets/video/moneyswitch-pitch-20261009.mp4
 
 ## Judge access instructions
 
@@ -207,8 +211,6 @@ The app homepage, `/healthz` and test-endpoint HTTP 402 response passed anonymou
 
 ## Remaining required work
 
-- Record an actual product technical demo of at most 3 minutes and supply its accessible URL.
-- Record the pitch of at most 2 minutes with the real team identity and supply its accessible URL.
 - Inspect the expanded Alibaba / Qwen required link field and supply the correct real URL.
 - Verify the deployed app version, authenticated access, testnet-only judging configuration and dedicated judge credentials.
 

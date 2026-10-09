@@ -1,0 +1,56 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:05.881
+AI bots can write code and run tasks. But how should they get permission
+to spend money?
+
+2
+00:00:05.881 --> 00:00:15.267
+MoneySwitch, created by hecare, is a programmable Web3 cloud wallet for
+AI bots. Your cloud. Your wallet. Your rules.
+
+3
+00:00:15.267 --> 00:00:25.490
+The problem grows across laptops, servers, and cloud agents. Giving every
+bot its own wallet means more private keys, balances, and approvals to
+manage.
+
+4
+00:00:25.490 --> 00:00:33.657
+One funder runs a wallet service on their own server. Agents receive
+separate spending keys. The wallet's private key stays with the service.
+
+5
+00:00:33.657 --> 00:00:46.243
+Each key has enforceable rules: total, daily, and per-payment limits,
+approved hosts, expiry, and revocation. The model requests a payment; the
+service enforces the policy.
+
+6
+00:00:46.243 --> 00:00:55.324
+Payments at or above an approval threshold wait for a person. Hard limits
+still apply. Bills show which key paid, how much, and where.
+
+7
+00:00:55.324 --> 00:01:06.919
+Today, MoneySwitch uses USDC and the x402 payment flow, supporting Monad
+and Base. Agents can purchase compatible paid APIs without managing
+blockchain keys.
+
+8
+00:01:06.919 --> 00:01:18.133
+In one recorded Qwen research run, five Nansen purchases settled on Monad
+mainnet, totaling nine cents in USDC. The published write-up links to the
+transactions.
+
+9
+00:01:18.133 --> 00:01:26.300
+This is an early, self-hosted product. The server remains a hot-wallet
+trust boundary, so keep it isolated from agent system permissions.
+
+10
+00:01:26.300 --> 00:01:37.771
+Try two agents with separate budgets on testnet. Share deployment and
+approval feedback, improve the docs, or open a pull request. Help build
+MoneySwitch.

@@ -4,7 +4,7 @@
 
 ## 材料怎么用
 
-- `submission-fields.json`：英文表单值的真相源，包含字符数、已知限制和缺口。未知视频 URL、X 账号和未确认的 Alibaba 字段保持 `null`。
+- `submission-fields.json`：英文表单值的真相源，包含字符数、已知限制和缺口。两段必填视频已补入官网链接；X 账号和未确认的 Alibaba 字段保持 `null`。
 - `submission.en.md`：相同英文内容的可读版本。复制时只取相应字段正文，不把 `Author note`、字符计数、上传要求等编辑说明粘进表单。
 - 本文件：中文填写说明、待补事项和英文录制口播稿。
 - `submission-workbench.html`：逐字段复制工作台，通过本地 HTTP 服务打开；启动方式见 `deployment-status.md`。直接双击 HTML 时浏览器可能拦截读取 JSON，离线取稿可用上面的 Markdown。
@@ -29,8 +29,8 @@
 | Go-to-market strategy | 真实目标用户和未来招募计划，低于 8000，没有编造用户数 |
 | GitHub repository | `https://github.com/dongsheng123132/moneyswitch`，替换误填的 GitHub Pages 地址 |
 | Live product | `https://app.moneyswitch.dev`；首页、`/healthz` 和测试接口 HTTP 402 响应已通过匿名只读检查，当前应用版本、登录流程与评委凭据仍需实操核验 |
-| Technical demo URL | **必填，待录制并提供真实 URL，最多 3 分钟** |
-| Pitch URL | **必填，待录制并提供真实 URL，最多 2 分钟** |
+| Technical demo URL | 已完成：[官网技术演示](https://moneyswitch.dev/videos/technical-demo/)，英文配音与字幕，少于 3 分钟 |
+| Pitch URL | 已完成：[官网 Pitch](https://moneyswitch.dev/videos/pitch/)，英文 AI 旁白与字幕，少于 2 分钟 |
 | Judge access instructions | 已写自托管评估路线；隔离的托管评委实例与私密凭证仍待配置 |
 | Nansen explanation | 已写研究流程、五笔主网交易和源码证据 |
 | Nansen demo URL | 可选，最多 2 分钟；尚无实际 URL |
@@ -58,7 +58,9 @@ Logo 使用 `site/assets/img/moneyswitch-logo-512.png`，官网路径为 `https:
 
 五笔 Qwen / Nansen 付款是 2026-09-27 的**一次历史演示**，总计 0.09 USDC，不是五个用户、流量指标，也不是当前线上版本的重新验收。不要采用旧草稿中尚未实现的任务用途审计、子 Key 管理界面、MCP 或 Mera，不声称行业首个、唯一或经过独立机构安全审计。
 
-## 录视频前先把真实演示跑通
+## 录制方案（已完成成片）
+
+2026-10-09 更新：两段视频已完成，实际演示验证了两笔 Monad 测试网付款、审批、账单与撤销。可直接复制上表链接；详见 [video-delivery.md](video-delivery.md)。以下保留录制前安排，不代表仍缺视频。
 
 技术演示必须展示产品，不能用幻灯片或代码讲解代替。建议在独立测试网实例上，用两把测试 Key 走一条完整流程：
 
@@ -69,11 +71,11 @@ Logo 使用 `site/assets/img/moneyswitch-logo-512.png`，官网路径为 `https:
 5. 2:10–2:40：查看账单、扣款状态和已确认交易哈希；撤销 A，再只查询 `GET /v1/status`，展示被拒绝。
 6. 2:40–2:55：回到产品，说明自托管、多 Agent 权限与热钱包边界。
 
-这是录制安排，不是已录好的视频，也不是已经完成的验收证据。录完再剪至 3 分钟以内，上传可访问的视频并填写真实 URL。如果要另做 Nansen 视频，将真实研究工具调用、预算和对应账单剪成最多 2 分钟；不要暗示历史付款是刚刚重新执行的。
+以上是原录制安排；现在的成片和实际交易证据见 `video-delivery.md`。录完再剪至 3 分钟以内，上传可访问的视频并填写真实 URL。如果要另做 Nansen 视频，将真实研究工具调用、预算和对应账单剪成最多 2 分钟；不要暗示历史付款是刚刚重新执行的。
 
 ## 两分钟英文 Pitch 口播稿
 
-以下是待录制稿，不是视频链接。用户已确认公开称呼为“贺去病（hecare）”，以项目创建者身份介绍；团队人数、其他成员与履历没有确认，不作推断。先实读计时，控制在 2 分钟以内。
+以下保留早期真人口播备选稿；实际成片采用明确标注的 AI 第三人称旁白，以 `video-delivery.md` 链接和成片字幕为准。用户已确认公开称呼为“贺去病（hecare）”，以项目创建者身份介绍；团队人数、其他成员与履历没有确认，不作推断。先实读计时，控制在 2 分钟以内。
 
 > Hello, I'm hecare, also known as 贺去病, the creator of MoneySwitch.
 >

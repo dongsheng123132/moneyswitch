@@ -1,0 +1,56 @@
+WEBVTT
+
+1
+00:00:00.300 --> 00:00:07.423
+MoneySwitch is a programmable Web3 cloud wallet.
+This is the real interface, using only Monad test tokens.
+
+2
+00:00:13.509 --> 00:00:18.632
+Two scripted HTTP clients represent agents, each with an independent MoneyKey.
+
+3
+00:00:20.509 --> 00:00:26.601
+Every key has spending limits. The second
+client needs approval to pay one cent or more.
+
+4
+00:00:30.418 --> 00:00:33.080
+Client A requests a paid resource.
+
+5
+00:00:34.759 --> 00:00:42.344
+MoneySwitch settles one cent in test USDC through x402.
+Bills records the charge and transaction link.
+
+6
+00:00:49.010 --> 00:00:57.426
+The second client requests one cent. Approval is required,
+so the payment pauses before signing. There is no charge yet.
+
+7
+00:01:02.071 --> 00:01:07.416
+The administrator approves the request. The second client retries with that approval.
+
+8
+00:01:10.545 --> 00:01:17.822
+Both payments are now settled, with separate keys and transaction links.
+Their fresh receipts were also verified on Monad testnet.
+
+9
+00:01:27.425 --> 00:01:32.317
+Each key has spent one cent. Now we revoke Client A's spending authority.
+
+10
+00:01:36.988 --> 00:01:40.034
+Revocation requires an explicit confirmation.
+
+11
+00:01:41.537 --> 00:01:48.957
+The first client is now revoked. Its next API request
+is rejected. The second client remains active.
+
+12
+00:01:52.901 --> 00:02:00.486
+The wallet balance drops by two cents. Self-hosted
+signing, limited keys, approvals, and verifiable bills.

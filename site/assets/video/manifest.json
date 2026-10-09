@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "releaseTag": "metropolis-videos-2026-10-09",
+  "videos": [
+    {
+      "id": "technical-demo",
+      "filename": "moneyswitch-technical-demo-20261009.mp4",
+      "url": "https://github.com/dongsheng123132/moneyswitch/releases/download/metropolis-videos-2026-10-09/moneyswitch-technical-demo-20261009.mp4",
+      "sha256": "d4c608f2c749eaa9235f12a8a070f2b893660b0f807d343022c962ea8f4f97dd",
+      "bytes": 3808368,
+      "durationSeconds": 121.68,
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "id": "team-pitch",
+      "filename": "moneyswitch-pitch-20261009.mp4",
+      "url": "https://github.com/dongsheng123132/moneyswitch/releases/download/metropolis-videos-2026-10-09/moneyswitch-pitch-20261009.mp4",
+      "sha256": "f6a98957d58d93fa85adfd298b3b6e525db8d117835ec87a2df9eb3e60ba54fe",
+      "bytes": 13101722,
+      "durationSeconds": 97.8,
+      "width": 1920,
+      "height": 1080
+    }
+  ]
+}

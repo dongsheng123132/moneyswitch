@@ -25,6 +25,11 @@ tools/m6/pi-run.log
 docs/pitch/video/
 docs/pitch/voice/
 docs/pitch/voice-samples/
+# Submission video renders and isolated recording state stay out of source control.
+docs/pitch/video-final-2026-10-09/*
+!docs/pitch/video-final-2026-10-09/HOSTING.md
+site/assets/video/*.mp4
+site/assets/video/*.tmp
 docs/pitch/deck-v2/shots/
 docs/pitch/deck-v2/tools/
 

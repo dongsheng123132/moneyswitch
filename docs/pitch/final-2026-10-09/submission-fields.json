@@ -97,22 +97,38 @@
     "technicalDemoUrl": {
       "label": "Technical demo URL",
       "required": true,
-      "value": null,
+      "value": "https://moneyswitch.dev/videos/technical-demo/",
       "constraints": {
         "maximumDurationSeconds": 180,
         "content": "Actual product demonstration, not a slide presentation or code walkthrough"
       },
-      "status": "Video and real accessible URL are not yet provided"
+      "status": "Completed video with English synthetic narration and captions; public player and MP4 download. Submission-form save has not been performed by this tool.",
+      "characterCount": 46,
+      "video": {
+        "durationSeconds": 121.68,
+        "width": 1280,
+        "height": 800,
+        "sha256": "d4c608f2c749eaa9235f12a8a070f2b893660b0f807d343022c962ea8f4f97dd",
+        "directMp4Url": "https://moneyswitch.dev/assets/video/moneyswitch-technical-demo-20261009.mp4"
+      }
     },
     "pitchUrl": {
       "label": "Pitch URL",
       "required": true,
-      "value": null,
+      "value": "https://moneyswitch.dev/videos/pitch/",
       "constraints": {
         "maximumDurationSeconds": 120,
         "content": "Actual team introduction, problem and why this project"
       },
-      "status": "Video and real accessible URL are not yet provided"
+      "status": "Completed video with English synthetic narration and captions; public player and MP4 download. Submission-form save has not been performed by this tool.",
+      "characterCount": 37,
+      "video": {
+        "durationSeconds": 97.8,
+        "width": 1920,
+        "height": 1080,
+        "sha256": "f6a98957d58d93fa85adfd298b3b6e525db8d117835ec87a2df9eb3e60ba54fe",
+        "directMp4Url": "https://moneyswitch.dev/assets/video/moneyswitch-pitch-20261009.mp4"
+      }
     },
     "judgeAccessInstructions": {
       "label": "Judge access instructions",
@@ -179,8 +195,6 @@
     "note": "Supporting evidence only; not a substitute for the still-unverified required link field"
   },
   "blockingGaps": [
-    "Record an actual product technical demo of at most 3 minutes and supply its accessible URL.",
-    "Record the pitch of at most 2 minutes with the real team identity and supply its accessible URL.",
     "Inspect the expanded Alibaba / Qwen required link field and supply the correct real URL.",
     "Verify the deployed app version, authenticated access, testnet-only judging configuration and dedicated judge credentials."
   ],
@@ -232,5 +246,17 @@
       "Authenticated app workflow",
       "Dedicated judge credentials and isolated testnet configuration"
     ]
+  },
+  "userProgressNote": "On 2026-10-09 the user reported filling the other fields; the supplied screenshot still required technical-demo and pitch HTTPS links. No authenticated account read-back or form save was performed by this tool.",
+  "videoDelivery": {
+    "date": "2026-10-09",
+    "releaseTag": "metropolis-videos-2026-10-09",
+    "technicalSourceVersion": "v0.7.6",
+    "technicalSourceCommit": "0600d4b944402c081c215edb4598916c0ceb0cf5",
+    "recordingType": "Continuous real Dashboard recording; two scripted HTTP clients; isolated local Monad testnet instance",
+    "newTestnetPayments": 2,
+    "totalTestUsdc": "0.02",
+    "mainnetPaymentsMade": 0,
+    "pitchNarration": "Third-person synthetic English voice; creator hecare / 贺去病; no voice cloning"
   }
 }
