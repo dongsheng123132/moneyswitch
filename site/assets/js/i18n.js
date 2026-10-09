@@ -160,6 +160,7 @@ window.MS_I18N_ZH = {
   'foot.tag': "给 AI Bot 用的可编程 Web3 云钱包，可在自己的云上部署。",
   'foot.warn': 'v0.7 默认只开测试网。启用主网意味着真钱 USDC：钱包里只放小钱。',
   'foot.sec': '安全',
+  'foot.media': '文章与图片素材',
   'foot.lic': 'AGPL-3.0-only（服务端、Dashboard 与 core）· Apache-2.0（skill、net 与 demo seller）'
 };
 
