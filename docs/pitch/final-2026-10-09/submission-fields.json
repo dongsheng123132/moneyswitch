@@ -1,0 +1,236 @@
+{
+  "preparedDate": "2026-10-09",
+  "timezone": "Asia/Shanghai",
+  "status": "Prepared locally; not submitted",
+  "productRelease": "Current self-hosted release",
+  "deadline": {
+    "local": "2026-10-14T11:59:00+08:00",
+    "source": "User-provided official submission screenshots"
+  },
+  "formEvidence": "User-provided official submission screenshots and read-only inspection of the public submission JavaScript confirm the recorded text limits; the expanded Alibaba link field remains to be verified.",
+  "sourceOfTruth": "This JSON supplies the English form values; submission.en.md is the readable rendering. Do not insert live secrets into either tracked file.",
+  "fields": {
+    "primaryTrack": {
+      "label": "Primary track",
+      "required": true,
+      "value": "Trust, Identity & AI Infrastructure",
+      "status": "Already selected in the supplied screenshot",
+      "characterCount": 35
+    },
+    "projectLogo": {
+      "label": "Project logo",
+      "required": true,
+      "value": "site/assets/img/moneyswitch-logo-512.png",
+      "status": "Local PNG and public asset verified against the published source; upload this file in the submission form. Form upload remains pending.",
+      "constraints": {
+        "formats": [
+          "PNG",
+          "JPG",
+          "WebP"
+        ],
+        "maximumBytes": 2000000,
+        "minimumPixels": 500,
+        "maximumTotalPixels": 4000000,
+        "note": "Screenshot states a minimum of 500 px; verify the exact dimension rule in the upload control."
+      },
+      "candidateAsset": {
+        "localPath": "site/assets/img/moneyswitch-logo-512.png",
+        "publicUrl": "https://moneyswitch.dev/assets/img/moneyswitch-logo-512.png",
+        "status": "Local asset and public URL verified after website deployment 82c7839; submission-form upload remains pending"
+      },
+      "characterCount": 40,
+      "verification": {
+        "format": "PNG",
+        "width": 512,
+        "height": 512,
+        "totalPixels": 262144,
+        "bytes": 82658,
+        "date": "2026-10-09",
+        "publicUrlVerified": true,
+        "deploymentCommit": "82c7839"
+      }
+    },
+    "projectName": {
+      "label": "Project name",
+      "required": true,
+      "maxCharacters": 120,
+      "value": "MoneySwitch",
+      "characterCount": 11
+    },
+    "oneLineDescription": {
+      "label": "One-line description",
+      "required": true,
+      "maxCharacters": 200,
+      "value": "A programmable, self-hosted Web3 cloud wallet for AI bots: separate spending keys, hard budgets and human approvals for USDC payments over x402 on Monad.",
+      "characterCount": 153
+    },
+    "description": {
+      "label": "Description",
+      "required": true,
+      "maxCharacters": 8000,
+      "limitStatus": "Verified: required, maximum 8000 characters",
+      "value": "AI bots can write code, choose tools and request paid data. Their authority to spend should be explicit: how much, on which services, and when a person must decide.\n\nMoneySwitch is a programmable Web3 cloud wallet for AI bots that the payer hosts and controls. A developer can run Codex on a laptop, Claude Code on a desktop and a background agent on a cloud server, while managing their spending permissions in one place. One payer funds the wallet. Each agent receives a separate, revocable MoneyKey with its own limits, rather than the wallet's private key. A key's budget is a spending ceiling, not a separately funded balance.\n\nWHAT WORKS TODAY\nThe current self-hosted release has Wallet, Keys, Approvals and Bills. The operator creates a wallet and issues keys with daily and total budgets, a per-payment cap, allowed hosts, an expiry and an optional approval threshold. The generated skill instructions connect an agent through HTTP; the payment endpoint is POST /v1/fetch.\n\nMoneySwitch checks the policy before signing. A payment at or above the approval threshold waits for the key holder's confirmation PIN or a logged-in administrator. A new public host also requires approval before it is contacted; approving adds that host to the key's allowlist. Hard spending caps still apply after approval. Keys can be revoked independently, blocking future requests without reversing payments that were already signed or settled.\n\nBills record the key, amount, requested URL, chain, transaction hash when available, and charged: yes / no / maybe. An uncertain payment result must not trigger an automatic retry. Mainnet and testnet amounts remain separate.\n\nWHY MONAD\nMoneySwitch pays supported x402 APIs using USDC on Monad mainnet and testnet. The seller returns an HTTP 402 payment requirement; the service evaluates it, signs an allowed EIP-3009 payment authorization, and retries the request with payment authorization. In this payment path the facilitator submits the settlement and pays gas, so the payer does not need MON for that transfer. Base is also supported; this is not an arbitrary-chain wallet, an automatic bridge or a way to pay every model subscription.\n\nThe Monad integration has a concrete paid-data use case. In a recorded September 27 mainnet run, a Qwen 3.8 Max research agent used a MoneyKey limited to api.nansen.ai, a $0.05 per-request cap and a $0.09 total budget. It selected and bought five Nansen queries, then stopped at the budget. The write-up links all five transaction hashes:\nhttps://moneyswitch.dev/blog/qwen-agent-pays-nansen/\n\nThis is one historical demonstration run with earlier code, not a user count, a production traffic metric or a claim that the current hosted deployment has been revalidated. It demonstrates an agent choosing paid data while the wallet service enforces the spending boundary.\n\nWHO CONTROLS THE WALLET\nCloud wallet means a service deployed on the payer's own infrastructure. One instance spends for one payer, whether an individual or an organization. MoneySwitch does not offer customer deposit accounts or a multi-tenant custodial service.\n\nThe server holds a hot wallet and remains trusted. Its compromise can put funds at risk. The service's system permissions must be isolated from agents, and mainnet balances should remain small. Keeping the private key out of the agent API is not protection against a compromised server or an agent that can edit its wallet files or database.\n\nHOW TO EVALUATE IT\nStart on Monad testnet with test USDC, which has no monetary value. Create two keys: one for an automatic test payment and one that requires approval at 0.01 test USDC. Give each agent its generated skill instructions, observe the first-payment flow, inspect the bill and revoke one key. This exercises the product's main claim: separate spending permissions for multiple bots, controlled by the payer.\n\nMoneySwitch is open source. The next improvements should come from real deployment and connection friction, understandable approvals and reliable payment records. Task-purpose reporting, a sub-key management UI and stronger signer isolation are not presented as shipped features.",
+      "characterCount": 4156
+    },
+    "firstUsersAndReach": {
+      "label": "Go-to-market strategy",
+      "required": true,
+      "maxCharacters": 8000,
+      "value": "Our first users are developers and small teams who already run multiple AI agents across local computers and cloud servers, and can operate a self-hosted service. The initial paid-use case is an agent buying a supported x402 API response, such as on-chain research data, while the payer controls budgets and approvals.\n\nWe are targeting a specific workflow rather than recruiting anyone who uses an AI chat product. A useful first trial connects two agent keys, makes a 0.01 test-USDC payment on Monad testnet, follows a human approval, reads the bill and checks revocation. Deployment failures and confusing instructions are useful feedback too. Test USDC has no monetary value.\n\nOur outreach plan has three parts:\n1. Publish concrete product and technical articles explaining the multi-device wallet, the server trust boundary and the recorded Qwen/Nansen experiment. Use the website, Chinese developer writing on Zhihu, English developer blogs and relevant self-hosting and agent communities to reach people with this workflow.\n2. Invite developers to follow the testnet guide and report their environment, expected result, actual result and the step where they became stuck. GitHub issues provide a reproducible feedback channel; public reports must be redacted.\n3. Turn small obstacles into contributions. Documentation fixes, minimal reproductions and clearer examples for connecting agents are suitable first PRs. The contribution guide gives interested developers a next step beyond trying the demo.\n\nWe will judge the trial by observed outcomes: whether someone can deploy the service, connect agents from another machine, understand an approval, distinguish paid from uncertain, and explain a bill. We will also ask which compatible services they actually want their agents to buy. Any adoption figures will be reported only after they have been measured; the five Nansen payments are evidence of a single experiment, not five users.\n\nContribution guide: https://moneyswitch.dev/contribute/\nTestnet trial: https://moneyswitch.dev/pilot/\nProduct rationale: https://moneyswitch.dev/blog/cloud-wallet-for-ai-bots/",
+      "characterCount": 2120,
+      "prompt": "Who are your first users, and how will you reach them?",
+      "limitStatus": "Verified: required, maximum 8000 characters"
+    },
+    "githubRepository": {
+      "label": "GitHub repository",
+      "required": true,
+      "value": "https://github.com/dongsheng123132/moneyswitch",
+      "characterCount": 46
+    },
+    "liveProduct": {
+      "label": "Live product",
+      "required": true,
+      "value": "https://app.moneyswitch.dev",
+      "status": "The app homepage, /healthz and the test endpoint HTTP 402 response passed anonymous read-only checks. Deployed app version, authenticated access, testnet-only judging configuration and dedicated judge credentials still need hands-on verification",
+      "characterCount": 27
+    },
+    "technicalDemoUrl": {
+      "label": "Technical demo URL",
+      "required": true,
+      "value": null,
+      "constraints": {
+        "maximumDurationSeconds": 180,
+        "content": "Actual product demonstration, not a slide presentation or code walkthrough"
+      },
+      "status": "Video and real accessible URL are not yet provided"
+    },
+    "pitchUrl": {
+      "label": "Pitch URL",
+      "required": true,
+      "value": null,
+      "constraints": {
+        "maximumDurationSeconds": 120,
+        "content": "Actual team introduction, problem and why this project"
+      },
+      "status": "Video and real accessible URL are not yet provided"
+    },
+    "judgeAccessInstructions": {
+      "label": "Judge access instructions",
+      "required": false,
+      "maxCharacters": 8000,
+      "visibility": "Private submission field",
+      "value": "MoneySwitch is self-hosted. You can evaluate it without receiving a shared administrator token by running your own instance from the public repository:\nhttps://github.com/dongsheng123132/moneyswitch#readme\nCloud deployment instructions:\nhttps://github.com/dongsheng123132/moneyswitch/tree/main/deploy\n\nUse the default testnet configuration. Create a wallet in the dashboard and follow the wallet page's faucet instructions to obtain Monad testnet USDC. Test USDC has no monetary value. Keep the wallet service isolated from your agent's system permissions.\n\nCreate two testnet keys with the test endpoint allowed. For each, use total budget 0.05, daily budget 0.05 and per-payment cap 0.02, all in test USDC. Leave key A's approval threshold empty and set key B's to 0.01 when creating it. Keep the confirmation PIN with the person, not in the agent prompt.\n\nGive each agent its own generated skill instructions. They guide the first test payment; do not manually duplicate that payment. A can pay within policy. B's 0.01 payment reaches the approval threshold and should wait. Open the approval link and approve with B's PIN, or use your own administrator session. Let the agent continue the same request.\n\nInspect Bills for the key, amount, URL, chain, charged status and confirmed transaction hash. For charged: maybe or a timeout, inspect the existing record instead of automatically retrying. Revoke A's key, then request only GET /v1/status with A; the request should be refused, without making another payment.\n\nAn isolated hosted testnet instance for private judge access is still pending configuration and verification. No hosted administrator token or agent credential is included in this draft. If hosted access is supplied, its details will be entered only in this private form field, with fresh testnet-only credentials. Public project materials must not contain those secrets.",
+      "status": "Public self-hosted evaluation route drafted; dedicated private hosted judge access remains pending",
+      "characterCount": 1890
+    },
+    "nansenIntegrationExplanation": {
+      "label": "Nansen integration explanation",
+      "required": true,
+      "maxCharacters": 8000,
+      "value": "MoneySwitch uses Nansen as a real paid-data source for a budget-constrained research agent, not as a static data display.\n\nThe demo in apps/qwen-agent uses Qwen 3.8 Max through Alibaba Cloud's OpenAI-compatible API. The model receives an endpoint catalog with prices and two tools: money_status and nansen_query. It decides which data is worth buying to answer a Monad research question. The query tool validates the chosen catalog endpoint and sends the request through MoneySwitch; the agent has a limited MoneyKey rather than the wallet's private key.\n\nNansen's x402 payment requirement provides the USDC price and supported settlement network. MoneySwitch applies the key policy before signing the EIP-3009 authorization and returns the purchased response and payment status. The recorded run used Monad mainnet and a key scoped to api.nansen.ai, with a $0.05 per-request cap and a $0.09 total budget.\n\nOn September 27, the agent investigated recent Monad token activity and whether smart money was participating. It first bought inexpensive screeners and a flow check, changed its query when stablecoins dominated the initial result, and only then bought the premium smart-money netflow endpoint. It produced an interpretation with limitations, listed its purchases and stopped when the budget was exhausted.\n\nThe five recorded Monad mainnet payments were:\n1. Token screener by volume, $0.01:\nhttps://monadvision.com/tx/0xb227e30f125cac1ab20977a5b9479ae538dacdec4295262173d643febc7ad540\n2. Token screener by price change, $0.01:\nhttps://monadvision.com/tx/0xc739c43296ed40a239bd148b60d6be230bae7a53c5795f68e389056520fc163f\n3. Flow intelligence, $0.01:\nhttps://monadvision.com/tx/0x99bf9da63699c1e6fd6e487bbbbfea882e882e29af30c6c178b0d277c82a2cb8\n4. Token screener with only_smart_money, $0.01:\nhttps://monadvision.com/tx/0x5fab3819a066e3f67e57109c2d6ff7f5a460d74fd6b9df4127c4bfbf4f4cf33b\n5. Premium smart-money netflow, $0.05:\nhttps://monadvision.com/tx/0xb7df99767f8ac3cff9ad05a3ebabe5e57a9a1ef9cc622ccad0afacab652de0b6\nTotal: $0.09 USDC in one recorded run. This is demonstration evidence, not a traffic or adoption metric. The historical run predates v0.7.5.\n\nAn earlier failed run also exposed a useful payment distinction: requests with invalid Nansen parameters did not settle, while signed authorizations initially kept budget reserved until their status could be reconciled. The integration's catalog validation and payment-status handling help the agent distinguish held budget from money actually spent.\n\nThe value beyond raw data is the research workflow: selecting queries under prices and a fixed budget, reformulating the question, stating uncertainty and returning a payment ledger alongside the answer. MoneySwitch supplies the enforceable spending boundary; Nansen supplies the research data.\n\nRecorded experiment and transaction evidence:\nhttps://moneyswitch.dev/blog/qwen-agent-pays-nansen/\nAgent source and usage:\nhttps://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent",
+      "characterCount": 3011
+    },
+    "nansenDemoUrl": {
+      "label": "Nansen demo URL",
+      "required": false,
+      "value": null,
+      "constraints": {
+        "maximumDurationSeconds": 120
+      },
+      "status": "Optional video; no actual URL supplied"
+    },
+    "qwenRequiredLink": {
+      "label": "Alibaba / Qwen 3.8 Max required link (exact form label pending verification)",
+      "required": true,
+      "value": null,
+      "status": "Do not guess whether the field requests a demo, source, product or other evidence link; inspect the expanded field before choosing the value"
+    },
+    "productAdUrl": {
+      "label": "Product ad URL",
+      "required": false,
+      "value": null,
+      "constraints": {
+        "maximumDurationSeconds": 30
+      },
+      "status": "Optional video; no actual URL supplied"
+    },
+    "xProfile": {
+      "label": "X profile",
+      "required": false,
+      "value": null,
+      "status": "Actual profile has not been supplied; do not substitute an inferred username"
+    }
+  },
+  "bountyPlan": {
+    "retain": [
+      "Best use of Nansen",
+      "Best Builds with Qwen 3.8 Max"
+    ],
+    "remove": "Mera: One Passkey, Many Keys",
+    "reason": "No implemented Mera integration is claimed",
+    "accountActionTaken": false
+  },
+  "qwenSupportingEvidence": {
+    "model": "qwen3.8-max",
+    "provider": "Alibaba Cloud DashScope, OpenAI-compatible tool calling",
+    "role": "Research agent chooses and buys Nansen data within a MoneyKey budget",
+    "sourceUrl": "https://github.com/dongsheng123132/moneyswitch/tree/main/apps/qwen-agent",
+    "recordedExperimentUrl": "https://moneyswitch.dev/blog/qwen-agent-pays-nansen/",
+    "note": "Supporting evidence only; not a substitute for the still-unverified required link field"
+  },
+  "blockingGaps": [
+    "Record an actual product technical demo of at most 3 minutes and supply its accessible URL.",
+    "Record the pitch of at most 2 minutes with the real team identity and supply its accessible URL.",
+    "Inspect the expanded Alibaba / Qwen required link field and supply the correct real URL.",
+    "Verify the deployed app version, authenticated access, testnet-only judging configuration and dedicated judge credentials."
+  ],
+  "finalReview": [
+    "Upload the locally and publicly verified 512 px PNG logo in the actual form; no upload has been performed by this preparation.",
+    "Replace the account-like project name with MoneySwitch.",
+    "Replace the GitHub Pages URL in the repository field with the actual repository URL.",
+    "Keep historical run dates and versions explicit; do not convert payment counts into user metrics.",
+    "Do not claim task-purpose audit, a sub-key management UI, MCP, arbitrary subscriptions, multi-tenant custody or unimplemented Mera integration.",
+    "Keep any hosted judge credentials in the private form field only; do not publish them or commit them.",
+    "The official-site article, pilot and contribution links are published and verified; preserve these verified URLs in the final submitted text.",
+    "Review and submit only after all required URLs and access details are complete."
+  ],
+  "factsReviewedAgainst": {
+    "release": "v0.7.5",
+    "commit": "a093107",
+    "note": "Feature facts reviewed against this baseline; the live deployment release must be checked again at submission."
+  },
+  "publicFormEvidencePath": "C:/Users/ZhuanZ/.codex/visualizations/2026/10/08/01a11b39-7a47-7900-83b1-907ac2f5fcdd/metropolis-evidence/0t8e4jr-_6e-r.js",
+  "eligibilityNote": "Only new work completed during the six-week hackathon window counts. Use the public repository history to identify that work; do not count the whole project history by default.",
+  "teamIdentity": {
+    "publicName": "贺去病",
+    "publicHandle": "hecare",
+    "role": "creator of MoneySwitch",
+    "teamSize": null,
+    "otherMembers": null,
+    "biography": null,
+    "source": "User-confirmed public introduction; do not infer team size or credentials"
+  },
+  "publicationVerification": {
+    "date": "2026-10-09",
+    "websiteDeploymentCommit": "82c7839",
+    "pagesRunUrl": "https://github.com/dongsheng123132/moneyswitch/actions/runs/37883060669",
+    "result": "Website article, pilot, contribution and media links published and verified",
+    "sourceMatches": {
+      "total": 22,
+      "webPages": 8,
+      "markdownFiles": 6,
+      "pngFiles": 8
+    },
+    "independentCheck": "TinyFish on an independent external network verified the media page, new article and contribution page",
+    "appAnonymousChecks": [
+      "Homepage",
+      "/healthz",
+      "Test endpoint HTTP 402 response"
+    ],
+    "notCovered": [
+      "Current deployed app version",
+      "Authenticated app workflow",
+      "Dedicated judge credentials and isolated testnet configuration"
+    ]
+  }
+}

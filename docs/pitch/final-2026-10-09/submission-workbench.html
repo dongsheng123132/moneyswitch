@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MoneySwitch · 参赛填写工作台</title>
+<style>
+:root{color-scheme:dark;font-family:Segoe UI,Arial,sans-serif;background:#0b0b12;color:#f4f2ff}*{box-sizing:border-box}body{margin:0}main{max-width:1080px;margin:auto;padding:42px 24px 80px}h1{font-size:clamp(28px,4vw,46px);line-height:1.15;margin:12px 0 20px}h2{margin:0;font-size:21px}p{line-height:1.65;color:#bdb8ce}a{color:#bdadff}nav{display:flex;gap:20px;flex-wrap:wrap;margin:22px 0}.eyebrow{color:#b4ff4a;font-size:13px;letter-spacing:.12em}.notice{padding:18px 22px;border:1px solid #58516d;border-radius:12px;background:#15121f;margin:24px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.field{border:1px solid #302b41;background:#121019;border-radius:14px;padding:24px;min-width:0}.field.wide{grid-column:1/-1}.field-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.meta{font-size:13px;color:#9e95b3;margin:8px 0 14px}.copy{border:1px solid #7561ae;background:#201933;color:#fff;padding:9px 16px;border-radius:8px;cursor:pointer;flex-shrink:0}.copy:focus-visible,a:focus-visible{outline:2px solid #b4ff4a;outline-offset:3px}.value{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font-size:15px}.long{max-height:370px;overflow:auto;padding-right:10px}.pending{color:#e6be77}.ready{color:#b4ff4a}footer{margin-top:32px;color:#9e95b3;font-size:13px}details summary{cursor:pointer}.error{color:#ffaaaa}@media(max-width:700px){main{padding:28px 18px 50px}.grid{grid-template-columns:1fr}.field{padding:20px}.field-head{flex-wrap:wrap}.field.wide{grid-column:auto}}
+</style></head><body><main>
+<div class="eyebrow">MONEYSWITCH · METROPOLIS · HECARE</div>
+<h1>给 AI Bot 的可编程<br>Web3 云钱包</h1>
+<p>参赛字段按官方表单排列。复制相应英文正文，到提交页核对并保存。此页面只读取本地材料，不会向比赛平台提交。</p>
+<nav><a href="https://hackathon.monad.xyz/project?tab=submission" target="_blank" rel="noopener">打开官方提交页 ↗</a><a href="https://moneyswitch.dev/media/" target="_blank" rel="noopener">官网文章与图片 ↗</a><a href="https://moneyswitch.dev/assets/img/moneyswitch-logo-512.png" target="_blank" rel="noopener">下载参赛 Logo ↗</a><a href="submission.en.md">英文全文</a><a href="README.zh.md">填写说明与口播稿</a><a href="recording-plan.md">视频录制安排</a><a href="evidence.md">已核验证据</a></nav>
+<div class="notice"><strong>截止：2026 年 10 月 14 日 11:59（北京时间）</strong><p>项目名使用 MoneySwitch，GitHub 栏填写源码仓库。团队介绍使用贺去病（hecare）。尚未提供的必填项会标为“待补”，不能视为已提交成功。</p></div>
+<div id="fields" class="grid"></div>
+<footer>字段源：submission-fields.json。公开材料不含管理员令牌、MoneyKey、PIN 或恢复词；需要的评委凭证应单独进入官方私密栏。</footer>
+<p id="feedback" role="status" aria-live="polite"></p>
+<script>
+(async function(){
+ const data=await fetch('submission-fields.json').then(r=>{if(!r.ok)throw new Error('无法读取字段文件');return r.json()});
+ const fields=document.getElementById('fields');
+ for(const [id,f] of Object.entries(data.fields)){
+  const card=document.createElement('section');card.className='field'+(String(f.value||'').length>300?' wide':'');
+  const head=document.createElement('div');head.className='field-head';
+  const title=document.createElement('h2');title.textContent=f.label;head.append(title);
+  if(f.value){const btn=document.createElement('button');btn.className='copy';btn.textContent='复制';
+   btn.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(String(f.value));document.getElementById('feedback').textContent=f.label+' 已复制';btn.textContent='已复制';setTimeout(()=>btn.textContent='复制',1500)}catch{document.getElementById('feedback').textContent='复制未获浏览器许可，请选中正文手动复制。'}});head.append(btn)}
+  card.append(head);
+  const meta=document.createElement('div');meta.className='meta';
+  meta.textContent=(f.required?'必填':'选填')+(f.maxCharacters?' · '+String(f.value||'').length+' / '+f.maxCharacters+' 字符':'')+(f.visibility?' · '+f.visibility:'');card.append(meta);
+  const value=document.createElement('div');value.className='value'+(String(f.value||'').length>600?' long':'')+(!f.value?' pending':'');
+  value.textContent=f.value||'待补：'+(f.status||'尚未提供');card.append(value);
+  if(f.status&&f.value){const note=document.createElement('p');note.className='meta';note.textContent=f.status;card.append(note)}
+  fields.append(card);
+ }
+})().catch(e=>{document.getElementById('fields').textContent=e.message;document.getElementById('fields').className='error'});
+</script></main></body></html>
