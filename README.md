@@ -35,13 +35,13 @@ The product demo is a real Dashboard recording on **Monad testnet**, with two sc
 
 ```mermaid
 flowchart TB
-    A["Laptop · agent A"] -->|MoneyKey A| W
-    B["Desktop · agent B"] -->|MoneyKey B| W
-    C["Cloud server · agent C"] -->|MoneyKey C| W
-    W["MoneySwitch · your self-hosted cloud wallet<br/>Key policies · budgets · server-side signing"]
-    H["Human owner / administrator"] -->|"Issue or revoke keys · approve gated requests"| W
-    W -->|"x402 + USDC on Monad / Base"| S["Compatible paid APIs"]
-    W --> L["Per-key bills<br/>Payment status + transaction links"]
+    A["Laptop agent A"] -->|MoneyKey A| W
+    B["Desktop agent B"] -->|MoneyKey B| W
+    C["Cloud agent C"] -->|MoneyKey C| W
+    W["MoneySwitch<br/>Your cloud wallet<br/>Limits + signing"]
+    H["Human owner"] -->|"Keys + approvals"| W
+    W -->|"x402 + USDC<br/>Monad / Base"| S["Compatible APIs"]
+    W --> L["Per-key bills<br/>Status + tx links"]
     classDef wallet fill:#ede9fe,stroke:#7c3aed,color:#29134f,stroke-width:2px
     classDef human fill:#ecfccb,stroke:#65a30d,color:#254000
     class W wallet

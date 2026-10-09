@@ -38,10 +38,10 @@ flowchart TB
     A["笔记本 · agent A"] -->|MoneyKey A| W
     B["台式机 · agent B"] -->|MoneyKey B| W
     C["云服务器 · agent C"] -->|MoneyKey C| W
-    W["MoneySwitch · 你的自托管云钱包<br/>Key 权限 · 支出额度 · 服务端签名"]
-    H["出资人 / 管理员"] -->|"发放或撤销 key · 审批需要批准的请求"| W
-    W -->|"x402 + USDC · Monad / Base"| S["兼容的付费 API"]
-    W --> L["按 key 归集账单<br/>扣款状态 + 交易链接"]
+    W["MoneySwitch<br/>自托管云钱包<br/>权限 · 额度 · 签名"]
+    H["出资人 / 管理员"] -->|"发 key · 撤销 · 审批"| W
+    W -->|"x402 + USDC<br/>Monad / Base"| S["兼容的付费 API"]
+    W --> L["按 key 归集账单<br/>状态 · 交易链接"]
     classDef wallet fill:#ede9fe,stroke:#7c3aed,color:#29134f,stroke-width:2px
     classDef human fill:#ecfccb,stroke:#65a30d,color:#254000
     class W wallet
