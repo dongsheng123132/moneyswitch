@@ -162,7 +162,9 @@ export async function buildContext(config: ServerConfig, opts: BuildContextOptio
   const chainReader = createMultiNetworkAuthorizationReader();
   // The same RPC read the wallet page uses (routes/wallet.ts readBalance wraps this very call with its own 5 s cache).
   const balanceReader = createBalanceReader((address, network, signal) =>
-    wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress, signal)
+    network.family === "svm"
+      ? wallet.getSolanaUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress, signal)
+      : wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress, signal)
   );
 
   return { db, sqlite, wallet, config, setup, chainReader, balanceReader };
