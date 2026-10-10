@@ -2,5 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
-  better-sqlite3: true
+  # 13.0.3 bundles N-API binaries for supported targets. pnpm 10 may
+  # synthesize node-gyp rebuild despite gypfile:false; use those binaries.
+  better-sqlite3: false
   esbuild: true
