@@ -119,7 +119,7 @@ describe("migration 0007_wallet_lifecycle on a database created by the previous 
         const metaCols = (sqlite.prepare(`PRAGMA table_info(wallet_meta)`).all() as { name: string }[]).map((c) => c.name);
         expect(metaCols).toEqual(["id", "address", "created_at", "backup_confirmed_at", "origin"]);
         const retCols = (sqlite.prepare(`PRAGMA table_info(wallet_retirements)`).all() as { name: string }[]).map((c) => c.name);
-        expect(retCols).toEqual(["id", "address", "retired_at", "reason", "keystore_file", "secret_file", "replaced_by"]);
+        expect(retCols).toEqual(["id", "address", "retired_at", "reason", "keystore_file", "secret_file", "replaced_by", "solana_address"]);
         // nothing was lost
         expect(getWalletMeta(db, ADDRESS)).toMatchObject({ address: ADDRESS, backupConfirmedAt: null, origin: null });
         expect(sqlite.prepare(`SELECT auth_from FROM payments WHERE id = 'p-old'`).get()).toEqual({ auth_from: ADDRESS });
