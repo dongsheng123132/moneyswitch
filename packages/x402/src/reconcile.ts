@@ -2,6 +2,7 @@ import { createPublicClient, http, toHex, type Address, type Hex } from "viem";
 import type { AuthorizationReader } from "@moneyswitch/core";
 import { getActiveNetwork, NETWORKS, type NetworkConfig } from "./networks.js";
 import { findAuthorizationUsedTxViaLogs, scanOptionsFromEnv, type LogRpc } from "./authorization-logs.js";
+import { readSvmPayment } from "./solana.js";
 
 /** EIP-3009 `authorizationState(address,bytes32) view returns (bool)` — standard on USDC and compatible tokens. */
 const AUTHORIZATION_STATE_ABI = [
@@ -89,6 +90,11 @@ export function createMultiNetworkAuthorizationReader(): AuthorizationReader {
     return reader;
   };
   return {
+    readSvmPayment: (payment) => {
+      const network = NETWORKS[payment.network];
+      if (!network || network.family !== "svm") throw new Error("Unsupported SVM reconciliation network");
+      return readSvmPayment(network, payment);
+    },
     authorizationState: (authorizer, nonce, network) => readerFor(network).authorizationState(authorizer, nonce),
     findAuthorizationUsedTx: (input) => readerFor(input.network).findAuthorizationUsedTx(input),
   };

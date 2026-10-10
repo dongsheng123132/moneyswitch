@@ -1,8 +1,10 @@
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
+import { ExactSvmScheme } from "@x402/svm/exact/client";
+import { address as svmAddress, type TransactionPartialSigner } from "@solana/kit";
 import type { PaymentRequired, PaymentRequirements } from "@x402/core/types";
-import type { EvmTypedDataSigner, SignerLease } from "@moneyswitch/wallet";
+import type { EvmTypedDataSigner, SignerLease, SvmSignerLease } from "@moneyswitch/wallet";
 import type { MoneySwitchDb } from "@moneyswitch/db";
 import { callerDeadlineDispatcher } from "@moneyswitch/net";
 import type Database from "better-sqlite3";
@@ -17,12 +19,14 @@ import {
   failPayment,
   markUnknown,
   recordPaymentAuthorization,
+  recordSvmPaymentEvidence,
   formatMicrosToUsdc,
   resolveRequestBody,
   type MoneyKeyRow,
 } from "@moneyswitch/core";
-import { getActiveNetwork, getEnabledNetworksFor, getEnabledNetworksForChain, SCHEME, type NetworkConfig } from "./networks.js";
+import { getActiveNetwork, getEnabledNetworksFor, getEnabledNetworksForChain, SCHEME, isSvmNetwork, sameNetworkAddress, type NetworkConfig } from "./networks.js";
 import type { KnownBalanceReader } from "./balance.js";
+import { captureSvmPayment } from "./solana.js";
 
 /**
  * Where a paid request gets its signer from. performPaidFetch asks for it LAZILY, at the moment a payment is about to be created
@@ -35,6 +39,8 @@ export interface SignerSource {
   leaseSigner(): SignerLease | null;
   /** The wallet's address, null when there is none. Read WITHOUT a lease: looking at a balance must not hold the wallet. */
   getAddress(): string | null;
+  getAddressForNetwork?(network: string): string | null;
+  leaseSvmSigner?(): SvmSignerLease | null;
 }
 
 /** Things performPaidFetch is handed rather than reaching for. */
@@ -102,7 +108,7 @@ export function narrowOffersWithoutBalance(
   let offers = inConfigOrder(payable, networks);
   const { approval } = ctx;
   if (approval) {
-    offers = offers.filter((o) => o.network === approval.network && o.asset.toLowerCase() === approval.asset.toLowerCase());
+    offers = offers.filter((o) => o.network === approval.network && sameNetworkAddress(o.network, o.asset, approval.asset));
     if (offers.length === 0) return { refusal: new MoneySwitchError("APPROVAL_INVALID") };
   }
   if (!ctx.keyChain) return { offers };
@@ -130,7 +136,7 @@ export function narrowOffersWithoutBalance(
 export async function orderOffersByBalance(
   payable: PaymentRequirements[],
   networks: NetworkConfig[],
-  address: string | null,
+  address: string | null | ((network: NetworkConfig) => string | null),
   readBalance: KnownBalanceReader | undefined
 ): Promise<PaymentRequirements[]> {
   const ordered = inConfigOrder(payable, networks);
@@ -141,7 +147,8 @@ export async function orderOffersByBalance(
       .filter((n) => ordered.some((offer) => offer.network === n.caip2))
       .map(async (n) => {
         try {
-          balances.set(n.caip2, await readBalance(address, n));
+          const owner = typeof address === "function" ? address(n) : address;
+          balances.set(n.caip2, owner ? await readBalance(owner, n) : null);
         } catch {
           balances.set(n.caip2, null); // a reader is meant never to throw; if one does, that chain's balance is simply unknown
         }
@@ -420,7 +427,9 @@ export async function performPaidFetch(
 
   // The signer lease, taken in onBeforePaymentCreation (see SignerSource) and given back in the `finally` at the end.
   // (declared with a cast: it is assigned inside a hook, which would otherwise make the compiler believe it is still null below)
-  let lease = null as SignerLease | null;
+  let lease = null as SignerLease | SvmSignerLease | null;
+  const balanceAddresses = new Map<string, string | null>();
+  const addressFor = (n: NetworkConfig) => wallet.getAddressForNetwork ? wallet.getAddressForNetwork(n.caip2) : isSvmNetwork(n) ? null : wallet.getAddress();
   // The wallet address the chain was picked with (balances were read for it); null when no balance was read.
   let balanceAddress = null as string | null;
   // Every requirement the seller offered was removed by our own policy filter (wrong asset or network, a Permit2 request, ...).
@@ -431,13 +440,28 @@ export async function performPaidFetch(
   const leasedSigner: EvmTypedDataSigner = {
     get address() {
       if (!lease) throw new Error("the wallet's signer was used before a lease on it was taken");
-      return lease.signer.address;
+      return lease.signer.address as `0x${string}`;
     },
     async signTypedData(msg) {
       if (!lease) throw new Error("the wallet's signer was used before a lease on it was taken");
       try {
-        return await lease.signer.signTypedData(msg);
+        return await (lease as SignerLease).signer.signTypedData(msg);
       } catch (e) {
+        if ((e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
+        throw e;
+      }
+    },
+  };
+
+  const leasedSvmSigner: TransactionPartialSigner = {
+    get address() {
+      if (!lease) throw new Error("SVM signer used before taking a lease");
+      return svmAddress(lease.signer.address);
+    },
+    async signTransactions(transactions, config) {
+      if (!lease) throw new Error("SVM signer used before taking a lease");
+      try { return await (lease as SvmSignerLease).signer.signTransactions(transactions, config); }
+      catch (e) {
         if ((e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
         throw e;
       }
@@ -446,8 +470,7 @@ export async function performPaidFetch(
 
   const isPayable = (r: PaymentRequirements) =>
     r.scheme === SCHEME &&
-    usesEip3009(r) &&
-    networks.some((n) => r.network === n.caip2 && r.asset.toLowerCase() === n.usdcAddress.toLowerCase());
+    networks.some((n) => r.network === n.caip2 && sameNetworkAddress(n.caip2, r.asset, n.usdcAddress) && (isSvmNetwork(n) || usesEip3009(r)));
 
   // SPEC §6: which chain a payment goes out on is decided HERE, before the SDK chooses, and only for a 402 we are about to pay (a
   // free resource never gets this far, so it costs no balance read). Nothing has been leased, reserved or signed yet.
@@ -480,11 +503,10 @@ export async function performPaidFetch(
       ownAbortLimit = narrowed.refusal.limit;
       throw narrowed.refusal;
     }
-    const address = wallet.getAddress();
+    for (const n of networks) balanceAddresses.set(n.caip2, addressFor(n));
     // The address the balances are read for. onBeforePaymentCreation compares it with the signer it is then leased (a wallet replaced
     // in between would pay out of a wallet nobody looked at).
-    balanceAddress = deps.balanceReader ? address : null;
-    const offers = await orderOffersByBalance(narrowed.offers, networks, address, deps.balanceReader);
+    const offers = await orderOffersByBalance(narrowed.offers, networks, (n) => balanceAddresses.get(n.caip2) ?? null, deps.balanceReader);
     if (offers.length === 0) {
       // Every chain this seller accepts is KNOWN to hold less than the price. Not retryable: the wallet needs funds.
       ownAbortCode = "INSUFFICIENT_FUNDS";
@@ -493,7 +515,32 @@ export async function performPaidFetch(
     return { ...required, accepts: offers };
   });
   for (const enabled of networks) {
-    client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(leasedSigner as any));
+    if (isSvmNetwork(enabled)) {
+      const scheme = new ExactSvmScheme(leasedSvmSigner, { rpcUrl: enabled.rpcUrl });
+      const createPayload = scheme.createPaymentPayload.bind(scheme);
+      // Unlike EVM, the SVM SDK reads mint/blockhash RPC while holding the lease. Its RPC
+      // does not take our HTTP abort signal: bound the caller and release the lease anyway.
+      // A late SDK operation cannot sign after release (the wallet's lease guard refuses it).
+      scheme.createPaymentPayload = async (...args) => {
+        let abort: () => void = () => undefined;
+        const cancelled = new Promise<never>((_resolve, reject) => {
+          abort = () => {
+            deadlineBeforeSend = true;
+            if (paymentId) {
+              try { failPayment(db, paymentId, "ABORTED_BEFORE_SEND"); } catch { /* reservation stays counted */ }
+            }
+            reject(new Error("SVM payment creation deadline expired"));
+          };
+          controller.signal.addEventListener("abort", abort, { once: true });
+          if (controller.signal.aborted) abort();
+        });
+        try { return await Promise.race([cancelled, createPayload(...args)]); }
+        finally { controller.signal.removeEventListener("abort", abort); }
+      };
+      client.register(enabled.caip2 as `${string}:${string}`, scheme);
+    } else {
+      client.register(enabled.caip2 as `${string}:${string}`, new ExactEvmScheme(leasedSigner as any));
+    }
   }
   client.registerPolicy((_version, reqs) => {
       const acceptable = reqs.filter(isPayable);
@@ -510,6 +557,17 @@ export async function performPaidFetch(
         return { abort: true, reason: "UNSUPPORTED_PAYMENT" };
       }
       network = selected;
+      balanceAddress = deps.balanceReader ? balanceAddresses.get(selected.caip2) ?? null : null;
+      if (isSvmNetwork(selected)) {
+        // The x402 facilitator must sponsor fees. A quote may not spend this wallet's SOL outside its USDC limits.
+        try {
+          const feePayer = ctx.selectedRequirements.extra?.feePayer;
+          if (typeof feePayer !== "string" || svmAddress(feePayer) === addressFor(selected)) throw new Error("Invalid fee payer");
+        } catch {
+          ownAbortCode = "UNSUPPORTED_PAYMENT";
+          return { abort: true, reason: "UNSUPPORTED_PAYMENT" };
+        }
+      }
       // The probe deadline may already have expired: @x402/fetch swallows an
       // aborted read of the 402 body and carries on with the PAYMENT-REQUIRED
       // header, so we can get here after the controller was aborted. Reserve
@@ -530,7 +588,7 @@ export async function performPaidFetch(
       // is draining, no new lease is handed out: nothing is reserved or signed and the caller is told to try again.
       if (!lease) {
         try {
-          lease = wallet.leaseSigner();
+          lease = isSvmNetwork(network) ? wallet.leaseSvmSigner?.() ?? null : wallet.leaseSigner();
         } catch (e) {
           if ((e as { code?: unknown } | null)?.code === "WALLET_BUSY") {
             ownAbortCode = "WALLET_BUSY";
@@ -545,7 +603,7 @@ export async function performPaidFetch(
         }
         // The chain was picked by the balance of one wallet; if the wallet was replaced since, this signer is another one. Nothing has
         // been reserved or signed: back off like a replacement in progress (the lease is given back in the `finally`), try again.
-        if (balanceAddress !== null && lease.signer.address.toLowerCase() !== balanceAddress.toLowerCase()) {
+        if (balanceAddress !== null && !sameNetworkAddress(network.caip2, lease.signer.address, balanceAddress)) {
           ownAbortCode = "WALLET_BUSY";
           return { abort: true, reason: "WALLET_BUSY" };
         }
@@ -615,6 +673,11 @@ export async function performPaidFetch(
         return;
       }
       if (paymentId) {
+        if (isSvmNetwork(network)) {
+          const payload = context.paymentPayload?.payload as { transaction?: unknown } | undefined;
+          if (!lease) throw new Error("No SVM signer lease");
+          recordSvmPaymentEvidence(db, paymentId, captureSvmPayment(payload?.transaction, lease.signer.address));
+        }
         const payload = context.paymentPayload?.payload as
           | { authorization?: { from?: unknown; nonce?: unknown; validBefore?: unknown } }
           | undefined;

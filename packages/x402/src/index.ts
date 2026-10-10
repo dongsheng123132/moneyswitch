@@ -3,3 +3,4 @@ export * from "./balance.js";
 export * from "./client.js";
 export * from "./reconcile.js";
 export * from "./authorization-logs.js";
+export * from "./solana.js";

@@ -7,6 +7,8 @@
 import { chainNetworkMode, type MoneyKeyRow, type NetworkMode } from "@moneyswitch/core";
 
 export interface NetworkConfig {
+  /** Existing EVM configurations omit this; SVM is always explicit. */
+  family?: "evm" | "svm";
   /** CAIP-2 network id, e.g. "eip155:10143". */
   caip2: string;
   /** JSON-RPC endpoint. */
@@ -94,8 +96,26 @@ export const BASE_SEPOLIA: NetworkConfig = {
   kind: "testnet", label: "Base Sepolia", explorerBase: "https://sepolia.basescan.org",
 };
 
+/** Official x402 CAIP-2 identifier and Circle's Devnet mint, verified 2026-10-11. No Solana mainnet opt-in yet. */
+export const SOLANA_DEVNET: NetworkConfig = {
+  family: "svm", caip2: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  rpcUrl: env("MONEYSWITCH_SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com"),
+  usdcAddress: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  usdcDomainName: "", usdcDomainVersion: "", usdcDecimals: 6,
+  facilitatorUrl: "https://x402.org/facilitator",
+  kind: "testnet", label: "Solana Devnet", explorerBase: "https://explorer.solana.com",
+};
+
+export function isSvmNetwork(network: NetworkConfig): boolean { return network.family === "svm"; }
+export function sameNetworkAddress(network: string, a: string, b: string): boolean {
+  return network.startsWith("eip155:") ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+export function explorerUrl(network: NetworkConfig, type: "address" | "tx", value: string): string {
+  return `${network.explorerBase}/${type}/${encodeURIComponent(value)}${isSvmNetwork(network) ? "?cluster=devnet" : ""}`;
+}
+
 export const NETWORKS: Readonly<Record<string, NetworkConfig>> = Object.freeze(
-  Object.fromEntries([TESTNET, MAINNET, BASE, BASE_SEPOLIA].map((n) => [n.caip2, n]))
+  Object.fromEntries([TESTNET, MAINNET, BASE, BASE_SEPOLIA, SOLANA_DEVNET].map((n) => [n.caip2, n]))
 );
 
 export function getNetwork(caip2: string): NetworkConfig {
