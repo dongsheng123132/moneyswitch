@@ -33,7 +33,8 @@ export const walletStrings = defineMessages(
 
     // --- status ---------------------------------------------------------------
     addressTitle: "Wallet address",
-    addressLead: "Send USDC to this address. It is the same address on every chain below; the balances are separate.",
+    addressLead: "EVM chains share the address above. Solana uses its own address shown below. Send USDC to the address for the selected chain; balances are separate.",
+    solanaUnavailable: "Solana requires an unlocked wallet with recovery words. Older wallets without recovery words must be replaced first.",
     chainCol: "Chain",
     balanceCol: "USDC balance",
     balanceUnknown: "unknown",
@@ -137,7 +138,8 @@ export const walletStrings = defineMessages(
 
     // --- status ---------------------------------------------------------------
     addressTitle: "钱包地址",
-    addressLead: "把 USDC 转到这个地址。下面每条链上都是同一个地址，余额各算各的。",
+    addressLead: "EVM 链共用上面的地址；Solana 使用下方单独的地址。请按链选择收款地址，余额各算各的。",
+    solanaUnavailable: "Solana 需要已解锁且含恢复词的钱包。没有恢复词的旧钱包需先更换。",
     chainCol: "链",
     balanceCol: "USDC 余额",
     balanceUnknown: "未知",

@@ -2,7 +2,9 @@ import { Wallet, HDNodeWallet, Interface, getAddress, encryptKeystoreJson, type 
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, createPrivateKey, createPublicKey } from "node:crypto";
+import { derivePath } from "ed25519-hd-key";
+import { address as svmAddress, createKeyPairSignerFromPrivateKeyBytes, getBase58Decoder, getAddressEncoder, getProgramDerivedAddress, type TransactionPartialSigner } from "@solana/kit";
 import { defaultProtector, type Protector, type SecretProtection } from "./protect.js";
 
 export { evaluateAcl, parseAclOutput, type Protector, type ProtectTargets, type SecretProtection } from "./protect.js";
@@ -132,6 +134,21 @@ export interface SignerLease {
   readonly signer: EvmTypedDataSigner;
   /** Idempotent. Call it in a `finally` when the request that took the lease is over. */
   release(): void;
+}
+
+export interface SvmSignerLease {
+  readonly signer: TransactionPartialSigner;
+  release(): void;
+}
+export const SOLANA_DERIVATION_PATH = "m/44'/501'/0'/0'";
+
+/** Independent SLIP-0010 Ed25519 child of the encrypted mnemonic, never the EVM private key. */
+function solanaAccountOf(wallet: AnyWallet): { seed: Uint8Array; address: string } | null {
+  if (!(wallet instanceof HDNodeWallet) || !wallet.mnemonic) return null;
+  const seed = derivePath(SOLANA_DERIVATION_PATH, wallet.mnemonic.computeSeed().slice(2)).key;
+  const key = createPrivateKey({ key: Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]), format: "der", type: "pkcs8" });
+  const publicKey = createPublicKey(key).export({ format: "der", type: "spki" }).subarray(-32);
+  return { seed, address: getBase58Decoder().decode(publicKey) };
 }
 
 /** Default data directory: $MONEYSWITCH_DATA_DIR or ~/.moneyswitch (or /data inside docker, set via env). */
@@ -612,6 +629,47 @@ export class LocalWalletDriver {
     return this.readLive()?.address ?? null;
   }
 
+  /** Locked or pre-mnemonic wallets have no available SVM address; no silent key migration. */
+  getSolanaAddress(): string | null {
+    return this.unlockedWallet ? solanaAccountOf(this.unlockedWallet)?.address ?? null : null;
+  }
+
+  getAddressForNetwork(network: string): string | null {
+    return network.startsWith("solana:") ? this.getSolanaAddress() : this.getAddress();
+  }
+
+  leaseSvmSigner(): SvmSignerLease | null {
+    const wallet = this.unlockedWallet;
+    if (!wallet) return null;
+    if (this.draining) throw new WalletError("WALLET_BUSY", "The wallet is being replaced");
+    const account = solanaAccountOf(wallet);
+    if (!account) return null;
+    const epoch = this.epoch;
+    let signing: ReturnType<typeof createKeyPairSignerFromPrivateKeyBytes> | undefined;
+    this.leases++;
+    let released = false;
+    const guard = () => {
+      if (released || this.epoch !== epoch || this.unlockedWallet !== wallet) throw new WalletError("WALLET_CHANGED", "This signer lease is no longer active");
+    };
+    return {
+      signer: {
+        address: svmAddress(account.address),
+        signTransactions: async (transactions, config) => {
+          guard();
+          const signer = await (signing ??= createKeyPairSignerFromPrivateKeyBytes(account.seed));
+          guard();
+          return signer.signTransactions(transactions, config);
+        },
+      },
+      release: () => {
+        if (released) return;
+        released = true;
+        this.leases--;
+        if (this.leases === 0) this.wakeIdleWaiters();
+      },
+    };
+  }
+
   /**
    * THE way to get a signer: a signer for the wallet that is unlocked right now, plus an in-flight lease. Replace and
    * lock refuse with WALLET_BUSY while any lease is open. Take it before the first byte of a payment request goes out
@@ -737,6 +795,33 @@ export class LocalWalletDriver {
       throw new Error("Invalid USDC balance RPC response");
     }
     return ERC20_ABI.decodeFunctionResult("balanceOf", body.result)[0] as bigint;
+  }
+
+  /** SPL token accounts for one case-sensitive owner/mint; all amounts stay in atomic units. */
+  async getSolanaUsdcBalanceOf(owner: string | null, rpcUrl: string, mint: string, signal?: AbortSignal): Promise<bigint> {
+    if (!owner) throw new Error("No Solana wallet address available");
+    svmAddress(owner); svmAddress(mint);
+    const tokenProgram = svmAddress("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    const [ata] = await getProgramDerivedAddress({
+      programAddress: svmAddress("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+      seeds: [getAddressEncoder().encode(svmAddress(owner)), getAddressEncoder().encode(tokenProgram), getAddressEncoder().encode(svmAddress(mint))],
+    });
+    const response = await fetch(rpcUrl, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTokenAccountsByOwner", params: [owner, { mint }, { encoding: "jsonParsed", commitment: "confirmed" }] }),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000), redirect: "error",
+    });
+    if (!response.ok) throw new Error("SPL balance RPC request failed");
+    const body = await response.json() as any;
+    if (body.error || !Array.isArray(body.result?.value)) throw new Error("Invalid SPL balance RPC response");
+    let total = 0n;
+    for (const row of body.result.value) {
+      if (row.pubkey !== ata) continue; // x402 exact spends from the ATA, not arbitrary token accounts.
+      const info = row.account?.data?.parsed?.info;
+      if (row.account?.owner !== "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" || info?.mint !== mint || info?.owner !== owner || info?.tokenAmount?.decimals !== 6 || !/^\d+$/.test(info?.tokenAmount?.amount ?? "")) throw new Error("Invalid SPL token account");
+      total += BigInt(info.tokenAmount.amount);
+    }
+    return total;
   }
 
   // -------------------------------------------------------------------------

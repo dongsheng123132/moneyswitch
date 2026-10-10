@@ -5,6 +5,7 @@ import {
   listUnknownPaymentsToReconcile,
   reconcilePaymentToFailed,
   reconcilePaymentToSettled,
+  listUnknownSvmPayments,
 } from "./payments.js";
 import { writeAudit } from "./audit.js";
 import type { PaymentRow } from "./types.js";
@@ -16,6 +17,8 @@ import type { PaymentRow } from "./types.js";
  * testnet dev instances on :4020/:4021).
  */
 export interface AuthorizationReader {
+  /** No match/expired blockhash is NOT proof of no charge. Only a matching finalized transaction decides. */
+  readSvmPayment?(payment: PaymentRow): Promise<{ status: "pending" | "settled" | "failed"; txHash?: string }>;
   /** USDC.authorizationState(authorizer, nonce) — true once the authorization has been consumed. */
   authorizationState(authorizer: string, nonce: string, network?: string): Promise<boolean>;
   /**
@@ -113,6 +116,26 @@ export async function reconcileUnknownPayments(
     backfillScanned: 0,
     backfilledTx: 0,
   };
+
+  if (reader.readSvmPayment) {
+    for (const payment of listUnknownSvmPayments(db, limit)) {
+      result.scanned++;
+      try {
+        const outcome = await reader.readSvmPayment(payment);
+        if (outcome.status === "pending") continue;
+        const nowIso = now.toISOString();
+        const changed = outcome.status === "settled"
+          ? reconcilePaymentToSettled(db, payment.id, outcome.txHash ?? null, nowIso)
+          : reconcilePaymentToFailed(db, payment.id, nowIso, { errorCode: "SOLANA_TRANSACTION_FAILED", txHash: outcome.txHash });
+        if (!changed) continue;
+        if (outcome.status === "failed") result.failed++;
+        else if (outcome.txHash) result.settledWithTx++;
+        else result.settledTxUnknown++;
+        result.reconciledPaymentIds.push(payment.id);
+        writeAudit(db, "system", `payment.reconcile.${outcome.status}`, { paymentId: payment.id, keyId: payment.keyId, network: payment.network, txHash: outcome.txHash ?? null });
+      } catch { result.rpcErrors++; }
+    }
+  }
 
   for (const payment of candidates) {
     // Guaranteed non-null by the WHERE clause in listUnknownPaymentsToReconcile.

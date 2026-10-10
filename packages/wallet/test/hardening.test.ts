@@ -271,8 +271,9 @@ describe("M5: a signer obtained before a replace cannot sign after it", () => {
     // out an unleased signer; a future route using it would have silently opted out of the WALLET_BUSY protection.)
     expect("getSigner" in LocalWalletDriver.prototype).toBe(false);
     expect(typeof LocalWalletDriver.prototype.leaseSigner).toBe("function");
-    // (makeSigner is the driver's private factory; leaseSigner is the only member that hands a signer out)
-    const handingOutASigner = Object.getOwnPropertyNames(LocalWalletDriver.prototype).filter((name) => /signer/i.test(name) && name !== "leaseSigner" && name !== "makeSigner");
+    // Both EVM and SVM public signers must participate in the same replacement lease boundary.
+    expect(typeof LocalWalletDriver.prototype.leaseSvmSigner).toBe("function");
+    const handingOutASigner = Object.getOwnPropertyNames(LocalWalletDriver.prototype).filter((name) => /signer/i.test(name) && name !== "leaseSigner" && name !== "leaseSvmSigner" && name !== "makeSigner");
     expect(handingOutASigner).toEqual([]);
   });
 

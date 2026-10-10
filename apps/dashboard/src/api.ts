@@ -311,6 +311,8 @@ export interface WalletHealth {
 
 /** The same address on one chain. */
 export interface WalletNetwork {
+  address?: string | null;
+  address_url?: string | null;
   network: string;
   label: string;
   explorer_base: string;
@@ -321,6 +323,7 @@ export interface WalletNetwork {
 }
 
 export interface RetiredWalletRow {
+  solana_address?: string | null;
   address: string;
   retired_at: string;
   reason: string;
@@ -419,7 +422,7 @@ export async function claimSetupToken(setupToken: string): Promise<string> {
 }
 
 export interface AdminMeta {
-  networks?: Array<{ network: string; chain_id: number; usdc_address: string; network_label: string; explorer_base: string; is_mainnet: boolean }>;
+  networks?: Array<{ network: string; chain_id: number | null; usdc_address: string; network_label: string; explorer_base: string; is_mainnet: boolean }>;
   /** CAIP-2 id of the default network. */
   network: string;
   chain_id: number | null;
