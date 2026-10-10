@@ -79,6 +79,7 @@ export function confirmWalletBackup(db: MoneySwitchDb, address: string, now = ne
 }
 
 export interface RetiredWalletRow {
+  solanaAddress?: string | null;
   id: string;
   address: string;
   retiredAt: string;
@@ -99,10 +100,12 @@ function rowToRetired(row: typeof schema.walletRetirements.$inferSelect): Retire
     keystoreFile: row.keystoreFile,
     secretFile: row.secretFile,
     replacedBy: row.replacedBy,
+    solanaAddress: row.solanaAddress,
   };
 }
 
 export interface RecordRetirementInput {
+  solanaAddress?: string | null;
   address: string;
   retiredAt: string;
   reason: string;
@@ -122,6 +125,7 @@ export function recordWalletRetirement(db: MoneySwitchDb, input: RecordRetiremen
       keystoreFile: input.keystoreFile,
       secretFile: input.secretFile,
       replacedBy: input.replacedBy,
+      solanaAddress: input.solanaAddress ?? null,
     })
     .run();
   const row = db.select().from(schema.walletRetirements).where(eq(schema.walletRetirements.id, id)).get();

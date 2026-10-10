@@ -36,6 +36,14 @@ export type PaymentStatus = "reserved" | "settled" | "failed" | "unknown";
 /** "chat" only on rows written by the removed OpenAI-compatible gateway; they stay readable in the history. */
 export type PaymentKind = "fetch" | "chat";
 
+export interface SvmPaymentEvidence {
+  transaction: string;
+  messageHash: string;
+  payer: string;
+  payerSignature: string;
+  blockhash: string;
+}
+
 export interface PaymentRow {
   id: string;
   keyId: string;
@@ -58,6 +66,7 @@ export interface PaymentRow {
   authNonce: string | null;
   authValidBefore: number | null;
   reconciledAt: string | null;
+  svmEvidence?: SvmPaymentEvidence | null;
 }
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "used";

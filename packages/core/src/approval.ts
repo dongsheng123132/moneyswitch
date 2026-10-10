@@ -144,8 +144,9 @@ export function validateApprovalForUse(
   if (approval.bodySha256 !== sha256OfBody(ctx.body)) throw new Error("APPROVAL_INVALID");
   // The approval was given for a payment on one chain in one asset: the same money on another chain is not what was approved.
   if (approval.network !== ctx.network) throw new Error("APPROVAL_INVALID");
-  if (approval.asset.toLowerCase() !== ctx.asset.toLowerCase()) throw new Error("APPROVAL_INVALID");
-  if (approval.payTo.toLowerCase() !== ctx.payTo.toLowerCase()) throw new Error("APPROVAL_INVALID");
+  const normalize = (value: string) => ctx.network.startsWith("solana:") ? value : value.toLowerCase();
+  if (normalize(approval.asset) !== normalize(ctx.asset)) throw new Error("APPROVAL_INVALID");
+  if (normalize(approval.payTo) !== normalize(ctx.payTo)) throw new Error("APPROVAL_INVALID");
   if (ctx.amount > approval.amount) throw new Error("APPROVAL_INVALID");
   return approval;
 }

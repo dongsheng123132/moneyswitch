@@ -2,7 +2,7 @@ import { and, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { schema, type MoneySwitchDb } from "@moneyswitch/db";
 import { writeAudit } from "./audit.js";
 import { dbNumberToMicros } from "./money.js";
-import type { PaymentRow, PaymentStatus } from "./types.js";
+import type { PaymentRow, PaymentStatus, SvmPaymentEvidence } from "./types.js";
 
 function rowToPayment(row: typeof schema.payments.$inferSelect): PaymentRow {
   return {
@@ -26,6 +26,7 @@ function rowToPayment(row: typeof schema.payments.$inferSelect): PaymentRow {
     authNonce: row.authNonce,
     authValidBefore: row.authValidBefore,
     reconciledAt: row.reconciledAt,
+    svmEvidence: row.svmEvidence,
   };
 }
 
@@ -104,7 +105,7 @@ export function sweepStaleReservations(db: MoneySwitchDb, bootedAtIso: string): 
   const result: SweepStaleReservationsResult = { toUnknown: [], toFailed: [] };
   for (const payment of stale) {
     // Any trace of a signed authorization counts: a half-written triple is still evidence that something was signed.
-    const signed = payment.authFrom !== null || payment.authNonce !== null || payment.authValidBefore !== null;
+    const signed = payment.authFrom !== null || payment.authNonce !== null || payment.authValidBefore !== null || payment.svmEvidence != null;
     if (signed) {
       markUnknown(db, payment.id, "RESTARTED_IN_FLIGHT");
       writeAudit(db, "system", "payment.startup_sweep.unknown", { paymentId: payment.id, keyId: payment.keyId, errorCode: "RESTARTED_IN_FLIGHT" });
@@ -139,6 +140,15 @@ export function recordPaymentAuthorization(
     })
     .where(eq(schema.payments.id, id))
     .run();
+}
+
+/** Written before the paid HTTP request can leave the process. */
+export function recordSvmPaymentEvidence(db: MoneySwitchDb, id: string, evidence: SvmPaymentEvidence): void {
+  db.update(schema.payments).set({ svmEvidence: evidence, updatedAt: new Date().toISOString() }).where(eq(schema.payments.id, id)).run();
+}
+
+export function listUnknownSvmPayments(db: MoneySwitchDb, limit = 200): PaymentRow[] {
+  return db.select().from(schema.payments).where(and(eq(schema.payments.status, "unknown"), isNull(schema.payments.reconciledAt), isNotNull(schema.payments.svmEvidence))).orderBy(schema.payments.createdAt).limit(limit).all().map(rowToPayment);
 }
 
 export function listHistoryForKey(db: MoneySwitchDb, keyId: string, limit = 20): PaymentRow[] {
@@ -223,10 +233,10 @@ function stillUnreconciled(id: string) {
  * Returns false (and changes nothing) when the row is no longer `unknown`/unreconciled,
  * i.e. another run already resolved it.
  */
-export function reconcilePaymentToFailed(db: MoneySwitchDb, id: string, nowIso: string): boolean {
+export function reconcilePaymentToFailed(db: MoneySwitchDb, id: string, nowIso: string, evidence?: { errorCode: string; txHash?: string }): boolean {
   const r = db
     .update(schema.payments)
-    .set({ status: "failed", errorCode: "NOT_SETTLED_EXPIRED", reconciledAt: nowIso, updatedAt: nowIso })
+    .set({ status: "failed", errorCode: evidence?.errorCode ?? "NOT_SETTLED_EXPIRED", ...(evidence?.txHash ? { txHash: evidence.txHash } : {}), reconciledAt: nowIso, updatedAt: nowIso })
     .where(stillUnreconciled(id))
     .run();
   return r.changes > 0;
