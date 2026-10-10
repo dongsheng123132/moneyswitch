@@ -43,7 +43,7 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.send({
       network: network.caip2,
       networks: getEnabledNetworks().map((n) => ({
-        network: n.caip2, chain_id: Number(n.caip2.split(":")[1]), usdc_address: n.usdcAddress,
+        network: n.caip2, chain_id: n.family === "svm" ? null : Number(n.caip2.split(":")[1]), usdc_address: n.usdcAddress,
         network_label: n.label, explorer_base: n.explorerBase, is_mainnet: isMainnetNetwork(n),
       })),
       chain_id: chainId,
@@ -55,7 +55,7 @@ export function registerSetupRoutes(app: FastifyInstance, ctx: AppContext) {
       faucet_url: getEnabledNetworks().some((n) => !isMainnetNetwork(n)) ? FAUCET_URL : null,
       wallet_password_from_env: Boolean(ctx.config.walletPassword),
       // The base URL the skill is written for (MONEYSWITCH_PUBLIC_URL, else the address the server listens on: never the request's Host).
-      wallet_address: ctx.wallet.getAddress(),
+      wallet_address: ctx.wallet.getAddressForNetwork(network.caip2),
       public_base: publicBase(ctx),
       public_base_from_env: Boolean(ctx.config.publicUrl),
       // Read-only: host:port + source only, never credentials (see
