@@ -239,14 +239,18 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
             <tbody>
               {g.networks.map((n) => (
                 <tr key={n.network} data-network={n.network}>
-                  <td>{n.label}</td>
+                  <td>{n.label}
+                    {n.network.startsWith("solana:") && (n.address
+                      ? <PublicAddress address={n.address} size="sm" qr="toggle" />
+                      : <p className="dim">{t("solanaUnavailable")}</p>)}
+                  </td>
                   <td className="num">
                     {n.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(n.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
                     {n.over_float_limit && <div className="wallet-over-limit">{t("overLimit", { limit })}</div>}
                   </td>
                   <td>
-                    {wallet.address && (
-                      <a href={`${n.explorer_base}/address/${wallet.address}`} target="_blank" rel="noreferrer">
+                    {(n.address_url || (!n.network.startsWith("solana:") && wallet.address)) && (
+                      <a href={n.address_url || `${n.explorer_base}/address/${wallet.address}`} target="_blank" rel="noreferrer">
                         {t("viewExplorer")}
                       </a>
                     )}
@@ -320,7 +324,7 @@ function RetiredCard({ wallet }: { wallet: WalletInfo }) {
         <tbody>
           {wallet.retired_wallets.map((r) => (
             <tr key={`${r.address}-${r.retired_at}`}>
-              <td className="mono">{r.address}</td>
+              <td className="mono">{r.address}{r.solana_address ? <PublicAddress address={r.solana_address} label="Solana" size="sm" qr="toggle" /> : null}</td>
               <td>{r.retired_at.slice(0, 10)}</td>
               <td className="mono">{r.reason}</td>
               <td className="num">
