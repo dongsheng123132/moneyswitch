@@ -31,7 +31,7 @@ export default function TxLink({ txHash, mock, network }: { txHash: string | nul
           {short}
         </span>
       ) : (
-        <a className="mono" href={explorerTxBase + txHash} target="_blank" rel="noreferrer" title={t("viewTx")}>
+        <a className="mono" href={network?.startsWith("solana:") ? `https://explorer.solana.com/tx/${encodeURIComponent(txHash)}?cluster=devnet` : explorerTxBase + txHash} target="_blank" rel="noreferrer" title={t("viewTx")}>
           {short}
           <ExternalLink size={11} aria-hidden style={{ marginLeft: 3, verticalAlign: -1 }} />
         </a>
