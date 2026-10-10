@@ -11,7 +11,7 @@ import {
   recordWalletRetirement,
   writeAudit,
 } from "@moneyswitch/core";
-import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork, type NetworkConfig } from "@moneyswitch/x402";
+import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork, isSvmNetwork, explorerUrl, type NetworkConfig } from "@moneyswitch/x402";
 import { WalletError } from "@moneyswitch/wallet";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
@@ -55,6 +55,8 @@ export interface WalletHealth {
 
 /** The same address on one chain: its balance and whether it is above the float limit. */
 export interface WalletNetworkView {
+  address: string | null;
+  address_url: string | null;
   network: string;
   label: string;
   explorer_base: string;
@@ -65,6 +67,7 @@ export interface WalletNetworkView {
 }
 
 export interface RetiredWalletView {
+  solana_address: string | null;
   address: string;
   retired_at: string;
   reason: string;
@@ -104,12 +107,13 @@ const balanceCaches = new WeakMap<AppContext, Map<string, CachedBalance>>();
 async function readBalance(ctx: AppContext, address: string, network: NetworkConfig): Promise<bigint | null> {
   let cache = balanceCaches.get(ctx);
   if (!cache) balanceCaches.set(ctx, (cache = new Map()));
-  const key = `${network.caip2}:${address.toLowerCase()}`;
+  const key = `${network.caip2}:${isSvmNetwork(network) ? address : address.toLowerCase()}`;
   const hit = cache.get(key);
   if (hit?.pending) return hit.pending;
   if (hit && Date.now() - hit.at < hit.ttl) return hit.value;
-  const pending = ctx.wallet
-    .getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress)
+  const pending = (isSvmNetwork(network)
+    ? ctx.wallet.getSolanaUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress)
+    : ctx.wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress))
     .then((value): bigint | null => value)
     .catch((): bigint | null => null);
   cache.set(key, { at: Date.now(), ttl: BALANCE_FAILURE_TTL_MS, value: hit?.value ?? null, pending });
@@ -119,10 +123,13 @@ async function readBalance(ctx: AppContext, address: string, network: NetworkCon
 }
 
 /** Balance on every enabled chain where it can be read (null = unknown). */
-async function balancesByNetwork(ctx: AppContext, address: string | null, networks: NetworkConfig[]): Promise<Map<string, bigint | null>> {
+async function balancesByNetwork(ctx: AppContext, address: string | null, networks: NetworkConfig[], solanaAddress: string | null = null): Promise<Map<string, bigint | null>> {
   const out = new Map<string, bigint | null>();
   if (!address) return out;
-  await Promise.all(networks.map(async (n) => out.set(n.caip2, await readBalance(ctx, address, n))));
+  await Promise.all(networks.map(async (n) => {
+    const owner = isSvmNetwork(n) ? solanaAddress : address;
+    out.set(n.caip2, owner ? await readBalance(ctx, owner, n) : null);
+  }));
   return out;
 }
 
@@ -202,14 +209,15 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     const networks = getEnabledNetworks();
     const active = getActiveNetwork();
     const address = ctx.wallet.getAddress();
-    const balances = await balancesByNetwork(ctx, address, networks);
+    const solanaAddress = ctx.wallet.getSolanaAddress();
+    const balances = await balancesByNetwork(ctx, address, networks, solanaAddress);
     const health = buildHealth(address, balances);
     const limit = walletFloatLimit();
 
     const retiredRows = listRetiredWallets(ctx.db);
     const retiredBalances = new Map<string, Map<string, bigint | null>>();
     await Promise.all(
-      [...new Set(retiredRows.map((r) => r.address))].map(async (a) => retiredBalances.set(a, await balancesByNetwork(ctx, a, networks)))
+      retiredRows.map(async (r) => retiredBalances.set(r.address, await balancesByNetwork(ctx, r.address, networks, r.solanaAddress ?? null)))
     );
 
     const selected = balances.get(active.caip2) ?? null;
@@ -225,7 +233,10 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       networks: networks.map(
         (n): WalletNetworkView => {
           const balance = balances.get(n.caip2) ?? null;
+          const owner = isSvmNetwork(n) ? solanaAddress : address;
           return {
+            address: owner,
+            address_url: owner ? explorerUrl(n, "address", owner) : null,
             network: n.caip2,
             label: n.label,
             explorer_base: n.explorerBase,
@@ -237,6 +248,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       ),
       retired_wallets: retiredRows.map(
         (r): RetiredWalletView => ({
+          solana_address: r.solanaAddress ?? null,
           address: r.address,
           retired_at: r.retiredAt,
           reason: r.reason,
@@ -304,6 +316,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     reply.header("Cache-Control", "no-store");
     const body = (req.body ?? {}) as Body;
     const oldAddress = ctx.wallet.getAddress();
+    const oldSolanaAddress = ctx.wallet.getSolanaAddress();
     if (!ctx.wallet.hasKeystore() || !oldAddress) return reply.status(404).send({ error: "NO_WALLET" });
     if (typeof body.confirm_address !== "string" || body.confirm_address.trim() !== oldAddress) {
       writeAudit(ctx.db, "admin", "wallet.replace.denied", { address: oldAddress, reason: "address_mismatch" });
@@ -320,6 +333,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
       const result = await ctx.wallet.replaceWallet({
         // Runs in the same synchronous stretch as the file swap, after the files moved. If this throws, the driver puts the old files back.
         onSwapped: (info) => {
+          if (info.address !== oldAddress) throw new WalletError("WALLET_CHANGED", "The wallet changed before replacement");
           ctx.sqlite.transaction(() => {
             recordWalletRetirement(ctx.db, {
               address: info.address,
@@ -328,6 +342,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
               keystoreFile: info.keystoreFile,
               secretFile: info.secretFile,
               replacedBy: info.newAddress,
+              solanaAddress: oldSolanaAddress,
             });
             // a generated wallet must be confirmed (written down) before it counts as backed up
             recordWalletOrigin(ctx.db, info.newAddress, "generated");
