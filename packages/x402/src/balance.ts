@@ -57,7 +57,7 @@ export function createBalanceReader(read: UsdcBalanceReader, options: BalanceRea
   const cache = new Map<string, { at: number; value: bigint }>();
   const failedAt = new Map<string, number>();
   const inFlight = new Map<string, Promise<bigint | null>>();
-  const keyOf = (address: string, network: NetworkConfig) => `${network.caip2}:${address.toLowerCase()}`;
+  const keyOf = (address: string, network: NetworkConfig) => `${network.caip2}:${network.caip2.startsWith("eip155:") ? address.toLowerCase() : address}`;
 
   async function lookup(address: string, network: NetworkConfig): Promise<bigint | null> {
     let timer: ReturnType<typeof setTimeout> | undefined;
