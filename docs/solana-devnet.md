@@ -28,6 +28,22 @@ Fund that address's associated token account with Circle Devnet USDC, mint `4zMM
 
 These tests do not prove a live USDC settlement. Before recording a Solana hackathon demo, fund a Devnet wallet, pay a compatible seller, inspect the full transaction on the Devnet explorer, then demonstrate a refused over-budget request and approval flow. Current Base/Monad demo videos do not demonstrate Solana.
 
+### Isolated live-chain harness
+
+After building, run from the repository root:
+
+```sh
+node scripts/demo-solana-devnet.mjs --prepare
+node scripts/demo-solana-devnet.mjs --status
+# Fund the printed payer with Circle Devnet USDC and the separate sponsor
+# with at least 0.003 Devnet SOL. These are test tokens, not mainnet funds.
+node scripts/demo-solana-devnet.mjs --pay
+```
+
+The harness keeps its encrypted wallets and ledger under `.data/solana-live/` (ignored by Git), pins the public Devnet RPC, checks its genesis before paying, and caps payment at 0.01 USDC. The seller is local and in-process; it sponsors and submits the transaction to the real Devnet RPC. This does not demonstrate an external HTTP seller or a public facilitator. The lost-receipt path keeps quota reserved, then matches finalized chain evidence before recording settlement. A saved payment prevents another automatic payment on rerun. Do not remove its ledger to retry an uncertain charge.
+
+`--status` and refusal with an unfunded sponsor have been exercised. The live `--pay` path still needs funded execution; do not describe this harness as a completed settlement demo until it prints a matched finalized transaction.
+
 ## Recovery limitation
 
 Signed transactions are persisted before the paid HTTP retry. Recovery matches the message hash and payer signature against finalized RPC transactions, including transactions found through the payer's latest 25 finalized history entries. Empty or pruned history, an expired blockhash, or an RPC error never releases the quota. Old transactions can remain `unknown`; no automatic retry is safe while charge status is uncertain.
