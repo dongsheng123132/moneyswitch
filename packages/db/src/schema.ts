@@ -83,6 +83,8 @@ export const payments = sqliteTable("payments", {
   authValidBefore: integer("auth_valid_before"),
   /** v0.5: when reconcileUnknownPayments last resolved this row (null = not yet reconciled). */
   reconciledAt: text("reconciled_at"),
+  /** Public signed transaction evidence, never key material. Distinct from EIP-3009. */
+  svmEvidence: text("svm_evidence", { mode: "json" }).$type<{ transaction: string; messageHash: string; payer: string; payerSignature: string; blockhash: string } | null>(),
 });
 
 export const approvals = sqliteTable("approvals", {
@@ -169,6 +171,7 @@ export const walletRetirements = sqliteTable("wallet_retirements", {
   keystoreFile: text("keystore_file").notNull(),
   secretFile: text("secret_file"),
   replacedBy: text("replaced_by"),
+  solanaAddress: text("solana_address"),
 });
 
 /** LEGACY (v0.5 seller toll booths, removed): the tables stay in the database, nothing reads or writes them any more. */
