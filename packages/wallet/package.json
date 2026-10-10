@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@solana/kit": "5.1.0",
+    "ed25519-hd-key": "2.0.0",
     "ethers": "6.17.0"
   },
   "devDependencies": {
