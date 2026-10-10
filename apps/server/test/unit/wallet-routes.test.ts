@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Wallet, HDNodeWallet } from "ethers";
 import { LocalWalletDriver, unlockSecretPath, walletFilePath } from "@moneyswitch/wallet";
-import { BASE_SEPOLIA, TESTNET } from "@moneyswitch/x402";
+import { BASE_SEPOLIA, TESTNET, SOLANA_DEVNET } from "@moneyswitch/x402";
 import { reconcileUnknownPayments, type AuthorizationReader } from "@moneyswitch/core";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { writeLegacyPasswordWallet } from "../legacy-wallet.js";
@@ -195,7 +195,7 @@ describe("health", () => {
       retired_wallets: [],
     });
     expect(info.networks).toEqual([
-      { network: TESTNET.caip2, label: TESTNET.label, explorer_base: TESTNET.explorerBase, is_mainnet: false, usdc_balance: null, over_float_limit: null },
+      { address: null, address_url: null, network: TESTNET.caip2, label: TESTNET.label, explorer_base: TESTNET.explorerBase, is_mainnet: false, usdc_balance: null, over_float_limit: null },
     ]);
     expect(info.health).toEqual({
       protection: "none",
@@ -225,9 +225,27 @@ describe("health", () => {
       network: TESTNET.caip2,
     });
     expect(info.networks).toEqual([
-      { network: TESTNET.caip2, label: TESTNET.label, explorer_base: TESTNET.explorerBase, is_mainnet: false, usdc_balance: "0.52", over_float_limit: false },
+      { address: created.address, address_url: `${TESTNET.explorerBase}/address/${created.address}`, network: TESTNET.caip2, label: TESTNET.label, explorer_base: TESTNET.explorerBase, is_mainnet: false, usdc_balance: "0.52", over_float_limit: false },
     ]);
     expect(info).not.toHaveProperty("auto_unlock_configured");
+  });
+
+  it("shows a separate Solana address and Devnet explorer, reads balances with the correct owner, and retains the retired address", async () => {
+    process.env.MONEYSWITCH_NETWORKS = `${TESTNET.caip2},${SOLANA_DEVNET.caip2}`;
+    const created = await createAuto();
+    const oldSolana = t.ctx.wallet.getSolanaAddress()!;
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf").mockResolvedValue(12345n);
+    stubRpc({ [TESTNET.rpcUrl]: 520000n });
+    const info = await walletInfo();
+    expect(info.networks[1]).toMatchObject({ address: oldSolana, address_url: `https://explorer.solana.com/address/${oldSolana}?cluster=devnet`, network: SOLANA_DEVNET.caip2, usdc_balance: "0.012345" });
+    expect(oldSolana).not.toBe(created.address);
+    expect(svmRead).toHaveBeenCalledWith(oldSolana, SOLANA_DEVNET.rpcUrl, SOLANA_DEVNET.usdcAddress);
+    const response = await post("/v1/admin/wallet/replace", { confirm_address: created.address });
+    expect(response.statusCode).toBe(200);
+    const after = await walletInfo();
+    expect(after.retired_wallets[0].solana_address).toBe(oldSolana);
+    expect(after.networks[1].address).not.toBe(oldSolana);
+    expect(after.retired_wallets[0].balances[SOLANA_DEVNET.caip2]).toBe("0.012345");
   });
 
   it("auto wallet: unlock_mode auto, last decrypt ok, backup missing until the human says the words are written down", async () => {
@@ -460,6 +478,7 @@ describe("replace wallet", () => {
 
   it("moves the old files into retired/ (never deletes), records the retirement, creates a new auto wallet with a new phrase, and leaves keys/budgets/approvals/payments alone", async () => {
     const old = await createAuto();
+    const oldSolanaAddress = t.ctx.wallet.getSolanaAddress();
     const oldKeystore = fs.readFileSync(walletFilePath(t.tmpDir), "utf-8");
     const oldSecret = secretOnDisk();
     await seedHistory();
@@ -495,6 +514,7 @@ describe("replace wallet", () => {
     expect(info.retired_wallets).toEqual([
       {
         address: old.address,
+        solana_address: oldSolanaAddress,
         retired_at: body.retired.retired_at,
         reason: "lost_password",
         keystore_file: body.retired.keystore_file,
@@ -618,12 +638,14 @@ describe("replace wallet", () => {
 
   it("the status lists the retired wallets with their USDC balance per chain and where the files are", async () => {
     const old = await createAuto();
+    const oldSolanaAddress = t.ctx.wallet.getSolanaAddress();
     const res = await replace({ confirm_address: old.address, reason: "lost_password" });
     const calls = stubRpc({ [TESTNET.rpcUrl]: 520_000n });
     const info = await walletInfo();
     expect(info.retired_wallets).toEqual([
       {
         address: old.address,
+        solana_address: oldSolanaAddress,
         retired_at: res.json().retired.retired_at,
         reason: "lost_password",
         keystore_file: res.json().retired.keystore_file,
