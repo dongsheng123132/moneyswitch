@@ -65,6 +65,9 @@ try {
   check('built Dashboard and its hashed JS are served', !!asset && (await fetch(`${base}${asset}`)).ok);
   const icon = await fetch(`${base}/favicon.ico`);
   check('the browser default favicon is served as an icon rather than the SPA', icon.ok && /image\//.test(icon.headers.get('content-type') ?? '') && (await icon.arrayBuffer()).byteLength > 22);
+  const demo = await fetch(`${base}/demoday.html`);
+  const demoHtml = await demo.text();
+  check('the standalone Demo Day HTML is public and is not the SPA fallback', demo.ok && /text\/html/.test(demo.headers.get('content-type') ?? '') && demoHtml.includes('data-moneyswitch-demoday="2026-10-11"') && !demoHtml.includes('<div id="root"'));
   const approvalPage = await fetch(`${base}/approvals?id=00000000-0000-4000-8000-000000000000`);
   check('an approval link opens the Dashboard', approvalPage.status === 200 && (await approvalPage.text()).includes(asset));
   check('admin metadata requires authentication', (await api('/v1/admin/meta', 'GET', undefined, '')).status === 403);
