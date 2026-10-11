@@ -33,7 +33,7 @@ export const walletStrings = defineMessages(
 
     // --- status ---------------------------------------------------------------
     addressTitle: "Wallet address",
-    addressLead: "EVM chains share the address above. Solana uses its own address shown below. Send USDC to the address for the selected chain; balances are separate.",
+    addressLead: "The same recovery words derive the EVM address above and a separate Solana address below. Solana mainnet and Devnet share that Solana address; this server currently supports Solana Devnet payments only. Balances and USDC tokens are separate on each network.",
     solanaUnavailable: "Solana requires an unlocked wallet with recovery words. Older wallets without recovery words must be replaced first.",
     chainCol: "Chain",
     balanceCol: "USDC balance",
@@ -138,7 +138,7 @@ export const walletStrings = defineMessages(
 
     // --- status ---------------------------------------------------------------
     addressTitle: "钱包地址",
-    addressLead: "EVM 链共用上面的地址；Solana 使用下方单独的地址。请按链选择收款地址，余额各算各的。",
+    addressLead: "同一份恢复词派生出上方 EVM 地址和下方独立 Solana 地址。Solana 主网与 Devnet 共用这个 Solana 地址，当前服务器仅支持 Solana Devnet 付款；各网络余额和 USDC 分开。",
     solanaUnavailable: "Solana 需要已解锁且含恢复词的钱包。没有恢复词的旧钱包需先更换。",
     chainCol: "链",
     balanceCol: "USDC 余额",

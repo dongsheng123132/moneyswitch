@@ -53,6 +53,8 @@ export interface PaymentRow {
   network: string;
   asset: string;
   payTo: string;
+  /** Optional Agent-supplied purpose, not a verified task record. */
+  purpose: string | null;
   amount: bigint;
   status: PaymentStatus;
   txHash: string | null;

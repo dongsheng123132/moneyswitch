@@ -1,9 +1,9 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Download, Search } from "lucide-react";
 import { usePolling } from "../usePolling";
 import { listBills, listKeys, isMockPayment, type BillsList, type MoneyKeyRow, type NetworkMode, type PaymentRow } from "../api";
-import { formatUsdc, sumDecimalStrings, toCsv, downloadCsv, urlPath, isTodayUtc } from "../money";
+import { formatUsdc, sumDecimalStrings, toCsv, downloadCsv, isTodayUtc } from "../money";
 import Pill from "../components/Pill";
 import NetworkKindPill from "../components/NetworkKindPill";
 import Callout from "../components/Callout";
@@ -68,68 +68,107 @@ function withinRange(iso: string, range: RangeFilter, now: number): boolean {
   return now - new Date(iso).getTime() <= ms;
 }
 
-/** One ledger row per payment: time, key, amount, URL, chain, transaction and whether the money left (yes / no / maybe). */
+/** A key is an attribution label, not a verified agent identity (keys can be shared). */
+export function billKeyName(p: Pick<PaymentRow, "key_id" | "key_name">, keyNames: Map<string, string>): string {
+  return p.key_name || keyNames.get(p.key_id) || p.key_id.slice(0, 8);
+}
+
+/** Audit details are mounted only after an explicit request, so a collapsed row has no private URL or purpose in its DOM. */
+export function BillsPaymentDetails({ payment: p, keyName, chainLabel, showPurpose = false }: {
+  payment: PaymentRow;
+  keyName: string;
+  chainLabel: string;
+  showPurpose?: boolean;
+}) {
+  const t = useT(billsStrings);
+  const dateTime = useDateTime();
+  return (
+    <dl className="bills-details" data-testid="bill-details">
+      <div><dt>{t("colTime")}</dt><dd><time dateTime={p.created_at}>{dateTime(p.created_at)}</time></dd></div>
+      <div><dt>{t("colKey")}</dt><dd>{keyName} <span className="mono dim">({p.key_id})</span></dd></div>
+      <div><dt>{t("colPurpose")}</dt><dd>{!p.purpose ? t("purposeMissing") : showPurpose ? p.purpose : t("purposeHidden")}</dd></div>
+      <div><dt>{t("fullRequest")}</dt><dd className="mono">{p.method} {p.url}</dd></div>
+      <div><dt>{t("colRecipient")}</dt><dd className="mono">{p.pay_to || "—"}</dd></div>
+      <div><dt>{t("colAmount")}</dt><dd>{formatUsdc(p.amount, { maxDecimals: 6 })} USDC</dd></div>
+      <div><dt>{t("colChain")}</dt><dd>{chainLabel} <NetworkKindPill kind={p.network_kind} /><span className="mono dim bills-detail-secondary">{p.network}</span></dd></div>
+      <div><dt>{t("asset")}</dt><dd className="mono">{p.asset || "—"}</dd></div>
+      <div><dt>{t("colTx")}</dt><dd><TxLink txHash={p.tx_hash} mock={isMockPayment(p)} network={p.network} /><span className="mono bills-detail-secondary">{p.tx_hash ?? "—"}</span></dd></div>
+      <div><dt>{t("paymentId")}</dt><dd className="mono">{p.id}</dd></div>
+      {p.approval_id && <div><dt>{t("approvalId")}</dt><dd className="mono">{p.approval_id}</dd></div>}
+      <div><dt>{t("paymentStatus")}</dt><dd>{t(p.status === "settled" ? "statusSettled" : p.status === "failed" ? "statusFailed" : p.status === "reserved" ? "statusReserved" : "statusUnknown")}{p.error_code && <span className="mono bills-detail-secondary">{p.error_code}</span>}</dd></div>
+    </dl>
+  );
+}
+
+function BillsRow({ payment: p, keyNames, chainLabels, onPickKey, showPurpose }: {
+  payment: PaymentRow;
+  keyNames: Map<string, string>;
+  chainLabels: Map<string, string>;
+  onPickKey?: (keyId: string) => void;
+  showPurpose: boolean;
+}) {
+  const t = useT(billsStrings);
+  const dateTime = useDateTime();
+  const [expanded, setExpanded] = useState(false);
+  const charged = chargedOf(p);
+  const name = billKeyName(p, keyNames);
+  const chainLabel = chainLabels.get(p.network) ?? p.network;
+  const detailId = `bill-detail-${p.id}`;
+  return (
+    <>
+      <tr className={charged === "maybe" ? "row-unknown" : ""} data-charged={charged}>
+        <td data-label={t("colTime")}><time dateTime={p.created_at}>{dateTime(p.created_at)}</time></td>
+        <td data-label={t("colKey")} className="bills-key">{onPickKey ? <button type="button" className="linklike-btn" onClick={() => onPickKey(p.key_id)}>{name}</button> : name}</td>
+        <td data-label={t("colAmount")} className="num">{formatUsdc(p.amount, { maxDecimals: 6 })} USDC</td>
+        <td data-label={t("colPurpose")} className="bills-purpose">{!p.purpose ? <span className="dim">{t("purposeMissing")}</span> : showPurpose ? p.purpose : <span className="dim">{t("purposeHidden")}</span>}</td>
+        <td data-label={t("colUrl")} className="mono bills-url">{p.host}</td>
+        <td data-label={t("colChain")} className="bills-chain">{chainLabel} <NetworkKindPill kind={p.network_kind} /></td>
+        <td data-label={t("colCharged")}>
+          <span title={t(charged === "yes" ? "chargedYesHint" : charged === "no" ? "chargedNoHint" : "chargedMaybeHint")}>
+            <Pill tone={CHARGED_TONE[charged]}>{t(charged === "yes" ? "chargedYes" : charged === "no" ? "chargedNo" : "chargedMaybe")}</Pill>
+          </span>
+          {p.error_code && charged !== "yes" && <span className="bills-error-code">{p.error_code}</span>}
+          {charged === "maybe" && <span className="bills-pending-hint">{t("pendingShortHint")}</span>}
+        </td>
+        <td data-label={t("colDetails")}><button type="button" className="btn secondary small" aria-expanded={expanded} aria-controls={expanded ? detailId : undefined} onClick={() => setExpanded(!expanded)}>{t(expanded ? "hideDetails" : "showDetails")}</button></td>
+      </tr>
+      {expanded && <tr className="bills-detail-row"><td colSpan={8} id={detailId}><BillsPaymentDetails payment={p} keyName={name} chainLabel={chainLabel} showPurpose={showPurpose} /></td></tr>}
+    </>
+  );
+}
+
+/** One row per payment; the overview includes only the request host, with private audit details available on demand. */
 export function BillsTable({
   payments,
   keyNames,
   chainLabels,
   onPickKey,
+  showPurpose = false,
 }: {
   payments: PaymentRow[];
   keyNames: Map<string, string>;
   /** CAIP-2 → display name of the chain. */
   chainLabels: Map<string, string>;
   onPickKey?: (keyId: string) => void;
+  showPurpose?: boolean;
 }) {
   const t = useT(billsStrings);
-  const dateTime = useDateTime();
   return (
-    <table>
+    <table className="bills-table">
       <thead>
         <tr>
           <th>{t("colTime")}</th>
           <th>{t("colKey")}</th>
           <th className="num">{t("colAmount")}</th>
+          <th>{t("colPurpose")}</th>
           <th>{t("colUrl")}</th>
           <th>{t("colChain")}</th>
-          <th>{t("colTx")}</th>
           <th>{t("colCharged")}</th>
+          <th>{t("colDetails")}</th>
         </tr>
       </thead>
       <tbody>
-        {payments.map((p) => {
-          const mock = isMockPayment(p);
-          const charged = chargedOf(p);
-          const name = keyNames.get(p.key_id);
-          return (
-            <tr key={p.id} className={charged === "maybe" ? "row-unknown" : ""} data-charged={charged}>
-              <td>{dateTime(p.created_at)}</td>
-              <td>
-                {name ? (
-                  <button type="button" className="linklike-btn" onClick={() => onPickKey?.(p.key_id)}>
-                    {name}
-                  </button>
-                ) : (
-                  <span className="mono">{p.key_id.slice(0, 8)}</span>
-                )}
-              </td>
-              <td className="num">{formatUsdc(p.amount, { maxDecimals: 4 })}</td>
-              <td className="mono bills-url">{`${p.host}${urlPath(p.url)}`}</td>
-              <td>
-                {chainLabels.get(p.network) ?? p.network} <NetworkKindPill kind={p.network_kind} />
-              </td>
-              <td>
-                <TxLink txHash={p.tx_hash} mock={mock} network={p.network} />
-              </td>
-              <td>
-                <span title={t(charged === "yes" ? "chargedYesHint" : charged === "no" ? "chargedNoHint" : "chargedMaybeHint")}>
-                  <Pill tone={CHARGED_TONE[charged]}>{t(charged === "yes" ? "chargedYes" : charged === "no" ? "chargedNo" : "chargedMaybe")}</Pill>
-                </span>
-                {p.error_code && charged !== "yes" && <span className="bills-error-code">{p.error_code}</span>}
-              </td>
-            </tr>
-          );
-        })}
+        {payments.map((p) => <BillsRow key={p.id} payment={p} keyNames={keyNames} chainLabels={chainLabels} onPickKey={onPickKey} showPurpose={showPurpose} />)}
       </tbody>
     </table>
   );
@@ -157,7 +196,7 @@ export function BillsSummary({ payments }: { payments: PaymentRow[] }) {
   const totals = useMemo(() => billsTotalsByKind(payments), [payments]);
   const maybeCount = payments.filter((p) => chargedOf(p) === "maybe").length;
   return (
-    <div style={{ display: "flex", gap: 32 }}>
+    <div className="bills-summary">
       <div>
         <div className="stat-label">{t("summaryCount")}</div>
         <div className="stat-value num">{payments.length}</div>
@@ -168,7 +207,7 @@ export function BillsSummary({ payments }: { payments: PaymentRow[] }) {
             {t(s.kind === "mainnet" ? "summaryTotalMainnet" : s.kind === "testnet" ? "summaryTotalTestnet" : s.kind === "other" ? "summaryTotalOther" : "summaryTotal")}
           </div>
           <div className="stat-value num">
-            {formatUsdc(s.total, { maxDecimals: 4 })} {tc("usdc")}
+            {formatUsdc(s.total, { maxDecimals: 6 })} {tc("usdc")}
           </div>
         </div>
       ))}
@@ -206,15 +245,15 @@ export function BillsRenderCap({ shown, matching }: { shown: number; matching: n
   return <Callout tone="info">{t("renderCapNotice", { shown, matching })}</Callout>;
 }
 
-/** The CSV of the bills: the original columns first, in their original order, then pay_to, method, approval_id and network_kind (mainnet / testnet, empty when unknown). */
-export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>): string {
-  const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code", "pay_to", "method", "approval_id", "network_kind"];
+/** Keep existing CSV columns stable. Private request paths and caller purposes require an explicit export choice. */
+export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>, includePrivateDetails = false): string {
+  const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code", "pay_to", "method", "approval_id", "network_kind", "purpose", "asset", "status"];
   const rows = payments.map((p) => [
     p.created_at,
     p.key_id,
-    keyNames.get(p.key_id) ?? "",
+    p.key_name || keyNames.get(p.key_id) || "",
     p.host,
-    p.url,
+    includePrivateDetails ? p.url : "",
     p.network,
     p.amount,
     chargedOf(p),
@@ -224,6 +263,9 @@ export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>):
     p.method,
     p.approval_id ?? "",
     p.network_kind ?? "",
+    includePrivateDetails ? p.purpose ?? "" : "",
+    p.asset,
+    p.status,
   ]);
   return toCsv(headers, rows);
 }
@@ -237,6 +279,8 @@ export default function BillsPage() {
   const payments = bills?.payments;
   const { data: keys } = usePolling(listKeys);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [showPurpose, setShowPurpose] = useState(false);
+  const [includePrivateExport, setIncludePrivateExport] = useState(false);
 
   const keyFilter = searchParams.get("key") ?? "all";
   const chargedFilter = (searchParams.get("charged") as ChargedFilter) ?? "all";
@@ -264,12 +308,12 @@ export default function BillsPage() {
       if (!kindMatches(p, kindFilter)) return false;
       if (!withinRange(p.created_at, range, now)) return false;
       if (needle) {
-        const haystack = [p.tx_hash, p.url, p.host, p.id].filter(Boolean).join(" ").toLowerCase();
+        const haystack = [p.tx_hash, p.url, p.host, p.id, p.pay_to, billKeyName(p, keyNames), ...(showPurpose ? [p.purpose] : [])].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(needle)) return false;
       }
       return true;
     });
-  }, [payments, keyFilter, chargedFilter, kindFilter, range, q]);
+  }, [payments, keyNames, showPurpose, keyFilter, chargedFilter, kindFilter, range, q]);
 
   const visible = useMemo(() => visibleBills(filtered), [filtered]);
 
@@ -280,11 +324,11 @@ export default function BillsPage() {
   }
 
   function exportCsv() {
-    downloadCsv(`moneyswitch-bills-${new Date().toISOString().slice(0, 10)}.csv`, billsCsv(filtered, keyNames));
+    downloadCsv(`moneyswitch-bills-${new Date().toISOString().slice(0, 10)}.csv`, billsCsv(filtered, keyNames, includePrivateExport));
   }
 
   return (
-    <div>
+    <div className="bills-page">
       <div className="toolbar">
         <div className="filters">
           <select value={keyFilter} onChange={(e) => updateParam("key", e.target.value, "all")}>
@@ -320,10 +364,16 @@ export default function BillsPage() {
             </button>
           )}
         </div>
-        <button className="btn secondary" onClick={exportCsv} disabled={filtered.length === 0}>
-          <Download size={14} />
-          {t("exportCsv")}
-        </button>
+        <div className="bills-export">
+          <label className="bills-checkbox"><input type="checkbox" checked={includePrivateExport} onChange={(e) => setIncludePrivateExport(e.target.checked)} />{t("exportPrivate")}</label>
+          <button className="btn secondary" onClick={exportCsv} disabled={filtered.length === 0}><Download size={14} />{t("exportCsv")}</button>
+        </div>
+      </div>
+
+      <div className="bills-privacy">
+        <label className="bills-checkbox"><input type="checkbox" checked={showPurpose} onChange={(e) => setShowPurpose(e.target.checked)} />{t("showPurposes")}</label>
+        <p>{t("privacyHint")}</p>
+        <p>{t("purposeHint")}</p>
       </div>
 
       {error && <div className="error-banner">{tc("requestFailed", { message: error })}</div>}
@@ -336,7 +386,7 @@ export default function BillsPage() {
 
       <div className="card">
         {loading && !payments ? (
-          <SkeletonTable rows={6} cols={7} />
+          <SkeletonTable rows={6} cols={8} />
         ) : !payments || payments.length === 0 ? (
           <EmptyState
             title={t("emptyNoPaymentsTitle")}
@@ -362,7 +412,7 @@ export default function BillsPage() {
         ) : (
           <>
             <BillsRenderCap shown={visible.length} matching={filtered.length} />
-            <BillsTable payments={visible} keyNames={keyNames} chainLabels={chainLabels} onPickKey={(id) => updateParam("key", id, "all")} />
+            <div className="bills-table-wrap"><BillsTable payments={visible} keyNames={keyNames} chainLabels={chainLabels} showPurpose={showPurpose} onPickKey={(id) => updateParam("key", id, "all")} /></div>
           </>
         )}
       </div>

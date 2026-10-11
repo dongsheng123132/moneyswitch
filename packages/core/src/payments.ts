@@ -14,6 +14,7 @@ function rowToPayment(row: typeof schema.payments.$inferSelect): PaymentRow {
     network: row.network,
     asset: row.asset,
     payTo: row.payTo,
+    purpose: row.purpose,
     amount: dbNumberToMicros(row.amount),
     status: row.status,
     txHash: row.txHash,

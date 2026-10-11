@@ -30,6 +30,8 @@ export interface PolicyInput {
   amount: bigint;
   maxPrice?: bigint;
   approvalId?: string | null;
+  /** Optional caller-supplied annotation; excluded from approval/payment identity. */
+  purpose?: string;
 }
 
 export interface PolicyResult {
@@ -170,6 +172,7 @@ export function evaluateAndReserve(
       network: input.network,
       asset: input.asset,
       payTo: input.payTo,
+      purpose: input.purpose ?? null,
       amount: microsToDbNumber(input.amount),
       status: "reserved",
       txHash: null,

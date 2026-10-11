@@ -16,9 +16,162 @@
 }
 
 .bills-url {
-  max-width: 260px;
+  max-width: 200px;
   white-space: normal;
   word-break: break-all;
+}
+
+.bills-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+}
+
+.bills-export,
+.bills-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bills-export {
+  flex-wrap: wrap;
+}
+
+.bills-checkbox {
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bills-checkbox input {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.bills-privacy {
+  margin: 0 0 16px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.bills-privacy p {
+  margin: 5px 0 0;
+}
+
+.bills-table-wrap {
+  overflow-x: auto;
+}
+
+.bills-table {
+  min-width: 950px;
+}
+
+.bills-table td {
+  vertical-align: top;
+}
+
+.bills-table td:first-child,
+.bills-key,
+.bills-purpose,
+.bills-chain {
+  max-width: 200px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.bills-table td:first-child {
+  min-width: 140px;
+}
+
+.bills-pending-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.bills-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+  margin: 4px 0;
+  white-space: normal;
+}
+
+.bills-details dt {
+  margin-bottom: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.bills-details dd {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.bills-detail-secondary {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .bills-table,
+  .bills-table tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  .bills-table thead {
+    display: none;
+  }
+
+  .bills-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px 0;
+    border-bottom: 1px solid var(--panel-border-soft);
+  }
+
+  .bills-table td {
+    display: block;
+    min-width: 0;
+    max-width: none;
+    padding: 8px 12px;
+    border-bottom: none;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .bills-table td:first-child {
+    min-width: 0;
+  }
+
+  .bills-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-faint);
+    font: 11px var(--font-sans, sans-serif);
+  }
+
+  .bills-table .bills-detail-row {
+    display: block;
+  }
+
+  .bills-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bills-page .search-input,
+  .bills-page .search-input input {
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 .bills-error-code {

@@ -239,6 +239,10 @@ export async function decideWithPin(id: string, decision: "approve" | "deny", pi
 export interface PaymentRow {
   id: string;
   key_id: string;
+  /** Key label supplied by the ledger API; the label does not prove which agent used the key. */
+  key_name?: string | null;
+  /** Optional caller-provided payment purpose, never inferred from a task or prompt. */
+  purpose?: string | null;
   url: string;
   host: string;
   method: string;

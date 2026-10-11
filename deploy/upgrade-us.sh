@@ -28,7 +28,9 @@ rollback() {
   MONEYSWITCH_IMAGE="$old_image" docker compose -p moneyswitch --env-file /opt/moneyswitch/config.env -f "$old_compose" up -d --no-build server
   echo "Upgrade failed; previous image restored. Backup: $backup" >&2
 }
-# Schema: this release adds migration 0007_wallet_lifecycle.sql, which is ADDITIVE ONLY (two nullable columns on wallet_meta, a new
+# This release adds 0012_payment_purpose.sql: one nullable payments.purpose column. Old rows stay NULL and the previous image
+# ignores the extra column. No wallet, administrator, existing key or payment identity is rewritten. The existing rollback remains
+# compatible with the additive migration. Earlier 0007_wallet_lifecycle.sql was also ADDITIVE ONLY (two nullable columns on wallet_meta, a new
 # wallet_retirements table and its index; nothing is dropped, renamed or rewritten). It runs when the new image first starts, and
 # restoring the old image in rollback() below stays safe, because the old image:
 #   - tracks applied migrations by file name in __migrations and ignores names it does not know, so it neither re-applies 0007

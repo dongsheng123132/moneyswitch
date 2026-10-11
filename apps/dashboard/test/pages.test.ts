@@ -601,7 +601,7 @@ describe("Bills page", () => {
     assert.deepEqual(rows.map((r) => BillsModule.chargedOf(r as never)), ["yes", "no", "maybe", "maybe"]);
   });
 
-  it("one row per payment with time, key, amount, URL, chain, transaction and Charged yes / no / maybe", () => {
+  it("one row per payment with time, key, amount, host, chain and Charged yes / no / maybe; audit details start closed", () => {
     const html = render(
       h(BillsModule.BillsTable, {
         payments: rows as never,
@@ -609,14 +609,15 @@ describe("Bills page", () => {
         chainLabels: new Map([["eip155:10143", "Monad Testnet"], ["eip155:84532", "Base Sepolia"]]),
       })
     );
-    for (const col of [en.bills.colTime, en.bills.colKey, en.bills.colAmount, en.bills.colUrl, en.bills.colChain, en.bills.colTx, en.bills.colCharged]) {
+    for (const col of [en.bills.colTime, en.bills.colKey, en.bills.colAmount, en.bills.colPurpose, en.bills.colUrl, en.bills.colChain, en.bills.colCharged, en.bills.colDetails]) {
       assert.ok(html.includes(`>${col}<`), col);
     }
     assert.deepEqual([...html.matchAll(/data-charged="(\w+)"/g)].map((m) => m[1]), ["yes", "no", "maybe", "maybe"]);
     assert.ok(html.includes("Codex"));
-    assert.ok(html.includes("api.example.com:443/paid"));
+    assert.ok(html.includes("api.example.com:443"));
+    assert.ok(!html.includes("/paid?q=1"), "private request paths are absent from the collapsed DOM");
     assert.ok(html.includes("Monad Testnet") && html.includes("Base Sepolia"), "the chain is named, not its CAIP-2 id");
-    assert.ok(html.includes("0xabababab"), "the settled payment shows its transaction");
+    assert.ok(!html.includes("0xabababab"), "transaction details are mounted on demand");
     assert.ok(html.includes("PAYMENT_REJECTED") && html.includes("TIMEOUT_AFTER_PAYMENT"), "the reason stays visible next to a no / maybe");
     assert.ok(html.includes(esc(en.bills.chargedMaybeHint)), "a maybe is explained");
   });
@@ -656,25 +657,26 @@ describe("Bills page", () => {
     assert.equal(render(h(BillsModule.BillsRenderCap, { shown: rows.length, matching: rows.length })), "");
   });
 
-  it("the CSV keeps its original columns in order and ends with pay_to, method, approval_id, network_kind", () => {
+  it("an explicit full CSV export keeps its original columns in order and appends purpose, asset and status", () => {
     const csv = BillsModule.billsCsv(
       [
         payment("paid", "settled", { approval_id: "appr-1", network_kind: "testnet" }),
         payment("refused", "failed", { error_code: "PAYMENT_REJECTED", network: "eip155:143", network_kind: "mainnet" }),
         payment("odd", "settled", { network: "eip155:999" }),
       ] as never,
-      new Map([["key-1", "Codex"]])
+      new Map([["key-1", "Codex"]]),
+      true
     );
     const [head, first, second, third] = csv.split("\n");
-    assert.equal(head, "time,key_id,key_name,host,url,network,amount,charged,tx_hash,error_code,pay_to,method,approval_id,network_kind");
+    assert.equal(head, "time,key_id,key_name,host,url,network,amount,charged,tx_hash,error_code,pay_to,method,approval_id,network_kind,purpose,asset,status");
     assert.ok(first.startsWith("2026-10-04T12:00:00.000Z,key-1,Codex,api.example.com:443,https://api.example.com/paid?q=1,eip155:10143,0.01,yes,0x"), first);
-    assert.ok(first.endsWith(",,0x000000000000000000000000000000000000dEaD,GET,appr-1,testnet"), first);
-    assert.ok(second.endsWith(",PAYMENT_REJECTED,0x000000000000000000000000000000000000dEaD,GET,,mainnet"), second);
-    assert.ok(third.endsWith(",0x000000000000000000000000000000000000dEaD,GET,,"), "a chain the server does not know: the column is empty, never guessed");
+    assert.ok(first.endsWith(",,0x000000000000000000000000000000000000dEaD,GET,appr-1,testnet,,0xusdc,settled"), first);
+    assert.ok(second.endsWith(",PAYMENT_REJECTED,0x000000000000000000000000000000000000dEaD,GET,,mainnet,,0xusdc,failed"), second);
+    assert.ok(third.endsWith(",0x000000000000000000000000000000000000dEaD,GET,,,,0xusdc,settled"), "a chain the server does not know: the column is empty, never guessed");
   });
 
   it("the CSV does not hand a spreadsheet a formula: a key name or URL that starts with = + - @ is written as text", () => {
-    const csv = BillsModule.billsCsv([payment("p", "settled", { url: "@evil.example/x" })] as never, new Map([["key-1", "=1+1"]]));
+    const csv = BillsModule.billsCsv([payment("p", "settled", { url: "@evil.example/x" })] as never, new Map([["key-1", "=1+1"]]), true);
     const [, line] = csv.split("\n");
     assert.ok(line.startsWith("2026-10-04T12:00:00.000Z,key-1,'=1+1,api.example.com:443,'@evil.example/x,eip155:10143,0.01,yes,"), line);
   });

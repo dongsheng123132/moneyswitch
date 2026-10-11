@@ -195,6 +195,10 @@ export interface PaidFetchInput {
    */
   body?: unknown;
   maxPrice?: bigint;
+  /** When supplied, this exact CAIP-2 chain is required: never fall back to another offer. */
+  network?: string;
+  /** Optional caller-provided audit note; not a verified task or the full prompt. */
+  purpose?: string;
   approvalId?: string | null;
 }
 
@@ -379,7 +383,11 @@ export async function performPaidFetch(
   } catch {
     // the key is gone or its chain is broken: the row we were given decides here, and the policy engine reports the rest when it reserves
   }
-  const networks = typeChain ? getEnabledNetworksForChain(typeChain) : getEnabledNetworksFor(key.networkMode);
+  const allowedNetworks = typeChain ? getEnabledNetworksForChain(typeChain) : getEnabledNetworksFor(key.networkMode);
+  if (input.network !== undefined && !allowedNetworks.some((n) => n.caip2 === input.network)) {
+    throw new MoneySwitchError("UNSUPPORTED_PAYMENT", "The requested payment network is not enabled for this key; no other chain will be used");
+  }
+  const networks = input.network === undefined ? allowedNetworks : allowedNetworks.filter((n) => n.caip2 === input.network);
   let network = getActiveNetwork();
   const { probeMs, paidMs } = resolvePaidFetchTimeouts();
   let paymentId: string | null = null;
@@ -614,6 +622,7 @@ export async function performPaidFetch(
           host: input.host,
           method: input.method,
           body: input.body,
+          purpose: input.purpose,
           network: ctx.selectedRequirements.network,
           asset: ctx.selectedRequirements.asset,
           payTo: ctx.selectedRequirements.payTo,

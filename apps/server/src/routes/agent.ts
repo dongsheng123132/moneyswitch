@@ -98,6 +98,9 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         url: p.url,
         method: p.method,
         network: p.network,
+        purpose: p.purpose,
+        asset: p.asset,
+        pay_to: p.payTo,
         amount: formatMicrosToUsdc(p.amount),
         status: p.status,
         tx_hash: p.txHash,
@@ -117,6 +120,8 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
       body?: unknown;
       max_price?: string;
       approval_id?: string;
+      network?: string;
+      purpose?: string;
     };
 
     // `charged` is mandatory on every envelope (CONTRACT): "yes" a settlement
@@ -153,7 +158,15 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
     }
 
     // A key tied to one kind of chain says so: the seller may accept only the other kind (SPEC.md §6).
-    function unsupportedReason(): { reason?: string } {
+    function unsupportedReason(error: MoneySwitchError): { reason?: string } {
+      if (body.network !== undefined) {
+        // Only our typed payment refusal reaches here. Keep its diagnostic
+        // reason so an Agent can distinguish a required chain from fallback.
+        const detail = error.message.startsWith(`${error.code}: `)
+          ? error.message.slice(error.code.length + 2).replace(/[\x00-\x1F\x7F]/g, " ").slice(0, 300)
+          : "The seller does not offer a supported payment on this chain; no other chain was used.";
+        return { reason: `Requested network ${body.network}: ${detail}` };
+      }
       try {
         const chain = getKeyChain(ctx.db, key.id);
         const enabled = getEnabledNetworks();
@@ -177,6 +190,24 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         return { remaining_today: "0", remaining_total: "0" };
       }
     }
+
+    // Validate optional audit annotations and explicit chain selection before
+    // host approval or any upstream request. Never infer a purpose from body.
+    if (body?.purpose !== undefined && (
+      typeof body.purpose !== "string" || Array.from(body.purpose).length > 160
+    )) {
+      return reply.status(400).send(envelope("error", "FORBIDDEN", "no", {
+        reason: "purpose must be a string of at most 160 characters; omit it to leave no annotation.",
+      }));
+    }
+    if (body?.network !== undefined && (
+      typeof body.network !== "string" || !/^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$/.test(body.network)
+    )) {
+      return reply.status(400).send(envelope("error", "FORBIDDEN", "no", {
+        reason: "network must be a CAIP-2 identifier, for example eip155:84532 or solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1.",
+      }));
+    }
+    const purpose = body?.purpose?.trim() || undefined;
 
     let url: URL;
     try {
@@ -231,6 +262,8 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         body: body.body,
         maxPrice,
         approvalId,
+        network: body.network,
+        purpose,
       }, { balanceReader: ctx.balanceReader });
       chargedSoFar = result.charged;
 
@@ -327,7 +360,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         }
         const limit = limitFields(e);
         if (DENIED_CODES.has(e.code)) {
-          return reply.send(envelope("denied", e.code, "no", { limit, ...(e.code === "UNSUPPORTED_PAYMENT" ? unsupportedReason() : {}) }));
+          return reply.send(envelope("denied", e.code, "no", { limit, ...(e.code === "UNSUPPORTED_PAYMENT" ? unsupportedReason(e) : {}) }));
         }
         return reply.send(envelope("error", e.code, "no", { limit }));
       }

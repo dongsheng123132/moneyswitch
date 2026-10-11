@@ -252,12 +252,15 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get("/v1/admin/usage", { preHandler: adminGuard }, async (_req, reply) => {
     const { rows, truncated, total } = listPaymentsForBills(ctx.db);
+    const keyNames = new Map(listMoneyKeys(ctx.db).map((k) => [k.id, k.name]));
     return reply.send({
       truncated,
       total,
       payments: rows.map((p) => ({
         id: p.id,
         key_id: p.keyId,
+        key_name: keyNames.get(p.keyId) ?? null,
+        purpose: p.purpose,
         url: p.url,
         host: p.host,
         method: p.method,

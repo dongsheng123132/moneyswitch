@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
-import { decodePaymentSignatureHeader, encodePaymentRequiredHeader } from "@x402/core/http";
+import { decodePaymentSignatureHeader, encodePaymentRequiredHeader, encodePaymentResponseHeader } from "@x402/core/http";
 import { openDb, type MoneySwitchDb } from "@moneyswitch/db";
 import {
   createMoneyKey,
@@ -22,7 +22,7 @@ import { LocalWalletDriver } from "@moneyswitch/wallet";
 import type Database from "better-sqlite3";
 import { performPaidFetch, type PaidFetchInput, type SignerSource } from "../src/client.js";
 import { createBalanceReader, type KnownBalanceReader } from "../src/balance.js";
-import { BASE_SEPOLIA, TESTNET, type NetworkConfig } from "../src/networks.js";
+import { BASE_SEPOLIA, SOLANA_DEVNET, TESTNET, type NetworkConfig } from "../src/networks.js";
 
 /**
  * SPEC.md §6, "pick the chain the wallet can actually pay on": with several chains the seller accepts, the first one in
@@ -39,6 +39,7 @@ interface Offer {
   network: NetworkConfig;
   amount?: string;
   asset?: string;
+  payTo?: string;
   extra?: Record<string, unknown>;
 }
 
@@ -60,6 +61,8 @@ describe("performPaidFetch picks the chain by balance", () => {
   let whilePaying: (() => Promise<void>) | null = null;
   /** The seller cuts the connection of a signed payment instead of answering: we never learn whether it was settled. */
   let cutPaid = false;
+  /** Selected success cases return an explicit mock receipt; other tests keep the original missing-receipt behaviour. */
+  let settlePaid = false;
 
   /** The fake chain: caip2 -> balance, null = the RPC does not answer, no entry = same as null. */
   let balances = new Map<string, bigint | null>();
@@ -93,6 +96,14 @@ describe("performPaidFetch picks the chain by balance", () => {
           return;
         }
         if (paid || free) {
+          if (paid && settlePaid) {
+            const paidNetwork = (decodePaymentSignatureHeader(signature) as { accepted: { network: string } }).accepted.network;
+            res.setHeader("PAYMENT-RESPONSE", encodePaymentResponseHeader({
+              success: true, network: paidNetwork, payer: wallet.getAddressForNetwork(paidNetwork),
+              transaction: paidNetwork.startsWith("solana:") ? "1".repeat(64) : "0x" + "11".repeat(32),
+              extra: { mock: true },
+            } as never));
+          }
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ delivered: true }));
           return;
@@ -106,7 +117,7 @@ describe("performPaidFetch picks the chain by balance", () => {
             network: o.network.caip2,
             amount: o.amount ?? PRICE.toString(),
             asset: o.asset ?? o.network.usdcAddress,
-            payTo: PAY_TO,
+            payTo: o.payTo ?? PAY_TO,
             maxTimeoutSeconds: 60,
             extra: { name: o.network.usdcDomainName, version: o.network.usdcDomainVersion, ...o.extra },
           })),
@@ -140,6 +151,7 @@ describe("performPaidFetch picks the chain by balance", () => {
     seen = [];
     whilePaying = null;
     cutPaid = false;
+    settlePaid = false;
     balances = new Map();
     reads = [];
     enable(TESTNET, BASE_SEPOLIA);
@@ -164,7 +176,7 @@ describe("performPaidFetch picks the chain by balance", () => {
     }).row;
   const fetchPaid = (
     readBalance: KnownBalanceReader | undefined = reader,
-    extra: Pick<PaidFetchInput, "maxPrice" | "approvalId" | "url" | "method"> = {},
+    extra: Pick<PaidFetchInput, "maxPrice" | "approvalId" | "url" | "method" | "network" | "purpose"> = {},
     source: SignerSource = wallet
   ) =>
     performPaidFetch(db, sqlite, key, source, { url: `${sellerUrl}/item`, host: sellerHost, method: "GET", ...extra }, { balanceReader: readBalance });
@@ -175,6 +187,118 @@ describe("performPaidFetch picks the chain by balance", () => {
       () => null,
       (e: unknown) => e
     );
+
+  it("requires the user-specified Base network even when Monad has funds, and preserves optional purpose", async () => {
+    settlePaid = true;
+    offers = [{ network: TESTNET }, { network: BASE_SEPOLIA }];
+    balances.set(TESTNET.caip2, PRICE * 10n);
+    balances.set(BASE_SEPOLIA.caip2, PRICE * 10n);
+    const result = await fetchPaid(reader, { network: BASE_SEPOLIA.caip2, purpose: "API data lookup" });
+    expect(result.payment).toMatchObject({ network: BASE_SEPOLIA.caip2, mock: true });
+    expect(result.charged).toBe("yes");
+    expect(paidOn()).toEqual([BASE_SEPOLIA.caip2]);
+    expect(listHistoryForKey(db, key.id, 1)[0]).toMatchObject({ network: BASE_SEPOLIA.caip2, purpose: "API data lookup", status: "settled" });
+  });
+
+  it("does not pay Monad when the explicitly required Base chain is not offered", async () => {
+    offers = [{ network: TESTNET }];
+    balances.set(TESTNET.caip2, PRICE * 10n);
+    const leased = vi.spyOn(wallet, "leaseSigner");
+    await expect(fetchPaid(reader, { network: BASE_SEPOLIA.caip2 })).rejects.toMatchObject({ code: "UNSUPPORTED_PAYMENT" });
+    expectNothingHappened(leased);
+  });
+
+  it("does not fall back when the required Base balance is insufficient", async () => {
+    offers = [{ network: TESTNET }, { network: BASE_SEPOLIA }];
+    balances.set(TESTNET.caip2, PRICE * 10n);
+    balances.set(BASE_SEPOLIA.caip2, 0n);
+    const leased = vi.spyOn(wallet, "leaseSigner");
+    await expect(fetchPaid(reader, { network: BASE_SEPOLIA.caip2 })).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS" });
+    expectNothingHappened(leased);
+  });
+
+  it("refuses a requested chain that is not allowed before probing any seller", async () => {
+    const leased = vi.spyOn(wallet, "leaseSigner");
+    await expect(fetchPaid(reader, { network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" })).rejects.toMatchObject({ code: "UNSUPPORTED_PAYMENT" });
+    expect(seen).toHaveLength(0);
+    expectNothingHappened(leased);
+  });
+
+  it("pins Solana Devnet among funded EVM offers, uses its address, and preserves purpose", async () => {
+    settlePaid = true;
+    enable(TESTNET, BASE_SEPOLIA, SOLANA_DEVNET);
+    const sponsor = "CKPKJWNdJEqa81x7CkZ14BVPiY6y16Sxs7owznqtWYp5";
+    offers = [
+      { network: TESTNET },
+      { network: BASE_SEPOLIA },
+      { network: SOLANA_DEVNET, payTo: sponsor, extra: { feePayer: sponsor } },
+    ];
+    for (const network of [TESTNET, BASE_SEPOLIA, SOLANA_DEVNET]) balances.set(network.caip2, PRICE * 10n);
+    const originalFetch = globalThis.fetch;
+    const mintData = Buffer.alloc(82);
+    mintData[44] = 6;
+    mintData[45] = 1;
+    const rpcMethods: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const target = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (target.startsWith(sellerUrl + "/")) return originalFetch(input, init);
+      if (target !== SOLANA_DEVNET.rpcUrl) throw new Error("Unexpected external test request");
+      const request = JSON.parse(String(init?.body));
+      rpcMethods.push(request.method);
+      const result = request.method === "getAccountInfo"
+        ? { context: { slot: 1 }, value: { data: [mintData.toString("base64"), "base64"], executable: false,
+            lamports: 1, owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", rentEpoch: 1, space: 82 } }
+        : request.method === "getLatestBlockhash"
+          ? { context: { slot: 1 }, value: { blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 100 } }
+          : null;
+      if (!result) throw new Error(`Unexpected Solana RPC: ${request.method}`);
+      return Response.json({ jsonrpc: "2.0", id: request.id, result });
+    });
+    const evmLease = vi.spyOn(wallet, "leaseSigner");
+    const svmLease = vi.spyOn(wallet, "leaseSvmSigner");
+    const result = await fetchPaid(reader, { network: SOLANA_DEVNET.caip2, purpose: "Devnet payment verification" });
+
+    expect(result.payment).toMatchObject({ amount: "0.01", network: SOLANA_DEVNET.caip2, mock: true });
+    expect(paidOn()).toEqual([SOLANA_DEVNET.caip2]);
+    expect(reads).toEqual([{ address: wallet.getSolanaAddress(), network: SOLANA_DEVNET.caip2 }]);
+    expect(evmLease).not.toHaveBeenCalled();
+    expect(svmLease).toHaveBeenCalledTimes(1);
+    expect(rpcMethods).toContain("getAccountInfo");
+    expect(rpcMethods).toContain("getLatestBlockhash");
+    expect(result.charged).toBe("yes");
+    expect(listHistoryForKey(db, key.id, 50)).toHaveLength(1);
+    expect(listHistoryForKey(db, key.id, 1)[0]).toMatchObject({
+      network: SOLANA_DEVNET.caip2, amount: PRICE, purpose: "Devnet payment verification", status: "settled",
+    });
+    expect(usedTotal(db, key.id)).toBe(PRICE);
+    expect(wallet.inFlight).toBe(0);
+  });
+
+  it("does not fall back to funded EVM chains when pinned Solana Devnet has no USDC", async () => {
+    enable(TESTNET, BASE_SEPOLIA, SOLANA_DEVNET);
+    const sponsor = "CKPKJWNdJEqa81x7CkZ14BVPiY6y16Sxs7owznqtWYp5";
+    offers = [
+      { network: BASE_SEPOLIA },
+      { network: TESTNET },
+      { network: SOLANA_DEVNET, payTo: sponsor, extra: { feePayer: sponsor } },
+    ];
+    balances.set(TESTNET.caip2, PRICE * 10n);
+    balances.set(BASE_SEPOLIA.caip2, PRICE * 10n);
+    balances.set(SOLANA_DEVNET.caip2, 0n);
+    const originalFetch = globalThis.fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const target = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (!target.startsWith(sellerUrl + "/")) throw new Error("No Solana RPC is needed before insufficient-funds refusal");
+      return originalFetch(input, init);
+    });
+    const evmLease = vi.spyOn(wallet, "leaseSigner");
+    const svmLease = vi.spyOn(wallet, "leaseSvmSigner");
+    await expect(fetchPaid(reader, { network: SOLANA_DEVNET.caip2 })).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS" });
+    expect(reads).toEqual([{ address: wallet.getSolanaAddress(), network: SOLANA_DEVNET.caip2 }]);
+    expectNothingHappened(evmLease);
+    expect(svmLease).not.toHaveBeenCalled();
+    expect(seen).toEqual([{ paid: false, paidNetwork: null }]);
+  });
 
   /** What must be true when nothing may leave the wallet: no signer lease, no payments row, no budget touched, nothing paid. */
   function expectNothingHappened(leased: { mock: { calls: unknown[] } }) {

@@ -60,6 +60,8 @@ export const payments = sqliteTable("payments", {
   network: text("network").notNull(),
   asset: text("asset").notNull(),
   payTo: text("pay_to").notNull(),
+  /** Optional Agent-supplied coarse purpose, never automatically collected from a task or request body. */
+  purpose: text("purpose"),
   amount: integer("amount").notNull(),
   status: text("status", { enum: ["reserved", "settled", "failed", "unknown"] }).notNull(),
   txHash: text("tx_hash"),

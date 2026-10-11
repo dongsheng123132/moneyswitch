@@ -35,7 +35,11 @@ When a request returns HTTP 402, or the user asks you to buy or call a paid API,
 | `headers` | optional object of headers for the seller |
 | `body` | optional. A JSON object/array is sent as JSON (`content-type: application/json` unless you set one); a string is sent verbatim |
 | `max_price` | optional. Highest USDC price you accept, e.g. `"0.05"` |
+| `network` | optional. Exact CAIP-2 chain required by the user; no fallback to another chain |
+| `purpose` | optional self-reported note, max 160 characters, visible to administrators. Omit private projects, prompts and personal data |
 | `approval_id` | only when resending after the user approved a price (`kind` `payment`); not needed after a new host was approved |
+
+For a user-specified chain, pass its enabled `network` from `/v1/status` (Base Sepolia: `eip155:84532`; Solana Devnet: `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`). Require a matching seller quote; never switch chains. `/x402-testnet/check` tests Monad only.
 
 ```bash
 curl -sS --max-time 120 "$MONEY_API_BASE/v1/fetch" \
