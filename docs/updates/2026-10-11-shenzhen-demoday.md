@@ -14,7 +14,9 @@ The latest build is deployed on our US server. Agents use a MoneyKey with spendi
 
 We completed **0.01 test-USDC payments on both Base Sepolia and Solana Devnet**: [Base Sepolia transaction](https://sepolia.basescan.org/tx/0x095a04dec1dbcc55e87c96abb69b0c0312a0c2606d5a3f8fa635deb71c7ea633) and [Solana Devnet transaction](https://explorer.solana.com/tx/3aBQPBbW2thr3k7WMv4UkFXcDgNDhfLvKv7QVLDFEcaR8PJYEMPmquZcf79bTt18RSz6s9TVdU3UvyL8NBxpQBCu?cluster=devnet). The Solana payment is settled and independently verified as finalized on-chain. Test tokens have no monetary value; Solana mainnet payments remain disabled.
 
-The deployed billing table makes each payment traceable by time, Agent/Key label, USDC amount, network and charge status. On-demand details show the recipient, request and chain transaction; mainnet money and testnet tokens have separate totals. An agent may add an optional purpose note, or leave it blank. Notes are self-reported, not verified task records. Purposes start hidden, the overview shows only request hosts, and CSV exports omit purposes and full URLs unless explicitly included. These display choices do not restrict administrator access to saved records.
+The deployed billing page puts human review first: separate totals for confirmed mainnet payments and testnet payments, a distinct pending-review notice, and clear amounts, Agent/Key labels and status in each row. On-demand details show the recipient, request and chain transaction. The Key page now presents budget cards with usage meters, active/inactive filters, search and direct links to each Key's bills; the mobile layout keeps amounts readable. This update adds no database migrations or new dependencies.
+
+An agent may add an optional purpose note, or leave it blank. Notes are self-reported, not verified task records. Purposes start hidden, the overview shows only request hosts, and CSV exports omit purposes and full URLs unless explicitly included. These display choices do not restrict administrator access to saved records.
 
 Developers are welcome to test at [app.moneyswitch.dev/keys](https://app.moneyswitch.dev/keys) (administrator sign-in required). [Source and self-hosting instructions](https://github.com/dongsheng123132/moneyswitch). We'd appreciate feedback on key setup, network selection, approvals, budgets and billing.
 
@@ -26,7 +28,9 @@ Developers are welcome to test at [app.moneyswitch.dev/keys](https://app.moneysw
 
 已经在 **Base Sepolia 和 Solana Devnet 各真实完成一笔 0.01 测试 USDC 支付**：[Base Sepolia 交易](https://sepolia.basescan.org/tx/0x095a04dec1dbcc55e87c96abb69b0c0312a0c2606d5a3f8fa635deb71c7ea633)、[Solana Devnet 交易](https://explorer.solana.com/tx/3aBQPBbW2thr3k7WMv4UkFXcDgNDhfLvKv7QVLDFEcaR8PJYEMPmquZcf79bTt18RSz6s9TVdU3UvyL8NBxpQBCu?cluster=devnet)。Solana 付款已结算，并通过独立链上核验确认最终完成。测试币没有货币价值，Solana 主网支付仍未启用。
 
-账单表格也已上线：能按时间、Agent/Key 名称、USDC 金额、公链和扣款状态查看开销，展开详情可查收款地址、请求与链上交易；主网真钱和测试币分别汇总。Agent 可以选填用途，也可以不填，用途是自述备注，不是已核实的任务事实。用途默认隐藏，概览只显示请求域名；CSV 默认省略用途和完整请求地址，主动选择才包含。这些展示选择不限制管理员读取已保存记录。
+这次把账单做成了更适合人审核的支出账本：主网与测试网的已付款金额分别汇总，待核对支出单独提醒；明细先展示金额、Agent/Key 与状态，展开后再看收款地址、请求和链上交易。Key 页面改成预算卡片，能直观看到额度占用，支持启用/停用筛选、搜索和直达对应账单，手机也能读清金额。本轮没有新增数据库迁移或依赖。
+
+Agent 可以选填用途，也可以不填，用途是自述备注，不是已核实的任务事实。用途默认隐藏，概览只显示请求域名；CSV 默认省略用途和完整请求地址，主动选择才包含。这些展示选择不限制管理员读取已保存记录。
 
 欢迎通过 [app.moneyswitch.dev/keys](https://app.moneyswitch.dev/keys) 测试（需要管理员登录）。[源码与自托管文档](https://github.com/dongsheng123132/moneyswitch)。欢迎反馈 Key 配置、选链、审批、额度和账单体验。
 
@@ -40,12 +44,13 @@ Developers are welcome to test at [app.moneyswitch.dev/keys](https://app.moneysw
 
 ## 维护区：本次状态（不属于公开正文）
 
-- 美国服务器当前源码与发布镜像对应 `4b29387`；包含 `69cc9cb` 的账单表格、可选用途和严格 `network` 参数，以及 Solana RPC 修复。
-- 部署前后比对一致：加密钱包、管理员凭据、20 把 Key 和部署时的 7 条付款记录完整保留。回滚备份：`/opt/moneyswitch/backups/20261011-122707`；公网 HTTPS 页面与 6 项资源哈希匹配当前发布包。
-- Windows/Linux 发布包烟测各 29 项通过；此次修复的 x402 131 项和 net 38 项回归通过。
+- 美国服务器当前源码与发布镜像对应 `c789255`，容器 healthy；包含账单审核概览、Key 预算卡片、可选用途、严格 `network` 参数和 Solana RPC 修复。本轮只更新界面及付款状态判定，没有新增数据库迁移或依赖。
+- 部署前后比对一致：加密钱包、解锁文件、管理员凭据、21 把 Key 和 8 条付款记录完整保留。回滚备份：`/opt/moneyswitch/backups/20261011-130757`；公网 `/keys`、`/bills` HTML 与 6 项资源哈希匹配当前发布包。
+- 完整本地构建、回归通过；最终 x402 138 项、Dashboard 232 项通过，Windows/Linux 发布包烟测各 29 项通过。视觉验收使用真实 App SSR 和合成数据，桌面 1440px、手机 390/360px 的金额、完整名称、长 URL 和原生操作菜单无横向溢出；静态截图不宣称 React 交互已通过。
 - Base Sepolia 已实际支付 `0.01` 测试 USDC；交易哈希：`0x095a04dec1dbcc55e87c96abb69b0c0312a0c2606d5a3f8fa635deb71c7ea633`。公开正文只放交易链接，不抄完整钱包地址或余额。
 - Solana Devnet 已实际支付 `0.01` 测试 USDC，账单状态 `settled`；独立 RPC 返回 `finalized`，slot `509781446`。交易：`3aBQPBbW2thr3k7WMv4UkFXcDgNDhfLvKv7QVLDFEcaR8PJYEMPmquZcf79bTt18RSz6s9TVdU3UvyL8NBxpQBCu`，用途自述为 `Solana Devnet connectivity test`。
 - 已修复 Node 原生 fetch 自动设置请求长度与 SDK 手动 `Content-Length` 重复的问题；通过标准 pnpm 小补丁让原生 fetch 计算 RPC 请求长度。先前的 `failed`、`unknown` 付款记录原样保留，本次成功不会把旧未知记录自动改成成功。
+- 新请求明确在签名前失败时标为失败并释放预算；签名可能已生成、证据保存失败或已开始付款请求时仍保留待核对与预算。SDK 重试超时不会释放先前付款的预算。北京时间 11:52:22 的旧 Solana 请求仍为 `unknown/UPSTREAM_ERROR`，缺少可验证证据；12:28:13 的成功付款是另一条记录。本轮部署没有再付款。
 - Solana 主网与 Devnet 使用同一派生地址，但美国部署没有开启 Solana 主网支付；无需为了主网额外生成另一地址。
 - Colosseum 浏览器控制所需 trusted Node 启动失败，当前拿不到登录会话；这份草稿**尚未提交**，未代发，等待可用登录会话或用户人工发布。
 - 后续以实时部署和账本核验为准；下方历史金额、记录数量、Key 数量与制品哈希只描述上一版验收时点。
