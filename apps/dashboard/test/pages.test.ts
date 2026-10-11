@@ -618,7 +618,7 @@ describe("Bills page", () => {
     assert.ok(!html.includes("/paid?q=1"), "private request paths are absent from the collapsed DOM");
     assert.ok(html.includes("Monad Testnet") && html.includes("Base Sepolia"), "the chain is named, not its CAIP-2 id");
     assert.ok(!html.includes("0xabababab"), "transaction details are mounted on demand");
-    assert.ok(html.includes("PAYMENT_REJECTED") && html.includes("TIMEOUT_AFTER_PAYMENT"), "the reason stays visible next to a no / maybe");
+    assert.ok(!html.includes("PAYMENT_REJECTED") && !html.includes("TIMEOUT_AFTER_PAYMENT"), "technical errors belong in the audit details, not the overview");
     assert.ok(html.includes(esc(en.bills.chargedMaybeHint)), "a maybe is explained");
   });
 
@@ -703,16 +703,20 @@ describe("Bills page", () => {
       assert.ok(rowsHtml[2].includes("eip155:999") && !rowsHtml[2].includes("data-network-kind"));
     });
 
-    it("the totals are one per kind and never one sum: 2.50 + 0.50 real USDC, 0.01 test USDC (a refused payment counts for neither)", () => {
+    it("paid totals contain confirmed payments only: 2.50 real USDC and 0.01 test USDC; the unknown 0.50 is shown separately", () => {
       assert.deepEqual(BillsModule.billsTotalsByKind([mainnetPaid, mainnetMaybe, testnetPaid, testnetRefused] as never), [
-        { kind: "mainnet", total: "3" },
+        { kind: "mainnet", total: "2.5" },
         { kind: "testnet", total: "0.01" },
       ]);
+      assert.deepEqual(BillsModule.billsPendingTotalsByKind([mainnetPaid, mainnetMaybe, testnetPaid, testnetRefused] as never), [{ kind: "mainnet", total: "0.5" }]);
       const html = render(h(BillsModule.BillsSummary, { payments: [mainnetPaid, mainnetMaybe, testnetPaid, testnetRefused] as never }));
       assert.ok(html.includes(esc(en.bills.summaryTotalMainnet)) && html.includes(esc(en.bills.summaryTotalTestnet)));
-      assert.ok(/data-total-kind="mainnet"[^]*?3 USDC/.test(html), html);
-      assert.ok(/data-total-kind="testnet"[^]*?0\.01 USDC/.test(html), html);
-      assert.ok(!html.includes("3.01"), "the two kinds are never added");
+      const mainnetCard = html.match(/<article[^>]*data-total-kind="mainnet"[^]*?<\/article>/)?.[0].replace(/<[^>]*>/g, "");
+      const testnetCard = html.match(/<article[^>]*data-total-kind="testnet"[^]*?<\/article>/)?.[0].replace(/<[^>]*>/g, "");
+      assert.ok(mainnetCard?.includes("2.5 USDC"), html);
+      assert.ok(testnetCard?.includes("0.01 USDC"), html);
+      assert.ok(/data-pending-kind="mainnet"[^]*?0\.5 USDC/.test(html), html);
+      assert.ok(!html.includes("3.01") && !html.includes("2.51"), "neither uncertainty nor test tokens are combined with paid real money");
       assert.ok(!html.includes(`>${en.bills.summaryTotal}<`), "no single total across kinds");
     });
 

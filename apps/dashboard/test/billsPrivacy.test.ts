@@ -52,6 +52,7 @@ const render = (element: Parameters<typeof renderToStaticMarkup>[0], lang: "en" 
   storage.set("moneyswitch_lang", lang);
   return renderToStaticMarkup(h(LangProvider, null, h(StaticRouter, { location: "/bills" }, element)));
 };
+const visibleText = (html: string) => html.replace(/<[^>]*>/g, "");
 const table = (payments: PaymentRow[], showPurpose = false) => render(h(Bills.BillsTable, {
   payments,
   keyNames: new Map([["key-research", "Old label"]]),
@@ -69,7 +70,7 @@ describe("bills: optional attribution and private audit details", () => {
     }
     assert.match(html, /aria-expanded="false"/);
     assert.ok(!html.includes('data-testid="bill-details"'));
-    assert.ok(html.includes("0.000001 USDC"), "a one-micro-USDC charge must not appear as zero");
+    assert.ok(visibleText(html).includes("0.000001 USDC"), "a one-micro-USDC charge must not appear as zero");
     assert.ok(html.includes("Solana Devnet") && html.includes('data-network-kind="testnet"'));
   });
 
@@ -97,8 +98,11 @@ describe("bills: optional attribution and private audit details", () => {
       payment({ id: "unknown", status: "unknown", tx_hash: null, error_code: "TIMEOUT_AFTER_PAYMENT" }),
     ]);
     assert.equal((html.match(/data-charged="maybe"/g) ?? []).length, 2);
-    assert.equal((html.match(/Being checked · do not pay again/g) ?? []).length, 2);
-    assert.ok(html.includes("TIMEOUT_AFTER_PAYMENT"));
+    assert.equal((html.match(/Do not pay again/g) ?? []).length, 4, "both pending rows have a visible reminder and an explanatory title");
+    assert.ok(!html.includes("TIMEOUT_AFTER_PAYMENT"), "raw transport errors stay out of the review overview");
+    assert.ok(visibleText(html).includes("Processing") && visibleText(html).includes("To check"));
+    const details = render(h(Bills.BillsPaymentDetails, { payment: payment({ status: "unknown", tx_hash: null, error_code: "TIMEOUT_AFTER_PAYMENT" }), keyName: "Research Agent", chainLabel: "Solana Devnet" }));
+    assert.ok(details.includes("TIMEOUT_AFTER_PAYMENT") && details.includes("Result unknown"), "the auditor can still inspect the actual error and unchanged status on demand");
   });
 
   it("a small Solana test payment remains visible and never adds to a real-money Base balance", () => {
@@ -109,7 +113,7 @@ describe("bills: optional attribution and private audit details", () => {
       { kind: "testnet", total: "0.000001" },
     ]);
     const html = render(h(Bills.BillsSummary, { payments: [mainPayment, testPayment] }));
-    assert.ok(html.includes("0.000001 USDC"));
+    assert.ok(visibleText(html).includes("0.000001 USDC"));
     assert.ok(!html.includes("2.000001"));
   });
 
@@ -136,8 +140,44 @@ describe("bills: optional attribution and private audit details", () => {
 
   it("every overview value has a localized field label for the narrow-screen record layout", () => {
     const html = table([payment()]);
-    for (const field of ["Time", "Agent / Key", "Amount", "Purpose", "Request host", "Chain", "Charged", "Details"]) {
+    for (const field of ["Time", "Agent / Key", "Amount", "Purpose", "Request host", "Network", "Status", "Details"]) {
       assert.ok(html.includes(`data-label="${field}"`), field);
     }
+  });
+
+  it("unknown and processing amounts are separately reviewable by network type and cannot inflate confirmed totals", () => {
+    const rows = [
+      payment({ id: "real-paid", network_kind: "mainnet", amount: "2", status: "settled" }),
+      payment({ id: "real-unknown", network_kind: "mainnet", amount: "7", status: "unknown" }),
+      payment({ id: "test-processing", amount: "8", status: "reserved" }),
+      payment({ id: "test-paid", amount: "0.000001" }),
+      payment({ id: "failed", network_kind: "mainnet", amount: "100", status: "failed" }),
+    ];
+    assert.deepEqual(Bills.billsTotalsByKind(rows), [{ kind: "mainnet", total: "2" }, { kind: "testnet", total: "0.000001" }]);
+    assert.deepEqual(Bills.billsPendingTotalsByKind(rows), [{ kind: "mainnet", total: "7" }, { kind: "testnet", total: "8" }]);
+    const html = render(h(Bills.BillsSummary, { payments: rows, onReview() {} }));
+    assert.ok(html.includes('data-testid="pending-summary"'));
+    assert.ok(visibleText(html).includes("2 payments to check"));
+    assert.ok(/data-pending-kind="mainnet"[^]*?7 USDC/.test(html));
+    assert.ok(/data-pending-kind="testnet"[^]*?8 USDC/.test(html));
+    assert.ok(!visibleText(html).includes("15 USDC") && !visibleText(html).includes("9 USDC"));
+    assert.ok(visibleText(html).includes("Review payments"));
+  });
+
+  it("a pending-only network shows zero confirmed spending and the payment remains unknown", () => {
+    const row = payment({ status: "unknown", amount: "0.01", tx_hash: null });
+    assert.deepEqual(Bills.billsTotalsByKind([row]), [{ kind: "testnet", total: "0" }]);
+    assert.deepEqual(Bills.billsPendingTotalsByKind([row]), [{ kind: "testnet", total: "0.01" }]);
+    assert.equal(row.status, "unknown");
+    const settled = render(h(Bills.BillsSummary, { payments: [payment()] }));
+    assert.ok(!settled.includes('data-testid="pending-summary"'));
+  });
+
+  it("status tabs expose actual record counts and let reviewers focus on the unresolved pair", () => {
+    const rows = [payment(), payment({ status: "unknown" }), payment({ status: "reserved" }), payment({ status: "failed" })];
+    const html = render(h(Bills.BillsStatusFilter, { payments: rows, value: "maybe", onChange() {} }));
+    const buttons = [...html.matchAll(/<button[^>]*data-status-filter="([^"]+)"[^>]*>([^]*?)<\/button>/g)];
+    assert.deepEqual(buttons.map((match) => [match[1], visibleText(match[2])]), [["all", "All payments4"], ["maybe", "To check2"], ["yes", "Paid1"], ["no", "Not charged1"]]);
+    assert.match(html, /aria-pressed="true" data-status-filter="maybe"/);
   });
 });
