@@ -46,7 +46,16 @@ The Node HTTP transport in Solana Kit 5.1.0 has a tracked pnpm patch at `patches
 - The SDK's mint RPC can stall. The caller deadline releases the lease, no signed payment is sent, and a late SDK operation cannot use the released signer.
 - A read-only probe of the real Devnet RPC returned genesis hash `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`. The configured mint was initialized, 82 bytes, owned by `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`, with 6 decimals, at slot 509626593.
 
-These tests do not prove a live USDC settlement. Before recording a Solana hackathon demo, fund a Devnet wallet, pay a compatible seller, inspect the full transaction on the Devnet explorer, then demonstrate a refused over-budget request and approval flow. Current Base/Monad demo videos do not demonstrate Solana.
+The offline tests and read-only probes above do not prove settlement. The external-seller verification below supplies a live transfer receipt; current Base/Monad demo videos still do not demonstrate a Solana approval or over-budget flow.
+
+### US external-seller verification, 2026-10-11
+
+Release `4b29387` paid `https://x402.org/protected` through the normal `/v1/fetch` route, pinning each test network and limiting each payment to 0.01 test USDC. The dedicated keys were revoked after verification. Both settled ledger rows contain the request, recipient, asset, network, transaction and optional connectivity-test purpose.
+
+- Base Sepolia: [0.01 USDC transaction](https://sepolia.basescan.org/tx/0x095a04dec1dbcc55e87c96abb69b0c0312a0c2606d5a3f8fa635deb71c7ea633), independently verified receipt success and matching USDC transfer, block `47961228`.
+- Solana Devnet: [0.01 USDC transaction](https://explorer.solana.com/tx/3aBQPBbW2thr3k7WMv4UkFXcDgNDhfLvKv7QVLDFEcaR8PJYEMPmquZcf79bTt18RSz6s9TVdU3UvyL8NBxpQBCu?cluster=devnet), independently verified finalized success and matching payer/recipient token-balance changes, slot `509781446`.
+
+Only testnet tokens were transferred. Solana mainnet payments remain disabled. Earlier unsuccessful attempts and their uncertain ledger rows were preserved; these successful receipts do not rewrite or resolve older unknown records.
 
 ### Isolated live-chain harness
 
@@ -76,4 +85,4 @@ Official sources: [x402 SVM implementation](https://github.com/x402-foundation/x
 
 ## Submission wording
 
-MoneySwitch is a self-hosted spending gateway for AI agents. Each agent gets a MoneyKey with budgets, approved domains and human approvals; signing keys stay on the owner's server. This branch extends the existing EVM x402 payment flow to Solana Devnet USDC using the official exact-SVM SDK and independent Ed25519 key derivation. Signed payment evidence survives restart, and uncertain charges remain reserved until matching finalized chain evidence resolves them. SDK integration and policy tests pass; a live funded Solana settlement demo is still pending. MagicBlock is not integrated.
+MoneySwitch is a self-hosted spending gateway for AI agents. Each agent gets a MoneyKey with budgets, approved domains and human approvals; signing keys stay on the owner's server. This branch extends the existing EVM x402 payment flow to Solana Devnet USDC using the official exact-SVM SDK and independent Ed25519 key derivation. Signed payment evidence survives restart, and uncertain charges remain reserved until matching finalized chain evidence resolves them. The US deployment completed real 0.01-test-USDC payments on both Base Sepolia and Solana Devnet, with independently verified chain evidence. Bills support optional purpose notes and on-demand transaction details. MagicBlock is not integrated.
