@@ -17,6 +17,26 @@ Use a testnet MoneyKey. The wallet page shows a separate Solana address, derived
 
 Fund that address's associated token account with Circle Devnet USDC, mint `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`. Balances in other token accounts do not count as spendable through this client. Use a compatible x402 v2 seller accepting `exact` on the configured Solana network, with a distinct fee sponsor in `extra.feePayer`. The MoneySwitch wallet cannot be the fee sponsor: SOL spending would otherwise bypass its USDC budget.
 
+## Select a chain and annotate a bill
+
+For a specific chain, `POST /v1/fetch` accepts `network` with the exact CAIP-2 identifier. A requested chain must be enabled for the key and quoted by the seller; insufficient funds or an unavailable offer never fall back to another chain. Base Sepolia uses `eip155:84532`; Solana Devnet uses `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`. The installation test at `/x402-testnet/check` remains Monad-only. Refresh an existing agent's MoneySwitch skill to learn the new fields; keep its existing server URL and MoneyKey secret.
+
+An optional `purpose` of at most 160 Unicode characters labels the expense. It is a caller's explanation, not verified agent identity or proof of a task. Omit private project names, complete prompts and employee information. Omission does not affect payment ability. Bills show the key label, time, host, network, amount and charge status; the full URL, recipient, asset and transaction are available in expanded details. Purposes and complete request URLs are excluded from the default CSV. Display hiding does not restrict administrator access to stored records.
+
+```json
+{
+  "url": "https://x402.org/protected",
+  "method": "GET",
+  "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+  "max_price": "0.01",
+  "purpose": "Public API connectivity test"
+}
+```
+
+The official test seller currently quotes both test networks. Authorize its canonical host `x402.org:443`, without a `www` prefix: the `www` URL redirects, and MoneySwitch intentionally does not forward a payment through a cross-host redirect. A missing receipt or uncertain charge is not permission to repeat payment.
+
+The Node HTTP transport in Solana Kit 5.1.0 has a tracked pnpm patch at `patches/@solana__rpc-transport-http@5.1.0.patch`. It lets `fetch` calculate the body byte length. With the deployed Node 22 native fetch and shared Undici 7.30 dispatcher, Kit's manual length was duplicated into `157, 157` and rejected before signing. Undici's duplicate-header validation stays intact. The patch covers Node ESM and CommonJS entries; `pnpm install --frozen-lockfile` applies it in source builds. Loopback tests cover ASCII and Unicode byte lengths, and the US isolated-wallet pipeline reached the paid-request guard without sending a payment. Revalidate this regression before removing the patch during a dependency upgrade.
+
 ## Verification
 
 - Offline SDK test constructs the real SPL transfer, independently verifies the payer's Ed25519 signature, adds a sponsor signature, and checks that reconciliation uses the full fee-payer transaction ID.

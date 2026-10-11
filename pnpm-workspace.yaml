@@ -6,3 +6,5 @@ allowBuilds:
   # synthesize node-gyp rebuild despite gypfile:false; use those binaries.
   better-sqlite3: false
   esbuild: true
+patchedDependencies:
+  '@solana/rpc-transport-http@5.1.0': patches/@solana__rpc-transport-http@5.1.0.patch

@@ -3,6 +3,7 @@
 // Bundle with esbuild --platform=node --format=esm --external:better-sqlite3
 // and the same createRequire banner used by apps/server-pkg/build.mjs.
 // No wallet, administrator token, migration, mainnet payment or automatic retry.
+// MONEYSWITCH_VERIFY_CASE=solana chooses one fixed Solana Devnet test; unset keeps both.
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -11,7 +12,7 @@ import { openDb } from "@moneyswitch/db";
 import { createMoneyKey, revokeMoneyKey, writeAudit, parseUsdcToMicros } from "@moneyswitch/core";
 
 const API = "http://127.0.0.1:4020";
-const SELLER = "https://www.x402.org/protected";
+const SELLER = "https://x402.org/protected";
 const TIMEOUT_MS = 360_000; // Includes the server's 30s probe + 300s paid deadline.
 const MAX_RESPONSE_BYTES = 128 * 1024;
 const CASES = [
@@ -92,12 +93,19 @@ function persistResult(file, result) {
 }
 
 /** Exported only to permit offline verification with an isolated DB and fake HTTP responses. */
-export async function verifyMultichain({ dataDir = "/data", fetchImpl = globalThis.fetch } = {}) {
+export async function verifyMultichain({ dataDir = "/data", fetchImpl = globalThis.fetch, mode } = {}) {
   const directory = path.resolve(dataDir);
   const databaseFile = path.join(directory, "moneyswitch.sqlite");
-  const markerFile = path.join(directory, "multichain-check-20261011.marker");
-  const resultFile = path.join(directory, "multichain-check-20261011.json");
   const result = { status: "error", key_id: null, checks: [], error: null };
+  if (mode !== undefined && mode !== "solana") {
+    result.error = error("INVALID_VERIFY_MODE", "MONEYSWITCH_VERIFY_CASE must be unset or solana; no marker or database was written.");
+    return result;
+  }
+  const cases = mode === "solana" ? [CASES[1]] : CASES;
+  const markerName = mode === "solana" ? "multichain-check-20261011-sol-only" : "multichain-check-20261011-canonical";
+  const markerFile = path.join(directory, `${markerName}.marker`);
+  const resultFile = path.join(directory, `${markerName}.json`);
+  const budget = BigInt(cases.length) * 10_000n;
   let markerOwned = false;
   let sqlite;
   let db;
@@ -126,18 +134,18 @@ export async function verifyMultichain({ dataDir = "/data", fetchImpl = globalTh
       const key = createMoneyKey(db, {
         name: "Multichain connectivity test 20261011",
         networkMode: "testnet",
-        totalBudget: 20_000n, dailyBudget: 20_000n, perRequestLimit: 10_000n,
-        approvalThreshold: null, allowedHosts: ["www.x402.org:443"],
+        totalBudget: budget, dailyBudget: budget, perRequestLimit: 10_000n,
+        approvalThreshold: null, allowedHosts: ["x402.org:443"],
         canDelegate: false, maxPaymentsPerMinute: 2,
         expiresAt: new Date(Date.now() + 20 * 60_000).toISOString(),
       });
-      writeAudit(db, "system", "multichain.check.started", { keyId: key.row.id, networks: CASES.map((c) => c.network) });
+      writeAudit(db, "system", "multichain.check.started", { keyId: key.row.id, networks: cases.map((c) => c.network) });
       return key;
     })();
     result.key_id = issued.row.id;
     plaintextKey = issued.plaintextKey; // Never included in output, a file or audit.
-    for (const test of CASES) {
-      const check = { network: test.network, status: "error", error: null, payment: emptyPayment() };
+    for (const test of cases) {
+      const check = { network: test.network, status: "error", code: null, charged: null, http_status: null, error: null, payment: emptyPayment() };
       result.checks.push(check);
       let paid;
       try {
@@ -154,9 +162,18 @@ export async function verifyMultichain({ dataDir = "/data", fetchImpl = globalTh
       }
       const body = paid.body;
       check.status = STATES.has(body.status) ? body.status : "error";
+      check.code = body.code == null ? null : errorCode(body.code);
+      check.charged = ["yes", "no", "maybe"].includes(body.charged) ? body.charged : null;
+      check.http_status = Number.isInteger(body.http_status) && body.http_status >= 100 && body.http_status <= 599 ? body.http_status : null;
       check.payment.tx_hash = transactionHash(body.payment?.tx_hash, test.network);
       check.payment.amount = amount(body.payment?.amount);
       // MoneySwitch's wire contract uses yes/no/maybe strings, not booleans.
+      if (body.charged === "no") {
+        check.status = "error";
+        const detail = reasonText(body.reason) ?? "No payment was made.";
+        check.error = error("UNPAID_RESPONSE", reasonText(`Unpaid response (upstream HTTP ${check.http_status ?? "unavailable"}): ${detail} Stop without retrying or switching chains.`));
+        break;
+      }
       if (paid.httpStatus !== 200 || body.status !== "ok" || body.charged !== "yes") {
         if (body.charged === "maybe" || body.status === "payment_unknown") check.status = "payment_unknown";
         check.error = error(errorCode(body.code), reasonText(body.reason) ?? "The payment was not confirmed. Stop without retrying or switching chains.");
@@ -191,7 +208,7 @@ export async function verifyMultichain({ dataDir = "/data", fetchImpl = globalTh
       check.payment.pay_to = matches[0].pay_to;
       check.status = "ok";
     }
-    result.status = result.checks.length === CASES.length && result.checks.every((c) => c.status === "ok" && !c.error) ? "ok" : "error";
+    result.status = result.checks.length === cases.length && result.checks.every((c) => c.status === "ok" && !c.error) ? "ok" : "error";
     if (result.status !== "ok") result.error = result.checks.at(-1)?.error ?? error("CHECK_FAILED", "The bounded test was not verified.");
   } catch (caught) {
     result.error = error(caught?.code === "EEXIST" ? "ALREADY_ATTEMPTED" : "SETUP_FAILED",
@@ -216,7 +233,7 @@ export async function verifyMultichain({ dataDir = "/data", fetchImpl = globalTh
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
-  const result = await verifyMultichain();
+  const result = await verifyMultichain({ mode: process.env.MONEYSWITCH_VERIFY_CASE });
   process.stdout.write(JSON.stringify(result) + "\n");
   process.exitCode = result.status === "ok" ? 0 : 1;
 }

@@ -1,0 +1,28 @@
+diff --git a/dist/index.node.cjs b/dist/index.node.cjs
+index 4e0db7a74963ad2a9cad9a7841c4e78ecbc9823e..889355915e9e3b61f4ada2cf56d0eb4201014110 100644
+--- a/dist/index.node.cjs
++++ b/dist/index.node.cjs
+@@ -80,7 +80,8 @@ function createHttpTransport(config) {
+         ...customHeaders,
+         // Keep these headers lowercase so they will override any user-supplied headers above.
+         accept: "application/json",
+-        "content-length": body.length.toString(),
++        // Let fetch compute the UTF-8 byte length. Native fetch may append its
++        // own length to a manual header; body.length also miscounts Unicode.
+         "content-type": "application/json; charset=utf-8"
+       },
+       method: "POST",
+diff --git a/dist/index.node.mjs b/dist/index.node.mjs
+index 2ae08d7e914f3afcabac25553625b3c359989241..08f92b9d18bbb9dab76591a47cac7a7576280fda 100644
+--- a/dist/index.node.mjs
++++ b/dist/index.node.mjs
+@@ -78,7 +78,8 @@ function createHttpTransport(config) {
+         ...customHeaders,
+         // Keep these headers lowercase so they will override any user-supplied headers above.
+         accept: "application/json",
+-        "content-length": body.length.toString(),
++        // Let fetch compute the UTF-8 byte length. Native fetch may append its
++        // own length to a manual header; body.length also miscounts Unicode.
+         "content-type": "application/json; charset=utf-8"
+       },
+       method: "POST",
