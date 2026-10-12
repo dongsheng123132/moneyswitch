@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Wallet, HDNodeWallet } from "ethers";
 import { LocalWalletDriver, unlockSecretPath, walletFilePath } from "@moneyswitch/wallet";
-import { BASE_SEPOLIA, TESTNET, SOLANA_DEVNET } from "@moneyswitch/x402";
+import { BASE_SEPOLIA, TESTNET, SOLANA_DEVNET, getEnabledNetworksFor } from "@moneyswitch/x402";
 import { reconcileUnknownPayments, type AuthorizationReader } from "@moneyswitch/core";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { writeLegacyPasswordWallet } from "../legacy-wallet.js";
@@ -14,6 +14,8 @@ import { unlockWalletOnStartup } from "../../src/context.js";
 // ACL work (it is exercised for real in packages/wallet/test/protect.*.test.ts).
 const FAST = { scrypt: { N: 2 ** 10, r: 8, p: 1 }, protect: false, drainTimeoutMs: 40 } as const; // (a replace that finds a request in flight waits this long, then answers WALLET_BUSY; production: 60 s)
 const HARDHAT_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const SOLANA_MAINNET_RPC = "https://api.mainnet-beta.solana.com";
+const SOLANA_MAINNET_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 // the request log of the app under test is noise here; tests that inspect logging build their own logger
 process.env.LOG_LEVEL = "silent";
@@ -34,6 +36,7 @@ afterEach(async () => {
   vi.useRealTimers();
   delete process.env.MONEYSWITCH_WALLET_FLOAT_LIMIT;
   delete process.env.MONEYSWITCH_NETWORKS;
+  delete process.env.MONEYSWITCH_SOLANA_MAINNET_RPC_URL;
   if (t) await cleanupTestApp(t);
 });
 
@@ -186,6 +189,7 @@ describe("health", () => {
     const info = await walletInfo();
     expect(info).toMatchObject({
       address: null,
+      solana_mainnet_balance: null,
       unlocked: false,
       has_keystore: false,
       has_recovery_phrase: false,
@@ -248,6 +252,73 @@ describe("health", () => {
     expect(after.retired_wallets[0].balances[SOLANA_DEVNET.caip2]).toBe("0.012345");
   });
 
+  it("reads mainnet USDC separately from Devnet without enabling mainnet payments", async () => {
+    process.env.MONEYSWITCH_NETWORKS = `${TESTNET.caip2},${SOLANA_DEVNET.caip2}`;
+    const created = await createAuto();
+    const owner = t.ctx.wallet.getSolanaAddress()!;
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf").mockImplementation(async (_address, _rpc, mint) =>
+      mint === SOLANA_MAINNET_USDC ? 10_000n : 19_990_000n);
+    stubRpc({ [TESTNET.rpcUrl]: 520_000n });
+    const info = await walletInfo();
+    expect(owner).not.toBe(created.address);
+    expect(info.solana_mainnet_balance).toEqual({
+      address: owner,
+      address_url: `https://explorer.solana.com/address/${owner}`,
+      usdc_balance: "0.01",
+      payments_enabled: false,
+    });
+    expect(info.networks.map((n: { network: string }) => n.network)).toEqual([TESTNET.caip2, SOLANA_DEVNET.caip2]);
+    expect(info.networks[1]).toMatchObject({ address: owner, usdc_balance: "19.99" });
+    expect(getEnabledNetworksFor("mainnet")).toEqual([]);
+    expect(svmRead).toHaveBeenCalledWith(owner, SOLANA_MAINNET_RPC, SOLANA_MAINNET_USDC);
+    expect(svmRead).toHaveBeenCalledWith(owner, SOLANA_DEVNET.rpcUrl, SOLANA_DEVNET.usdcAddress);
+    expect(Object.keys(info.health.over_float_limit).sort()).toEqual([TESTNET.caip2, SOLANA_DEVNET.caip2].sort());
+  });
+
+  it("uses the configured mainnet RPC and reports failures as unknown with a short retry cache", async () => {
+    process.env.MONEYSWITCH_SOLANA_MAINNET_RPC_URL = "https://mainnet.example.test";
+    await createAuto();
+    const owner = t.ctx.wallet.getSolanaAddress()!;
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf")
+      .mockRejectedValueOnce(new Error("mainnet RPC unavailable")).mockResolvedValue(0n);
+    const first = await walletInfo();
+    expect(first.solana_mainnet_balance).toMatchObject({ address: owner, usdc_balance: null, payments_enabled: false });
+    expect((await walletInfo()).solana_mainnet_balance.usdc_balance).toBeNull();
+    expect(svmRead).toHaveBeenCalledTimes(1);
+    expect(svmRead).toHaveBeenCalledWith(owner, "https://mainnet.example.test", SOLANA_MAINNET_USDC);
+    vi.setSystemTime(Date.now() + 2_001);
+    expect((await walletInfo()).solana_mainnet_balance.usdc_balance).toBe("0");
+    expect(svmRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts mainnet and enabled balance reads together and shares pending reads across polls", async () => {
+    await createAuto();
+    let release!: (value: bigint) => void;
+    const pending = new Promise<bigint>((resolve) => { release = resolve; });
+    const evmRead = vi.spyOn(t.ctx.wallet, "getUsdcBalanceOf").mockReturnValue(pending);
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf").mockReturnValue(pending);
+    const polls = [walletInfo(), walletInfo()];
+    await vi.waitFor(() => {
+      expect(evmRead).toHaveBeenCalledTimes(1);
+      expect(svmRead).toHaveBeenCalledTimes(1);
+    });
+    release(10_000n);
+    for (const info of await Promise.all(polls)) expect(info.solana_mainnet_balance.usdc_balance).toBe("0.01");
+    await walletInfo();
+    expect(evmRead).toHaveBeenCalledTimes(1);
+    expect(svmRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not query mainnet for an unlocked legacy wallet without a recovery phrase", async () => {
+    const legacy = new Wallet(Wallet.createRandom().privateKey);
+    await writeLegacyPasswordWallet(t.tmpDir, "legacy-pass-1", { wallet: legacy });
+    await restart("legacy-pass-1");
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf");
+    const info = await walletInfo();
+    expect(info).toMatchObject({ unlocked: true, has_recovery_phrase: false, solana_mainnet_balance: null });
+    expect(svmRead).not.toHaveBeenCalled();
+  });
+
   it("auto wallet: unlock_mode auto, last decrypt ok, backup missing until the human says the words are written down", async () => {
     await createAuto();
     const { health, has_recovery_phrase, backup_confirmed_at } = await walletInfo();
@@ -289,8 +360,10 @@ describe("health", () => {
     await writeLegacyPasswordWallet(t.tmpDir, "manual-pass-1");
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     await restart();
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf");
     const info = await walletInfo();
-    expect(info).toMatchObject({ unlocked: false, has_keystore: true });
+    expect(info).toMatchObject({ unlocked: false, has_keystore: true, solana_mainnet_balance: null });
+    expect(svmRead).not.toHaveBeenCalled();
     expect(info.health).toMatchObject({ protection: "password", unlock_mode: "manual", auto_unlock_ok: null, unlock_sources: [], secret_file_present: null });
   });
 
@@ -357,7 +430,7 @@ describe("health", () => {
     await walletInfo();
     await walletInfo();
     await Promise.all([walletInfo(), walletInfo()]);
-    expect(calls).toHaveLength(1);
+    expect(calls).toEqual([TESTNET.rpcUrl, SOLANA_MAINNET_RPC]);
   });
 });
 
@@ -654,7 +727,8 @@ describe("replace wallet", () => {
         balances: { [TESTNET.caip2]: "0.52" },
       },
     ]);
-    expect(calls).toHaveLength(2); // the live wallet and the retired one, one read each
+    expect(calls.filter((url) => url === TESTNET.rpcUrl)).toHaveLength(2); // the live wallet and the retired one, one read each
+    expect(calls.filter((url) => url === SOLANA_MAINNET_RPC)).toHaveLength(1); // read-only mainnet balance of the live wallet
     // an unreachable RPC is "unknown", not zero
     vi.setSystemTime(Date.now() + 60_000);
     stubRpc({ [TESTNET.rpcUrl]: "error" });

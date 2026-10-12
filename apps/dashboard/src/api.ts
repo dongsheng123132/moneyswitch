@@ -339,6 +339,8 @@ export interface RetiredWalletRow {
 }
 
 export interface WalletInfo {
+  /** Observed Solana mainnet funds; this does not enable mainnet payments. */
+  solana_mainnet_balance?: { address: string; address_url: string; usdc_balance: string | null; payments_enabled: false } | null;
   address: string | null;
   unlocked: boolean;
   has_keystore: boolean;

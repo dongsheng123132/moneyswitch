@@ -21,6 +21,7 @@ docker stop moneyswitch-server-1 >/dev/null
 restart_on_failure() { docker start moneyswitch-server-1 >/dev/null || true; }
 trap restart_on_failure EXIT
 tar -C /var/lib/docker/volumes/moneyswitch_moneyswitch-data/_data -czf "$backup/data.tgz" .
+sh "$release/check-backup.sh" "$backup/data.tgz"
 trap - EXIT
 rollback() {
   cp -p "$backup/config.env" /opt/moneyswitch/config.env.next

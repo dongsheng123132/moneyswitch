@@ -195,13 +195,18 @@ describe("the 12 words", () => {
 
 describe("a wallet: address and balance on every chain", () => {
   it("shows the separate Solana address before the balances, with a mainnet explorer link and only the enabled Devnet balance", () => {
-    const html = view(wallet({ networks: [{ ...NETWORK, network: "eip155:8453", label: "Base mainnet", is_mainnet: true }, SOLANA_NETWORK] }));
+    const html = view(wallet({
+      networks: [{ ...NETWORK, network: "eip155:8453", label: "Base mainnet", is_mainnet: true }, SOLANA_NETWORK],
+      solana_mainnet_balance: { address: SOLANA_ADDRESS, address_url: `https://explorer.solana.com/address/${SOLANA_ADDRESS}`, usdc_balance: "0.01", payments_enabled: false },
+    }));
     const addressSection = html.split('data-address-family="solana"')[1].split("</section>")[0];
     assert.ok(html.includes(esc(en.evmAddressLabel)) && html.includes(esc(en.solanaAddressLabel)));
     assert.ok(addressSection.includes(SOLANA_ADDRESS) && !addressSection.includes(ADDRESS));
     assert.ok(html.indexOf(SOLANA_ADDRESS) < html.indexOf('data-network-group="mainnet"'), "both addresses are visible above the network balances");
     assert.equal(html.split(`${SOLANA_ADDRESS}</code>`).length - 1, 1, "the address is not hidden or repeated inside the Devnet row");
     assert.ok(addressSection.includes(esc(en.solanaNetworkNote)));
+    assert.ok(addressSection.includes("0.01 USDC") && addressSection.includes(esc(en.solanaMainnetReadOnly)));
+    assert.ok(html.includes("19.99 USDC"), "the Devnet balance is separate from the real mainnet deposit");
     assert.ok(addressSection.includes(`href="https://explorer.solana.com/address/${SOLANA_ADDRESS}"`));
     assert.ok(html.includes(`href="${SOLANA_NETWORK.address_url}"`), "the Devnet balance retains its own explorer link");
     assert.deepEqual([...html.matchAll(/data-network="([^"]+)"/g)].map((m) => m[1]), ["eip155:8453", SOLANA_DEVNET], "showing a mainnet address does not add an unsupported mainnet balance");
@@ -221,7 +226,16 @@ describe("a wallet: address and balance on every chain", () => {
     assert.ok(html.includes(zh.evmAddressLabel) && html.includes(zh.solanaAddressLabel));
     assert.ok(html.includes(zh.solanaNetworkNote) && html.includes(zh.viewSolanaMainnet));
     assert.ok(/主网.*Devnet.*共用这个地址/.test(zh.solanaNetworkNote));
-    assert.ok(/主网尚未接入/.test(zh.solanaNetworkNote));
+    assert.ok(/主网付款尚未启用/.test(zh.solanaNetworkNote));
+  });
+
+  it("an unreachable Solana mainnet RPC shows an unknown observed balance instead of zero", () => {
+    const html = view(wallet({ solana_mainnet_balance: { address: SOLANA_ADDRESS, address_url: `https://explorer.solana.com/address/${SOLANA_ADDRESS}`, usdc_balance: null, payments_enabled: false } }));
+    const observed = html.split('data-testid="solana-mainnet-balance"')[1].split("</p>")[0];
+    assert.ok(observed.includes(en.balanceUnknown) && !observed.includes("0 USDC"));
+    assert.ok(observed.includes(esc(en.solanaMainnetReadOnly)));
+    assert.ok(html.includes(SOLANA_ADDRESS), "the address is visible even when no Solana payment network is enabled");
+    assert.deepEqual([...html.matchAll(/data-network="([^"]+)"/g)].map((m) => m[1]), [TESTNET]);
   });
 
   it("shows the address (copyable, with a QR on request), each chain with its balance and an explorer link, the float limit and how to fund a test wallet", () => {

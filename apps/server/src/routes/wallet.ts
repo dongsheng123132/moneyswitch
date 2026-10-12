@@ -26,6 +26,8 @@ import { requireAdmin } from "../auth.js";
 const DEFAULT_FLOAT_LIMIT = "50";
 const BALANCE_TTL_MS = 5_000;
 const BALANCE_FAILURE_TTL_MS = 2_000;
+const SOLANA_MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com";
+const SOLANA_MAINNET_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 type Body = Record<string, unknown>;
 
@@ -66,6 +68,14 @@ export interface WalletNetworkView {
   over_float_limit: boolean | null;
 }
 
+/** Read-only mainnet funds; this does not enable Solana mainnet payments. */
+export interface SolanaMainnetBalanceView {
+  address: string;
+  address_url: string;
+  usdc_balance: string | null;
+  payments_enabled: false;
+}
+
 export interface RetiredWalletView {
   solana_address: string | null;
   address: string;
@@ -104,22 +114,39 @@ interface CachedBalance {
 }
 const balanceCaches = new WeakMap<AppContext, Map<string, CachedBalance>>();
 
-async function readBalance(ctx: AppContext, address: string, network: NetworkConfig): Promise<bigint | null> {
+async function readCachedBalance(ctx: AppContext, key: string, read: () => Promise<bigint>): Promise<bigint | null> {
   let cache = balanceCaches.get(ctx);
   if (!cache) balanceCaches.set(ctx, (cache = new Map()));
-  const key = `${network.caip2}:${isSvmNetwork(network) ? address : address.toLowerCase()}`;
   const hit = cache.get(key);
   if (hit?.pending) return hit.pending;
   if (hit && Date.now() - hit.at < hit.ttl) return hit.value;
-  const pending = (isSvmNetwork(network)
-    ? ctx.wallet.getSolanaUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress)
-    : ctx.wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress))
+  const pending = read()
     .then((value): bigint | null => value)
     .catch((): bigint | null => null);
   cache.set(key, { at: Date.now(), ttl: BALANCE_FAILURE_TTL_MS, value: hit?.value ?? null, pending });
   const value = await pending;
   cache.set(key, { at: Date.now(), ttl: value === null ? BALANCE_FAILURE_TTL_MS : BALANCE_TTL_MS, value });
   return value;
+}
+
+async function readBalance(ctx: AppContext, address: string, network: NetworkConfig): Promise<bigint | null> {
+  const key = `${network.caip2}:${isSvmNetwork(network) ? address : address.toLowerCase()}`;
+  return readCachedBalance(ctx, key, () => isSvmNetwork(network)
+    ? ctx.wallet.getSolanaUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress)
+    : ctx.wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress));
+}
+
+async function readSolanaMainnetBalance(ctx: AppContext, address: string | null): Promise<SolanaMainnetBalanceView | null> {
+  if (!address) return null;
+  const rpcUrl = process.env.MONEYSWITCH_SOLANA_MAINNET_RPC_URL || SOLANA_MAINNET_RPC_URL;
+  const balance = await readCachedBalance(ctx, `solana:mainnet:${address}:${rpcUrl}`, () =>
+    ctx.wallet.getSolanaUsdcBalanceOf(address, rpcUrl, SOLANA_MAINNET_USDC_MINT));
+  return {
+    address,
+    address_url: `https://explorer.solana.com/address/${encodeURIComponent(address)}`,
+    usdc_balance: balance === null ? null : formatMicrosToUsdc(balance),
+    payments_enabled: false,
+  };
 }
 
 /** Balance on every enabled chain where it can be read (null = unknown). */
@@ -210,7 +237,10 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     const active = getActiveNetwork();
     const address = ctx.wallet.getAddress();
     const solanaAddress = ctx.wallet.getSolanaAddress();
-    const balances = await balancesByNetwork(ctx, address, networks, solanaAddress);
+    const [balances, solanaMainnetBalance] = await Promise.all([
+      balancesByNetwork(ctx, address, networks, solanaAddress),
+      readSolanaMainnetBalance(ctx, solanaAddress),
+    ]);
     const health = buildHealth(address, balances);
     const limit = walletFloatLimit();
 
@@ -223,6 +253,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     const selected = balances.get(active.caip2) ?? null;
     return reply.send({
       address,
+      solana_mainnet_balance: solanaMainnetBalance,
       unlocked: ctx.wallet.isUnlocked(),
       has_keystore: ctx.wallet.hasKeystore(),
       has_recovery_phrase: ctx.wallet.hasKeystore() && ctx.wallet.keystoreHasRecoveryPhrase(),

@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { KeyRound, Receipt, ShieldAlert, Wallet, LogOut, CodeXml, MessageSquare, GitPullRequest, ExternalLink, Presentation } from "lucide-react";
+import { KeyRound, Receipt, ShieldAlert, Wallet, LogOut, CodeXml, MessageSquare, GitPullRequest, ExternalLink } from "lucide-react";
 import { useAuth } from "./auth";
 import { usePolling } from "./usePolling";
 import { listApprovals } from "./api";
@@ -65,7 +65,6 @@ export default function Layout() {
         <div className="sidebar-footer">
           <nav aria-label={t("community")}>
             {[
-              { label: "demoDay" as const, url: "/demoday.html", icon: Presentation },
               { label: "github" as const, url: "https://github.com/dongsheng123132/moneyswitch", icon: CodeXml },
               { label: "reportIssue" as const, url: "https://github.com/dongsheng123132/moneyswitch/issues/new/choose", icon: MessageSquare },
               { label: "contributePr" as const, url: "https://github.com/dongsheng123132/moneyswitch/compare?expand=1", icon: GitPullRequest },

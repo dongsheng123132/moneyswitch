@@ -217,7 +217,8 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
   const tc = useT(common);
   const limit = wallet.health.float_limit;
   const solanaNetworks = wallet.networks.filter((n) => n.network.startsWith("solana:"));
-  const solanaAddress = solanaNetworks.find((n) => n.address)?.address;
+  const solanaMainnet = wallet.solana_mainnet_balance;
+  const solanaAddress = solanaMainnet?.address ?? solanaNetworks.find((n) => n.address)?.address;
   // SPEC.md §2: the balances in two groups, real money first, and only the groups this instance enables. Each group carries its own funding note.
   const groups = (["mainnet", "testnet"] as const)
     .map((kind) => ({ kind, networks: wallet.networks.filter((n) => Boolean(n.is_mainnet) === (kind === "mainnet")) }))
@@ -227,11 +228,18 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
       <h2>{t("addressTitle")}</h2>
       {wallet.address && <PublicAddress address={wallet.address} label={t("evmAddressLabel")} qr="toggle" size="lg" />}
       <p className="wallet-lead">{t("addressLead")}</p>
-      {solanaNetworks.length > 0 && (
+      {(solanaNetworks.length > 0 || solanaMainnet) && (
         <section data-address-family="solana" aria-label={t("solanaAddressLabel")}>
           {solanaAddress ? (
             <>
               <PublicAddress address={solanaAddress} label={t("solanaAddressLabel")} showNote={false} qr="toggle" size="lg" />
+              {solanaMainnet && (
+                <p className="wallet-lead" data-testid="solana-mainnet-balance">
+                  <strong>{t("solanaMainnetBalance")}</strong>{" "}
+                  {solanaMainnet.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(solanaMainnet.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
+                  {" · "}{t("solanaMainnetReadOnly")}
+                </p>
+              )}
               <p className="wallet-lead">
                 {t("solanaNetworkNote")}{" "}
                 <a href={`https://explorer.solana.com/address/${solanaAddress}`} target="_blank" rel="noreferrer">

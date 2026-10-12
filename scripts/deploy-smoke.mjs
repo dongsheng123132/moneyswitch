@@ -23,7 +23,9 @@ async function start() {
   proc = spawn(process.execPath, [entry, '--data-dir', dataDir, '--port', String(port)], {
     env: { ...process.env, MONEYSWITCH_NETWORKS: 'eip155:10143,eip155:84532,solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1', MONEYSWITCH_DEFAULT_NETWORK: 'eip155:10143',
       MONEYSWITCH_PUBLIC_URL: base, MONEYSWITCH_TESTNET_RPC_URL: 'http://127.0.0.1:1',
+      MONEYSWITCH_BASE_SEPOLIA_RPC_URL: 'http://127.0.0.1:1',
       MONEYSWITCH_SOLANA_DEVNET_RPC_URL: 'http://127.0.0.1:1',
+      MONEYSWITCH_SOLANA_MAINNET_RPC_URL: 'http://127.0.0.1:1',
       MONEYSWITCH_WALLET_PASSWORD: '', MONEYSWITCH_WALLET_PASSWORD_FILE: '',
       MONEYSWITCH_RECONCILE_INTERVAL_MS: '0' },
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
@@ -83,6 +85,8 @@ try {
   check('the new wallet is unlocked and its words are never shown again', wallet.body.unlocked === true && wallet.body.address === created.body.address && !JSON.stringify(wallet.body).includes(phrase));
   const svmWallet = wallet.body.networks.find((n) => n.network.startsWith('solana:'));
   check('the bundle derives a separate Solana address and Devnet explorer link', /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(svmWallet?.address ?? '') && svmWallet.address !== wallet.body.address && svmWallet.address_url.endsWith('?cluster=devnet'));
+  const mainnetBalance = wallet.body.solana_mainnet_balance;
+  check('Solana mainnet is observed separately without enabling payments or inventing a zero balance', mainnetBalance?.address === svmWallet.address && mainnetBalance.address_url === `https://explorer.solana.com/address/${svmWallet.address}` && mainnetBalance.usdc_balance === null && mainnetBalance.payments_enabled === false && wallet.body.networks.every((n) => !n.is_mainnet));
   const files = await fs.readdir(dataDir);
   check('the unlock file is named after the wallet address', files.some((f) => /^wallet-unlock-0x[0-9a-fA-F]{40}\.secret$/.test(f) && f.toLowerCase() === `wallet-unlock-${created.body.address.toLowerCase()}.secret`));
   check('the unlock file is readable by this user only', wallet.body.health.secret_protected === true);
