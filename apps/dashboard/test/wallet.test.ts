@@ -28,6 +28,18 @@ const OTHER_ADDRESS = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const PHRASE = "abandon ability able about above absent absorb abstract absurd abuse access accident";
 const TESTNET = "eip155:10143";
 const BASE_SEPOLIA = "eip155:84532";
+const SOLANA_DEVNET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+const SOLANA_ADDRESS = "5rXEkA3EdBfZwYeKhqsHqhAYH6SXRBoXubFBhkSVScHM";
+const SOLANA_NETWORK = {
+  network: SOLANA_DEVNET,
+  label: "Solana Devnet",
+  address: SOLANA_ADDRESS,
+  address_url: `https://explorer.solana.com/address/${SOLANA_ADDRESS}?cluster=devnet`,
+  explorer_base: "https://explorer.solana.com",
+  is_mainnet: false,
+  usdc_balance: "19.99",
+  over_float_limit: false,
+};
 
 let WalletPage: typeof import("../src/pages/WalletPage.tsx");
 let freshPhrase: typeof import("../src/freshPhrase.ts").freshPhrase;
@@ -182,6 +194,36 @@ describe("the 12 words", () => {
 });
 
 describe("a wallet: address and balance on every chain", () => {
+  it("shows the separate Solana address before the balances, with a mainnet explorer link and only the enabled Devnet balance", () => {
+    const html = view(wallet({ networks: [{ ...NETWORK, network: "eip155:8453", label: "Base mainnet", is_mainnet: true }, SOLANA_NETWORK] }));
+    const addressSection = html.split('data-address-family="solana"')[1].split("</section>")[0];
+    assert.ok(html.includes(esc(en.evmAddressLabel)) && html.includes(esc(en.solanaAddressLabel)));
+    assert.ok(addressSection.includes(SOLANA_ADDRESS) && !addressSection.includes(ADDRESS));
+    assert.ok(html.indexOf(SOLANA_ADDRESS) < html.indexOf('data-network-group="mainnet"'), "both addresses are visible above the network balances");
+    assert.equal(html.split(`${SOLANA_ADDRESS}</code>`).length - 1, 1, "the address is not hidden or repeated inside the Devnet row");
+    assert.ok(addressSection.includes(esc(en.solanaNetworkNote)));
+    assert.ok(addressSection.includes(`href="https://explorer.solana.com/address/${SOLANA_ADDRESS}"`));
+    assert.ok(html.includes(`href="${SOLANA_NETWORK.address_url}"`), "the Devnet balance retains its own explorer link");
+    assert.deepEqual([...html.matchAll(/data-network="([^"]+)"/g)].map((m) => m[1]), ["eip155:8453", SOLANA_DEVNET], "showing a mainnet address does not add an unsupported mainnet balance");
+    assert.ok(!html.includes(`https://explorer.solana.com/address/${ADDRESS}`), "an EVM address is never used for Solana");
+  });
+
+  it("an older wallet without a Solana address shows its limitation, without substituting the EVM address", () => {
+    const html = view(wallet({ has_recovery_phrase: false, health: { backup: "not_applicable" }, networks: [NETWORK, { ...SOLANA_NETWORK, address: null, address_url: null, usdc_balance: null }] }));
+    const addressSection = html.split('data-address-family="solana"')[1].split("</section>")[0];
+    assert.ok(addressSection.includes(esc(en.solanaUnavailable)));
+    assert.ok(!addressSection.includes(ADDRESS) && !addressSection.includes(SOLANA_ADDRESS));
+    assert.ok(!html.includes("https://explorer.solana.com/address/"));
+  });
+
+  it("Chinese labels make the shared Solana mainnet/Devnet address and unsupported mainnet payments explicit", () => {
+    const html = view(wallet({ networks: [NETWORK, SOLANA_NETWORK] }), null, "zh");
+    assert.ok(html.includes(zh.evmAddressLabel) && html.includes(zh.solanaAddressLabel));
+    assert.ok(html.includes(zh.solanaNetworkNote) && html.includes(zh.viewSolanaMainnet));
+    assert.ok(/主网.*Devnet.*共用这个地址/.test(zh.solanaNetworkNote));
+    assert.ok(/主网尚未接入/.test(zh.solanaNetworkNote));
+  });
+
   it("shows the address (copyable, with a QR on request), each chain with its balance and an explorer link, the float limit and how to fund a test wallet", () => {
     const meta = { faucet_url: "https://faucet.example/usdc" } as never;
     const html = view(

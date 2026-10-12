@@ -33,7 +33,11 @@ export const walletStrings = defineMessages(
 
     // --- status ---------------------------------------------------------------
     addressTitle: "Wallet address",
-    addressLead: "The same recovery words derive the EVM address above and a separate Solana address below. Solana mainnet and Devnet share that Solana address; this server currently supports Solana Devnet payments only. Balances and USDC tokens are separate on each network.",
+    evmAddressLabel: "EVM address · Monad / Base",
+    solanaAddressLabel: "Solana address · Mainnet / Devnet",
+    addressLead: "The same recovery words derive different EVM and Solana addresses. Monad and Base share the EVM address; use the separate Solana address for Solana. Each network keeps its own balance and USDC tokens.",
+    solanaNetworkNote: "Solana mainnet and Devnet use this same address, with separate balances. MoneySwitch currently queries balances and makes payments on Solana Devnet only; Solana mainnet is not connected. Do not fund Solana mainnet for MoneySwitch payments yet.",
+    viewSolanaMainnet: "View this address on Solana mainnet",
     solanaUnavailable: "Solana requires an unlocked wallet with recovery words. Older wallets without recovery words must be replaced first.",
     chainCol: "Chain",
     balanceCol: "USDC balance",
@@ -44,7 +48,7 @@ export const walletStrings = defineMessages(
     fundTestnet: "To fund a test wallet, get free test USDC from the faucet. No gas token is needed: the facilitator pays the gas.",
     fundFaucet: "Open the USDC faucet",
     fundMainnet:
-      "Send real USDC to this address, and pick the right chain: the address is the same on every chain, but each chain keeps its own balance, so USDC sent on another chain does not show up here. Send only what you are willing to let your AI spend.",
+      "Send real USDC only on a mainnet listed above, and pick the right chain and address: Monad and Base share the EVM address; Solana uses a separate address. Each chain keeps its own balance, so USDC sent on another chain does not show up here. Send only what you are willing to let your AI spend.",
     groupMainnet: "Mainnet · real money",
     groupTestnet: "Testnet · test tokens, no value",
 
@@ -138,7 +142,11 @@ export const walletStrings = defineMessages(
 
     // --- status ---------------------------------------------------------------
     addressTitle: "钱包地址",
-    addressLead: "同一份恢复词派生出上方 EVM 地址和下方独立 Solana 地址。Solana 主网与 Devnet 共用这个 Solana 地址，当前服务器仅支持 Solana Devnet 付款；各网络余额和 USDC 分开。",
+    evmAddressLabel: "EVM 地址 · Monad / Base",
+    solanaAddressLabel: "Solana 地址 · 主网 / Devnet",
+    addressLead: "同一份恢复词派生出不同的 EVM 和 Solana 地址。Monad、Base 共用 EVM 地址；Solana 使用独立的 Solana 地址。各网络的余额和 USDC 分开。",
+    solanaNetworkNote: "Solana 主网和 Devnet 共用这个地址，余额各自独立。MoneySwitch 当前只查询 Solana Devnet 余额并支持 Devnet 付款，Solana 主网尚未接入。暂不要为 MoneySwitch 付款向 Solana 主网充值。",
+    viewSolanaMainnet: "在 Solana 主网浏览器查看此地址",
     solanaUnavailable: "Solana 需要已解锁且含恢复词的钱包。没有恢复词的旧钱包需先更换。",
     chainCol: "链",
     balanceCol: "USDC 余额",
@@ -148,7 +156,7 @@ export const walletStrings = defineMessages(
     floatNote: "这里只放小钱：每条链上限 {limit} USDC（MONEYSWITCH_WALLET_FLOAT_LIMIT）。",
     fundTestnet: "给测试钱包充值：到水龙头领免费测试 USDC。不需要 gas 代币，gas 由 facilitator 代付。",
     fundFaucet: "打开 USDC 水龙头",
-    fundMainnet: "往这个地址转真 USDC，注意选对链：各条链上的地址相同，但余额各算各的，转到别的链上的 USDC 不会出现在这里。只转你愿意让 AI 花的数额。",
+    fundMainnet: "仅向上方已列出的主网转真 USDC，注意选对链和地址：Monad、Base 共用 EVM 地址，Solana 使用独立地址。余额各算各的，转到别的链上的 USDC 不会出现在这里。只转你愿意让 AI 花的数额。",
     groupMainnet: "主网 · 真钱",
     groupTestnet: "测试网 · 测试币，没有价值",
 
