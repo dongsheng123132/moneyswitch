@@ -29,6 +29,7 @@ const PHRASE = "abandon ability able about above absent absorb abstract absurd a
 const TESTNET = "eip155:10143";
 const BASE_SEPOLIA = "eip155:84532";
 const SOLANA_DEVNET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+const SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 const SOLANA_ADDRESS = "5rXEkA3EdBfZwYeKhqsHqhAYH6SXRBoXubFBhkSVScHM";
 const SOLANA_NETWORK = {
   network: SOLANA_DEVNET,
@@ -39,6 +40,14 @@ const SOLANA_NETWORK = {
   is_mainnet: false,
   usdc_balance: "19.99",
   over_float_limit: false,
+};
+const SOLANA_MAINNET_NETWORK = {
+  ...SOLANA_NETWORK,
+  network: SOLANA_MAINNET,
+  label: "Solana mainnet",
+  address_url: `https://explorer.solana.com/address/${SOLANA_ADDRESS}`,
+  is_mainnet: true,
+  usdc_balance: "0.16",
 };
 
 let WalletPage: typeof import("../src/pages/WalletPage.tsx");
@@ -221,12 +230,56 @@ describe("a wallet: address and balance on every chain", () => {
     assert.ok(!html.includes("https://explorer.solana.com/address/"));
   });
 
-  it("Chinese labels make the shared Solana mainnet/Devnet address and unsupported mainnet payments explicit", () => {
-    const html = view(wallet({ networks: [NETWORK, SOLANA_NETWORK] }), null, "zh");
+  it("Chinese labels explain the shared Solana address and explicitly mark mainnet funds read-only when payments are disabled", () => {
+    const html = view(wallet({
+      networks: [NETWORK, SOLANA_NETWORK],
+      solana_mainnet_balance: { address: SOLANA_ADDRESS, address_url: SOLANA_MAINNET_NETWORK.address_url, usdc_balance: "0.16", payments_enabled: false },
+    }), null, "zh");
     assert.ok(html.includes(zh.evmAddressLabel) && html.includes(zh.solanaAddressLabel));
     assert.ok(html.includes(zh.solanaNetworkNote) && html.includes(zh.viewSolanaMainnet));
     assert.ok(/主网.*Devnet.*共用这个地址/.test(zh.solanaNetworkNote));
-    assert.ok(/主网付款尚未启用/.test(zh.solanaNetworkNote));
+    assert.ok(!html.includes(zh.solanaMainnetPaymentsEnabled));
+    assert.ok(html.includes(zh.solanaMainnetReadOnly));
+    assert.ok(/Solana.*地址/.test(zh.solanaNetworkNote));
+  });
+
+  it("shows enabled mainnet payments with one mainnet balance row and distinct Devnet and EVM funds", () => {
+    const w = wallet({
+      networks: [{ ...NETWORK, network: "eip155:8453", label: "Base mainnet", is_mainnet: true, usdc_balance: "0.2" }, SOLANA_MAINNET_NETWORK, SOLANA_NETWORK],
+      solana_mainnet_balance: { address: SOLANA_ADDRESS, address_url: SOLANA_MAINNET_NETWORK.address_url, usdc_balance: "0.16", payments_enabled: true },
+    });
+    for (const lang of ["en", "zh"] as const) {
+      const html = view(w, null, lang);
+      const strings = lang === "en" ? en : zh;
+      const addressSection = html.split('data-address-family="solana"')[1].split("</section>")[0];
+      const mainnetGroup = html.split('data-network-group="mainnet"')[1].split('data-network-group="testnet"')[0];
+      const testnetGroup = html.split('data-network-group="testnet"')[1].split("</table>")[0];
+      assert.ok(addressSection.includes(esc(strings.solanaMainnetPaymentsEnabled)));
+      assert.ok(!addressSection.includes("0.16 USDC"), "the address card does not repeat the mainnet balance");
+      assert.ok(!html.includes(esc(strings.solanaMainnetReadOnly)) && !html.includes('data-testid="solana-mainnet-balance"'));
+      assert.equal(html.split("0.16 USDC").length - 1, 1);
+      assert.ok(mainnetGroup.includes(`data-network="${SOLANA_MAINNET}"`) && mainnetGroup.includes("0.16 USDC"));
+      assert.ok(mainnetGroup.includes('data-network="eip155:8453"') && mainnetGroup.includes("0.2 USDC"));
+      assert.ok(!mainnetGroup.includes(`data-network="${SOLANA_DEVNET}"`));
+      assert.ok(testnetGroup.includes(`data-network="${SOLANA_DEVNET}"`) && testnetGroup.includes("19.99 USDC"));
+      assert.ok(!testnetGroup.includes(`data-network="${SOLANA_MAINNET}"`));
+      assert.ok(mainnetGroup.includes(`href="${SOLANA_MAINNET_NETWORK.address_url}"`));
+      assert.ok(!mainnetGroup.includes("cluster=devnet"));
+      assert.ok(testnetGroup.includes(`href="${SOLANA_NETWORK.address_url}"`));
+      assert.ok(html.includes(esc(strings.fundMainnet)), "funding explains the correct chain and address");
+      assert.ok(!html.includes(`https://explorer.solana.com/address/${ADDRESS}`));
+    }
+  });
+
+  it("an enabled mainnet RPC failure keeps payment status visible and renders one unknown mainnet row", () => {
+    const html = view(wallet({
+      networks: [{ ...SOLANA_MAINNET_NETWORK, usdc_balance: null, over_float_limit: null }, SOLANA_NETWORK],
+      solana_mainnet_balance: { address: SOLANA_ADDRESS, address_url: SOLANA_MAINNET_NETWORK.address_url, usdc_balance: null, payments_enabled: true },
+    }));
+    const row = html.split(`data-network="${SOLANA_MAINNET}"`)[1].split("</tr>")[0];
+    assert.ok(row.includes(en.balanceUnknown) && !row.includes("0 USDC"));
+    assert.ok(html.includes(esc(en.solanaMainnetPaymentsEnabled)));
+    assert.ok(!html.includes(esc(en.solanaMainnetReadOnly)) && !html.includes('data-testid="solana-mainnet-balance"'));
   });
 
   it("an unreachable Solana mainnet RPC shows an unknown observed balance instead of zero", () => {

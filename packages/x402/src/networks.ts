@@ -96,7 +96,7 @@ export const BASE_SEPOLIA: NetworkConfig = {
   kind: "testnet", label: "Base Sepolia", explorerBase: "https://sepolia.basescan.org",
 };
 
-/** Official x402 CAIP-2 identifier and Circle's Devnet mint, verified 2026-10-11. No Solana mainnet opt-in yet. */
+/** Official x402 CAIP-2 identifier and Circle's Devnet mint, verified 2026-10-11. */
 export const SOLANA_DEVNET: NetworkConfig = {
   family: "svm", caip2: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
   rpcUrl: env("MONEYSWITCH_SOLANA_DEVNET_RPC_URL", "https://api.devnet.solana.com"),
@@ -106,16 +106,26 @@ export const SOLANA_DEVNET: NetworkConfig = {
   kind: "testnet", label: "Solana Devnet", explorerBase: "https://explorer.solana.com",
 };
 
+/** Circle's mainnet USDC and the official x402 network id, verified 2026-10-12. Explicit MONEYSWITCH_NETWORKS opt-in required. */
+export const SOLANA_MAINNET: NetworkConfig = {
+  family: "svm", caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+  rpcUrl: env("MONEYSWITCH_SOLANA_MAINNET_RPC_URL", "https://api.mainnet-beta.solana.com"),
+  usdcAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  usdcDomainName: "", usdcDomainVersion: "", usdcDecimals: 6,
+  facilitatorUrl: env("MONEYSWITCH_SOLANA_MAINNET_FACILITATOR_URL", "https://facilitator.payai.network"),
+  kind: "mainnet", label: "Solana mainnet", explorerBase: "https://explorer.solana.com",
+};
+
 export function isSvmNetwork(network: NetworkConfig): boolean { return network.family === "svm"; }
 export function sameNetworkAddress(network: string, a: string, b: string): boolean {
   return network.startsWith("eip155:") ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 export function explorerUrl(network: NetworkConfig, type: "address" | "tx", value: string): string {
-  return `${network.explorerBase}/${type}/${encodeURIComponent(value)}${isSvmNetwork(network) ? "?cluster=devnet" : ""}`;
+  return `${network.explorerBase}/${type}/${encodeURIComponent(value)}${isSvmNetwork(network) && network.kind === "testnet" ? "?cluster=devnet" : ""}`;
 }
 
 export const NETWORKS: Readonly<Record<string, NetworkConfig>> = Object.freeze(
-  Object.fromEntries([TESTNET, MAINNET, BASE, BASE_SEPOLIA, SOLANA_DEVNET].map((n) => [n.caip2, n]))
+  Object.fromEntries([TESTNET, MAINNET, BASE, BASE_SEPOLIA, SOLANA_DEVNET, SOLANA_MAINNET].map((n) => [n.caip2, n]))
 );
 
 export function getNetwork(caip2: string): NetworkConfig {
@@ -164,7 +174,7 @@ export function getActiveNetwork(): NetworkConfig {
   return network;
 }
 
-/** True when the active network is Monad mainnet (real USDC, real funds). */
+/** True when the active network moves real USDC. */
 export function isMainnet(): boolean {
   return isMainnetNetwork(getActiveNetwork());
 }

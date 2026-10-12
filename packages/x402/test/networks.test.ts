@@ -8,6 +8,7 @@ const ENV_KEYS = [
   "MONEYSWITCH_MAINNET_LABEL",
   "MONEYSWITCH_MAINNET_EXPLORER_BASE",
   "MONEYSWITCH_MAINNET_RPC_URL",
+  "MONEYSWITCH_SOLANA_MAINNET_RPC_URL", "MONEYSWITCH_SOLANA_MAINNET_FACILITATOR_URL",
 ];
 const original: Record<string, string | undefined> = {};
 for (const k of ENV_KEYS) original[k] = process.env[k];
@@ -26,6 +27,21 @@ async function freshNetworks() {
 }
 
 describe("networks", () => {
+  it("Solana mainnet is explicit opt-in with canonical USDC, isolated key modes and mainnet explorer links", async () => {
+    delete process.env.MONEYSWITCH_NETWORKS;
+    delete process.env.MONEYSWITCH_MAINNET_ENABLED;
+    delete process.env.MONEYSWITCH_SOLANA_MAINNET_RPC_URL;
+    delete process.env.MONEYSWITCH_SOLANA_MAINNET_FACILITATOR_URL;
+    const n = await freshNetworks();
+    expect(n.SOLANA_MAINNET).toMatchObject({ family: "svm", caip2: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", kind: "mainnet", rpcUrl: "https://api.mainnet-beta.solana.com", usdcAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", usdcDecimals: 6 });
+    expect(n.getEnabledNetworks()).toEqual([n.TESTNET]);
+    process.env.MONEYSWITCH_NETWORKS = `${n.SOLANA_DEVNET.caip2},${n.SOLANA_MAINNET.caip2}`;
+    expect(n.getEnabledNetworksFor("mainnet")).toEqual([n.SOLANA_MAINNET]);
+    expect(n.getEnabledNetworksFor("testnet")).toEqual([n.SOLANA_DEVNET]);
+    expect(n.getEnabledNetworksFor(null)).toEqual([n.SOLANA_DEVNET]);
+    expect(n.explorerUrl(n.SOLANA_MAINNET, "tx", "signature")).toBe("https://explorer.solana.com/tx/signature");
+    expect(n.explorerUrl(n.SOLANA_DEVNET, "address", "owner")).toBe("https://explorer.solana.com/address/owner?cluster=devnet");
+  });
   it("only enables explicitly configured chains and rejects unknown/default mismatches", async () => {
     const n = await freshNetworks();
     process.env.MONEYSWITCH_NETWORKS = "eip155:10143,eip155:84532";

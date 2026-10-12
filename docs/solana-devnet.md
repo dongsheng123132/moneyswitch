@@ -1,6 +1,6 @@
 # MoneySwitch Solana Devnet integration
 
-This change adds a real Ed25519 signer and the official `@x402/svm` exact-payment client. It does not enable Solana mainnet or add MagicBlock.
+This integration adds a real Ed25519 signer and the official `@x402/svm` exact-payment client. Devnet remains separate from real funds. Solana mainnet requires a separate explicit opt-in; see [Solana mainnet](solana-mainnet.md). MagicBlock is not integrated.
 
 ## Enable
 
@@ -55,7 +55,7 @@ Release `4b29387` paid `https://x402.org/protected` through the normal `/v1/fetc
 - Base Sepolia: [0.01 USDC transaction](https://sepolia.basescan.org/tx/0x095a04dec1dbcc55e87c96abb69b0c0312a0c2606d5a3f8fa635deb71c7ea633), independently verified receipt success and matching USDC transfer, block `47961228`.
 - Solana Devnet: [0.01 USDC transaction](https://explorer.solana.com/tx/3aBQPBbW2thr3k7WMv4UkFXcDgNDhfLvKv7QVLDFEcaR8PJYEMPmquZcf79bTt18RSz6s9TVdU3UvyL8NBxpQBCu?cluster=devnet), independently verified finalized success and matching payer/recipient token-balance changes, slot `509781446`.
 
-Only testnet tokens were transferred. Solana mainnet payments remain disabled. Earlier unsuccessful attempts and their uncertain ledger rows were preserved; these successful receipts do not rewrite or resolve older unknown records.
+Only testnet tokens were transferred in this verification; it does not prove Solana mainnet settlement. Mainnet is disabled by default and requires [explicit opt-in](solana-mainnet.md). Earlier unsuccessful attempts and their uncertain ledger rows were preserved; these successful receipts do not rewrite or resolve older unknown records.
 
 ### Isolated live-chain harness
 

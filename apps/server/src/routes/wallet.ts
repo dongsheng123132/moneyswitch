@@ -11,7 +11,7 @@ import {
   recordWalletRetirement,
   writeAudit,
 } from "@moneyswitch/core";
-import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork, isSvmNetwork, explorerUrl, type NetworkConfig } from "@moneyswitch/x402";
+import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork, isSvmNetwork, explorerUrl, SOLANA_MAINNET, type NetworkConfig } from "@moneyswitch/x402";
 import { WalletError } from "@moneyswitch/wallet";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
@@ -26,8 +26,6 @@ import { requireAdmin } from "../auth.js";
 const DEFAULT_FLOAT_LIMIT = "50";
 const BALANCE_TTL_MS = 5_000;
 const BALANCE_FAILURE_TTL_MS = 2_000;
-const SOLANA_MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com";
-const SOLANA_MAINNET_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 type Body = Record<string, unknown>;
 
@@ -68,12 +66,12 @@ export interface WalletNetworkView {
   over_float_limit: boolean | null;
 }
 
-/** Read-only mainnet funds; this does not enable Solana mainnet payments. */
+/** Mainnet funds and whether this instance has enabled Solana mainnet payments. */
 export interface SolanaMainnetBalanceView {
   address: string;
   address_url: string;
   usdc_balance: string | null;
-  payments_enabled: false;
+  payments_enabled: boolean;
 }
 
 export interface RetiredWalletView {
@@ -136,16 +134,24 @@ async function readBalance(ctx: AppContext, address: string, network: NetworkCon
     : ctx.wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress));
 }
 
-async function readSolanaMainnetBalance(ctx: AppContext, address: string | null): Promise<SolanaMainnetBalanceView | null> {
+async function readSolanaMainnetBalance(
+  ctx: AppContext,
+  address: string | null,
+  networks: NetworkConfig[],
+  enabledBalances: Promise<Map<string, bigint | null>>,
+): Promise<SolanaMainnetBalanceView | null> {
   if (!address) return null;
-  const rpcUrl = process.env.MONEYSWITCH_SOLANA_MAINNET_RPC_URL || SOLANA_MAINNET_RPC_URL;
-  const balance = await readCachedBalance(ctx, `solana:mainnet:${address}:${rpcUrl}`, () =>
-    ctx.wallet.getSolanaUsdcBalanceOf(address, rpcUrl, SOLANA_MAINNET_USDC_MINT));
+  const paymentsEnabled = networks.some((n) => n.caip2 === SOLANA_MAINNET.caip2);
+  const rpcUrl = process.env.MONEYSWITCH_SOLANA_MAINNET_RPC_URL || SOLANA_MAINNET.rpcUrl;
+  const balance = paymentsEnabled
+    ? (await enabledBalances).get(SOLANA_MAINNET.caip2) ?? null
+    : await readCachedBalance(ctx, `solana:mainnet:${address}:${rpcUrl}`, () =>
+      ctx.wallet.getSolanaUsdcBalanceOf(address, rpcUrl, SOLANA_MAINNET.usdcAddress));
   return {
     address,
     address_url: `https://explorer.solana.com/address/${encodeURIComponent(address)}`,
     usdc_balance: balance === null ? null : formatMicrosToUsdc(balance),
-    payments_enabled: false,
+    payments_enabled: paymentsEnabled,
   };
 }
 
@@ -237,9 +243,10 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     const active = getActiveNetwork();
     const address = ctx.wallet.getAddress();
     const solanaAddress = ctx.wallet.getSolanaAddress();
+    const enabledBalances = balancesByNetwork(ctx, address, networks, solanaAddress);
     const [balances, solanaMainnetBalance] = await Promise.all([
-      balancesByNetwork(ctx, address, networks, solanaAddress),
-      readSolanaMainnetBalance(ctx, solanaAddress),
+      enabledBalances,
+      readSolanaMainnetBalance(ctx, solanaAddress, networks, enabledBalances),
     ]);
     const health = buildHealth(address, balances);
     const limit = walletFloatLimit();

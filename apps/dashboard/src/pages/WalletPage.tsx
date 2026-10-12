@@ -233,7 +233,7 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
           {solanaAddress ? (
             <>
               <PublicAddress address={solanaAddress} label={t("solanaAddressLabel")} showNote={false} qr="toggle" size="lg" />
-              {solanaMainnet && (
+              {solanaMainnet && !solanaMainnet.payments_enabled && (
                 <p className="wallet-lead" data-testid="solana-mainnet-balance">
                   <strong>{t("solanaMainnetBalance")}</strong>{" "}
                   {solanaMainnet.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(solanaMainnet.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
@@ -246,6 +246,9 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
                   {t("viewSolanaMainnet")}
                 </a>
               </p>
+              {solanaMainnet?.payments_enabled && (
+                <p className="wallet-lead" data-testid="solana-mainnet-payments">{t("solanaMainnetPaymentsEnabled")}</p>
+              )}
             </>
           ) : <p className="dim">{t("solanaUnavailable")}</p>}
         </section>

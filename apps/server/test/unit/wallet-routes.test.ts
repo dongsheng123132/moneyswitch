@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Wallet, HDNodeWallet } from "ethers";
 import { LocalWalletDriver, unlockSecretPath, walletFilePath } from "@moneyswitch/wallet";
-import { BASE_SEPOLIA, TESTNET, SOLANA_DEVNET, getEnabledNetworksFor } from "@moneyswitch/x402";
+import { BASE_SEPOLIA, TESTNET, SOLANA_DEVNET, SOLANA_MAINNET, getEnabledNetworksFor } from "@moneyswitch/x402";
 import { reconcileUnknownPayments, type AuthorizationReader } from "@moneyswitch/core";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { writeLegacyPasswordWallet } from "../legacy-wallet.js";
@@ -289,6 +289,68 @@ describe("health", () => {
     vi.setSystemTime(Date.now() + 2_001);
     expect((await walletInfo()).solana_mainnet_balance.usdc_balance).toBe("0");
     expect(svmRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports enabled Solana mainnet payments and reuses its balance read without mixing Devnet or EVM funds", async () => {
+    process.env.MONEYSWITCH_NETWORKS = `${TESTNET.caip2},${SOLANA_MAINNET.caip2},${SOLANA_DEVNET.caip2}`;
+    const created = await createAuto();
+    const owner = t.ctx.wallet.getSolanaAddress()!;
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf").mockImplementation(async (_address, _rpc, mint) =>
+      mint === SOLANA_MAINNET.usdcAddress ? 160_000n : 19_990_000n);
+    stubRpc({ [TESTNET.rpcUrl]: 520_000n });
+
+    const info = await walletInfo();
+    expect(info.solana_mainnet_balance).toEqual({
+      address: owner,
+      address_url: `https://explorer.solana.com/address/${owner}`,
+      usdc_balance: "0.16",
+      payments_enabled: true,
+    });
+    expect(info.networks).toMatchObject([
+      { address: created.address, network: TESTNET.caip2, is_mainnet: false, usdc_balance: "0.52" },
+      { address: owner, address_url: `https://explorer.solana.com/address/${owner}`, network: SOLANA_MAINNET.caip2, is_mainnet: true, usdc_balance: "0.16" },
+      { address: owner, address_url: `https://explorer.solana.com/address/${owner}?cluster=devnet`, network: SOLANA_DEVNET.caip2, is_mainnet: false, usdc_balance: "19.99" },
+    ]);
+    expect(getEnabledNetworksFor("mainnet")).toEqual([SOLANA_MAINNET]);
+    expect(svmRead).toHaveBeenCalledWith(owner, SOLANA_MAINNET.rpcUrl, SOLANA_MAINNET.usdcAddress);
+    expect(svmRead).toHaveBeenCalledWith(owner, SOLANA_DEVNET.rpcUrl, SOLANA_DEVNET.usdcAddress);
+    expect(svmRead).toHaveBeenCalledTimes(2);
+    const second = await walletInfo();
+    expect(second.solana_mainnet_balance.usdc_balance).toBe(second.networks[1].usdc_balance);
+    expect(svmRead).toHaveBeenCalledTimes(2);
+    expect(Object.keys(info.health.over_float_limit).sort()).toEqual([TESTNET.caip2, SOLANA_MAINNET.caip2, SOLANA_DEVNET.caip2].sort());
+  });
+
+  it("keeps enabled mainnet payments marked enabled when its RPC fails and shares the unknown result with the mainnet row", async () => {
+    process.env.MONEYSWITCH_NETWORKS = SOLANA_MAINNET.caip2;
+    await createAuto();
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf")
+      .mockRejectedValueOnce(new Error("mainnet RPC unavailable")).mockResolvedValue(160_000n);
+    const first = await walletInfo();
+    expect(first.solana_mainnet_balance).toMatchObject({ usdc_balance: null, payments_enabled: true });
+    expect(first.networks).toMatchObject([{ network: SOLANA_MAINNET.caip2, is_mainnet: true, usdc_balance: null, over_float_limit: null }]);
+    expect((await walletInfo()).solana_mainnet_balance.usdc_balance).toBeNull();
+    expect(svmRead).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 2_001);
+    const recovered = await walletInfo();
+    expect(recovered.solana_mainnet_balance).toMatchObject({ usdc_balance: "0.16", payments_enabled: true });
+    expect(recovered.networks[0].usdc_balance).toBe("0.16");
+    expect(svmRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("derives payment enablement from configured networks on every request", async () => {
+    process.env.MONEYSWITCH_NETWORKS = SOLANA_DEVNET.caip2;
+    await createAuto();
+    const svmRead = vi.spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf").mockResolvedValue(160_000n);
+    expect((await walletInfo()).solana_mainnet_balance.payments_enabled).toBe(false);
+    process.env.MONEYSWITCH_NETWORKS = `${SOLANA_DEVNET.caip2},${SOLANA_MAINNET.caip2}`;
+    const enabled = await walletInfo();
+    expect(enabled.solana_mainnet_balance.payments_enabled).toBe(true);
+    expect(enabled.networks[1]).toMatchObject({ network: SOLANA_MAINNET.caip2, usdc_balance: "0.16", is_mainnet: true });
+    expect(svmRead).toHaveBeenCalledTimes(3); // initial Devnet + observation, then the enabled mainnet balance
+    process.env.MONEYSWITCH_NETWORKS = SOLANA_DEVNET.caip2;
+    expect((await walletInfo()).solana_mainnet_balance.payments_enabled).toBe(false);
+    expect(svmRead).toHaveBeenCalledTimes(3);
   });
 
   it("starts mainnet and enabled balance reads together and shares pending reads across polls", async () => {

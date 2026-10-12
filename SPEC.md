@@ -67,7 +67,7 @@
 - 两段超时：签名前 30 秒，签名后 300 秒。
 - 事后从链上对账，补上交易号。
 - 服务启动时处理上次卡住的付款（已签名 → 待对账；未签名 → 失败并退回额度）。
-- EVM 只签 EIP-3009（USDC transferWithAuthorization），不签 Permit2。Solana Devnet 使用官方 x402 exact SVM 的 SPL USDC 部分签名交易；不开放任意交易签名接口。
+- EVM 只签 EIP-3009（USDC transferWithAuthorization），不签 Permit2。Solana Devnet 和显式启用的 Solana 主网使用官方 x402 exact SVM 的 SPL USDC 部分签名交易；不开放任意交易签名接口。
 - Solana 的已签名交易在发送前持久化（交易消息摘要、付款人签名、blockhash 和原始交易）。重启后保留额度，不能把缺少 EVM 授权字段理解成未签名。对账只凭匹配原始交易的链上成功/失败记录；RPC 失败、blockhash 过期或查不到交易本身不证明未扣款，保持 `maybe`，不自动重试。
 
 ## 5. 钱包的安全底子（不可删；界面上看不到）
@@ -82,7 +82,7 @@
 
 配置表（CAIP-2）：Monad 主网 / 测试网、Base 主网 / Sepolia。默认只开测试网。同一地址在各链余额独立。**不跨链、不兑换。**
 同一个 12 词钱包在每条 EVM 链上是同一个地址。
-**Solana Devnet（2026-10-11）**：显式配置 `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` 启用，仅测试网。用现有加密恢复词按 SLIP-0010 路径 `m/44'/501'/0'/0'` 派生独立 Ed25519 地址，不复用 EVM 私钥、不新建明文助记词文件。没有恢复词的旧钱包不支持 Solana，需走原有钱包更换流程。地址、mint 和审批收款方区分大小写；余额按该链地址查询，浏览器链接带 Devnet 参数。现有测试网/主网隔离、额度、撤销、审批和钱包更换等待逻辑同样适用。Solana 主网本次不启用。
+**Solana（Devnet 2026-10-11，主网 2026-10-12）**：显式配置 `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` 启用 Devnet；主网另须显式配置 `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`，默认关闭。用现有加密恢复词按 SLIP-0010 路径 `m/44'/501'/0'/0'` 派生独立 Ed25519 地址，不复用 EVM 私钥、不新建明文助记词文件。没有恢复词的旧钱包不支持 Solana，需走原有钱包更换流程。主网和 Devnet 共用 Solana 地址，USDC mint 和余额独立；主网 mint 是 `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`。地址、mint 和审批收款方区分大小写；浏览器链接仅 Devnet 带 `cluster=devnet`。主网必须使用主网 key；现有隔离、额度、撤销、审批和钱包更换等待逻辑同样适用，混合网络部署的旧 key 仍只能花测试币。卖家须提供独立的 `extra.feePayer`，不允许钱包自己付 SOL 手续费。启用和余额查询不证明已完成主网结算；验证及升级回滚细节见 [docs/solana-mainnet.md](docs/solana-mainnet.md)。
 **显式选链（2026-10-11）**：`POST /v1/fetch` 可传 `network`（CAIP-2 字符串，如 `eip155:84532` 或 `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`）。指定后只在这条链付款：链未启用、与 key 网络类型冲突、卖家未接受，均拒绝且 `charged: no`；这条链余额不足则 `INSUFFICIENT_FUNDS`，不得静默换到其他链。格式无效返回 HTTP 400，不发请求、不签名。未指定时保留按余额选链的行为。审批重试必须仍与原审批的链一致。
 **按余额选链（v0.7.1）**：卖家报价里有多条可付的链时，按 `MONEYSWITCH_NETWORKS` 的顺序，选第一条钱包 USDC 余额够付这一笔的链；都不够 → `INSUFFICIENT_FUNDS`，`charged: no`，不签名、不预留。余额查询失败（RPC 不通）的链排在余额够的链之后、按原顺序尝试，不因为查不到余额而拒付。余额最多缓存 15 秒；免费请求不查余额。
 - 先查不需要余额的限制（单笔上限、`max_price`），超了就按原错误码拒绝，不读余额；再按余额选链。
