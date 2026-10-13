@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MoneySwitch — Programmable Web3 cloud wallet for AI bots</title>
-<meta name="description" content="A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.">
+<meta name="description" content="An open-source, programmable Web3 cloud wallet for AI bots, self-hosted on your own server. Give each agent a revocable MoneyKey with budgets, allowed service domains and human approval rules. Manage approvals and bills in one place. USDC x402 payments on Solana, Base and Monad; testnet by default.">
 <meta name="theme-color" content="#07060d">
 <link rel="canonical" href="https://moneyswitch.dev/">
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="MoneySwitch">
 <meta property="og:title" content="MoneySwitch — Programmable Web3 cloud wallet for AI bots">
-<meta property="og:description" content="A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.">
+<meta property="og:description" content="An open-source, programmable Web3 cloud wallet for AI bots, self-hosted on your own server. Give each agent a revocable MoneyKey with budgets, allowed service domains and human approval rules. Manage approvals and bills in one place. USDC x402 payments on Solana, Base and Monad; testnet by default.">
 <meta property="og:url" content="https://moneyswitch.dev/">
 <meta property="og:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.png">
 <meta property="og:image:width" content="1672">
@@ -22,7 +22,7 @@
 <meta property="og:image:alt" content="MoneySwitch — Programmable Web3 cloud wallet for AI bots">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="MoneySwitch — Programmable Web3 cloud wallet for AI bots">
-<meta name="twitter:description" content="A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.">
+<meta name="twitter:description" content="An open-source, programmable Web3 cloud wallet for AI bots, self-hosted on your own server. Give each agent a revocable MoneyKey with budgets, allowed service domains and human approval rules. Manage approvals and bills in one place. USDC x402 payments on Solana, Base and Monad; testnet by default.">
 <meta name="twitter:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.png">
 
 <link rel="stylesheet" href="assets/css/site.css">
@@ -32,7 +32,7 @@
     var q = new URLSearchParams(location.search).get('lang');
     var l = (q === 'zh' || q === 'en') ? q : null;
     if (!l) { try { l = localStorage.getItem('ms-lang'); } catch (e) {} }
-    if (l !== 'zh' && l !== 'en') l = /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+    if (l !== 'zh' && l !== 'en') l = 'en';
     document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en';
     document.documentElement.dataset.lang = l;
   })();
@@ -42,7 +42,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
   "name": "MoneySwitch",
-  "description": "A programmable Web3 cloud wallet for AI bots, self-hosted on your own cloud server. One payer, multiple agents, separate MoneyKeys with spending limits. Manage approvals and bills in one place. Pays x402 APIs in USDC; testnet by default.",
+  "description": "An open-source, programmable Web3 cloud wallet for AI bots, self-hosted on your own server. Give each agent a revocable MoneyKey with budgets, allowed service domains and human approval rules. Manage approvals and bills in one place. USDC x402 payments on Solana, Base and Monad; testnet by default.",
   "codeRepository": "https://github.com/dongsheng123132/moneyswitch",
   "programmingLanguage": "TypeScript",
   "license": ["https://www.apache.org/licenses/LICENSE-2.0", "https://www.gnu.org/licenses/agpl-3.0.html"],
@@ -90,7 +90,7 @@
   <div class="wrap">
     <p class="pill"><span class="dot" aria-hidden="true"></span><span data-i18n="hero.badge">v0.7.6 · Open source · Self-hosted · Testnet by default</span></p>
     <h1 class="hero-title" data-i18n="hero.title">The programmable Web3<br><span class="hl">cloud wallet</span> for AI bots.</h1>
-    <p class="hero-sub" data-i18n="hero.sub">Self-host the wallet on your own cloud server. Connect Codex, Claude Code and your cloud agents to one wallet funded by you or your organization. Give each bot a separate MoneyKey with spending limits, and manage approvals and bills in one place.</p>
+    <p class="hero-sub" data-i18n="hero.sub">Self-host this open-source wallet on your own cloud server. Connect Codex, Claude Code and cloud agents to one wallet funded by you or your organization. Give each bot a revocable MoneyKey with its own budget, allowed service domains and human approval rules. Manage approvals and bills in one place.</p>
     <p class="hero-compare" data-i18n="hero.compare"><span>Your wallet. Separate agent budgets.</span> <span class="lime">One place for approvals and bills.</span></p>
     <div class="cta-row">
       <a class="btn btn-primary" href="pilot/" data-href-en="pilot/" data-href-zh="pilot/zh/" data-i18n="cta.pilot">Join the early testers →</a>
@@ -114,7 +114,7 @@
           <div class="wallet-secret" data-i18n="map.secret">Wallet signing stays in this service</div>
         </div>
         <span class="map-arrow" aria-hidden="true">→</span>
-        <div class="wallet-destination"><span class="device-type" data-i18n="map.pay">PAY PER REQUEST</span><h3 data-i18n="map.api">Paid APIs</h3><p>x402 · USDC</p><span class="chip">Monad · Base</span><p class="small" data-i18n="map.testnet">Testnet by default</p></div>
+        <div class="wallet-destination"><span class="device-type" data-i18n="map.pay">PAY PER REQUEST</span><h3 data-i18n="map.api">Paid APIs</h3><p>x402 · USDC</p><span class="chip">Solana · Base · Monad</span><p class="small" data-i18n="map.testnet">Testnet by default</p></div>
       </div>
       <p class="wallet-map-note" data-i18n="map.note">The devices share a payment service, not a private key. Keep agents outside the wallet service’s system-user and data-directory boundary.</p>
     </div>
@@ -238,7 +238,7 @@
       <li><span class="n">2</span><h3 data-i18n="how.2t">MoneyKey</h3><p data-i18n="how.2">A revocable <code>mk_live_…</code> token issued by your administrator. Each key has its own limits; the service stores only its SHA-256 hash.</p></li>
       <li><span class="n">3</span><h3 data-i18n="how.3t">Policy</h3><p data-i18n="how.3">Check per-request, daily and total limits, <code>max_price</code>, allowed hosts and the approval threshold before signing.</p></li>
       <li><span class="n">4</span><h3>x402</h3><p data-i18n="how.4">The API returns HTTP 402 with a price. MoneySwitch signs a USDC authorization from the small spending wallet on your server.</p></li>
-      <li><span class="n">5</span><h3>USDC</h3><p data-i18n="how.5">A facilitator settles the transfer and pays the gas. Of the chains the API accepts, MoneySwitch picks the first one in your list that the wallet can afford — Monad or Base, testnet by default.</p></li>
+      <li><span class="n">5</span><h3>USDC</h3><p data-i18n="how.5">A facilitator settles the transfer and pays the gas. MoneySwitch supports USDC x402 payments on Solana, Base and Monad, with testnets enabled by default. The selected network must be enabled for the key and accepted by the API; an explicit network choice does not fall back to another chain.</p></li>
       <li><span class="n">6</span><h3 data-i18n="how.6t">Paid API</h3><p data-i18n="how.6">Receives USDC. No MoneySwitch account needed.</p></li>
     </ol>
     <p class="fineprint" data-i18n="how.fine">The service holds an encrypted hot wallet and the secret needed to unlock it after a restart. Anyone who can read the server’s data directory can use the wallet; anyone who can change its database can bypass policy. Separate agents from that machine or system user, restrict data access, and keep only a small balance. A MoneyKey does not grant wallet export or administrator access through the API.</p>
@@ -254,7 +254,7 @@
       <div class="card"><span class="ico" aria-hidden="true">⚿</span><h3 data-i18n="g1.t">Revocable MoneyKeys</h3><p data-i18n="g1.p">Give the agent a MoneyKey, not the wallet’s private key. Revoke that key to stop future API use. Keep wallet files and administrator credentials outside the agent’s access.</p></div>
       <div class="card"><span class="ico" aria-hidden="true">≤</span><h3 data-i18n="g2.t">Per-request limit &amp; max_price</h3><p data-i18n="g2.p">Any single payment above the key's cap, or above the caller's <code>max_price</code>, is refused.</p></div>
       <div class="card"><span class="ico" aria-hidden="true">◔</span><h3 data-i18n="g3.t">Daily &amp; total budgets</h3><p data-i18n="g3.p">Checked and reserved inside one database transaction, so concurrent calls can't overspend.</p></div>
-      <div class="card"><span class="ico" aria-hidden="true">✋</span><h3 data-i18n="g4.t">Human approval line</h3><p data-i18n="g4.p">At or above the threshold, payment waits for approval. The person holding that key uses its 4–6 digit PIN, or an administrator signs in to approve. Keep the PIN with the person, not the agent. The agent then retries with <code>approval_id</code>. New public hosts also require approval; approval adds the host to that key.</p></div>
+      <div class="card"><span class="ico" aria-hidden="true">✋</span><h3 data-i18n="g4.t">Human approval line</h3><p data-i18n="g4.p">At or above the threshold, payment waits for approval. The person holding that key uses its 4–6 digit PIN, or an administrator signs in to approve. Keep the PIN with the person, not the agent. New approval requests expire after 30 minutes; approving does not extend that deadline. The agent then resumes the same request with <code>approval_id</code>. New public hosts also require approval; approval adds the host to that key.</p></div>
       <div class="card"><span class="ico" aria-hidden="true">⌘</span><h3 data-i18n="g5.t">Host allowlist</h3><p data-i18n="g5.p">Governs every outbound request, including free ones. A public host that is not listed asks a person first, and nothing is sent until it is approved; private and special-use addresses can never be added that way.</p></div>
       <div class="card"><span class="ico" aria-hidden="true">⤺</span><h3 data-i18n="g6.t">SSRF guard</h3><p data-i18n="g6.p">Requests to MoneySwitch’s own listening address (<code>127.0.0.1</code>, <code>localhost</code>, <code>0.0.0.0</code>, <code>::1</code>) are refused. The match is literal, not a DNS-rebinding defence; see <a href="https://github.com/dongsheng123132/moneyswitch/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p></div>
     </div>
@@ -283,17 +283,23 @@
   <div class="wrap">
     <p class="eyebrow" data-i18n="proof.eyebrow">On-chain proof</p>
     <h2 class="h2" id="proof-h" data-i18n="proof.h">Not a mockup. Every payment is a real transaction.</h2>
-    <p class="lead" data-i18n="proof.lead">Real x402 settlements on Monad testnet. Every row links to the block explorer: click any hash to check it. They were made on 25 September and 2 October with versions before v0.7; the payment path (<code>POST /v1/fetch</code>, x402, EIP-3009) is the same.</p>
+    <p class="lead" data-i18n="proof.lead">Verified real-USDC x402 payments on Solana, Base and Monad. These recent development checks link to their on-chain receipts; historical testnet records are shown separately below.</p>
+    <div class="grid3">
+      <div class="card"><h3>Solana · CoinGecko</h3><p data-i18n="proof.sol">0.01 USDC for on-chain market data. Mainnet settlement finalized.</p><p><a href="https://solscan.io/tx/PwwnmH9fBXwgFZJhNfrHXHGJ6nN27TLBgTJTf6PhEnaBeco7CC9CKtRQGau2QfSH3bPr7P2mmLJbyjDePW74YWg" target="_blank" rel="noopener" data-i18n="proof.receipt">View transaction ↗</a></p></div>
+      <div class="card"><h3>Base · CoinGecko / Quicknode</h3><p data-i18n="proof.base">0.01 USDC for CoinGecko market data and 0.001 USDC for a Quicknode RPC request. Both settled on mainnet.</p><p><a href="https://basescan.org/tx/0xd77ef3e9059e3f649d21dc2abbece5448ec6662235436d40882ec2cf10d824f1" target="_blank" rel="noopener">CoinGecko ↗</a> · <a href="https://basescan.org/tx/0x718dff364c385656a1ddfdcec4473aa8801ae5bb715485fed0b62282875671cf" target="_blank" rel="noopener">Quicknode ↗</a></p></div>
+      <div class="card"><h3>Monad · AgentVerse</h3><p data-i18n="proof.monad">0.20 USDC to purchase two cells from our demo merchant. Mainnet payment and delivery verified.</p><p><a href="https://monadvision.com/tx/0xfb6db2eccac26143f38cdf7abc07fdfc5bd7df2ab1f669fa3edc07067e57baad" target="_blank" rel="noopener" data-i18n="proof.receipt">View transaction ↗</a></p></div>
+    </div>
     <div class="stats">
       <div class="stat"><b id="stat-count">5</b><span data-i18n="stat.count">real testnet settlements</span></div>
       <div class="stat"><b id="stat-total">0.19</b><span data-i18n="stat.total">test USDC settled in total</span></div>
       <div class="stat"><b>0 MON</b><span data-i18n="stat.gas">gas paid by the wallet</span></div>
-      <div class="stat"><b>9</b><span data-i18n="stat.main">real-USDC settlements on mainnet (Monad 8, Base 1)</span></div>
+      <div class="stat"><b>3</b><span data-i18n="stat.main">mainnets with verified real-USDC payments</span></div>
     </div>
+    <p class="fineprint" data-i18n="proof.testnet">The records below were made on Monad testnet on 25 September and 2 October with versions before v0.7. Test USDC has no monetary value.</p>
     <div class="ledger">
       <div class="ledger-head">
         <span class="mono">eip155:10143</span>
-        <span data-i18n="proof.head">test USDC, no real value</span>
+        <span data-i18n="proof.head">Historical testnet records · test USDC, no real value</span>
       </div>
       <table class="tx-table">
         <thead><tr><th data-i18n="tx.time">Time (UTC)</th><th data-i18n="tx.kind">Type</th><th data-i18n="tx.what">Resource</th><th class="r" data-i18n="tx.amt">USDC</th><th data-i18n="tx.hash">Transaction</th></tr></thead>
