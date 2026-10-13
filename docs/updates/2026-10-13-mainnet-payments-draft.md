@@ -6,7 +6,7 @@ Status: **Draft only. Prepared for the user to submit manually.** Suggested stat
 
 Mainnet x402 payments verified on Solana, Base and Monad
 
-MoneySwitch has now verified real USDC x402 payments across three mainnets:
+MoneySwitch is an open-source, self-hosted programmable Web3 cloud wallet for AI bots. We have now verified real USDC x402 payments across three mainnets:
 
 - Solana: 0.01 USDC to CoinGecko, with finalized settlement.
 - Base: 0.01 USDC to CoinGecko and 0.001 USDC to Quicknode, returning market data and an RPC result.

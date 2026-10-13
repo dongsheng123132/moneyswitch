@@ -1,37 +1,43 @@
 # MoneySwitch 官网定位与文案修改建议 — 2026-10-13
 
-范围：当前首页、付款证据和试用入口的内容审查。基于当前站点源码、只读访问和链上交易验证；本次不构成逐屏视觉/无障碍审查。下列文案为建议稿，尚未修改或发布官网。
+范围：当前首页、付款证据和试用入口的内容审查。基于当前站点源码、只读访问和链上交易验证；本次不构成逐屏视觉/无障碍审查。下列完整文案为参考稿。已按用户确认的“小幅优化”更新首页源码：保留主标题和布局，补充功能与三链主网证据，默认英文；尚未发布官网。
 
 ## 建议定位
 
-给 AI 一把有预算、可审批、可撤销的付款 Key。
+保留主定位：AI Bot 的可编程 Web3 云钱包。
+
+按用户确认的方向做小幅优化：给 AI 一把有预算、可审批、可撤销的付款 Key，是云钱包能力的补充说明；开源、自托管、审批和统一账单是这一定位的组成部分。国际比赛材料及首页新访客默认英文，保留主动选择中文的偏好。
 
 MoneySwitch 是由用户自行部署的 Agent 付款服务：每个 Agent 持独立 MoneyKey，通过统一入口调用兼容的 x402 付费接口；用户设置额度和允许域名，在需要时输入确认码审批，并按 Agent、服务和链查看账单。钱包签名由用户自己的服务器执行。
 
 ## 当前页面的具体问题
 
-1. 首屏 `site/index.html` / `hero.title` 和 `site/assets/js/i18n.js` 重点写“Programmable Web3 cloud wallet”。这说明了技术形态，但用户最先需要理解的是“给 Agent 什么、能买什么、如何控制支出”。建议把 MoneyKey 的动作放在标题里，把自托管放在副标题。
+1. 首屏 `site/index.html` / `hero.title` 和 `site/assets/js/i18n.js` 重点写“Programmable Web3 cloud wallet”。这说明了技术形态，但用户最先需要理解的是“给 Agent 什么、能买什么、如何控制支出”。保留云钱包主标题，在副标题补充开源、可撤销的 MoneyKey、允许域名和人工审批规则。
 2. 架构图只列 Monad · Base；`how.5` 的中英文也只列两条链。加入 Solana，说明链必须同时为 Key 和商户支持，显式指定链时不回退。
-3. 首个付款案例、演示和 proof 主表突出旧 Monad 测试网交易；主网证据放在长段落里，`stat.main` 静态写 9 笔。建议先展示带时间、金额、服务、网络和交易链接的近期主网案例，旧测试网记录保留在单独区域；统计从统一证据数据生成，避免硬编码重复维护。
-4. 主按钮“参与首批试用”落到试用说明页面，而不是一条明确的首次付款路径。建议主按钮“完成第一笔测试付款”，指向清楚列出部署、创建 Key、接入 Agent、查看回执的指南；次按钮“查看主网付款证据”。不要暗示 app.moneyswitch.dev 是开放注册的托管钱包。
+3. 已在原证据区增加三张现有样式的主网案例卡片，附四笔交易链接，保留历史测试网表格并明确标注。旧的“9 笔主网结算”改为“3 条主网已验证付款”，不把示例数量写成钱包的累计交易量。后续如扩展完整流水，再使用结构化数据维护。
+4. 保留现有“参与首批试用”和贡献入口。后续只在试用说明中补清楚部署、创建 Key、接入 Agent、查看回执的步骤，保持自托管试用路径。
 5. 新用户应在接入指南看到一个具体审批例子：单笔上限 0.02 USDC、审批阈值 0.01 USDC；达到阈值暂停；人打开官方链接输入确认码；Agent 按原请求继续。新审批 30 分钟有效，批准不刷新期限。确认码交给人，MoneyKey 交给 Agent。
 6. 展示“可调用服务”，按“已付费验证 / 仅检查报价”区分。已验证：CoinGecko（Base、Solana）、Quicknode（Base）、AgentVerse（Monad）；AgentVerse Solana 收款已部署且报价可用，尚未完成该商户的真实 Solana 购买；BlockRun 本次仅检查报价。不要列成全量兼容或官方合作关系。
 
 ## 可替换的首页首屏文案
 
-中文主标题：给 AI 一把有预算的付款 Key。
+中文主标题：AI Bot 的可编程 Web3 云钱包。
+
+补充表达：给 AI 一把有预算的付款 Key。
 
 中文副标题：每个 Agent 一把 MoneyKey，分别设置单笔、每日和总预算。调用兼容的 x402 付费接口时，MoneySwitch 检查额度和域名；达到审批阈值，由你输入确认码批准。支持 Solana、Base、Monad 的 USDC，签名服务部署在你自己的服务器上。
 
 短句：额度由你设，审批由你做，账单随时可查。
 
-英文主标题：Give your AI a spending key.
+英文主标题：The programmable Web3 cloud wallet for AI bots.
+
+补充表达：Give your AI a spending key.
 
 英文副标题：Issue a separate MoneyKey to each agent. Set per-request, daily and total budgets, allowed service domains and a human approval threshold. Pay compatible x402 APIs in USDC on Solana, Base and Monad, with wallet signing on your own server.
 
 英文短句：Set the budget. Approve the exceptions. Review every payment.
 
-按钮：Make your first test payment / View mainnet payment proof。
+按钮：保留当前试用和贡献入口，本次不改。
 
 ## 同行比较与定位依据
 
@@ -46,8 +52,8 @@ MoneySwitch 是由用户自行部署的 Agent 付款服务：每个 Agent 持独
 
 ## 参赛项目简介替换稿
 
-MoneySwitch is an open-source, self-hosted spending gateway for AI agents. Each agent receives a revocable MoneyKey with per-request, daily and total budgets, allowed service domains and human approval rules. Wallet signing stays on the owner's server. MoneySwitch pays compatible x402 APIs in USDC on Solana, Base and Monad, with real mainnet payments verified. One dashboard keeps approvals and bills organized across agents and separates confirmed spending from payments awaiting reconciliation.
+MoneySwitch is an open-source, self-hosted programmable Web3 cloud wallet for AI bots. Each agent receives a revocable MoneyKey with per-request, daily and total budgets, allowed service domains and human approval rules. Wallet signing stays on the owner's server. MoneySwitch pays compatible x402 APIs in USDC on Solana, Base and Monad, with real mainnet payments verified. One dashboard keeps approvals and bills organized across agents and separates confirmed spending from payments awaiting reconciliation.
 
 ## 实施范围
 
-优先更新 `site/index.html`、`site/assets/js/i18n.js` 的首屏、链支持说明与证据区，再同步 `site/pilot/index.html` 和 `site/pilot/zh/index.html`。交易证据应来自一份结构化数据，现有 `site-data/build-site-data.mjs` 目前只处理测试网记录，可扩展为分别生成主网和测试网列表。旧演示视频、图片和博客标明历史日期，不把历史测试网视频当成新主网演示。新确认码表单可录一段简短付款过程，在实际录制后再换视频封面和说明。
+本次源码修改限于 `site/index.html`、`site/assets/js/i18n.js`：主标题、视觉样式、导航与 CTA 不变；补充副标题、Solana 链说明、30 分钟审批和三链主网案例；新访客默认英文，中文选择仍可记住。项目介绍和未发布动态草稿统一采用“开源、自托管的可编程 Web3 云钱包”。后续可在实际录制确认码付款过程后补充视频，本次不重录或改历史素材。
