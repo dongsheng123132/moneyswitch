@@ -125,7 +125,7 @@ describe("/v1/fetch to a host outside the key's allowed list", () => {
     const k = await createKey();
     const body = await fetchVia(k.key, { url: NEW_URL, method: "POST", body: { q: 1 } });
     expect(body).toMatchObject({ status: "approval_required", code: "APPROVAL_REQUIRED", charged: "no", http_status: null, payment: null });
-    expect(body.approve_url).toBe(`http://127.0.0.1:4020/approvals?id=${body.approval_id}`);
+    expect(body.approve_url).toBe(`http://127.0.0.1:4020/approvals?id=${body.approval_id}&mode=pin`);
     expect(Object.keys(body).sort()).toEqual(
       ["approval_id", "approve_url", "body", "charged", "code", "headers", "http_status", "payment", "remaining_today", "remaining_total", "status"].sort()
     );

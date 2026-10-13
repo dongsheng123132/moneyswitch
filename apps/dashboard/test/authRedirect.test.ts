@@ -2,7 +2,7 @@
 // login -> back to the approval) and how the first-start setup link is recognised.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { LANDING_PATH, loginUrlFor, safeNextPath, setupTokenFromHash } from "../src/authRedirect.ts";
+import { LANDING_PATH, loginUrlFor, safeNextPath, setupTokenFromHash, shouldUsePinApproval } from "../src/authRedirect.ts";
 
 describe("loginUrlFor", () => {
   it("an approval link without a session goes to the login and comes back to that very approval", () => {
@@ -64,5 +64,21 @@ describe("setupTokenFromHash: the one-time link printed on the first start", () 
     }
     assert.equal(setupTokenFromHash(null), null);
     assert.equal(setupTokenFromHash(undefined), null);
+  });
+});
+
+
+describe("approval links use the confirmation code", () => {
+  it("explicit PIN links stay on the PIN form with an administrator session", () => {
+    assert.equal(shouldUsePinApproval("/approvals", "?id=abc&mode=pin", true), true);
+    assert.equal(shouldUsePinApproval("/approvals", "?id=abc&mode=pin", false), true);
+  });
+  it("ordinary links retain the existing session behavior and the list remains protected", () => {
+    assert.equal(shouldUsePinApproval("/approvals", "?id=abc", false), true);
+    assert.equal(shouldUsePinApproval("/approvals", "?id=abc", true), false);
+    for (const session of [true, false]) {
+      assert.equal(shouldUsePinApproval("/approvals", "?mode=pin", session), false);
+      assert.equal(shouldUsePinApproval("/keys", "?id=abc&mode=pin", session), false);
+    }
   });
 });

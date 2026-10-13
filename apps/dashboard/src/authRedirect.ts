@@ -1,7 +1,12 @@
 // Where the login page sends the administrator afterwards, and how the one-time setup link of the first start is recognised.
 //
-// SPEC.md §3: the approval link carries no token. Whoever opens /approvals?id=… without being logged in is sent to
-// /login?next=/approvals%3Fid%3D…, logs in with the administrator token, and lands back on that approval.
+// Approval links use the key holder's confirmation code. An explicit mode=pin keeps that form visible even in an administrator's session.
+
+/** Select the public PIN form without changing the administrator's normal approval list. */
+export function shouldUsePinApproval(pathname: string, search: string, hasAdminSession: boolean): boolean {
+  const params = new URLSearchParams(search);
+  return pathname === "/approvals" && Boolean(params.get("id")) && (!hasAdminSession || params.get("mode") === "pin");
+}
 
 /** Where a login without a destination ends up: the Wallet page (SPEC.md §2: first use is login -> create the wallet). */
 export const LANDING_PATH = "/wallet";

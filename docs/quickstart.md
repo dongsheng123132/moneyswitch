@@ -49,7 +49,7 @@ The **Bills** page then shows the payment: time, key, amount, URL, chain, transa
 
 ## 5. An approval
 
-Give a key an approval line below the price (for example `0.005` with the 0.01 test endpoint). `/v1/fetch` then answers `approval_required` with an `approval_id` and an `approve_url` such as `http://127.0.0.1:4020/approvals?id=…`. The skill makes the AI hand that link to you and poll `GET /v1/approvals/:id` every 15 seconds. Open the link, sign in if asked (the link itself carries no token, so you are sent back to the same approval afterwards) and approve or deny. The AI then repeats the request with the `approval_id`. An approval expires after 10 minutes.
+Give a key an approval line below the price (for example `0.005` with the 0.01 test endpoint). `/v1/fetch` then answers `approval_required` with an `approval_id` and an `approve_url` such as `http://127.0.0.1:4020/approvals?id=…`. The skill makes the AI hand that link to you and poll `GET /v1/approvals/:id` every 15 seconds. Open the link, sign in if asked (the link itself carries no token, so you are sent back to the same approval afterwards) and approve or deny. The AI then repeats the request with the `approval_id`. An approval expires after 30 minutes.
 
 ## The same through the API
 

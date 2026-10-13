@@ -149,9 +149,15 @@ describe("the approval link opens without a login (SPEC.md §3)", () => {
     assert.ok(!html.includes('id="approval-pin"'));
   });
 
+  it("an explicit PIN link stays on the public confirmation page when signed in", () => {
+    store.set("moneyswitch_admin_token", "ms_admin_testtoken");
+    const html = render(h(App), "en", "/approvals?id=ap-1&mode=pin");
+    assert.ok(!html.includes("app-shell"));
+  });
+
   it("only a link with an id is public: the source gives /approvals?id=… the PIN page and every other path the login", () => {
     const app = fs.readFileSync(path.join(here, "../src/App.tsx"), "utf8");
-    assert.ok(/location\.pathname === "\/approvals" && new URLSearchParams\(location\.search\)\.get\("id"\)/.test(app));
+    assert.ok(app.includes("shouldUsePinApproval(location.pathname, location.search, Boolean(token))"), "the app binds to the tested PIN route selector");
     assert.ok(/if \(!token\) return <Navigate to=\{loginUrlFor/.test(app), "everything else still asks for the administrator's login");
   });
 });

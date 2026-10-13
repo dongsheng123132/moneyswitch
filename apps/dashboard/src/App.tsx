@@ -2,7 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { LangProvider } from "./i18n";
-import { LANDING_PATH, loginUrlFor, safeNextPath } from "./authRedirect";
+import { LANDING_PATH, loginUrlFor, safeNextPath, shouldUsePinApproval } from "./authRedirect";
 import "./styles/shell.css";
 import Layout from "./Layout";
 import LoginPage from "./pages/LoginPage";
@@ -18,7 +18,7 @@ import WalletPage from "./pages/WalletPage";
 function RequireAdmin({ children }: { children: React.ReactElement }) {
   const { token } = useAuth();
   const location = useLocation();
-  if (!token && location.pathname === "/approvals" && new URLSearchParams(location.search).get("id")) return <ApprovalLinkPage />;
+  if (shouldUsePinApproval(location.pathname, location.search, Boolean(token))) return <ApprovalLinkPage />;
   if (!token) return <Navigate to={loginUrlFor(location.pathname, location.search)} replace />;
   return children;
 }

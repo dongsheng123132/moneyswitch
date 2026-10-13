@@ -5,7 +5,7 @@ import { dbNumberToMicros, microsToDbNumber } from "./money.js";
 import { encodeRequestBody } from "./request-body.js";
 import type { ApprovalKind, ApprovalRow } from "./types.js";
 
-export const APPROVAL_TTL_MS = 10 * 60 * 1000;
+export const APPROVAL_TTL_MS = 30 * 60 * 1000;
 
 function rowToApproval(row: typeof schema.approvals.$inferSelect): ApprovalRow {
   return {
