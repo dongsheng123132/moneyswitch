@@ -90,6 +90,8 @@ export const payments = sqliteTable("payments", {
 });
 
 export const approvals = sqliteTable("approvals", {
+  /** Explicit, coarse task description visible on the approval link and administrator page. */
+  purpose: text("purpose"),
   id: text("id").primaryKey(),
   keyId: text("key_id").notNull(),
   url: text("url").notNull(),

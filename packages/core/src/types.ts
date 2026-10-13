@@ -77,6 +77,8 @@ export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "us
 export type ApprovalKind = "payment" | "host";
 
 export interface ApprovalRow {
+  /** Agent-supplied task description, not inferred from the request body. */
+  purpose: string | null;
   id: string;
   keyId: string;
   url: string;

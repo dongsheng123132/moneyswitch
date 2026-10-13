@@ -135,7 +135,7 @@ export function renderSkill(input: RenderSkillInput = {}): string {
     "| `body` | optional. A JSON object/array is sent as JSON (`content-type: application/json` unless you set one); a string is sent verbatim |",
     '| `max_price` | optional. Highest USDC price you accept, e.g. `"0.05"` |',
     "| `network` | optional. Exact CAIP-2 chain required by the user; no fallback to another chain |",
-    "| `purpose` | optional self-reported note, max 160 characters, visible to administrators. Omit private projects, prompts and personal data |",
+    "| `purpose` | optional task note, max 160 chars; admins and approval-link holders can see it. Omit private tasks, prompts, secrets and personal data |",
     "| `approval_id` | only when resending after the user approved a price (`kind` `payment`); not needed after a new host was approved |",
     ""
   );

@@ -181,6 +181,20 @@ describe("the approval link's page", () => {
     assert.ok(!html.includes("approval-chain"));
   });
 
+  it("shows the explicit task and why approval is needed in English and Chinese, escaping HTML", () => {
+    const purpose = "为虾盘制作海报 <img src=x onerror=alert(1)>";
+    for (const lang of ["en", "zh"] as const) {
+      const html = linkView({ approval: link({ purpose }) }, lang);
+      const strings = lang === "en" ? en.approvals : zh.approvals;
+      assert.ok(html.includes(esc(purpose)));
+      assert.ok(!html.includes("<img src=x"));
+      assert.ok(html.includes(esc(strings.taskLabel)) && html.includes(esc(strings.reasonPayment)));
+      const host = linkView({ approval: link({ purpose, kind: "host", host: "blockrun.ai:443" }) }, lang);
+      assert.ok(host.includes(esc(strings.reasonHost)));
+      assert.ok(linkView({ approval: link({ purpose: null }) }, lang).includes(esc(strings.taskMissing)));
+    }
+  });
+
   it("asks for the PIN: a masked numeric field of at most six digits, with Approve and Deny, both disabled until 4 to 6 digits are typed", () => {
     const html = linkView();
     assert.match(html, /<input id="approval-pin" type="password" inputMode="numeric" pattern="\[0-9\]\*" maxLength="6" autoComplete="off"/);

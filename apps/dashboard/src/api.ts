@@ -177,6 +177,8 @@ export async function setApprovalPin(id: string, pin?: string): Promise<{ id: st
 // ---------------------------------------------------------------------------
 
 export interface ApprovalRow {
+  /** Optional for compatibility with older servers. Visible to holders of this approval link. */
+  purpose?: string | null;
   id: string;
   key_id: string;
   url: string;

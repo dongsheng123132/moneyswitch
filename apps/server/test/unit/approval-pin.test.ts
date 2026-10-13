@@ -471,6 +471,7 @@ describe("GET /v1/approvals?id=<approval id>: the approval link, no login", () =
       approval: {
         id: mine.id,
         key_name: "Alice's agent",
+        purpose: null,
         url: "https://known.example/paid?x=1",
         method: "GET",
         network: "eip155:10143",

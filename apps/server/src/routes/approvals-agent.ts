@@ -40,6 +40,7 @@ export function registerApprovalStatusRoutes(app: FastifyInstance, ctx: AppConte
       id: approval.id,
       status: approval.status,
       kind: approval.kind,
+      purpose: approval.purpose,
       ...(approval.kind === "host" ? { host: hostOfApproval(approval) } : {}),
       amount: formatMicrosToUsdc(approval.amount),
       currency: "USDC",

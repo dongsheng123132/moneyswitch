@@ -14,6 +14,7 @@ function rowToApproval(row: typeof schema.approvals.$inferSelect): ApprovalRow {
     url: row.url,
     method: row.method,
     bodySha256: row.bodySha256,
+    purpose: row.purpose ?? null,
     network: row.network,
     asset: row.asset,
     payTo: row.payTo,
@@ -47,6 +48,7 @@ export interface CreateApprovalInput {
   amount: bigint;
   /** Default 'payment'. */
   kind?: ApprovalKind;
+  purpose?: string;
 }
 
 export function createApproval(db: MoneySwitchDb, input: CreateApprovalInput): ApprovalRow {
@@ -58,6 +60,7 @@ export function createApproval(db: MoneySwitchDb, input: CreateApprovalInput): A
     url: input.url,
     method: input.method,
     bodySha256: sha256OfBody(input.body),
+    purpose: input.purpose?.trim() || null,
     network: input.network,
     asset: input.asset,
     payTo: input.payTo,

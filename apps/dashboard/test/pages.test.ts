@@ -385,6 +385,17 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
     assert.equal(html.split(`>${en.approvals.deny}<`).length - 1, 2);
   });
 
+  it("shows task descriptions and reasons in pending cards and the recently decided list", () => {
+    const purpose = "Generate a USB product poster <script>alert(1)</script>";
+    const pending = view({ pending: [pendingRow("ap-1", { kind: "payment", purpose })] });
+    assert.ok(pending.includes(esc(purpose)) && pending.includes(esc(en.approvals.reasonPayment)));
+    assert.ok(!pending.includes("<script>alert(1)</script>"));
+    const recent = view({ pending: [], all: [pendingRow("ap-1", { kind: "host", purpose, host: "blockrun.ai:443", status: "expired" })] });
+    assert.ok(recent.includes("approval-context-compact"));
+    assert.ok(recent.includes(esc(purpose)) && recent.includes(esc(en.approvals.reasonHost)));
+    assert.ok(view({ pending: [pendingRow("ap-1", { purpose: null })] }).includes(esc(en.approvals.taskMissing)));
+  });
+
   it("a link to a request that was already handled says what became of it instead of showing nothing", () => {
     const html = view({ pending: [pendingRow("ap-1")], all: [pendingRow("ap-1"), pendingRow("ap-2", { status: "approved", decided_at: "2026-10-04T12:03:00.000Z" })], highlightId: "ap-2" });
     assert.ok(html.includes('data-testid="linked-already"'));

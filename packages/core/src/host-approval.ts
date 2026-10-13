@@ -152,6 +152,7 @@ export function hostOfApproval(approval: Pick<ApprovalRow, "kind" | "url">): str
 
 /** What a request to a host outside the key's allowed hosts is recorded with: the paying key and the exact url, method and body. */
 export interface HostApprovalContext {
+  purpose?: string;
   keyId: string;
   url: string;
   method: string;
@@ -161,7 +162,7 @@ export interface HostApprovalContext {
 /**
  * The approval a /v1/fetch to a host outside the key's allowed hosts waits on. It exists before any request goes out, so there is no
  * price yet: network / asset / pay_to are stored as '' and amount as 0 (the columns are NOT NULL); `url` is the request's own, for
- * display. Same 10-minute TTL as every approval.
+ * display. Same 30-minute TTL as every approval.
  *
  * One pending approval per key and host:port: asking again returns the one that is already waiting (its url, method and body are the
  * first request's). A key with MAX_PENDING_HOST_APPROVALS unexpired pending ones gets RATE_LIMITED for any further new host. Nothing

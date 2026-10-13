@@ -63,6 +63,23 @@ export function decisionErrorMessage(e: unknown, decision: Decision, t: (key: "e
   return e instanceof ApiError ? e.message : e instanceof Error ? e.message : `${decision}_failed`;
 }
 
+/** The same task and trigger are shown to the administrator and the person holding the PIN link. */
+function ApprovalContext({ approval: a, compact = false }: { approval: Pick<ApprovalRow, "kind" | "purpose">; compact?: boolean }) {
+  const t = useT(approvalsStrings);
+  return (
+    <div className={`approval-context${compact ? " approval-context-compact" : ""}`}>
+      <div className="approval-purpose" data-testid="approval-purpose">
+        <span className="approval-context-label">{t("taskLabel")}</span>
+        <span>{a.purpose?.trim() || t("taskMissing")}</span>
+      </div>
+      <div className="approval-reason" data-testid="approval-reason">
+        <span className="approval-context-label">{t("reasonLabel")}</span>
+        <span>{t(a.kind === "host" ? "reasonHost" : "reasonPayment")}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * What a request is: which key asks, for what (the price, or the new host), on which chain, from which URL, and how long it stands. Shared by the
  * administrator's cards and the approval link (SPEC.md §3), so both say it the same way.
@@ -74,7 +91,7 @@ function ApprovalSummary({
   now,
   chainLabel,
 }: {
-  approval: Pick<ApprovalRow, "kind" | "host" | "amount" | "network_kind" | "url" | "pay_to" | "expires_at">;
+  approval: Pick<ApprovalRow, "kind" | "host" | "amount" | "network_kind" | "url" | "pay_to" | "expires_at" | "purpose">;
   keyLabel: string;
   /** false = the label is only the start of a key id (the key's name is not known to this page), so it is set in monospace. */
   keyKnown: boolean;
@@ -114,6 +131,7 @@ function ApprovalSummary({
           <span>{chainLabel}</span> <NetworkKindPill kind={a.network_kind} />
         </div>
       )}
+      <ApprovalContext approval={a} />
       <div className="approval-url">
         {isHost && <span className="dim">{t("hostSource")} </span>}
         {a.url}
@@ -322,20 +340,23 @@ export function ApprovalsView({
               const statusKey = DECIDED_STATUS_KEY[a.status] ?? "statusExpired";
               const tone = DECIDED_TONE[a.status] ?? "gray";
               return (
-                <div className="decided-row" key={a.id}>
-                  <Avatar name={keyLabel} size={20} />
-                  <span className={key ? undefined : "mono"} style={{ flexShrink: 0 }}>
-                    {keyLabel}
-                  </span>
-                  {a.kind === "host" ? (
-                    <span className="mono">{a.host}</span>
-                  ) : (
-                    <span className="num">{formatUsdc(a.amount, { maxDecimals: 4 })}</span>
-                  )}
-                  <Pill tone={tone}>{t(statusKey)}</Pill>
-                  <span className="dim" style={{ marginLeft: "auto" }}>
-                    {relTime(a.decided_at ?? a.created_at)}
-                  </span>
+                <div className="decided-request" key={a.id}>
+                  <div className="decided-row">
+                    <Avatar name={keyLabel} size={20} />
+                    <span className={key ? undefined : "mono"} style={{ flexShrink: 0 }}>
+                      {keyLabel}
+                    </span>
+                    {a.kind === "host" ? (
+                      <span className="mono">{a.host}</span>
+                    ) : (
+                      <span className="num">{formatUsdc(a.amount, { maxDecimals: 4 })}</span>
+                    )}
+                    <Pill tone={tone}>{t(statusKey)}</Pill>
+                    <span className="dim" style={{ marginLeft: "auto" }}>
+                      {relTime(a.decided_at ?? a.created_at)}
+                    </span>
+                  </div>
+                  <ApprovalContext approval={a} compact />
                 </div>
               );
             })}
@@ -543,7 +564,7 @@ export function ApprovalLinkView({
         <LangSwitch />
       </div>
       <div className="login-stack">
-        <div className="card login-card">
+        <div className="card login-card approval-link-shell">
           <div className="login-brand">
             <div className="brand-mark">M</div>
             <div>

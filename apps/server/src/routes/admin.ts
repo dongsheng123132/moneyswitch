@@ -173,6 +173,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     return {
       id: a.id,
       key_id: a.keyId,
+      purpose: a.purpose,
       url: a.url,
       method: a.method,
       network: a.network,

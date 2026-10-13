@@ -236,7 +236,7 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: AppContext) {
         ) {
           throw e;
         }
-        throw new ApprovalRequiredError(createHostApproval(ctx.sqlite, ctx.db, { keyId: key.id, url: body.url, method: body.method || "GET", body: body.body }).id);
+        throw new ApprovalRequiredError(createHostApproval(ctx.sqlite, ctx.db, { keyId: key.id, url: body.url, method: body.method || "GET", body: body.body, purpose }).id);
       }
       assertNotSsrf(url, { selfPort: ctx.config.port, allowedHosts: key.allowedHosts });
 

@@ -153,6 +153,7 @@ export function evaluateAndReserve(
         asset: input.asset,
         payTo: input.payTo,
         amount: input.amount,
+        purpose: input.purpose,
       });
       throw new ApprovalRequiredError(approval.id);
     }

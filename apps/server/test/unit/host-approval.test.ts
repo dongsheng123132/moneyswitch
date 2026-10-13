@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import os from "node:os";
 import { encodePaymentRequiredHeader } from "@x402/core/http";
 import { TESTNET } from "@moneyswitch/x402";
-import { createApproval, createChildKey, createHostApproval, getApproval, listAudit, parseUsdcToMicros } from "@moneyswitch/core";
+import { createApproval, createChildKey, createHostApproval, getApproval, listAudit, parseUsdcToMicros, APPROVAL_TTL_MS } from "@moneyswitch/core";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 
 /**
@@ -118,6 +118,51 @@ const allowHostAudit = () => listAudit(t.ctx.db).filter((e) => e.action === "key
 
 const NEW_URL = "https://api.newhost.example/v1/data?x=1";
 
+describe("explicit task descriptions on approvals", () => {
+  it("keeps a new host's first description and returns it on all three approval readers", async () => {
+    t = await buildTestApp();
+    const fetchSpy = noNetwork();
+    const k = await createKey();
+    const purpose = "为虾盘制作一张横版打印海报";
+    const first = await fetchVia(k.key, { url: NEW_URL, purpose: `  ${purpose}  `, body: { privatePrompt: "never show this" } });
+    expect(getApproval(t.ctx.db, first.approval_id)?.purpose).toBe(purpose);
+    expect((await adminApprovals()).find(a => a.id === first.approval_id)?.purpose).toBe(purpose);
+    const publicLink = await t.app.inject({ url: `/v1/approvals?id=${first.approval_id}` });
+    expect(publicLink.json().approval).toMatchObject({ kind: "host", purpose });
+    expect(publicLink.body).not.toContain("never show this");
+    const agent = await t.app.inject({ url: `/v1/approvals/${first.approval_id}`, headers: asKey(k.key) });
+    expect(agent.json()).toMatchObject({ kind: "host", purpose });
+    const retry = await fetchVia(k.key, { url: NEW_URL, purpose: "another task" });
+    expect(retry.approval_id).toBe(first.approval_id);
+    expect(getApproval(t.ctx.db, retry.approval_id)?.purpose).toBe(purpose);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("leaves an omitted description empty rather than copying the request body", async () => {
+    t = await buildTestApp();
+    noNetwork();
+    const k = await createKey();
+    const result = await fetchVia(k.key, { url: NEW_URL, body: { purpose: "private body text" } });
+    const publicLink = await t.app.inject({ url: `/v1/approvals?id=${result.approval_id}` });
+    expect(publicLink.json().approval.purpose).toBeNull();
+    expect(publicLink.body).not.toContain("private body text");
+  });
+
+  it("records the description before signing a payment over the approval threshold", async () => {
+    t = await buildTestApp({ unlockWallet: true });
+    const fetchSpy = sellerQuoting("127000");
+    const k = await createKey({ approval_threshold: "0.1" });
+    const purpose = "生成一张 GPT Image 2 宣传图，预计 0.127 USDC";
+    const result = await fetchVia(k.key, { url: "https://known.example/paid", purpose });
+    expect(result).toMatchObject({ status: "approval_required", charged: "no" });
+    expect(getApproval(t.ctx.db, result.approval_id)).toMatchObject({ kind: "payment", purpose, amount: 127000n });
+    const publicLink = await t.app.inject({ url: `/v1/approvals?id=${result.approval_id}` });
+    expect(publicLink.json().approval).toMatchObject({ kind: "payment", purpose });
+    expect((await adminApprovals()).find(a => a.id === result.approval_id)?.purpose).toBe(purpose);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("/v1/fetch to a host outside the key's allowed list", () => {
   it("returns approval_required in the usual envelope and sends nothing; the approval is a pending 'host' approval bound to the request", async () => {
     t = await buildTestApp();
@@ -134,7 +179,7 @@ describe("/v1/fetch to a host outside the key's allowed list", () => {
 
     const row = getApproval(t.ctx.db, body.approval_id)!;
     expect(row).toMatchObject({ keyId: k.id, url: NEW_URL, method: "POST", kind: "host", status: "pending", network: "", asset: "", payTo: "", amount: 0n });
-    expect(new Date(row.expiresAt).getTime() - new Date(row.createdAt).getTime()).toBe(10 * 60 * 1000);
+    expect(new Date(row.expiresAt).getTime() - new Date(row.createdAt).getTime()).toBe(APPROVAL_TTL_MS);
     // no payment of any kind was started, and the key's list is untouched
     expect(t.ctx.sqlite.prepare("SELECT count(*) AS n FROM payments").get()).toEqual({ n: 0 });
     expect(await keyHosts(k.id)).toEqual(["known.example:443"]);

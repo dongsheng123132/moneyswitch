@@ -7,6 +7,12 @@ export const approvalsStrings = defineMessages(
     introBody:
       "Payments at or above a key's approval threshold pause here, and the AI sends a link to the person who holds the key: they open it and approve or deny with the key's confirmation code, no login. You, the administrator, can approve everything here. After approval, the AI sends the request again with the approval id and the payment goes through. A request to a host that is not on the key's list pauses here too: approving it adds that host to the key from now on, and the AI sends the request again as it was. Requests you don't handle within 30 minutes expire.",
 
+    taskLabel: "Task (provided by AI)",
+    taskMissing: "No task description provided",
+    reasonLabel: "Approval reason",
+    reasonHost: "This service is outside the key's allowed hosts. Approval allows future access; payment limits still apply.",
+    reasonPayment: "This amount reaches an approval threshold and needs your confirmation before payment.",
+
     payTo: "pay to {addr}",
     hostBadge: "New host",
     hostSource: "Requested:",
@@ -59,6 +65,12 @@ export const approvalsStrings = defineMessages(
     introTitle: "审批是怎么回事",
     introBody:
       "单笔金额达到这把 Key 的审批阈值时会先暂停在这里，AI 会把链接发给持这把 Key 的人：他打开链接、输入这把 Key 的确认码就能批准或拒绝，不用登录；你作为管理员可以在这里批全部。批准之后，AI 会带着审批编号重新发起请求，付款随之完成。请求的域名不在这把 Key 的允许列表里时也会先停在这里：批准就是把这个域名加进这把 Key 的允许列表，AI 原样重发即可；30 分钟内没有处理的请求会自动过期。",
+
+    taskLabel: "任务说明（AI 填写）",
+    taskMissing: "未填写任务说明",
+    reasonLabel: "审批原因",
+    reasonHost: "此服务尚未在 Key 的允许列表中；批准后允许今后访问，付款额度仍照常检查。",
+    reasonPayment: "这笔金额达到审批阈值，需要你确认后才能付款。",
 
     payTo: "付给 {addr}",
     hostBadge: "新域名",
