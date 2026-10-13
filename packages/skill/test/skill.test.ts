@@ -147,7 +147,7 @@ describe("renderSkill: content contract", () => {
     expect(row).toContain("must not try");
     expect(row).toContain("/v1/approvals/{approval_id}");
     expect(row).toContain("every 15 seconds");
-    expect(row).toContain("10 minutes");
+    expect(row).toContain("30 minutes");
     expect(row).toContain("exact same request plus `approval_id`");
   });
 
