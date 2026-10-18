@@ -13,6 +13,7 @@ import { MoneySwitchError } from "./types.js";
 import { getKeyChain, assertChainUsable } from "./chain.js";
 import { rowToMoneyKey } from "./keyrow.js";
 import { hashApprovalPin, resolveApprovalPin } from "./approval-pin.js";
+import { isAllowedHostEntry } from "./keyinput.js";
 
 export { rowToMoneyKey };
 
@@ -34,11 +35,13 @@ export interface CreateMoneyKeyInput {
 }
 
 /**
- * Root-key input checks shared with the admin route. Child keys are validated
- * in delegation.ts (which also enforces parent bounds); this keeps POST /v1/keys
- * from leaking SQLite constraint errors or storing a non-array allowed_hosts.
- * The admin route answers these as 400 INVALID_REQUEST; the code here is the
- * generic FORBIDDEN (MoneySwitchErrorCode has no INVALID_REQUEST).
+ * Root-key input checks. The rules themselves live in keyinput.ts, shared with
+ * the two creation routes (and with child keys); this is the last gate before
+ * an insert, so a caller that bypasses the routes still cannot store a key
+ * with a missing name, a negative limit, or a non-array / unmatchable
+ * allowed_hosts. The code thrown here is the generic FORBIDDEN
+ * (MoneySwitchErrorCode has no INVALID_REQUEST); the routes answer their own
+ * 400 INVALID_REQUEST before it ever comes to this.
  */
 function assertCreateMoneyKeyInput(input: CreateMoneyKeyInput): void {
   const name = typeof input.name === "string" ? input.name.trim() : "";
@@ -62,7 +65,7 @@ function assertCreateMoneyKeyInput(input: CreateMoneyKeyInput): void {
   // host[:port] only — a scheme or path can never match isHostListed, so it is a dead entry the admin would think is allowed.
   for (const raw of input.allowedHosts) {
     const h = raw.trim();
-    if (h.includes("/") || h.includes("://") || /\s/.test(h)) {
+    if (!isAllowedHostEntry(h)) {
       throw new MoneySwitchError("FORBIDDEN", `allowed_hosts entry must be host or host:port, not "${h}"`);
     }
   }
