@@ -34,6 +34,41 @@ export interface CreateMoneyKeyInput {
 }
 
 /**
+ * Root-key input checks shared with the admin route. Child keys are validated
+ * in delegation.ts (which also enforces parent bounds); this keeps POST /v1/keys
+ * from leaking SQLite constraint errors or storing a non-array allowed_hosts.
+ * The admin route answers these as 400 INVALID_REQUEST; the code here is the
+ * generic FORBIDDEN (MoneySwitchErrorCode has no INVALID_REQUEST).
+ */
+function assertCreateMoneyKeyInput(input: CreateMoneyKeyInput): void {
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  if (!name || name.length > 200) {
+    throw new MoneySwitchError("FORBIDDEN", "name is required (1-200 characters)");
+  }
+  if (
+    input.totalBudget < 0n ||
+    input.dailyBudget < 0n ||
+    input.perRequestLimit < 0n ||
+    (input.approvalThreshold != null && input.approvalThreshold < 0n)
+  ) {
+    throw new MoneySwitchError("FORBIDDEN", "budgets must be >= 0");
+  }
+  if (input.approvalThreshold != null && input.approvalThreshold > input.perRequestLimit) {
+    throw new MoneySwitchError("FORBIDDEN", "approval_threshold must be <= per_request_limit");
+  }
+  if (!Array.isArray(input.allowedHosts) || input.allowedHosts.some((h) => typeof h !== "string" || h.trim() === "")) {
+    throw new MoneySwitchError("FORBIDDEN", "allowed_hosts must be an array of non-empty strings");
+  }
+  // host[:port] only — a scheme or path can never match isHostListed, so it is a dead entry the admin would think is allowed.
+  for (const raw of input.allowedHosts) {
+    const h = raw.trim();
+    if (h.includes("/") || h.includes("://") || /\s/.test(h)) {
+      throw new MoneySwitchError("FORBIDDEN", `allowed_hosts entry must be host or host:port, not "${h}"`);
+    }
+  }
+}
+
+/**
  * Creates a new ROOT MoneyKey (admin path: parent_id NULL, depth 0,
  * created_by "admin"). Child keys are created only via createChildKey
  * (delegation.ts), which enforces the parent-bound constraints.
@@ -43,18 +78,12 @@ export function createMoneyKey(
   db: MoneySwitchDb,
   input: CreateMoneyKeyInput
 ): { plaintextKey: string; approvalPin: string; row: MoneyKeyRow } {
-  if (
-    input.approvalThreshold != null &&
-    input.approvalThreshold > input.perRequestLimit
-  ) {
-    throw new MoneySwitchError(
-      "FORBIDDEN",
-      "approval_threshold must be <= per_request_limit"
-    );
-  }
+  assertCreateMoneyKeyInput(input);
   if (input.expiresAt != null && Number.isNaN(new Date(input.expiresAt).getTime())) {
     throw new MoneySwitchError("FORBIDDEN", "expires_at must be an ISO-8601 date-time");
   }
+  const name = input.name.trim();
+  const allowedHosts = input.allowedHosts.map((h) => h.trim());
   const approvalPin = resolveApprovalPin(input.approvalPin);
   const plaintextKey = generateMoneyKey();
   const id = randomUUID();
@@ -62,7 +91,7 @@ export function createMoneyKey(
   db.insert(schema.moneyKeys)
     .values({
       id,
-      name: input.name,
+      name,
       keyPrefix: keyPrefix12(plaintextKey),
       keyHash: sha256Hex(plaintextKey),
       enabled: true,
@@ -71,7 +100,7 @@ export function createMoneyKey(
       perRequestLimit: microsToDbNumber(input.perRequestLimit),
       approvalThreshold:
         input.approvalThreshold == null ? null : microsToDbNumber(input.approvalThreshold),
-      allowedHosts: input.allowedHosts,
+      allowedHosts,
       maxPaymentsPerMinute: input.maxPaymentsPerMinute ?? 10,
       expiresAt: input.expiresAt ?? null,
       createdAt: now,

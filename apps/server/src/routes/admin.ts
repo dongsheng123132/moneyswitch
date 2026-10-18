@@ -24,6 +24,7 @@ import {
   ApprovalPinError,
   type ApprovalRow,
   type NetworkMode,
+  MoneySwitchError,
 } from "@moneyswitch/core";
 import { getEnabledNetworks, NETWORKS } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
@@ -53,36 +54,104 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
   const adminOrPinGuard = requireAdminOrApprovalPin(ctx);
 
+  /**
+   * SPEC.md §1: issuing a root MoneyKey. Same field rules as a child key's body
+   * (children.ts / delegation.ts): a missing or malformed field is a 400
+   * INVALID_REQUEST naming the field — never a SQLite constraint error or a
+   * TypeError from parseUsdcToMicros, and never a key row with a non-array
+   * allowed_hosts.
+   */
   app.post("/v1/keys", { preHandler: adminGuard }, async (req, reply) => {
-    const body = req.body as {
-      name: string;
-      total_budget: string;
-      daily_budget: string;
-      per_request_limit: string;
-      approval_threshold?: string | null;
-      allowed_hosts: string[];
-      max_payments_per_minute?: number;
-      expires_at?: string | null;
-      can_delegate?: boolean;
+    const body = (req.body ?? {}) as {
+      name?: unknown;
+      total_budget?: unknown;
+      daily_budget?: unknown;
+      per_request_limit?: unknown;
+      approval_threshold?: unknown;
+      allowed_hosts?: unknown;
+      max_payments_per_minute?: unknown;
+      expires_at?: unknown;
+      can_delegate?: unknown;
       network_mode?: unknown;
       approval_pin?: unknown;
     };
-    if (body?.can_delegate !== undefined && typeof body.can_delegate !== "boolean") {
-      return reply.status(400).send({ error: "can_delegate must be a boolean" });
+    const invalid = (message: string, field?: string) =>
+      reply.status(400).send({ error: "INVALID_REQUEST", code: "INVALID_REQUEST", message, ...(field ? { field } : {}) });
+
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 200) return invalid("name is required (1-200 characters)", "name");
+
+    function parseBudget(field: "total_budget" | "daily_budget" | "per_request_limit" | "approval_threshold"): bigint {
+      const raw = body[field];
+      if (raw === undefined || raw === null || raw === "") {
+        if (field === "approval_threshold") return 0n; // sentinel: treated as null below
+        throw Object.assign(new Error(`${field} is required`), { field });
+      }
+      const str = typeof raw === "number" && Number.isFinite(raw) ? String(raw) : raw;
+      if (typeof str !== "string") {
+        throw Object.assign(new Error(`${field} must be a decimal USDC string like "1.00"`), { field });
+      }
+      try {
+        return parseUsdcToMicros(str);
+      } catch {
+        throw Object.assign(new Error(`${field} must be a decimal USDC string like "1.00"`), { field });
+      }
     }
-    const networkMode = resolveNetworkMode(body?.network_mode);
+
+    let totalBudget: bigint;
+    let dailyBudget: bigint;
+    let perRequestLimit: bigint;
+    let approvalThreshold: bigint | null;
+    try {
+      totalBudget = parseBudget("total_budget");
+      dailyBudget = parseBudget("daily_budget");
+      perRequestLimit = parseBudget("per_request_limit");
+      const thr = body.approval_threshold;
+      approvalThreshold =
+        thr === undefined || thr === null || thr === "" ? null : parseBudget("approval_threshold");
+    } catch (e) {
+      return invalid(e instanceof Error ? e.message : "invalid amount", (e as { field?: string }).field);
+    }
+
+    const rawHosts = body.allowed_hosts ?? [];
+    if (!Array.isArray(rawHosts) || rawHosts.some((h) => typeof h !== "string" || h.trim() === "")) {
+      return invalid("allowed_hosts must be an array of non-empty strings", "allowed_hosts");
+    }
+    const allowedHosts = (rawHosts as string[]).map((h) => h.trim());
+    for (const h of allowedHosts) {
+      if (h.includes("/") || h.includes("://") || /\s/.test(h)) {
+        return invalid(`allowed_hosts entry must be host or host:port, not "${h}"`, "allowed_hosts");
+      }
+    }
+
+    if (body.can_delegate !== undefined && typeof body.can_delegate !== "boolean") {
+      return invalid("can_delegate must be a boolean", "can_delegate");
+    }
+    if (
+      body.max_payments_per_minute !== undefined &&
+      body.max_payments_per_minute !== null &&
+      (typeof body.max_payments_per_minute !== "number" ||
+        !Number.isInteger(body.max_payments_per_minute) ||
+        body.max_payments_per_minute <= 0)
+    ) {
+      return invalid("max_payments_per_minute must be a positive integer", "max_payments_per_minute");
+    }
+    if (body.expires_at !== undefined && body.expires_at !== null && typeof body.expires_at !== "string") {
+      return invalid("expires_at must be an ISO-8601 date-time", "expires_at");
+    }
+
+    const networkMode = resolveNetworkMode(body.network_mode);
     if ("code" in networkMode) return reply.status(400).send({ error: networkMode.code, message: networkMode.message });
     try {
       const { plaintextKey, approvalPin, row } = createMoneyKey(ctx.db, {
-        name: body.name,
-        totalBudget: parseUsdcToMicros(body.total_budget),
-        dailyBudget: parseUsdcToMicros(body.daily_budget),
-        perRequestLimit: parseUsdcToMicros(body.per_request_limit),
-        approvalThreshold:
-          body.approval_threshold != null ? parseUsdcToMicros(body.approval_threshold) : null,
-        allowedHosts: body.allowed_hosts ?? [],
-        maxPaymentsPerMinute: body.max_payments_per_minute,
-        expiresAt: body.expires_at ?? null,
+        name,
+        totalBudget,
+        dailyBudget,
+        perRequestLimit,
+        approvalThreshold,
+        allowedHosts,
+        maxPaymentsPerMinute: body.max_payments_per_minute as number | undefined,
+        expiresAt: (body.expires_at as string | null | undefined) ?? null,
         canDelegate: body.can_delegate === true,
         networkMode: networkMode.mode,
         approvalPin: body.approval_pin as string | null | undefined,
@@ -109,6 +178,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       });
     } catch (e) {
       if (e instanceof ApprovalPinError) return reply.status(400).send({ error: e.code, message: e.message });
+      if (e instanceof MoneySwitchError) {
+        return reply.status(400).send({ error: e.code, code: e.code, message: e.message });
+      }
       return reply.status(400).send({ error: e instanceof Error ? e.message : "invalid_request" });
     }
   });

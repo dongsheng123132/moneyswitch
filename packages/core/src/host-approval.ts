@@ -126,9 +126,11 @@ export function normalizedAllowedEntry(entry: string): string {
  * dot, in the entry or in the URL, makes no other host.
  */
 export function isHostListed(url: URL, allowedHosts: string[]): boolean {
+  if (!Array.isArray(allowedHosts)) return false;
   const hostPort = hostPortOf(url);
   const hostname = normalizedHostname(url);
   return allowedHosts.some((h) => {
+    if (typeof h !== "string") return false;
     const entry = normalizedAllowedEntry(h);
     return entry === hostPort || entry === hostname;
   });
