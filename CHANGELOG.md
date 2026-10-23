@@ -3,6 +3,10 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
+## Unreleased — 2026-10-23
+
+- **The testnet receiver's 402 body now mirrors its `PAYMENT-REQUIRED` header** (issue #19). The header was already the canonical, complete x402 v2 quote; a read-only third-party inspector reads only the body and reported `NO_ACCEPTS` against the SDK's empty `{}` body. The 402 body now carries the same `PaymentRequired` object, so body-only tools can read it; the header stays authoritative and pricing, payment verification and settlement are unchanged. `docs/x402-receiver.md` documents where the quote lives and how to re-check it.
+
 ## v0.7.6 — 2026-10-09
 
 - Add GitHub, issue reporting and pull request links to the bottom of the Dashboard sidebar, available on every admin page in English and Chinese.

@@ -33,9 +33,14 @@ test('testnet receiver quotes exactly 0.01 test USDC to the stated address and n
     const req = quote.accepts[0];
     assert.equal(req.network, NETWORK); assert.equal(req.amount, '10000'); assert.equal(req.payTo, payTo);
     assert.equal(req.asset.toLowerCase(), '0x534b2f3a21130d7a60830c2df862319e593943a3');
+    // Issue #19: the body mirrors the canonical PAYMENT-REQUIRED object, so a
+    // body-only inspector sees the same accepts[]/payTo as an x402 v2 client.
+    assert.deepEqual(await res.json(), quote);
     const rejected = await fetch(base + TESTNET_RECEIVER_PATH, { headers: { 'PAYMENT-SIGNATURE': header(signedPayload(quote, req)) } });
     assert.equal(rejected.status, 402); assert.equal(verifies, 1); assert.equal(settlements, 0);
-    assert.equal((await rejected.json()).service, undefined);
+    const rejectedBody = await rejected.json();
+    assert.equal(rejectedBody.service, undefined);
+    assert.equal(rejectedBody.accepts?.[0]?.payTo, payTo);
   } finally { await close(); }
 });
 

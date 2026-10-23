@@ -17,7 +17,9 @@
 {"url":"https://app.moneyswitch.dev/x402-testnet/check","method":"GET","max_price":"0.01"}
 ```
 
-浏览器直接访问收费接口返回 HTTP 402 是正常报价，不会扣款。客户端签名付款后，服务通过 facilitator 验证和结算；成功返回 JSON 验证结果及 `PAYMENT-RESPONSE` 收据。保留交易哈希并在链上核对。若状态为不确定或 `charged: maybe`，先核对交易，不能自动重试。
+浏览器直接访问收费接口返回 HTTP 402 是正常报价，不会扣款。**报价在 `PAYMENT-REQUIRED` 响应头里**：它是 base64 编码的 `PaymentRequired`（`x402Version`、`resource`、`accepts[]`、`payTo`、`amount`、`network`），这是 x402 v2 规范的 HTTP 传输位置；响应体只是服务端实现细节，规范示例里的 body 也是 `{}`。本服务同时把同一对象镜像进 402 的 JSON body，方便只读 body 的工具和检查器；两者内容一致。因此不能因为 body 为空就判断端点没有报价。
+
+客户端签名付款后，服务通过 facilitator 验证和结算；成功返回 JSON 验证结果及 `PAYMENT-RESPONSE` 收据。保留交易哈希并在链上核对。若状态为不确定或 `charged: maybe`，先核对交易，不能自动重试。
 
 付款钱包必须解锁（默认由服务器自动解锁，见 `docs/wallet-setup.md`），Key 的额度和域名白名单也必须满足，钱包里要有测试 USDC。收款服务只使用公开收款地址，不加载钱包、密码或管理员凭据。协议参考：[Monad 官方 x402 指南](https://docs.monad.xyz/guides/x402)。
 
@@ -38,5 +40,7 @@ PAY_TO=<收款地址（公开地址）> sh ./run-receiver.sh
 ## 验证
 
 `node --test apps/demo-seller/receiver.test.mjs` 覆盖准确报价（0.01、测试网 USDC 合约、收款地址）、无效签名拒绝、结算失败不提供内容、成功结算返回收据，以及「没有主网路径、拒绝 `RECEIVER_MODE=mainnet`」。结算成功/失败的单元测试使用模拟 facilitator，不代表真实链上付款。
+
+未付款的 402 应同时满足两点：`PAYMENT-REQUIRED` 头解码后有 `accepts[0]`，且 JSON body 与解码头上的 `PaymentRequired` 对象一致。可用 `curl -si https://app.moneyswitch.dev/x402-testnet/check` 核对，或运行 `npx @eidonze/mcpreflight inspect https://app.moneyswitch.dev/x402-testnet/check --json` 直到 `finalStatus` 为 `PASS`（该检查器此前的 `NO_ACCEPTS` 是它没有解 base64 头、只读 body 造成的误报）。
 
 验证结果必须包含结算收据/交易哈希与 MoneySwitch「账单」页里的这一笔；单独收到 HTTP 402 只说明报价成功。若付款人与收款人为同一个钱包，链上余额可能不变，但受限 Key 的付款额度仍会消耗。
