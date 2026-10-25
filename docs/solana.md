@@ -44,7 +44,7 @@ Balances in other token accounts do not count as spendable through this client. 
   - Devnet genesis hash `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`; mint initialized, 82 bytes, owner `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`, 6 decimals, slot 509626593.
   - Mainnet genesis hash `5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d` (the CAIP-2 id is its first 32 characters); mint initialized, 82 bytes, owner `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`, 6 decimals, slot 461107591.
 
-These tests do not prove a live USDC settlement on either cluster. Before trusting mainnet with more than pocket money, fund a little real USDC, pay a compatible seller, inspect the full transaction on the mainnet explorer, and demonstrate a refused over-budget request and the approval flow. A Devnet live settlement should be recorded first.
+Live evidence (2026-10-25): a real Solana mainnet payment was verified on the project's US deployment (`app.moneyswitch.dev`, release revision `0c0e093`) — `0.005` USDC through the human-approval flow (first request `approval_required`, the administrator approves, the resend with the `approval_id` settles), finalized with the seller's fee sponsor paying the fee. A `0.01` test-USDC Devnet payment settled in the same run, and a request above the key's per-request limit returned `PER_REQUEST_LIMIT_EXCEEDED` with `charged: no`. Transactions, addresses and balances are recorded in [updates/2026-10-25-solana-live-payments.md](updates/2026-10-25-solana-live-payments.md). This does not replace a run from the exact revision you deploy: fund pocket money and repeat one payment, one refusal and one approval before trusting mainnet with more.
 
 ### Isolated live-chain harness (Devnet only)
 

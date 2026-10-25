@@ -135,7 +135,7 @@ export MONEYSWITCH_SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
 export MONEYSWITCH_SOLANA_MAINNET_RPC_URL=https://api.mainnet-beta.solana.com
 ```
 
-主网就绪度：SDK 集成、钱包派生、策略、审批页和对账都有测试覆盖；只读探测公共主网 RPC 已核对 genesis hash 和 Circle 的 USDC mint（82 字节、owner Tokenkeg、6 位小数）。但**仓库里还没有真正在主网付过一笔**——先充少量真 USDC，跑通一笔真实付款 + 一次拒绝 + 一次审批，再考虑放更多钱；Devnet 的真机结算也还没录。MagicBlock 未接入。
+主网就绪度：SDK 集成、钱包派生、策略、审批页和对账都有测试覆盖；只读探测公共主网 RPC 已核对 genesis hash 和 Circle 的 USDC mint（82 字节、owner Tokenkeg、6 位小数）。2026-10-25 在项目的美国部署上做了真机验证：`0.005` 真 USDC 经人工审批后在主网结算（finalized，手续费由卖家的 fee sponsor 付），同一次还结算了 `0.01` Devnet 测试 USDC —— 见[验证记录](docs/updates/2026-10-25-solana-live-payments.md)。在你自己的实例上仍建议先跑一笔真实付款 + 一次拒绝 + 一次审批，再考虑放更多钱。MagicBlock 未接入。
 
 主网和测试网可以在同一台服务器、同一个钱包上同时启用（先在测试网跑通，再花一点真钱）。每把 key 要么是测试网 key、要么是主网 key（`network_mode`：`testnet` | `mainnet`），发 key 时选定，之后不能改；它只在启用的、自己这一类的链里付款，选链顺序按 `MONEYSWITCH_NETWORKS`。`POST /v1/keys` 不给 `network_mode` 时：实例只开了一类就用那一类，两类都开返回 `400 NETWORK_MODE_REQUIRED`。卖家只接受另一类链时返回 `UNSUPPORTED_PAYMENT`（`charged: no`，什么都没签）。子 key 与父 key 同类。v0.7.2 之前发的 key 没有类型（`network_mode: null`）：实例只开一类时保持原样（那一类的所有链）；**两类都开时只在测试网付款**（加开主网不会让旧 key 花到真钱）。没有类型的 key 在有类型的父 key 之下，跟随父 key；同一条链上两级类型不同，这把 key 哪条链都不能付（`UNSUPPORTED_PAYMENT`）。
 

@@ -122,4 +122,4 @@ Step 1 已落地，Step 2/3 仍未做：
 - API：`approvalFields` 增加 `network_family`、`asset_label`、`pay_to_url`、`fee_payer`，全部由服务端计算（页面不解析 CAIP-2 / 地址 / URL）。
 - 页面：管理员审批卡片与审批链接共用的 `ApprovalSummary` 新增事实块——完整收款方（可复制 + 浏览器链接）、资产与 mint、按链型分流的“只签一笔 USDC 转账 / 不含代币授权 / 不花 ETH 或 SOL”、失败不扣 USDC、Solana 手续费赞助方。
 - 测试：x402 在已签名交易上断言 exact-SVM 指令集恰好为两条 compute-budget + 一条 `TransferChecked` + 一条 memo，且 `feePayer` 仍是赞助方；审批记录断言 `feePayer`；server 断言 Solana 审批链接返回的字段（大小写原样、Devnet explorer URL）；dashboard 覆盖 EN/ZH、EVM 与 Solana 渲染、host 审批没有事实块。`SPEC.md` §3、`docs/solana.md`、`CHANGELOG.md` 已同步。
-- 仍未做：Step 2 的 Devnet `approval → settle` 真机（需 funded payer USDC + sponsor SOL，`.data/solana-live/` 仍未生成）；Step 3 的 Pulse `check_tx` 一次性对照（trial key 未用）。Solana 主网已作为显式 opt-in 支持（见 `docs/solana.md` 的主网就绪度），但仓库里还没有真钱付款记录。
+- 仍未做：Step 2 的 Devnet `approval → settle` 真机（需 funded payer USDC + sponsor SOL，`.data/solana-live/` 仍未生成）；Step 3 的 Pulse `check_tx` 一次性对照（trial key 未用）。2026-10-25 已在项目的美国部署（revision `0c0e093`）上完成一笔真机 Solana 主网付款（`0.005` USDC，经人工审批，finalized）和一笔 Devnet `0.01` 测试币付款，证据见 `docs/updates/2026-10-25-solana-live-payments.md`；注意该部署跑的是另一条分支的发布版本，本仓库 `main` 的提交尚未部署。
