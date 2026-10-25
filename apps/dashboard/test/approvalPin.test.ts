@@ -99,7 +99,11 @@ const link = (over: Record<string, unknown> = {}) => ({
   network: "eip155:143",
   network_kind: "mainnet" as const,
   network_label: "Monad mainnet",
+  network_family: "evm" as const,
   asset: "0xusdc",
+  asset_label: "USDC",
+  pay_to_url: "https://monadvision.com/address/0x000000000000000000000000000000000000dEaD",
+  fee_payer: null as string | null,
   pay_to: "0x000000000000000000000000000000000000dEaD",
   amount: "0.15",
   status: "pending" as const,
@@ -168,11 +172,38 @@ describe("the approval link's page", () => {
     assert.ok(html.includes(esc(en.approvals.linkLead)));
   });
 
+  it("shows what a Solana payment can do: the whole devnet recipient, the mint, the fee sponsor and the no-approval sentence", () => {
+    const payTo = "J7aN3PLJnTCF5qpEnvJHJsnCjcGuqC2rYtEM8Gv3xwg";
+    const feePayer = "So11111111111111111111111111111111111111112";
+    const solanaApproval = link({
+      network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+      network_kind: "testnet",
+      network_label: "Solana Devnet",
+      network_family: "svm",
+      asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      asset_label: "USDC",
+      pay_to: payTo,
+      pay_to_url: `https://explorer.solana.com/address/${payTo}?cluster=devnet`,
+      fee_payer: feePayer,
+    });
+    const html = linkView({ approval: solanaApproval });
+    assert.ok(html.includes('data-testid="approval-facts"'));
+    assert.ok(html.includes(payTo), "the whole address, not a shortened one");
+    assert.ok(html.includes(`href="https://explorer.solana.com/address/${payTo}?cluster=devnet"`));
+    assert.ok(html.includes(fill(en.approvals.impactSvm, { amount: "0.15", chain: "Solana Devnet" })));
+    assert.ok(html.includes(fill(en.approvals.impactFeeKnown, { addr: "So1111...1112" })));
+    assert.ok(html.includes(esc(en.approvals.impactFailure)));
+    const zhHtml = linkView({ approval: solanaApproval }, "zh");
+    assert.ok(zhHtml.includes(fill(zh.approvals.impactSvm, { amount: "0.15", chain: "Solana Devnet" })));
+    assert.ok(zhHtml.includes(fill(zh.approvals.impactFeeKnown, { addr: "So1111...1112" })));
+  });
+
   it("a new host shows its host:port and no amount or chain, as on the administrator's page", () => {
     const html = linkView({ approval: link({ kind: "host", host: "api.newhost.example:443", network: "", network_kind: null, network_label: null, amount: "0", pay_to: "" }) });
     assert.ok(html.includes('data-testid="host-approval"') && html.includes("api.newhost.example:443"));
     assert.ok(html.includes(esc(en.approvals.hostBadge)));
     assert.ok(!html.includes("approval-chain"));
+    assert.ok(!html.includes('data-testid="approval-facts"'), "no payment facts for a host request");
   });
 
   it("asks for the PIN: a masked numeric field of at most six digits, with Approve and Deny, both disabled until 4 to 6 digits are typed", () => {

@@ -21,6 +21,7 @@ Fund that address's associated token account with Circle Devnet USDC, mint `4zMM
 
 - Offline SDK test constructs the real SPL transfer, independently verifies the payer's Ed25519 signature, adds a sponsor signature, and checks that reconciliation uses the full fee-payer transaction ID.
 - Policy checks cover per-request refusal, mainnet/testnet separation, revoked keys, approval before signing, case-sensitive mint selection and refusal to spend the wallet's SOL as fees.
+- The approval screen shows what a payment really does: the full recipient, the USDC mint, and the chain's family. A Solana approval names the quote's fee sponsor (`extra.feePayer`, recorded by migration `0012_approval_fee_payer`) and says that the wallet signs one USDC transfer. A test decodes the signed transaction and asserts exactly two compute-budget instructions, one SPL Token `TransferChecked` (never an approve or an authority change) and the memo, with the sponsor as fee payer. The dashboard renders only server-computed fields, so it needs no chain parsing of its own.
 - Wallet tests cover lease/replacement protection and address persistence after restart. API tests cover the live and retired Solana addresses and correct Devnet explorer links.
 - Ledger tests preserve signed reservations across restart, empty chain history and RPC failure; only a matching finalized transaction's success or execution failure resolves them.
 - The SDK's mint RPC can stall. The caller deadline releases the lease, no signed payment is sent, and a late SDK operation cannot use the released signer.

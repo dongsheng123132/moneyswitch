@@ -558,11 +558,15 @@ export async function performPaidFetch(
       }
       network = selected;
       balanceAddress = deps.balanceReader ? balanceAddresses.get(selected.caip2) ?? null : null;
+      // The Solana fee sponsor from the quote (extra.feePayer), recorded with a new approval so its screen can say who pays the network
+      // fee; EVM leaves it null (the buyer signs EIP-3009 and the facilitator submits the transfer).
+      let feePayer: string | null = null;
       if (isSvmNetwork(selected)) {
         // The x402 facilitator must sponsor fees. A quote may not spend this wallet's SOL outside its USDC limits.
         try {
-          const feePayer = ctx.selectedRequirements.extra?.feePayer;
-          if (typeof feePayer !== "string" || svmAddress(feePayer) === addressFor(selected)) throw new Error("Invalid fee payer");
+          const sponsor = ctx.selectedRequirements.extra?.feePayer;
+          if (typeof sponsor !== "string" || svmAddress(sponsor) === addressFor(selected)) throw new Error("Invalid fee payer");
+          feePayer = sponsor;
         } catch {
           ownAbortCode = "UNSUPPORTED_PAYMENT";
           return { abort: true, reason: "UNSUPPORTED_PAYMENT" };
@@ -618,6 +622,7 @@ export async function performPaidFetch(
           asset: ctx.selectedRequirements.asset,
           payTo: ctx.selectedRequirements.payTo,
           amount,
+          feePayer,
           maxPrice: input.maxPrice,
           approvalId: input.approvalId,
         });

@@ -84,6 +84,8 @@ export interface ApprovalRow {
   asset: string;
   payTo: string;
   amount: bigint;
+  /** The Solana fee sponsor from the seller's 402 quote, or null (EVM, a new host, or an approval from before migration 0012). */
+  feePayer: string | null;
   status: ApprovalStatus;
   kind: ApprovalKind;
   expiresAt: string;

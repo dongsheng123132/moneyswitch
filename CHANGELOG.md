@@ -3,7 +3,9 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
-## Unreleased — 2026-10-23
+## Unreleased — 2026-10-25
+
+- **The approval screen now shows what a payment really does** (issue #24). A payment approval shows the full, case-sensitive recipient (with a copy button and an explorer link) and the asset, plus the fixed facts of an x402 exact payment: the wallet signs one USDC transfer, there are no token approvals, and no ETH/SOL leaves the wallet. A Solana approval also names the seller's fee sponsor (`extra.feePayer`, recorded with the approval by migration `0012_approval_fee_payer`; read as null for older rows) and says that a chain rejection moves no USDC and releases the reservation once the chain confirms. The page renders only fields the server computes — the same values `validateApprovalForUse` binds at payment time — and a new `packages/x402` assertion pins the exact-SVM instruction set (two compute-budget instructions, one SPL Token `TransferChecked`, one memo) so the "one transfer only" sentence cannot drift. No EVM payment change and no Solana mainnet.
 
 - **The testnet receiver's 402 body now mirrors its `PAYMENT-REQUIRED` header** (issue #19). The header was already the canonical, complete x402 v2 quote; a read-only third-party inspector reads only the body and reported `NO_ACCEPTS` against the SDK's empty `{}` body. The 402 body now carries the same `PaymentRequired` object, so body-only tools can read it; the header stays authoritative and pricing, payment verification and settlement are unchanged. `docs/x402-receiver.md` documents where the quote lives and how to re-check it.
 

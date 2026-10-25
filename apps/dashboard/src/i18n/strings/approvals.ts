@@ -7,7 +7,19 @@ export const approvalsStrings = defineMessages(
     introBody:
       "Payments at or above a key's approval threshold pause here, and the AI sends a link to the person who holds the key: they open it and approve or deny with the key's confirmation code, no login. You, the administrator, can approve everything here. After approval, the AI sends the request again with the approval id and the payment goes through. A request to a host that is not on the key's list pauses here too: approving it adds that host to the key from now on, and the AI sends the request again as it was. Requests you don't handle within 10 minutes expire.",
 
-    payTo: "pay to {addr}",
+    payToLabel: "Recipient",
+    assetLabel: "Asset",
+    viewAddress: "View address",
+    /** The impact sentence for a Solana payment: what the approved request can and cannot do. */
+    impactSvm:
+      "Approving lets the AI send exactly {amount} to this address on {chain}. It signs one USDC transfer only: no token approvals, and the network fee is paid by a sponsor, not by your wallet's SOL.",
+    /** The impact sentence for an EVM payment (EIP-3009: the wallet signs an authorization, it sends no transaction and pays no gas). */
+    impactEvm:
+      "Approving lets the AI send exactly {amount} to this address on {chain}. It signs one USDC transfer authorization (EIP-3009) only: no token approvals, and it spends no ETH from your wallet.",
+    impactOther: "Approving lets the AI send exactly {amount} to this address. It pays only that price in the quoted asset: no token approvals.",
+    impactFailure: "If the chain rejects it, no USDC moves; the reserved amount is released once the chain confirms.",
+    impactFeeKnown: "Network fee paid by the sponsor {addr}.",
+    impactFeeUnknown: "Network fee paid by the seller's facilitator.",
     hostBadge: "New host",
     hostSource: "Requested:",
     hostNote: "Once approved, this key can reach {host} from now on. The price is only known when the seller quotes it; the key's limits are still checked.",
@@ -60,7 +72,15 @@ export const approvalsStrings = defineMessages(
     introBody:
       "单笔金额达到这把 Key 的审批阈值时会先暂停在这里，AI 会把链接发给持这把 Key 的人：他打开链接、输入这把 Key 的确认码就能批准或拒绝，不用登录；你作为管理员可以在这里批全部。批准之后，AI 会带着审批编号重新发起请求，付款随之完成。请求的域名不在这把 Key 的允许列表里时也会先停在这里：批准就是把这个域名加进这把 Key 的允许列表，AI 原样重发即可；10 分钟内没有处理的请求会自动过期。",
 
-    payTo: "付给 {addr}",
+    payToLabel: "收款方",
+    assetLabel: "资产",
+    viewAddress: "查看地址",
+    impactSvm: "批准后，AI 只会把 {amount} 付到这个 Solana 地址：一笔 USDC 转账，不含代币授权；网络手续费由赞助方支付，不花你钱包的 SOL。",
+    impactEvm: "批准后，AI 只会把 {amount} 付到这个地址：只签一笔 USDC 转账授权（EIP-3009），不含代币授权，不花你钱包的 ETH。",
+    impactOther: "批准后，AI 只会按报价把这个数额付到这个地址：不含代币授权。",
+    impactFailure: "链上执行失败不会扣走 USDC；额度在链上确认后释放。",
+    impactFeeKnown: "网络手续费由赞助方 {addr} 支付。",
+    impactFeeUnknown: "网络手续费由卖家的 facilitator 支付。",
     hostBadge: "新域名",
     hostSource: "来源网址：",
     hostNote: "批准后，这把 key 以后都可以访问 {host}；价格要等卖家报价，额度照常检查。",

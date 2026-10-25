@@ -3,14 +3,21 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createPublicKey, verify } from "node:crypto";
-import { address, createKeyPairSignerFromPrivateKeyBytes, getBase58Encoder, getBase64Encoder, getTransactionDecoder, getBase64EncodedWireTransaction, getSignatureFromTransaction } from "@solana/kit";
+import { address, createKeyPairSignerFromPrivateKeyBytes, getBase58Encoder, getBase64Encoder, getTransactionDecoder, getBase64EncodedWireTransaction, getSignatureFromTransaction, getCompiledTransactionMessageDecoder } from "@solana/kit";
 import { encodePaymentRequiredHeader, decodePaymentSignatureHeader } from "@x402/core/http";
 import { openDb } from "@moneyswitch/db";
-import { createMoneyKey, revokeMoneyKey, listHistoryForKey, usedTotal, ApprovalRequiredError } from "@moneyswitch/core";
+import { createMoneyKey, revokeMoneyKey, listHistoryForKey, listApprovals, usedTotal, ApprovalRequiredError } from "@moneyswitch/core";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
 import { performPaidFetch } from "../src/client.js";
 import { SOLANA_DEVNET } from "../src/networks.js";
 import { readSvmPayment, captureSvmPayment } from "../src/solana.js";
+
+// What an exact-SVM payment may contain: two compute-budget instructions, one SPL Token instruction and the memo. Nothing else — in
+// particular no token approval (Approve = 4) and no authority change (SetAuthority = 6), which is what the approval screen promises.
+const COMPUTE_BUDGET_PROGRAM = "ComputeBudget111111111111111111111111111111";
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const MEMO_PROGRAM = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
+const TRANSFER_CHECKED = 12;
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
@@ -52,6 +59,15 @@ describe("official x402 SVM integration", () => {
           const row = listHistoryForKey(db, key.id, 10)[0];
           expect(row.svmEvidence?.transaction).toBe(payload.transaction);
           const tx = getTransactionDecoder().decode(getBase64Encoder().encode(payload.transaction));
+          // The wallet signs one USDC TransferChecked and nothing else: this is what the approval screen tells the person.
+          const compiled = getCompiledTransactionMessageDecoder().decode(tx.messageBytes) as unknown as {
+            staticAccounts: readonly string[];
+            instructions: ReadonlyArray<{ programAddressIndex: number; data: Uint8Array }>;
+          };
+          const programs = compiled.instructions.map((ix) => compiled.staticAccounts[ix.programAddressIndex]);
+          expect(programs).toEqual([COMPUTE_BUDGET_PROGRAM, COMPUTE_BUDGET_PROGRAM, TOKEN_PROGRAM, MEMO_PROGRAM]);
+          expect(compiled.instructions[2].data[0]).toBe(TRANSFER_CHECKED);
+          expect(compiled.staticAccounts[0]).toBe(sponsor.address); // the sponsor stays the fee payer; our wallet only signs the transfer
           const publicKey = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), Buffer.from(getBase58Encoder().encode(owner))]), format: "der", type: "spki" });
           expect(verify(null, Uint8Array.from(tx.messageBytes), publicKey, Uint8Array.from(tx.signatures[address(owner)]!))).toBe(true);
           const [signatures] = await sponsor.signTransactions([tx as never]);
@@ -83,6 +99,15 @@ describe("official x402 SVM integration", () => {
       const approvalKey = policyKey({ approvalThreshold: 5000n });
       await expect(withKey(approvalKey)).rejects.toBeInstanceOf(ApprovalRequiredError);
       expect(listHistoryForKey(db, approvalKey.id, 10)).toHaveLength(0);
+      // The approval records the seller's quote, including the fee sponsor, so its screen can say who pays the network fee (migration 0012).
+      expect(listApprovals(db, "pending").find((a) => a.keyId === approvalKey.id)).toMatchObject({
+        kind: "payment",
+        network: SOLANA_DEVNET.caip2,
+        asset: SOLANA_DEVNET.usdcAddress,
+        payTo: sponsor.address,
+        amount: 10000n,
+        feePayer: sponsor.address,
+      });
       const mainnetKey = policyKey({ networkMode: "mainnet" });
       await expect(withKey(mainnetKey)).rejects.toMatchObject({ code: "UNSUPPORTED_PAYMENT" });
       const revokedKey = policyKey({}); revokeMoneyKey(db, revokedKey.id);

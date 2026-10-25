@@ -28,6 +28,8 @@ export interface PolicyInput {
   asset: string;
   payTo: string;
   amount: bigint;
+  /** The Solana fee sponsor from the seller's 402 quote (`extra.feePayer`), recorded on a new approval for its screen; EVM passes none. */
+  feePayer?: string | null;
   maxPrice?: bigint;
   approvalId?: string | null;
 }
@@ -151,6 +153,7 @@ export function evaluateAndReserve(
         asset: input.asset,
         payTo: input.payTo,
         amount: input.amount,
+        feePayer: input.feePayer ?? null,
       });
       throw new ApprovalRequiredError(approval.id);
     }

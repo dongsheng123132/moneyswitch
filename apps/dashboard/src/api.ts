@@ -183,7 +183,15 @@ export interface ApprovalRow {
   method: string;
   network: string;
   asset: string;
+  /** 'evm' / 'svm': lets the page say "no ETH" or "no SOL" without parsing a CAIP-2 id; null/absent when the server does not know the chain. */
+  network_family?: "evm" | "svm" | null;
+  /** "USDC" when the asset is the chain's own USDC; null for a new host, an unknown chain, or a server that does not send it. */
+  asset_label?: string | null;
   pay_to: string;
+  /** The recipient's explorer page, computed by the server (the page parses nothing); null for a new host or an unknown chain. */
+  pay_to_url?: string | null;
+  /** The Solana fee sponsor recorded with the seller's quote; null for EVM payments and approvals from before migration 0012. */
+  fee_payer?: string | null;
   amount: string;
   status: "pending" | "approved" | "denied" | "expired" | "used";
   /** "payment" = a price over the approval line; "host" = a request to a host outside the key's list (no price yet: amount "0"). */

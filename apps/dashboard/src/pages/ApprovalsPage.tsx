@@ -27,6 +27,7 @@ import LangSwitch from "../components/LangSwitch";
 import Pill from "../components/Pill";
 import NetworkKindPill from "../components/NetworkKindPill";
 import Term from "../components/Term";
+import CopyButton from "../components/CopyButton";
 import { useT } from "../i18n";
 import { common } from "../i18n/strings/common";
 import { approvalsStrings } from "../i18n/strings/approvals";
@@ -64,6 +65,58 @@ export function decisionErrorMessage(e: unknown, decision: Decision, t: (key: "e
 }
 
 /**
+ * What the approved money actually does (issue #24): the full, case-sensitive recipient, the asset, and the fixed facts of an x402
+ * exact payment. Every value comes from the server (the page parses nothing); an older server that sends none of the new fields
+ * still gets the amount, the chain and the recipient.
+ */
+function ApprovalFacts({
+  approval: a,
+  chainLabel,
+}: {
+  approval: Pick<ApprovalRow, "amount" | "asset" | "asset_label" | "network_family" | "pay_to" | "pay_to_url" | "fee_payer">;
+  chainLabel: string;
+}) {
+  const t = useT(approvalsStrings);
+  const family = a.network_family ?? null;
+  const amount = formatUsdc(a.amount, { maxDecimals: 4 });
+  return (
+    <div className="approval-facts" data-testid="approval-facts">
+      <div className="approval-fact-row">
+        <span className="approval-fact-label">{t("payToLabel")}</span>
+        <span className="mono approval-fact-value" data-testid="approval-pay-to">
+          {a.pay_to}
+        </span>
+        <CopyButton text={a.pay_to} className="icon-only" />
+        {a.pay_to_url && (
+          <a className="approval-explorer" href={a.pay_to_url} target="_blank" rel="noreferrer">
+            {t("viewAddress")}
+          </a>
+        )}
+      </div>
+      <div className="approval-fact-row">
+        <span className="approval-fact-label">{t("assetLabel")}</span>
+        <span className="approval-fact-value">
+          {a.asset_label ? `${a.asset_label} ` : ""}
+          <span className="mono dim" title={a.asset}>
+            {shortAddr(a.asset)}
+          </span>
+        </span>
+        <CopyButton text={a.asset} className="icon-only" />
+      </div>
+      <p className="approval-impact" data-testid="approval-impact">
+        {t(family === "svm" ? "impactSvm" : family === "evm" ? "impactEvm" : "impactOther", { amount, chain: chainLabel })}
+      </p>
+      <p className="approval-impact dim">{t("impactFailure")}</p>
+      {family === "svm" && (
+        <p className="approval-impact dim" data-testid="approval-fee">
+          {a.fee_payer ? t("impactFeeKnown", { addr: shortAddr(a.fee_payer) }) : t("impactFeeUnknown")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * What a request is: which key asks, for what (the price, or the new host), on which chain, from which URL, and how long it stands. Shared by the
  * administrator's cards and the approval link (SPEC.md §3), so both say it the same way.
  */
@@ -74,7 +127,21 @@ function ApprovalSummary({
   now,
   chainLabel,
 }: {
-  approval: Pick<ApprovalRow, "kind" | "host" | "amount" | "network_kind" | "url" | "pay_to" | "expires_at">;
+  approval: Pick<
+    ApprovalRow,
+    | "kind"
+    | "host"
+    | "amount"
+    | "asset"
+    | "asset_label"
+    | "network_family"
+    | "network_kind"
+    | "url"
+    | "pay_to"
+    | "pay_to_url"
+    | "fee_payer"
+    | "expires_at"
+  >;
   keyLabel: string;
   /** false = the label is only the start of a key id (the key's name is not known to this page), so it is set in monospace. */
   keyKnown: boolean;
@@ -119,8 +186,8 @@ function ApprovalSummary({
         {a.url}
       </div>
       {isHost && <div className="approval-host-note">{t("hostNote", { host: hostPort })}</div>}
+      {!isHost && <ApprovalFacts approval={a} chainLabel={chainLabel} />}
       <div className="approval-meta">
-        {!isHost && <span>{t("payTo", { addr: shortAddr(a.pay_to) })}</span>}
         <span>{countdown}</span>
       </div>
     </>

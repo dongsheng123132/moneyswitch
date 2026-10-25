@@ -97,6 +97,8 @@ export const approvals = sqliteTable("approvals", {
   asset: text("asset").notNull(),
   payTo: text("pay_to").notNull(),
   amount: integer("amount").notNull(),
+  /** The Solana fee sponsor from the seller's 402 quote (`extra.feePayer`), recorded so the approval screen can name who pays the network fee; NULL for EVM payments and approvals created before migration 0012. */
+  feePayer: text("fee_payer"),
   status: text("status", { enum: ["pending", "approved", "denied", "expired", "used"] }).notNull(),
   expiresAt: text("expires_at").notNull(),
   decidedAt: text("decided_at"),
