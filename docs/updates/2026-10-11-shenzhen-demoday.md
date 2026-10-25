@@ -39,7 +39,7 @@ Agent 可以选填用途，也可以不填，用途是自述备注，不是已�
 1. 用现有管理员登录打开 [Key 页面](https://app.moneyswitch.dev/keys)，创建**测试网** MoneyKey。
 2. 打开钱包页，复制 **Solana Devnet 那一行的 Solana 地址**，从 [Circle 测试币水龙头](https://faucet.circle.com/) 获取 Devnet USDC。不要使用上方的 EVM `0x` 地址。官方 mint 为 `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`，见 [Circle 合约地址](https://developers.circle.com/stablecoins/usdc-contract-addresses)。测试币没有真实货币价值。
 3. 每次请求可显式填写 `network`，例如 Base Sepolia 的 `eip155:84532`，或 Solana Devnet 的 `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`；卖家必须提供匹配网络。用途 `purpose` 可留空或写通用备注，避免填机密项目、员工私人任务或完整提示词。
-4. 当前公网 `/x402-testnet/check` 是 **Monad 测试付款端点**，不能用它证明 Base 或 Solana 付款成功。Solana 需要接受 x402 v2 exact-SVM 的兼容卖家及独立付款赞助方；本次 Devnet 实付已通过，具体说明见 [Solana 手册](../solana-devnet.md)。
+4. 当前公网 `/x402-testnet/check` 是 **Monad 测试付款端点**，不能用它证明 Base 或 Solana 付款成功。Solana 需要接受 x402 v2 exact-SVM 的兼容卖家及独立付款赞助方；本次 Devnet 实付已通过，具体说明见 [Solana 手册](../solana.md#us-external-seller-verification-2026-10-11-testnets)。
 5. 付款后核对账单及对应网络的 explorer 交易。出现不确定状态时不要重复付款，保留账本并等待对账结果。
 
 ## 维护区：本次状态（不属于公开正文）
