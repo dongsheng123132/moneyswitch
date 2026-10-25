@@ -6,7 +6,7 @@ import { createPublicKey, verify } from "node:crypto";
 import { address, createKeyPairSignerFromPrivateKeyBytes, getAddressEncoder, getBase58Encoder, getBase64Encoder, getCompiledTransactionMessageDecoder, getProgramDerivedAddress, getTransactionDecoder, getBase64EncodedWireTransaction, getSignatureFromTransaction, getU32Decoder, getU64Decoder } from "@solana/kit";
 import { encodePaymentRequiredHeader, decodePaymentSignatureHeader } from "@x402/core/http";
 import { openDb } from "@moneyswitch/db";
-import { createMoneyKey, revokeMoneyKey, listHistoryForKey, usedTotal, ApprovalRequiredError } from "@moneyswitch/core";
+import { createMoneyKey, revokeMoneyKey, listHistoryForKey, listApprovals, usedTotal, ApprovalRequiredError } from "@moneyswitch/core";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
 import { performPaidFetch } from "../src/client.js";
 import { SOLANA_DEVNET, SOLANA_MAINNET } from "../src/networks.js";
@@ -126,6 +126,15 @@ describe.each([SOLANA_DEVNET, SOLANA_MAINNET])("official x402 SVM integration ($
       const approvalKey = policyKey({ approvalThreshold: 5000n });
       await expect(withKey(approvalKey)).rejects.toBeInstanceOf(ApprovalRequiredError);
       expect(listHistoryForKey(db, approvalKey.id, 10)).toHaveLength(0);
+      // The approval records the seller's quote, including the fee sponsor, so its screen can say who pays the network fee (migration 0014).
+      expect(listApprovals(db, "pending").find((a) => a.keyId === approvalKey.id)).toMatchObject({
+        kind: "payment",
+        network: network.caip2,
+        asset: network.usdcAddress,
+        payTo: sponsor.address,
+        amount: 10000n,
+        feePayer: sponsor.address,
+      });
       const otherModeKey = policyKey({ networkMode: network.kind === "mainnet" ? "testnet" : "mainnet" });
       await expect(withKey(otherModeKey)).rejects.toMatchObject({ code: "UNSUPPORTED_PAYMENT" });
       const revokedKey = policyKey({}); revokeMoneyKey(db, revokedKey.id);
