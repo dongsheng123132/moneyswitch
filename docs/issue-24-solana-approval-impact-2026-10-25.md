@@ -23,11 +23,11 @@
 
 ### 2.2 Solana Devnet 链路
 
-- 只有显式配置 `MONEYSWITCH_NETWORKS` 才启用，测试网、仅 Devnet、主网未启用；独立 SLIP-0010 Ed25519 地址，不能用 EVM 私钥（[networks.ts](../packages/x402/src/networks.ts#L99-L107)、[SPEC.md](../SPEC.md#L81)）。
+- 只有显式配置 `MONEYSWITCH_NETWORKS` 才启用；评估当时仅 Devnet，主网未启用（2026-10-25 起主网也可作显式 opt-in，见 `docs/solana.md`）；独立 SLIP-0010 Ed25519 地址，不能用 EVM 私钥（[networks.ts](../packages/x402/src/networks.ts#L99-L107)、[SPEC.md](../SPEC.md#L81)）。
 - 付款必须由第三方 fee sponsor 付手续费：`extra.feePayer` 缺失或等于自己就 `UNSUPPORTED_PAYMENT`（[client.ts](../packages/x402/src/client.ts#L561-L569)）。**审批人钱包的 SOL 不会被花掉。**
 - `@x402/svm` 2.27.0 的 exact 路径实际只构造四条指令：`SetComputeUnitLimit`、`SetComputeUnitPrice`、`TransferChecked`（USDC，payer→收款方 ATA）、`Memo`（随机 16 字节或卖家给的 memo）。**没有 approve、setAuthority、closeAccount，也没有任意 program。**
 - 链上失败（例如收款方 USDC ATA 不存在）→ `readSvmPayment` 返回 `failed` → `reconcilePaymentToFailed` 把额度释放（[reconcile.ts](../packages/core/src/reconcile.ts#L120-L137)）；确认前仍是 `unknown`、额度继续占用。
-- **真机证据缺口**：仓库 `docs/solana-devnet.md` 明说 `--pay` 路径仍未跑过、`live funded Solana settlement demo is still pending`（[solana-devnet.md](solana-devnet.md#L29-L45)），`.data/solana-live/` 不存在。目前只有 mock RPC 的 SDK 集成测试和只读 RPC probe。
+- **真机证据缺口**：仓库 `docs/solana.md` 明说 `--pay` 路径仍未跑过、`live funded Solana settlement demo is still pending`（[solana.md](solana.md)），`.data/solana-live/` 不存在。目前只有 mock RPC 的 SDK 集成测试和只读 RPC probe。
 
 ### 2.3 已有测试边界（本次实跑，全绿）
 
@@ -51,7 +51,7 @@
 | 接入成本 = 一个 HTTP 调用 | **否** | 要把“签名前构造”提前到审批前，或接受审的不是最终那笔；10 分钟审批窗口 vs 分钟级 blockhash 生命周期 |
 | Solana Pulse 可离线验证 | **是** | 其 `check_tx` 接受 base64、signed or not，`network` 支持 `devnet`；免费 25 次/天 |
 
-补充：Pulse 仓库 MIT、目前 1 star、托管在 GCP；付费档是 **Solana mainnet** 上的 x402（$0.02/次）。MoneySwitch 现在不启用 Solana mainnet，**无法用自己的支付链路付费**；免费额度或 6 周 trial 都不是长期方案。把 payer 公钥、收款方、金额发给第三方也是一次需要拍板的数据流。
+补充：Pulse 仓库 MIT、目前 1 star、托管在 GCP；付费档是 **Solana mainnet** 上的 x402（$0.02/次）。MoneySwitch 当时未启用 Solana mainnet（2026-10-25 起可显式开启），**无法用自己的支付链路付费**；免费额度或 6 周 trial 都不是长期方案。把 payer 公钥、收款方、金额发给第三方也是一次需要拍板的数据流。
 
 ## 4. 一条最小接入路径
 
@@ -69,7 +69,7 @@
 ### Step 2 — 补一次 Devnet 真机审批闭环（当前最大证据缺口）
 
 - 复用 `scripts/demo-solana-devnet.mjs` 与 `.data/solana-live/`：给 payer 充 Circle Devnet USDC、给 sponsor 充 Devnet SOL，跑 **approval_required → 批准 → 带 `approval_id` 重发 → settled**。
-- 验收物：Devnet explorer 的 tx 链接；payer 余额变化只有 USDC（SOL 不变）；sponsor 付 fee；写回 `docs/solana-devnet.md` 的 “Verification / 边界” 两节。没有这一步，审批页上任何 Solana 文案都只是纸上谈兵。
+- 验收物：Devnet explorer 的 tx 链接；payer 余额变化只有 USDC（SOL 不变）；sponsor 付 fee；写回 `docs/solana.md` 的 “Verification / 边界” 两节。没有这一步，审批页上任何 Solana 文案都只是纸上谈兵。
 - 加分（可选，不是本路径验收项）：同一笔用 `getAccountInfo` 看收款方 ATA 是否存在——失败预测在本地一次 RPC 就能做，不需要外部服务。
 
 ### Step 3 — 只用一次离线对照评估 Pulse（决定要不要继续，而不是接入）
@@ -84,7 +84,7 @@
 - 页面：`ApprovalSummary` 同时服务管理员卡片与审批链接；`NetworkKindPill`、`approvalsStrings`（en/zh）。
 - 流程锚点：`client.ts` 的 `onBeforePaymentCreation` 里已有 `selectedRequirements`（fee payer 就在 `extra`）；`validateApprovalForUse` 是“显示 = 绑定”的锚点。
 - 证据工具：`solana.test.ts` 的 mock RPC harness（[solana.test.ts](../packages/x402/test/solana.test.ts#L34-L68)）可直接加指令集断言；`scripts/demo-solana-devnet.mjs`；`reconcilePaymentToFailed` 的失败释放逻辑。
-- 文档：`docs/solana-devnet.md` 的边界声明照实更新即可。
+- 文档：`docs/solana.md` 的边界声明照实更新即可。
 
 ## 6. 需要新增的证据（验收清单）
 
@@ -92,7 +92,7 @@
 2. 显示与绑定一致性：审批页展示字段 ⊆ `validateApprovalForUse` 校验字段（server 字段测试 + dashboard 渲染测试）。
 3. Devnet 真机一笔：approval → approve → settled，tx signature + explorer + payer/sponsor 余额差（失败一笔更好）。
 4. Pulse 一次性对照记录：unsigned/devnet 是否真支持、多出什么事实、延迟、数据流边界。
-5. 若要长期用 Pulse：付费通道方案（当前只有 Solana mainnet x402，与现有网络策略冲突）。
+5. 若要长期用 Pulse：付费通道是 Solana mainnet x402；Solana mainnet 现在可以显式开启，但仍需要一笔真钱付款验证，而且不应把审批页依赖建在外部服务上。
 
 ## 7. 暂不应承诺的能力
 
@@ -121,5 +121,5 @@ Step 1 已落地，Step 2/3 仍未做：
 - 数据：迁移 `0012_approval_fee_payer` 给 `approvals` 加 `fee_payer`（可空、无回填；`apps/server-pkg/migrations/` 同步副本）。Solana 审批创建时从报价的 `extra.feePayer` 写入，EVM 和新域名审批为 null。
 - API：`approvalFields` 增加 `network_family`、`asset_label`、`pay_to_url`、`fee_payer`，全部由服务端计算（页面不解析 CAIP-2 / 地址 / URL）。
 - 页面：管理员审批卡片与审批链接共用的 `ApprovalSummary` 新增事实块——完整收款方（可复制 + 浏览器链接）、资产与 mint、按链型分流的“只签一笔 USDC 转账 / 不含代币授权 / 不花 ETH 或 SOL”、失败不扣 USDC、Solana 手续费赞助方。
-- 测试：x402 在已签名交易上断言 exact-SVM 指令集恰好为两条 compute-budget + 一条 `TransferChecked` + 一条 memo，且 `feePayer` 仍是赞助方；审批记录断言 `feePayer`；server 断言 Solana 审批链接返回的字段（大小写原样、Devnet explorer URL）；dashboard 覆盖 EN/ZH、EVM 与 Solana 渲染、host 审批没有事实块。`SPEC.md` §3、`docs/solana-devnet.md`、`CHANGELOG.md` 已同步。
-- 仍未做：Step 2 的 Devnet `approval → settle` 真机（需 funded payer USDC + sponsor SOL，`.data/solana-live/` 仍未生成）；Step 3 的 Pulse `check_tx` 一次性对照（trial key 未用）。Solana 主网仍未启用。
+- 测试：x402 在已签名交易上断言 exact-SVM 指令集恰好为两条 compute-budget + 一条 `TransferChecked` + 一条 memo，且 `feePayer` 仍是赞助方；审批记录断言 `feePayer`；server 断言 Solana 审批链接返回的字段（大小写原样、Devnet explorer URL）；dashboard 覆盖 EN/ZH、EVM 与 Solana 渲染、host 审批没有事实块。`SPEC.md` §3、`docs/solana.md`、`CHANGELOG.md` 已同步。
+- 仍未做：Step 2 的 Devnet `approval → settle` 真机（需 funded payer USDC + sponsor SOL，`.data/solana-live/` 仍未生成）；Step 3 的 Pulse `check_tx` 一次性对照（trial key 未用）。Solana 主网已作为显式 opt-in 支持（见 `docs/solana.md` 的主网就绪度），但仓库里还没有真钱付款记录。

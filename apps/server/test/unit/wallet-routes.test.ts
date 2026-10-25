@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Wallet, HDNodeWallet } from "ethers";
 import { LocalWalletDriver, unlockSecretPath, walletFilePath } from "@moneyswitch/wallet";
-import { BASE_SEPOLIA, TESTNET, SOLANA_DEVNET } from "@moneyswitch/x402";
+import { BASE_SEPOLIA, TESTNET, SOLANA_DEVNET, SOLANA_MAINNET } from "@moneyswitch/x402";
 import { reconcileUnknownPayments, type AuthorizationReader } from "@moneyswitch/core";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
 import { writeLegacyPasswordWallet } from "../legacy-wallet.js";
@@ -246,6 +246,37 @@ describe("health", () => {
     expect(after.retired_wallets[0].solana_address).toBe(oldSolana);
     expect(after.networks[1].address).not.toBe(oldSolana);
     expect(after.retired_wallets[0].balances[SOLANA_DEVNET.caip2]).toBe("0.012345");
+  });
+
+  it("supports Solana mainnet and Devnet at once: one derived address, a mainnet explorer link with no cluster, real USDC read from the mainnet RPC", async () => {
+    process.env.MONEYSWITCH_NETWORKS = `${SOLANA_MAINNET.caip2},${SOLANA_DEVNET.caip2}`;
+    const created = await createAuto();
+    const solana = t.ctx.wallet.getSolanaAddress()!;
+    const svmRead = vi
+      .spyOn(t.ctx.wallet, "getSolanaUsdcBalanceOf")
+      .mockImplementation(async (_address, rpcUrl) => (rpcUrl === SOLANA_MAINNET.rpcUrl ? 250_000n : 12_345n));
+    const info = await walletInfo();
+    expect(info.networks).toMatchObject([
+      {
+        network: SOLANA_MAINNET.caip2,
+        label: "Solana mainnet",
+        is_mainnet: true,
+        address: solana,
+        address_url: `https://explorer.solana.com/address/${solana}`,
+        usdc_balance: "0.25",
+      },
+      {
+        network: SOLANA_DEVNET.caip2,
+        label: "Solana Devnet",
+        is_mainnet: false,
+        address: solana,
+        address_url: `https://explorer.solana.com/address/${solana}?cluster=devnet`,
+        usdc_balance: "0.012345",
+      },
+    ]);
+    expect(created.address).not.toBe(solana);
+    expect(svmRead).toHaveBeenCalledWith(solana, SOLANA_MAINNET.rpcUrl, SOLANA_MAINNET.usdcAddress);
+    expect(svmRead).toHaveBeenCalledWith(solana, SOLANA_DEVNET.rpcUrl, SOLANA_DEVNET.usdcAddress);
   });
 
   it("auto wallet: unlock_mode auto, last decrypt ok, backup missing until the human says the words are written down", async () => {

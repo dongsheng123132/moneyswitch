@@ -9,7 +9,7 @@ import { openDb } from "@moneyswitch/db";
 import { createMoneyKey, revokeMoneyKey, listHistoryForKey, listApprovals, usedTotal, ApprovalRequiredError } from "@moneyswitch/core";
 import { LocalWalletDriver } from "@moneyswitch/wallet";
 import { performPaidFetch } from "../src/client.js";
-import { SOLANA_DEVNET } from "../src/networks.js";
+import { SOLANA_DEVNET, SOLANA_MAINNET } from "../src/networks.js";
 import { readSvmPayment, captureSvmPayment } from "../src/solana.js";
 
 // What an exact-SVM payment may contain: two compute-budget instructions, one SPL Token instruction and the memo. Nothing else — in
@@ -140,6 +140,62 @@ describe("official x402 SVM integration", () => {
       expect(paidCalls).toBe(1);
       expect(listHistoryForKey(db, key.id, 10)[0]).toMatchObject({ status: "failed", errorCode: "ABORTED_BEFORE_SEND" });
       expect(usedTotal(db, key.id)).toBe(10000n);
+    } finally { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("builds and reconciles a Solana mainnet payment with the mainnet USDC mint and the seller's fee sponsor", async () => {
+    vi.stubEnv("MONEYSWITCH_NETWORKS", SOLANA_MAINNET.caip2);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ms-svm-mainnet-"));
+    const { db, sqlite } = openDb({ filePath: ":memory:" });
+    try {
+      const wallet = new LocalWalletDriver(dir, { protect: false, scrypt: { N: 32 } });
+      await wallet.createWithPhrase();
+      const owner = wallet.getSolanaAddress()!;
+      const sponsor = await createKeyPairSignerFromPrivateKeyBytes(new Uint8Array(32).fill(8));
+      const key = createMoneyKey(db, { name: "svm-mainnet", totalBudget: 100000n, dailyBudget: 100000n, perRequestLimit: 10000n, allowedHosts: ["seller.example:443"], networkMode: "mainnet" }).row;
+      let fullTransaction = "", fullSignature = "";
+      const mintData = Buffer.alloc(82); mintData[44] = 6; mintData[45] = 1;
+      const mockedFetch = vi.fn(async (url: any, init?: RequestInit) => {
+        const target = typeof url === "string" ? url : url.url ?? String(url);
+        if (target === SOLANA_MAINNET.rpcUrl) {
+          const request = JSON.parse(String(init?.body));
+          let result: any;
+          if (request.method === "getAccountInfo") result = { context: { slot: 1 }, value: { data: [mintData.toString("base64"), "base64"], executable: false, lamports: 1, owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", rentEpoch: 1, space: 82 } };
+          else if (request.method === "getLatestBlockhash") result = { context: { slot: 1 }, value: { blockhash: "11111111111111111111111111111111", lastValidBlockHeight: 100 } };
+          else if (request.method === "getSignaturesForAddress") result = fullSignature ? [{ signature: fullSignature }] : [];
+          else if (request.method === "getTransaction") result = { meta: { err: null }, transaction: [fullTransaction, "base64"] };
+          else throw new Error(`Unexpected RPC: ${request.method}`);
+          return Response.json({ jsonrpc: "2.0", id: request.id, result });
+        }
+        const headers = new Headers(init?.headers ?? url.headers);
+        const signatureHeader = headers.get("payment-signature");
+        if (signatureHeader) {
+          const payload = decodePaymentSignatureHeader(signatureHeader).payload as { transaction: string };
+          const tx = getTransactionDecoder().decode(getBase64Encoder().encode(payload.transaction));
+          const [signatures] = await sponsor.signTransactions([tx as never]);
+          const sponsored = { ...tx, signatures: { ...tx.signatures, ...signatures } };
+          fullTransaction = getBase64EncodedWireTransaction(sponsored);
+          fullSignature = getSignatureFromTransaction(sponsored);
+          return Response.json({ delivered: true });
+        }
+        const required = { x402Version: 2, resource: { url: "https://seller.example/item", description: "SVM mainnet test", mimeType: "application/json" }, accepts: [{ scheme: "exact", network: SOLANA_MAINNET.caip2, amount: "10000", asset: SOLANA_MAINNET.usdcAddress, payTo: sponsor.address, maxTimeoutSeconds: 60, extra: { feePayer: sponsor.address } }] };
+        return Response.json(required, { status: 402, headers: { "PAYMENT-REQUIRED": encodePaymentRequiredHeader(required as never) } });
+      });
+      vi.stubGlobal("fetch", mockedFetch);
+      await performPaidFetch(db, sqlite, key, wallet, { url: "https://seller.example/item", host: "seller.example:443", method: "GET" });
+      const row = listHistoryForKey(db, key.id, 10)[0];
+      expect(row).toMatchObject({ network: SOLANA_MAINNET.caip2, status: "unknown", payTo: sponsor.address });
+      expect(usedTotal(db, key.id)).toBe(10000n);
+      // Reconcile on mainnet: settled only by the full fee-payer transaction id, with the same fixed instruction set as Devnet.
+      expect(await readSvmPayment(SOLANA_MAINNET, row)).toEqual({ status: "settled", txHash: fullSignature });
+      const tx = getTransactionDecoder().decode(getBase64Encoder().encode(row.svmEvidence!.transaction));
+      const compiled = getCompiledTransactionMessageDecoder().decode(tx.messageBytes) as unknown as {
+        staticAccounts: readonly string[];
+        instructions: ReadonlyArray<{ programAddressIndex: number; data: Uint8Array }>;
+      };
+      expect(compiled.staticAccounts[0]).toBe(sponsor.address);
+      expect(compiled.instructions).toHaveLength(4);
+      expect(owner).not.toBe(sponsor.address);
     } finally { sqlite.close(); fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

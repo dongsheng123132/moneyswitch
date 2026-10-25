@@ -66,9 +66,9 @@ docker exec <容器名> node /app/dist/cli.js reset-admin-token
 
 ## 链和资金
 
-默认只启用 Monad 测试网 `eip155:10143` 和 Base Sepolia `eip155:84532`。主网要明确写进 `MONEYSWITCH_NETWORKS`（例如 `eip155:143,eip155:8453`），默认链必须在允许列表内。每条链只认它自己的 USDC，不换币、不跨链；同一地址在各链的余额独立，账单记录实际链，对账按该链查询。
+默认只启用 Monad 测试网 `eip155:10143` 和 Base Sepolia `eip155:84532`。主网要明确写进 `MONEYSWITCH_NETWORKS`（例如 `eip155:143,eip155:8453`），默认链必须在允许列表内。每条链只认它自己的 USDC，不换币、不跨链；同一地址在各链的余额独立，账单记录实际链，对账按该链查询。**Solana 也可列进同一个列表**：Devnet `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` 是测试币，主网 `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` 是真 USDC（和所有主网一样必须显式写进列表）；RPC 可用 `MONEYSWITCH_SOLANA_DEVNET_RPC_URL` / `MONEYSWITCH_SOLANA_MAINNET_RPC_URL` 覆盖。Solana 地址由 12 个恢复词单独派生，Devnet 和主网是同一个地址、余额各算各的；手续费必须由卖家的 fee sponsor 支付，不花钱包的 SOL。
 
-**主网和测试网可以同时启用**：同一台服务器、同一个钱包，先在测试网跑通，再花一点真钱。例如 `MONEYSWITCH_NETWORKS=eip155:10143,eip155:84532,eip155:143,eip155:8453`。每把 key 在发出时选定类型（测试网 key 或主网 key，之后不能改）：测试网 key 只在测试网付测试币，主网 key 只在主网付真 USDC，永不串用；卖家只接受另一类链时返回 `UNSUPPORTED_PAYMENT`，什么都不会签。两类都启用时，后台发 key 的表单要先选类型（选主网要勾选「这把 key 花真钱」），接口 `POST /v1/keys` 不给 `network_mode` 会返回 `400 NETWORK_MODE_REQUIRED`；只启用一类时，不给就是那一类。钱包页的余额分「主网 · 真钱」和「测试网 · 测试币，没有价值」两组显示，账单的合计按主网、测试网分开，从不相加。升级前（v0.7.2 之前）发的旧 key 没有类型：实例只启用一类时保持原样（那一类的所有链）；**两类都启用时，旧 key 只在测试网付款**——也就是说，在测试网旁边加开主网，以前发出去试用的旧 key 仍然只能花测试币，不会因此花到真钱。后台把它标为「旧 key」并列出它实际能付款的链，仍建议撤销后重发一把带类型的新 key。
+**主网和测试网可以同时启用**：同一台服务器、同一个钱包，先在测试网跑通，再花一点真钱。例如 `MONEYSWITCH_NETWORKS=eip155:10143,eip155:84532,eip155:143,eip155:8453`（Solana 同理，Devnet 与主网可同时列）。每把 key 在发出时选定类型（测试网 key 或主网 key，之后不能改）：测试网 key 只在测试网付测试币，主网 key 只在主网付真 USDC，永不串用；卖家只接受另一类链时返回 `UNSUPPORTED_PAYMENT`，什么都不会签。两类都启用时，后台发 key 的表单要先选类型（选主网要勾选「这把 key 花真钱」），接口 `POST /v1/keys` 不给 `network_mode` 会返回 `400 NETWORK_MODE_REQUIRED`；只启用一类时，不给就是那一类。钱包页的余额分「主网 · 真钱」和「测试网 · 测试币，没有价值」两组显示，账单的合计按主网、测试网分开，从不相加。升级前（v0.7.2 之前）发的旧 key 没有类型：实例只启用一类时保持原样（那一类的所有链）；**两类都启用时，旧 key 只在测试网付款**——也就是说，在测试网旁边加开主网，以前发出去试用的旧 key 仍然只能花测试币，不会因此花到真钱。后台把它标为「旧 key」并列出它实际能付款的链，仍建议撤销后重发一把带类型的新 key。
 
 ## 备份、升级和回滚
 

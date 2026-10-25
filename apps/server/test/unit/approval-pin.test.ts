@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { createApproval, createHostApproval, getApproval, listAudit, parseUsdcToMicros, APPROVAL_PIN_MAX_FAILURES } from "@moneyswitch/core";
-import { explorerUrl, NETWORKS, SOLANA_DEVNET } from "@moneyswitch/x402";
+import { explorerUrl, NETWORKS, SOLANA_DEVNET, SOLANA_MAINNET } from "@moneyswitch/x402";
 import { schema } from "@moneyswitch/db";
 import { eq } from "drizzle-orm";
 import { buildTestApp, cleanupTestApp, type TestCtx } from "../helpers.js";
@@ -499,23 +499,26 @@ describe("GET /v1/approvals?id=<approval id>: the approval link, no login", () =
     expect(text).not.toMatch(/scrypt|1234|mk_live_/);
   });
 
-  it("shows what a Solana payment does: the full devnet recipient, its USDC mint, the chain family and the fee sponsor", async () => {
+  it("shows what a Solana payment does: the full recipient, its USDC mint, the chain family and the fee sponsor on Devnet and mainnet", async () => {
     t = await buildTestApp();
     const k = await createKey({ approval_pin: "8426" });
     const payTo = "J7aN3PLJnTCF5qpEnvJHJsnCjcGuqC2rYtEM8Gv3xwg";
     const feePayer = "So11111111111111111111111111111111111111112";
-    const ap = createApproval(t.ctx.db, {
-      keyId: k.id,
-      url: "https://seller.example/item",
-      method: "GET",
-      body: undefined,
-      network: SOLANA_DEVNET.caip2,
-      asset: SOLANA_DEVNET.usdcAddress,
-      payTo,
-      amount: parseUsdcToMicros("0.15"),
-      feePayer,
-    });
-    const approval = (await t.app.inject({ method: "GET", url: `/v1/approvals?id=${ap.id}` })).json().approval;
+    const approvalOf = async (network: typeof SOLANA_DEVNET, amount = "0.15") => {
+      const ap = createApproval(t.ctx.db, {
+        keyId: k.id,
+        url: "https://seller.example/item",
+        method: "GET",
+        body: undefined,
+        network: network.caip2,
+        asset: network.usdcAddress,
+        payTo,
+        amount: parseUsdcToMicros(amount),
+        feePayer,
+      });
+      return (await t.app.inject({ method: "GET", url: `/v1/approvals?id=${ap.id}` })).json().approval;
+    };
+    const approval = await approvalOf(SOLANA_DEVNET);
     expect(approval).toMatchObject({
       kind: "payment",
       network: SOLANA_DEVNET.caip2,
@@ -530,6 +533,19 @@ describe("GET /v1/approvals?id=<approval id>: the approval link, no login", () =
     // The page must not have to know a Solana address is case-sensitive: the server sends it exactly as the quote did.
     expect(approval.pay_to).toBe(payTo);
     expect(approval.pay_to_url).toBe(`https://explorer.solana.com/address/${payTo}?cluster=devnet`);
+
+    // Mainnet: the same facts with a real-money pill and an explorer link that does not claim Devnet.
+    const mainnet = await approvalOf(SOLANA_MAINNET);
+    expect(mainnet).toMatchObject({
+      network: SOLANA_MAINNET.caip2,
+      network_kind: "mainnet",
+      network_family: "svm",
+      asset: SOLANA_MAINNET.usdcAddress,
+      asset_label: "USDC",
+      pay_to: payTo,
+      pay_to_url: `https://explorer.solana.com/address/${payTo}`,
+      fee_payer: feePayer,
+    });
   });
 
   it("says what became of it: decided and expired requests are shown as such; a new host shows its host:port; pin_state tells locked and none", async () => {

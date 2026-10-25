@@ -114,18 +114,28 @@ When the instance enables Monad testnet (a mainnet enabled next to it does not m
 
 ## Networks and payment outcomes
 
-Monad testnet (`eip155:10143`), Base Sepolia (`eip155:84532`), Solana Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`), Monad mainnet (`eip155:143`), Base mainnet (`eip155:8453`). Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own USDC. No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK.
+Monad testnet (`eip155:10143`), Base Sepolia (`eip155:84532`), Solana Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`), Monad mainnet (`eip155:143`), Base mainnet (`eip155:8453`), Solana mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own USDC. No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK.
 
-To enable Solana alongside the existing testnets:
+To enable Solana Devnet alongside the existing testnets:
 
 ```sh
 export MONEYSWITCH_NETWORKS=eip155:10143,eip155:84532,solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
 export MONEYSWITCH_SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
 ```
 
-Restart the server with these environment variables. The wallet dashboard shows a **separate Solana address**, derived from the existing encrypted recovery phrase using SLIP-0010 `m/44'/501'/0'/0'`. Solana addresses and mints are case-sensitive. Legacy wallets without a recovery phrase must use the normal wallet replacement flow before Solana can be used. Fund the displayed address's associated token account with Circle Devnet USDC (`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`); tokens have no monetary value. Sellers must offer x402 v2 exact-SVM payments with a separate fee sponsor (`extra.feePayer`), so payments cannot spend the wallet's SOL outside MoneyKey limits. Solana mainnet is not enabled.
+To spend real USDC on Solana mainnet, list its id explicitly — the same opt-in as every other mainnet. Devnet and mainnet can be enabled together:
 
-Signed Solana transactions are recorded before being sent. Lost responses and server restarts retain the budget reservation until a matching finalized transaction proves settlement or execution failure. An RPC error, expired blockhash or empty history is not proof of no charge. Recovery searches the latest 25 finalized transactions involving the payer; older/pruned transactions may remain `unknown` and continue counting against the budget. This implementation has automated SDK integration tests; a live Devnet settlement must still be verified with a funded wallet and compatible seller before claiming a completed on-chain demo. MagicBlock is not integrated.
+```sh
+export MONEYSWITCH_NETWORKS=eip155:10143,eip155:84532,solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1,solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp
+export MONEYSWITCH_SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
+export MONEYSWITCH_SOLANA_MAINNET_RPC_URL=https://api.mainnet-beta.solana.com
+```
+
+Restart the server with these environment variables. The wallet dashboard shows a **separate Solana address**, derived from the existing encrypted recovery phrase using SLIP-0010 `m/44'/501'/0'/0'`: the same address on Devnet and mainnet, with a separate USDC balance and token account per cluster. Solana addresses and mints are case-sensitive. Legacy wallets without a recovery phrase must use the normal wallet replacement flow before Solana can be used. Fund the Devnet address's associated token account with Circle Devnet USDC (`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`; tokens have no monetary value) and/or the mainnet address's token account with real USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`). Sellers must offer x402 v2 exact-SVM payments with a separate fee sponsor (`extra.feePayer`), so payments cannot spend the wallet's SOL outside MoneyKey limits. A mainnet key pays only mainnet USDC and a testnet key only Devnet test USDC, even with both enabled.
+
+Mainnet readiness: the SDK integration, wallet derivation, policy, approval screen and reconciliation are covered by tests, and a read-only probe of the public mainnet RPC verified the genesis hash and Circle's USDC mint (82 bytes, owner Tokenkeg, 6 decimals). **No live mainnet payment has been made from this repository yet** — fund a small amount and run one real payment (plus a refusal and an approval) before trusting it with more. A live Devnet settlement is still to be recorded as well. MagicBlock is not integrated.
+
+Signed Solana transactions are recorded before being sent. Lost responses and server restarts retain the budget reservation until a matching finalized transaction proves settlement or execution failure. An RPC error, expired blockhash or empty history is not proof of no charge. Recovery searches the latest 25 finalized transactions involving the payer; older/pruned transactions may remain `unknown` and continue counting against the budget. The live-settlement caveat above applies to both clusters.
 
 Mainnets and testnets can be enabled together on one server and one wallet (try on a testnet first, then spend a little real money). Every key is a testnet key or a mainnet key (`network_mode`: `testnet` | `mainnet`), chosen when it is issued and never changed; a key pays only on the enabled chains of its own kind, in `MONEYSWITCH_NETWORKS` order. `POST /v1/keys` without `network_mode` uses the one kind the instance enables, and answers `400 NETWORK_MODE_REQUIRED` when both are enabled. A seller that accepts only the other kind gets `UNSUPPORTED_PAYMENT` (`charged: no`, nothing signed). Child keys share their parent's type. Keys issued before v0.7.2 have no type (`network_mode: null`): where the instance enables one kind only they keep paying on all of its enabled chains, and where it enables **both kinds they pay on the testnets only** (adding a mainnet never lets an old key spend real money). A key without a type under a typed parent follows the parent; if two levels of one chain have different types, that key pays on no chain at all (`UNSUPPORTED_PAYMENT`).
 
