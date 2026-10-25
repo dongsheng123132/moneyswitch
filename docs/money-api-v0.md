@@ -280,6 +280,34 @@ status, own_used_today, own_used_total` (`used_today`/`used_total` are
 subtree totals); `GET /v1/admin/keys/tree` returns
 `{ "tree": [ { …row, "children": [ … ] } ] }`.
 
+**`POST /v1/keys` reads its fields exactly as `POST /v1/keys/children`
+does** (one shared reading, `packages/core/src/keyinput.ts`). A missing or
+malformed one is
+`400 { "error": "INVALID_REQUEST", "code": "INVALID_REQUEST", "message", "field" }`
+naming the field, and **no key is created**. The rules are:
+
+- `name`: 1–200 characters (trimmed; a missing or blank one is refused, not
+  stored as an empty name).
+- `total_budget`, `daily_budget`, `per_request_limit`: required, each a
+  decimal USDC string (`"1.00"`) or a finite number, and **>= 0**.
+  `approval_threshold` is optional (omitted = no threshold: every amount asks
+  a person) and must also be >= 0 and **<= `per_request_limit`** — a
+  threshold above the per-request limit could never fire, since every
+  payment that would reach it is refused by the limit first.
+- `allowed_hosts`: an array of `host` or `host:port` entries (trimmed). A
+  scheme, a path, userinfo, whitespace or an out-of-range port is refused:
+  none of them can ever match a URL's host, so the key would appear to allow
+  a site it does not. Omitted means no hosts (every site asks a person); a
+  non-array (a bare string, say) is refused, not stored as a string.
+- `max_payments_per_minute`: a positive integer when given.
+- `expires_at`: an ISO-8601 date-time when given (omitted / `null` = never).
+- `can_delegate`: a boolean.
+
+The same rules hold for a child key, with one difference: an omitted
+`allowed_hosts` is **inherited from the parent**, and where a child breaks
+both a parent bound and its own limits the answer is the parent-bound
+`CHILD_EXCEEDS_PARENT` (with `parent_value`), which names the value to beat.
+
 ### Who approves: the approval PIN (v0.7.4, SPEC.md §3)
 
 A key cannot approve its own request (the AI holds the same key), so each

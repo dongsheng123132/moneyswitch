@@ -5,7 +5,7 @@ import { evaluateAndReserve } from "../src/policy.js";
 import { getPayment, recordSvmPaymentEvidence, sweepStaleReservations } from "../src/payments.js";
 import { usedTotal } from "../src/ledger.js";
 import { reconcileUnknownPayments } from "../src/reconcile.js";
-import { createApproval, decideApproval, validateApprovalForUse } from "../src/approval.js";
+import { createApproval, decideApproval, getApproval, validateApprovalForUse } from "../src/approval.js";
 
 const network = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
 const asset = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
@@ -56,6 +56,19 @@ describe("Solana ledger safeguards", () => {
       expect(validateApprovalForUse(db, approval.id, ctx).id).toBe(approval.id);
       expect(() => validateApprovalForUse(db, approval.id, { ...ctx, asset: asset.toLowerCase() })).toThrow("APPROVAL_INVALID");
       expect(() => validateApprovalForUse(db, approval.id, { ...ctx, payTo: "recipient" })).toThrow("APPROVAL_INVALID");
+    } finally { sqlite.close(); }
+  });
+
+  it("records the quote's Solana fee sponsor with the approval, so the approval screen can name it (migration 0014)", () => {
+    const { db, sqlite } = freshDb();
+    try {
+      const payment = createApproval(db, { keyId: "key", url: "https://api.example/item", method: "GET", body: undefined, network, asset, payTo: "Recipient", amount: 10n, feePayer: "FeeSponsor" });
+      expect(getApproval(db, payment.id)).toMatchObject({ kind: "payment", feePayer: "FeeSponsor" });
+      // A new host has no price and no fee sponsor; an approval from before migration 0014 reads as null, not as a missing field.
+      const host = createApproval(db, { keyId: "key", url: "https://api.example/new", method: "GET", body: undefined, network: "", asset: "", payTo: "", amount: 0n, kind: "host" });
+      expect(getApproval(db, host.id)!.feePayer).toBeNull();
+      sqlite.prepare("UPDATE approvals SET fee_payer = NULL WHERE id = ?").run(payment.id);
+      expect(getApproval(db, payment.id)!.feePayer).toBeNull();
     } finally { sqlite.close(); }
   });
 });

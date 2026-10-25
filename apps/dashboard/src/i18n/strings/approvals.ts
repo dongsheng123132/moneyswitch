@@ -13,7 +13,19 @@ export const approvalsStrings = defineMessages(
     reasonHost: "This service is outside the key's allowed hosts. Approval allows future access; payment limits still apply.",
     reasonPayment: "This amount reaches an approval threshold and needs your confirmation before payment.",
 
-    payTo: "pay to {addr}",
+    payToLabel: "Recipient",
+    assetLabel: "Asset",
+    viewAddress: "View address",
+    /** The impact sentence for a Solana payment: what the approved request can and cannot do. */
+    impactSvm:
+      "Approving lets the AI send exactly {amount} to this address on {chain}. It signs one USDC transfer only: no token approvals, and the network fee is paid by a sponsor, not by your wallet's SOL.",
+    /** The impact sentence for an EVM payment (EIP-3009: the wallet signs an authorization, it sends no transaction and pays no gas). */
+    impactEvm:
+      "Approving lets the AI send exactly {amount} to this address on {chain}. It signs one USDC transfer authorization (EIP-3009) only: no token approvals, and it spends no ETH from your wallet.",
+    impactOther: "Approving lets the AI send exactly {amount} to this address. It pays only that price in the quoted asset: no token approvals.",
+    impactFailure: "If the chain rejects it, no USDC moves; the reserved amount is released once the chain confirms.",
+    impactFeeKnown: "Network fee paid by the sponsor {addr}.",
+    impactFeeUnknown: "Network fee paid by the seller's facilitator.",
     hostBadge: "New host",
     hostSource: "Requested:",
     hostNote: "Once approved, this key can reach {host} from now on. The price is only known when the seller quotes it; the key's limits are still checked.",
@@ -72,7 +84,15 @@ export const approvalsStrings = defineMessages(
     reasonHost: "此服务尚未在 Key 的允许列表中；批准后允许今后访问，付款额度仍照常检查。",
     reasonPayment: "这笔金额达到审批阈值，需要你确认后才能付款。",
 
-    payTo: "付给 {addr}",
+    payToLabel: "收款方",
+    assetLabel: "资产",
+    viewAddress: "查看地址",
+    impactSvm: "批准后，AI 只会把 {amount} 付到这个 Solana 地址：一笔 USDC 转账，不含代币授权；网络手续费由赞助方支付，不花你钱包的 SOL。",
+    impactEvm: "批准后，AI 只会把 {amount} 付到这个地址：只签一笔 USDC 转账授权（EIP-3009），不含代币授权，不花你钱包的 ETH。",
+    impactOther: "批准后，AI 只会按报价把这个数额付到这个地址：不含代币授权。",
+    impactFailure: "链上执行失败不会扣走 USDC；额度在链上确认后释放。",
+    impactFeeKnown: "网络手续费由赞助方 {addr} 支付。",
+    impactFeeUnknown: "网络手续费由卖家的 facilitator 支付。",
     hostBadge: "新域名",
     hostSource: "来源网址：",
     hostNote: "批准后，这把 key 以后都可以访问 {host}；价格要等卖家报价，额度照常检查。",

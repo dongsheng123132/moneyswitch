@@ -88,6 +88,8 @@ export interface ApprovalRow {
   asset: string;
   payTo: string;
   amount: bigint;
+  /** The Solana fee sponsor from the seller's 402 quote, or null (EVM, a new host, or an approval from before migration 0014). */
+  feePayer: string | null;
   status: ApprovalStatus;
   kind: ApprovalKind;
   expiresAt: string;
@@ -117,6 +119,35 @@ export type MoneySwitchErrorCode =
   | "PAYMENT_FAILED"
   | "UPSTREAM_ERROR"
   | "FORBIDDEN";
+
+/**
+ * A rejected key creation (v0.4, SPEC-v0.4 §A). Lives here, not in
+ * delegation.ts: keyinput.ts (the shared body reader) throws it too, and
+ * delegation.ts imports keyinput.ts, which would be a cycle.
+ */
+export type DelegationErrorCode =
+  | "CHILD_EXCEEDS_PARENT"
+  | "DELEGATION_NOT_ALLOWED"
+  | "MAX_DEPTH_EXCEEDED"
+  | "CHILDREN_LIMIT_REACHED"
+  | "INVALID_REQUEST";
+
+/** A rejected key creation. `field` names the offending request field (snake_case, as on the wire). */
+export class DelegationError extends Error {
+  code: DelegationErrorCode;
+  field: string | null;
+  /** The parent key's value for the field, in wire format, when that helps the caller (e.g. "1.00", ["a:1"]). */
+  parentValue: unknown;
+  httpStatus: number;
+  constructor(code: DelegationErrorCode, message: string, opts: { field?: string; parentValue?: unknown } = {}) {
+    super(`${code}: ${message}`);
+    this.name = "DelegationError";
+    this.code = code;
+    this.field = opts.field ?? null;
+    this.parentValue = opts.parentValue;
+    this.httpStatus = code === "CHILD_EXCEEDS_PARENT" || code === "INVALID_REQUEST" ? 400 : 403;
+  }
+}
 
 /**
  * v0.4 (SPEC-v0.4 §A): which level of the key chain produced a key/limit

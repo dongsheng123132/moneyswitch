@@ -7,7 +7,12 @@ import { rowToMoneyKey } from "./keyrow.js";
 import { getKeyChain, assertChainUsable, chainNetworkMode } from "./chain.js";
 import { usedToday, usedTotal } from "./ledger.js";
 import { revokeMoneyKey } from "./keys.js";
-import type { MoneyKeyRow, NetworkMode } from "./types.js";
+import { type MoneyKeyRow, type NetworkMode, DelegationError } from "./types.js";
+import { assertOwnLimits } from "./keyinput.js";
+
+// Defined in types.ts (shared with keyinput.ts, to keep the two out of a
+// cycle); re-exported here because this is where a reader looks for it.
+export { DelegationError };
 
 /**
  * v0.4 (SPEC-v0.4 §A): child MoneyKeys / multi-level delegation.
@@ -39,30 +44,6 @@ export function parseMaxKeyDepth(raw: string | undefined | null): number {
   const n = Number(raw.trim());
   if (!Number.isSafeInteger(n) || n < 0) return DEFAULT_MAX_KEY_DEPTH;
   return Math.min(n, MAX_KEY_DEPTH_CEILING);
-}
-
-export type DelegationErrorCode =
-  | "CHILD_EXCEEDS_PARENT"
-  | "DELEGATION_NOT_ALLOWED"
-  | "MAX_DEPTH_EXCEEDED"
-  | "CHILDREN_LIMIT_REACHED"
-  | "INVALID_REQUEST";
-
-/** A rejected child-key creation. `field` names the offending request field (snake_case, as on the wire). */
-export class DelegationError extends Error {
-  code: DelegationErrorCode;
-  field: string | null;
-  /** Parent's value for the field, in wire format, when that helps the caller (e.g. "1.00", ["a:1"]). */
-  parentValue: unknown;
-  httpStatus: number;
-  constructor(code: DelegationErrorCode, message: string, opts: { field?: string; parentValue?: unknown } = {}) {
-    super(`${code}: ${message}`);
-    this.name = "DelegationError";
-    this.code = code;
-    this.field = opts.field ?? null;
-    this.parentValue = opts.parentValue;
-    this.httpStatus = code === "CHILD_EXCEEDS_PARENT" || code === "INVALID_REQUEST" ? 400 : 403;
-  }
 }
 
 export interface CreateChildKeyInput {
@@ -331,6 +312,10 @@ export function createChildKey(
       parentValue: parentMode ?? null,
     });
   }
+  // Last: the child's own limits must agree with each other. This runs after
+  // every parent-bound check, so a child that breaks both gets the parent-
+  // bound answer (CHILD_EXCEEDS_PARENT), which names the value it has to beat.
+  assertOwnLimits(input);
 
   const plaintextKey = generateMoneyKey();
   const id = randomUUID();

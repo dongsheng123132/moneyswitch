@@ -339,8 +339,13 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
     url: `https://api.example.com/${id}`,
     method: "GET",
     network: "eip155:10143",
-    asset: "0xusdc",
+    network_kind: "testnet" as const,
+    network_family: "evm" as const,
+    asset: "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+    asset_label: "USDC",
     pay_to: "0x000000000000000000000000000000000000dEaD",
+    pay_to_url: "https://testnet.monadvision.com/address/0x000000000000000000000000000000000000dEaD",
+    fee_payer: null as string | null,
     amount: "0.15",
     status: "pending" as const,
     expires_at: "2026-10-04T12:10:00.000Z",
@@ -464,7 +469,7 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
       assert.ok(html.includes(esc(en.approvals.hostSource)));
       assert.ok(html.includes(fill(en.approvals.hostNote, { host: "api.newhost.example:443" })));
       assert.ok(!html.includes('class="approval-amount'), "no price yet, so no amount");
-      assert.ok(!html.includes("pay to"), "no payee yet");
+      assert.ok(!html.includes('data-testid="approval-facts"'), "no payee, asset or impact facts yet");
       assert.ok(!html.includes("<input"), "nothing to tick: approving is the one decision");
       assert.equal(html.split(`>${en.approvals.approve}<`).length - 1, 1);
       assert.equal(html.split(`>${en.approvals.deny}<`).length - 1, 1);
@@ -482,7 +487,7 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
       assert.ok(html.includes(fill(zh.hostNote, { host: "seller.example:8080" })));
     });
 
-    it("a payment approval looks exactly as before: amount and payee, no marker; so does one from a server that sends no kind", () => {
+    it("a payment approval shows the full recipient, the asset and what this payment can do; so does one from a server that sends no kind", () => {
       for (const row of [pendingRow("ap-p", { kind: "payment" }), pendingRow("ap-q")]) {
         const html = view({ pending: [row] });
         assert.ok(!html.includes("host-approval"));
@@ -490,8 +495,47 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
         assert.ok(!html.includes("approval-host-note"));
         assert.ok(html.includes('class="approval-amount num"'));
         assert.ok(html.includes("0.15"));
-        assert.ok(html.includes("pay to"));
+        assert.ok(html.includes('data-testid="approval-facts"'));
+        assert.ok(html.includes("0x000000000000000000000000000000000000dEaD"), "the whole recipient, not a shortened one");
+        assert.ok(html.includes(fill(en.approvals.impactEvm, { amount: "0.15", chain: "eip155:10143" })));
+        assert.ok(html.includes(esc(en.approvals.impactFailure)));
       }
+    });
+
+    it("Solana Devnet: the full case-sensitive recipient, the mint, the sponsor and the no-SOL/no-approvals sentence", () => {
+      const payTo = "J7aN3PLJnTCF5qpEnvJHJsnCjcGuqC2rYtEM8Gv3xwg";
+      const feePayer = "So11111111111111111111111111111111111111112";
+      const solana = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+      const html = view({
+        pending: [
+          pendingRow("ap-s", {
+            network: solana,
+            network_family: "svm",
+            asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+            asset_label: "USDC",
+            pay_to: payTo,
+            pay_to_url: `https://explorer.solana.com/address/${payTo}?cluster=devnet`,
+            fee_payer: feePayer,
+          }),
+        ],
+        networks: [
+          {
+            network: solana,
+            chain_id: null,
+            usdc_address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+            network_label: "Solana Devnet",
+            explorer_base: "https://explorer.solana.com",
+            is_mainnet: false,
+          },
+        ],
+      });
+      assert.ok(html.includes('data-testid="approval-facts"'));
+      assert.ok(html.includes(payTo), "the full base58 address, case intact");
+      assert.ok(html.includes(`href="https://explorer.solana.com/address/${payTo}?cluster=devnet"`));
+      assert.ok(html.includes(fill(en.approvals.impactSvm, { amount: "0.15", chain: "Solana Devnet" })));
+      assert.ok(html.includes(esc(en.approvals.impactFailure)));
+      assert.ok(html.includes(fill(en.approvals.impactFeeKnown, { addr: "So1111...1112" })));
+      assert.ok(html.includes("4zMMC9"), "the devnet USDC mint is named");
     });
 
     it("the host:port shown is the server's `host` field, as it will be listed: the page reads no URL (IDN, upper case and a trailing dot included)", () => {

@@ -2,6 +2,7 @@ export * from "./money.js";
 export * from "./moneykey.js";
 export * from "./types.js";
 export * from "./keys.js";
+export * from "./keyinput.js";
 export * from "./chain.js";
 export * from "./delegation.js";
 export * from "./ledger.js";

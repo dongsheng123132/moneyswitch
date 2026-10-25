@@ -7,9 +7,13 @@
 
 export const MICROS_PER_USDC = 1_000_000n;
 
-/** Parses a decimal USDC string like "0.01" or "5" into integer micro-USDC bigint. Throws on invalid input. */
-export function parseUsdcToMicros(input: string): bigint {
-  const trimmed = input.trim();
+/** Parses a decimal USDC string like "0.01" or "5" (or a finite number) into integer micro-USDC bigint. Throws on invalid input. */
+export function parseUsdcToMicros(input: string | number): bigint {
+  // Never call .trim() on a non-string: a missing/ null budget would otherwise surface as a TypeError.
+  if (typeof input !== "string" && typeof input !== "number") {
+    throw new Error(`INVALID_AMOUNT: ${JSON.stringify(input)} is not a valid decimal USDC amount`);
+  }
+  const trimmed = String(input).trim();
   if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) {
     throw new Error(`INVALID_AMOUNT: "${input}" is not a valid decimal USDC amount`);
   }

@@ -19,11 +19,13 @@ const BASE = "https://pay.example.com";
 let SkillForAi: typeof import("../src/components/SkillForAi.tsx").default;
 let ConfirmDialog: typeof import("../src/components/ConfirmDialog.tsx").default;
 let LangProvider: typeof import("../src/i18n/index.tsx").LangProvider;
+let TxLink: typeof import("../src/components/TxLink.tsx");
 
 before(async () => {
   SkillForAi = (await import("../src/components/SkillForAi.tsx")).default;
   ConfirmDialog = (await import("../src/components/ConfirmDialog.tsx")).default;
   LangProvider = (await import("../src/i18n/index.tsx")).LangProvider;
+  TxLink = await import("../src/components/TxLink.tsx");
 });
 
 const render = (el: Parameters<typeof renderToStaticMarkup>[0], lang: "en" | "zh" = "en") => {
@@ -87,6 +89,14 @@ describe("ConfirmDialog (reset secret)", () => {
   it("renders nothing when closed and shows an error when given one", () => {
     assert.equal(render(h(ConfirmDialog, { ...props, open: false }, "x")), "");
     assert.ok(render(h(ConfirmDialog, { ...props, open: true, error: "boom" }, "x")).includes("boom"));
+  });
+});
+
+describe("TxLink (Solana transaction explorer)", () => {
+  it("links a mainnet transaction at the explorer's default cluster and a Devnet one at ?cluster=devnet", () => {
+    assert.equal(TxLink.solanaTxExplorerUrl("sig", true), "https://explorer.solana.com/tx/sig");
+    assert.equal(TxLink.solanaTxExplorerUrl("sig", false), "https://explorer.solana.com/tx/sig?cluster=devnet");
+    assert.equal(TxLink.solanaTxExplorerUrl("a/b?c", true), "https://explorer.solana.com/tx/a%2Fb%3Fc");
   });
 });
 

@@ -97,10 +97,10 @@ node apps/server-pkg/dist/cli.js --data-dir ./data
 |---|---|
 | **钱包** | 创建钱包，12 个词只显示一次，抄下后勾选「我已抄下」，再转入少量 USDC。重启后自动解锁。余额分「主网 · 真钱」和「测试网 · 测试币，没有价值」两组显示（只显示启用了的），各带各的充值说明。 |
 | **Key** | 一个 AI 一把。先选网络类型：**测试网**（测试币，没有价值）或**主网**（真 USDC，必须勾选「这把 key 花真钱」）；测试网 key 只在测试网付款，主网 key 只在主网付款，永不串用。再填日额度、总额度、单笔上限、允许的域名、审批线、过期时间。创建后 key 和技能段落（写明这把 key 是哪一类）只显示一次，把技能段落粘贴给 AI。每把根 key 还有一个给用这把 key 的人的**确认码**：4–6 位数字，你填（可以填他自己想要的），留空则随机生成 4 位；它只显示一次，就在 key 旁边，技能段落里没有它——给人，不给 AI。key 列表里的「设置确认码」随时可以换（同时解锁）；重置密钥不影响它。v0.7.4 之前发的 key 没有确认码，设置之后才有，列表上会标「无确认码 · 只能管理员批」。发出后额度和网络类型都不可改：要改就撤销旧 key、发一把新的；允许的域名只能在审批新域名时放宽（见下）。列表上每把 key 标明测试网 / 主网；v0.7.2 之前发的 key 显示「旧 key」和它实际能付款的链（见「支持的链」一节，建议撤销后重发）。 |
-| **审批** | 批准或拒绝超过审批线的付款，或请求了不在某把 key 允许列表里的域名：批准新域名就是把它加进这把 key 的允许域名。管理员在这里看到并能处理全部；持这把 key 的人不用登录：审批链接直接打开，只看到这一条，输入这把 key 的确认码就能批准或拒绝。 |
+| **审批** | 批准或拒绝超过审批线的付款，或请求了不在某把 key 允许列表里的域名：批准新域名就是把它加进这把 key 的允许域名。付款审批会显示完整（区分大小写）的收款方、资产和这笔付款只会做什么：只签一笔 USDC 转账、不含代币授权、不花钱包的 ETH/SOL；Solana 还会显示手续费赞助方。管理员在这里看到并能处理全部；持这把 key 的人不用登录：审批链接直接打开，只看到这一条，输入这把 key 的确认码就能批准或拒绝。 |
 | **账单** | 每一笔：时间、key、金额、网址、链（标明主网 / 测试网）、交易号、扣款状态（yes / no / maybe）。合计按主网、测试网分开，真钱和测试币从不相加；可按主网 / 测试网筛选；CSV 末尾多一列 `network_kind`。 |
 
-AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，带 `approval_id` 和 `approve_url`（`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`）。技能让 AI 把链接发给给它这把 key 的人，并每 15 秒查一次 `GET /v1/approvals/:id`。链接本身不含令牌，也不用登录：打开就看到这一条（网站或金额、链、哪把 key），输入这把 key 的确认码即可批准或拒绝。确认码是根 key 的（子 key 没有自己的），自上次设置以来累计输错 5 次就锁住（输对一次不清零），直到你设置新的确认码；太好猜的确认码（1111、1234、4321、2580 这类）设置时就会被拒绝；你登录后始终可以批。key 本身永远不能批准：AI 拿着它，却没有确认码。批准后 AI 带 `approval_id` 原样重发。请求的 http(s) 域名不在这把 key 的允许列表里时，同样先返回 `approval_required`，此时还没有向该域名发出任何请求。批准就是把这个 `host:port` 永久加进这把 key 的允许域名，之后 AI 原样重发即可，不用带 `approval_id`；价格仍照常检查，超过审批线会再问一次。批准时会查一次域名：解析到私有地址（或本机自己的地址）、或解析失败 / 超时的会被拒绝，审批保持待批。子 key、非 http(s)、以及私有 / 本机 / 特殊用途地址的字面地址直接返回 `HOST_NOT_ALLOWED`；每把 key 最多 5 条待批的新域名（超过返回 `RATE_LIMITED`）。审批 10 分钟过期。不做推送渠道。
+AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，带 `approval_id` 和 `approve_url`（`{MONEYSWITCH_PUBLIC_URL}/approvals?id=…`）。技能让 AI 把链接发给给它这把 key 的人，并每 15 秒查一次 `GET /v1/approvals/:id`。链接本身不含令牌，也不用登录：打开就看到这一条（网站或金额、链、哪把 key、完整收款方和资产，以及这笔付款只会做什么），输入这把 key 的确认码即可批准或拒绝。确认码是根 key 的（子 key 没有自己的），自上次设置以来累计输错 5 次就锁住（输对一次不清零），直到你设置新的确认码；太好猜的确认码（1111、1234、4321、2580 这类）设置时就会被拒绝；你登录后始终可以批。key 本身永远不能批准：AI 拿着它，却没有确认码。批准后 AI 带 `approval_id` 原样重发。请求的 http(s) 域名不在这把 key 的允许列表里时，同样先返回 `approval_required`，此时还没有向该域名发出任何请求。批准就是把这个 `host:port` 永久加进这把 key 的允许域名，之后 AI 原样重发即可，不用带 `approval_id`；价格仍照常检查，超过审批线会再问一次。批准时会查一次域名：解析到私有地址（或本机自己的地址）、或解析失败 / 超时的会被拒绝，审批保持待批。子 key、非 http(s)、以及私有 / 本机 / 特殊用途地址的字面地址直接返回 `HOST_NOT_ALLOWED`；每把 key 最多 5 条待批的新域名（超过返回 `RATE_LIMITED`）。审批 10 分钟过期。不做推送渠道。
 
 公开的 `GET /skill.md` 是不含 key 的通用说明。接入方式只有「技能 + key」，另外就是直接调用 HTTP 接口。
 
@@ -118,10 +118,24 @@ AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，
 |---|---|
 | Monad 测试网 | eip155:10143 |
 | Base Sepolia | eip155:84532 |
+| Solana Devnet | solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 |
 | Monad 主网 | eip155:143 |
 | Base 主网 | eip155:8453 |
+| Solana 主网 | solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp |
 
-默认只开测试网：`MONEYSWITCH_NETWORKS` 给出允许列表，`MONEYSWITCH_DEFAULT_NETWORK` 必须在其中；启用主网就是真实 USDC。每条链只认自己的 USDC，同一地址在各链的余额独立。不换币、不跨链。只签 EIP-3009，不签 Permit2。
+默认只开测试网：`MONEYSWITCH_NETWORKS` 给出允许列表，`MONEYSWITCH_DEFAULT_NETWORK` 必须在其中；启用主网就是真实 USDC。每条链只认自己的 USDC，同一地址在各链的余额独立。不换币、不跨链。EVM 只签 EIP-3009，不签 Permit2；Solana 用官方 x402 exact-SVM 的 SPL 转账 SDK。
+
+Solana 的钱包地址由现有加密恢复词按 SLIP-0010 `m/44'/501'/0'/0'` 单独派生：**Devnet 和主网是同一个地址，但 USDC 余额和 token 账户各算各的**，地址和 mint 区分大小写。旧钱包没有恢复词的，要先走更换钱包流程。Devnet 地址的 token 账户充 Circle Devnet USDC（`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`，没有价值）；主网地址的 token 账户充真 USDC（`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`）。卖家必须支持 x402 v2 exact-SVM 并用独立的 fee sponsor（价签里的 `extra.feePayer`）付网络费，这样付款才不会绕过额度花掉钱包的 SOL。Devnet 和主网可以同时启用：主网 key 只花主网 USDC，测试网 key 只花 Devnet 测试币。
+
+Solana 启用示例（两网同开，主网 ID 必须显式写进列表，和所有主网一样）：
+
+```sh
+export MONEYSWITCH_NETWORKS=eip155:10143,eip155:84532,solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1,solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp
+export MONEYSWITCH_SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
+export MONEYSWITCH_SOLANA_MAINNET_RPC_URL=https://api.mainnet-beta.solana.com
+```
+
+主网就绪度：SDK 集成、钱包派生、策略、审批页和对账都有测试覆盖；只读探测公共主网 RPC 已核对 genesis hash 和 Circle 的 USDC mint（82 字节、owner Tokenkeg、6 位小数）。2026-10-25 在项目的美国部署上做了真机验证：`0.005` 真 USDC 经人工审批后在主网结算（finalized，手续费由卖家的 fee sponsor 付），同一次还结算了 `0.01` Devnet 测试 USDC —— 见[验证记录](docs/updates/2026-10-25-solana-live-payments.md)。在你自己的实例上仍建议先跑一笔真实付款 + 一次拒绝 + 一次审批，再考虑放更多钱。MagicBlock 未接入。
 
 主网和测试网可以在同一台服务器、同一个钱包上同时启用（先在测试网跑通，再花一点真钱）。每把 key 要么是测试网 key、要么是主网 key（`network_mode`：`testnet` | `mainnet`），发 key 时选定，之后不能改；它只在启用的、自己这一类的链里付款，选链顺序按 `MONEYSWITCH_NETWORKS`。`POST /v1/keys` 不给 `network_mode` 时：实例只开了一类就用那一类，两类都开返回 `400 NETWORK_MODE_REQUIRED`。卖家只接受另一类链时返回 `UNSUPPORTED_PAYMENT`（`charged: no`，什么都没签）。子 key 与父 key 同类。v0.7.2 之前发的 key 没有类型（`network_mode: null`）：实例只开一类时保持原样（那一类的所有链）；**两类都开时只在测试网付款**（加开主网不会让旧 key 花到真钱）。没有类型的 key 在有类型的父 key 之下，跟随父 key；同一条链上两级类型不同，这把 key 哪条链都不能付（`UNSUPPORTED_PAYMENT`）。
 

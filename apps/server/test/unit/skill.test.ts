@@ -111,6 +111,7 @@ describe("GET /v1/approvals/:id (agent-facing approval status)", () => {
       id: approval.id,
       status: "pending",
       kind: "payment",
+      purpose: null,
       amount: "0.15",
       currency: "USDC",
       url: "https://example.com/paid",

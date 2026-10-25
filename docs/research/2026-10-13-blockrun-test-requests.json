@@ -1,0 +1,81 @@
+{
+  "verified_at": "2026-10-13",
+  "verification": "Unsigned quote requests only; no payments or fulfillment tested.",
+  "network": "eip155:8453",
+  "currency": "USDC",
+  "x402_version": 2,
+  "scheme": "exact",
+  "instruction": "For one selected case, send its moneySwitchFetch object to your own MoneySwitch POST /v1/fetch using your existing MoneyKey. Do not send this whole catalog.",
+  "cases": [
+    {
+      "name": "short-chat",
+      "observed_quote_usdc": "0.002",
+      "moneySwitchFetch": {
+        "url": "https://blockrun.ai/api/v1/chat/completions",
+        "method": "POST",
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "model": "openai/gpt-4o-mini",
+          "messages": [{ "role": "user", "content": "Reply only: MoneySwitch payment test OK" }],
+          "max_tokens": 32,
+          "stream": false
+        },
+        "max_price": "0.003"
+      }
+    },
+    {
+      "name": "short-speech",
+      "observed_quote_usdc": "0.002",
+      "moneySwitchFetch": {
+        "url": "https://blockrun.ai/api/v1/audio/speech",
+        "method": "POST",
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "model": "elevenlabs/flash-v2.5",
+          "input": "Hello MoneySwitch!",
+          "voice": "sarah",
+          "response_format": "mp3"
+        },
+        "max_price": "0.003"
+      }
+    },
+    {
+      "name": "exa-page-contents",
+      "observed_quote_usdc": "0.003",
+      "moneySwitchFetch": {
+        "url": "https://blockrun.ai/api/v1/exa/contents",
+        "method": "POST",
+        "headers": { "Content-Type": "application/json" },
+        "body": { "urls": ["https://www.x402.org"] },
+        "max_price": "0.004"
+      }
+    },
+    {
+      "name": "base-block-number",
+      "observed_quote_usdc": "0.003",
+      "moneySwitchFetch": {
+        "url": "https://blockrun.ai/api/v1/rpc/base",
+        "method": "POST",
+        "headers": { "Content-Type": "application/json" },
+        "body": { "jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": [] },
+        "max_price": "0.004"
+      }
+    },
+    {
+      "name": "small-image",
+      "observed_quote_usdc": "0.01675",
+      "moneySwitchFetch": {
+        "url": "https://blockrun.ai/api/v1/images/generations",
+        "method": "POST",
+        "headers": { "Content-Type": "application/json" },
+        "body": {
+          "model": "zai/cogview-4",
+          "prompt": "A small red lobster on a white background",
+          "size": "512x512",
+          "n": 1
+        },
+        "max_price": "0.02"
+      }
+    }
+  ]
+}

@@ -24,8 +24,15 @@ import {
   ApprovalPinError,
   type ApprovalRow,
   type NetworkMode,
+  MoneySwitchError,
+  DelegationError,
+  parseKeyFields,
+  keyErrorFields,
+  assertOwnLimits,
+  type KeyBody,
+  type ParsedKeyFields,
 } from "@moneyswitch/core";
-import { getEnabledNetworks, NETWORKS } from "@moneyswitch/x402";
+import { getEnabledNetworks, NETWORKS, explorerUrl, sameNetworkAddress } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin, requireAdminOrApprovalPin } from "../auth.js";
 import { keyView, networkFacts, statusFromIndex } from "../keyview.js";
@@ -53,37 +60,41 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   const adminGuard = requireAdmin(ctx);
   const adminOrPinGuard = requireAdminOrApprovalPin(ctx);
 
+  /**
+   * SPEC.md §1: issuing a root MoneyKey. The fields are read by core's
+   * keyinput.ts — the same functions POST /v1/keys/children uses — so a
+   * missing or malformed one is a 400 INVALID_REQUEST naming the field:
+   * never a SQLite constraint error, a TypeError, or a stored key with a
+   * non-array (or unmatchable) allowed_hosts.
+   */
   app.post("/v1/keys", { preHandler: adminGuard }, async (req, reply) => {
-    const body = req.body as {
-      name: string;
-      total_budget: string;
-      daily_budget: string;
-      per_request_limit: string;
-      approval_threshold?: string | null;
-      allowed_hosts: string[];
-      max_payments_per_minute?: number;
-      expires_at?: string | null;
-      can_delegate?: boolean;
-      network_mode?: unknown;
-      approval_pin?: unknown;
-    };
-    if (body?.can_delegate !== undefined && typeof body.can_delegate !== "boolean") {
-      return reply.status(400).send({ error: "can_delegate must be a boolean" });
+    const body = (req.body ?? {}) as KeyBody & { network_mode?: unknown; approval_pin?: unknown };
+    let fields: ParsedKeyFields;
+    try {
+      fields = parseKeyFields(body);
+      // A root key has no parent to inherit from: omitted allowed_hosts means none.
+      fields.allowedHosts = fields.allowedHosts ?? [];
+      // The key's own limits must agree. A root key has no parent bound to
+      // beat, so this is the only answer a caller can act on.
+      assertOwnLimits(fields);
+    } catch (e) {
+      if (e instanceof DelegationError) return reply.status(400).send(keyErrorFields(e));
+      throw e;
     }
-    const networkMode = resolveNetworkMode(body?.network_mode);
+
+    const networkMode = resolveNetworkMode(body.network_mode);
     if ("code" in networkMode) return reply.status(400).send({ error: networkMode.code, message: networkMode.message });
     try {
       const { plaintextKey, approvalPin, row } = createMoneyKey(ctx.db, {
-        name: body.name,
-        totalBudget: parseUsdcToMicros(body.total_budget),
-        dailyBudget: parseUsdcToMicros(body.daily_budget),
-        perRequestLimit: parseUsdcToMicros(body.per_request_limit),
-        approvalThreshold:
-          body.approval_threshold != null ? parseUsdcToMicros(body.approval_threshold) : null,
-        allowedHosts: body.allowed_hosts ?? [],
-        maxPaymentsPerMinute: body.max_payments_per_minute,
-        expiresAt: body.expires_at ?? null,
-        canDelegate: body.can_delegate === true,
+        name: fields.name,
+        totalBudget: fields.totalBudget,
+        dailyBudget: fields.dailyBudget,
+        perRequestLimit: fields.perRequestLimit,
+        approvalThreshold: fields.approvalThreshold,
+        allowedHosts: fields.allowedHosts,
+        maxPaymentsPerMinute: fields.maxPaymentsPerMinute,
+        expiresAt: fields.expiresAt,
+        canDelegate: fields.canDelegate,
         networkMode: networkMode.mode,
         approvalPin: body.approval_pin as string | null | undefined,
       });
@@ -109,6 +120,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       });
     } catch (e) {
       if (e instanceof ApprovalPinError) return reply.status(400).send({ error: e.code, message: e.message });
+      if (e instanceof MoneySwitchError) {
+        return reply.status(400).send({ error: e.code, code: e.code, message: e.message });
+      }
       return reply.status(400).send({ error: e instanceof Error ? e.message : "invalid_request" });
     }
   });
@@ -170,6 +184,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /** One approval as the list and the approval link show it. */
   function approvalFields(a: ApprovalRow) {
+    // Everything the screen needs is computed here (the page parses nothing): the chain's family for the "no ETH / no SOL" sentence,
+    // the USDC label, the recipient's explorer URL, and the Solana fee sponsor recorded with the quote.
+    const chain = NETWORKS[a.network];
     return {
       id: a.id,
       key_id: a.keyId,
@@ -178,9 +195,17 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       method: a.method,
       network: a.network,
       // 'mainnet' / 'testnet'; null for a host approval (no chain yet) or a chain the configuration table does not know
-      network_kind: NETWORKS[a.network]?.kind ?? null,
+      network_kind: chain?.kind ?? null,
+      /** 'evm' / 'svm', so the page can say "no ETH" or "no SOL" without parsing a CAIP-2 id; null without a known chain. */
+      network_family: chain ? chain.family ?? "evm" : null,
       asset: a.asset,
+      /** "USDC" when the asset is the chain's own USDC (what the client only ever pays), null for a new host or an unknown chain. */
+      asset_label: chain && sameNetworkAddress(a.network, a.asset, chain.usdcAddress) ? "USDC" : null,
       pay_to: a.payTo,
+      /** The recipient's explorer page on its own chain (the same helper the wallet page uses); null for a new host or an unknown chain. */
+      pay_to_url: chain && a.payTo ? explorerUrl(chain, "address", a.payTo) : null,
+      /** The Solana fee sponsor from the seller's quote (extra.feePayer); null for EVM payments and approvals from before migration 0014. */
+      fee_payer: a.feePayer,
       amount: formatMicrosToUsdc(a.amount),
       status: a.status,
       kind: a.kind,

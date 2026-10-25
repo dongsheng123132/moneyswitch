@@ -1,0 +1,111 @@
+<html style="margin:0;padding:0;">
+<title>MoneySwitch 云钱包架构与安全阶梯</title>
+<div style="width:100%;box-sizing:border-box;font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;background:#f6f8fb;padding:20px;color:#1a2333;">
+
+  <div style="font-size:20px;font-weight:700;margin-bottom:4px;">MoneySwitch 云钱包（示意）</div>
+  <div style="font-size:13px;color:#5b6b82;margin-bottom:16px;">可云自托管 · 多 agent 共用 · 每笔花费带任务备注 · 私钥永不交给 AI</div>
+
+  <!-- 架构主图 -->
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 14px;margin-bottom:16px;">
+
+    <!-- 第一行：管理员 / 云钱包 / Agents -->
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;">
+
+      <!-- 管理员 -->
+      <div style="flex:0 0 190px;background:#eef4ff;border:1.5px solid #2563eb;border-radius:10px;padding:10px;box-sizing:border-box;">
+        <div style="font-size:14px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">👤 管理员（人）</div>
+        <div style="font-size:13px;line-height:1.7;color:#334155;">
+          钱包与总余额<br>发 Key / 子 Key<br>审批大额付款<br>查账与导出审计
+        </div>
+      </div>
+
+      <!-- 云钱包核心 -->
+      <div style="flex:1 1 380px;background:#f8fafc;border:1.5px solid #94a3b8;border-radius:10px;padding:10px;box-sizing:border-box;min-width:300px;">
+        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:8px;">⚡ MoneySwitch 云钱包（自托管服务器）</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+
+          <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-sizing:border-box;">
+            <div style="font-size:13px;font-weight:600;color:#0f172a;">资金池</div>
+            <div style="font-size:12.5px;color:#475569;line-height:1.6;">USDC 热钱包（小额，定期充值）<br>主网 / 测试网分离</div>
+          </div>
+
+          <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-sizing:border-box;">
+            <div style="font-size:13px;font-weight:600;color:#0f172a;">MoneyKey 体系</div>
+            <div style="font-size:12.5px;color:#475569;line-height:1.6;">Agent Key → 子 Key<br>日额度 · 单笔上限<br>域名白名单 · 审批线</div>
+          </div>
+
+          <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;box-sizing:border-box;">
+            <div style="font-size:13px;font-weight:600;color:#0f172a;">策略引擎</div>
+            <div style="font-size:12.5px;color:#475569;line-height:1.6;">签名前逐级检查<br>超线 → 人工审批<br>SSRF / 白名单防护</div>
+          </div>
+
+          <div style="flex:1 1 240px;background:#ecfdf5;border:1px solid #10b981;border-radius:8px;padding:8px;box-sizing:border-box;">
+            <div style="font-size:13px;font-weight:700;color:#047857;">📒 审计账本（新增）</div>
+            <div style="font-size:12.5px;color:#065f46;line-height:1.6;">task_id + 用途备注<br>谁 · 何时 · 买什么 · 为什么<br>按任务筛选 / 导出审计报告</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Agents -->
+      <div style="flex:0 0 190px;background:#fff7ed;border:1.5px solid #ea580c;border-radius:10px;padding:10px;box-sizing:border-box;">
+        <div style="font-size:14px;font-weight:700;color:#c2410c;margin-bottom:6px;">🤖 AI Agents</div>
+        <div style="font-size:13px;line-height:1.7;color:#7c2d12;">
+          Claude Code<br>Codex · Qwen<br>Cherry Studio · bot<br>各持一把 MoneyKey<br>请求时上报任务备注
+        </div>
+      </div>
+    </div>
+
+    <!-- 流向说明 -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px;font-size:12.5px;color:#475569;">
+      <span style="background:#eef4ff;border-radius:20px;padding:3px 10px;">① agent 带 task_id + 用途发起付款请求</span>
+      <span style="background:#eef4ff;border-radius:20px;padding:3px 10px;">② 策略引擎逐级检查额度 / 白名单 / 审批线</span>
+      <span style="background:#eef4ff;border-radius:20px;padding:3px 10px;">③ 签名 EIP-3009 授权（私钥不出服务器）</span>
+      <span style="background:#eef4ff;border-radius:20px;padding:3px 10px;">④ 记账：task + 用途 + 交易号</span>
+    </div>
+
+    <!-- 支付轨道 -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#f1f5f9;border:1px dashed #94a3b8;border-radius:10px;padding:10px;margin-top:10px;">
+      <span style="font-size:13px;font-weight:700;color:#0f172a;">支付轨道 x402</span>
+      <span style="font-size:12.5px;color:#334155;">HTTP 402 报价 → 付款方免 gas（facilitator 提交结算）→ Monad / Base 链上 USDC → 卖家收款</span>
+      <span style="font-size:12.5px;color:#64748b;">（Google Agent Payments Protocol 同样以 x402 为加密支付轨道）</span>
+    </div>
+  </div>
+
+  <!-- 安全阶梯 -->
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 14px;">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;">🔒 服务端密钥安全阶梯（当前 = 助记词本地加密，单点风险）</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+
+      <div style="flex:1 1 200px;background:#ecfdf5;border:1.5px solid #10b981;border-radius:10px;padding:9px;box-sizing:border-box;min-width:170px;">
+        <div style="font-size:13px;font-weight:700;color:#047857;">L0 资金分层 ✅ v0.8 必做</div>
+        <div style="font-size:12.5px;color:#065f46;line-height:1.6;">热钱包只放 1 周预算<br>定期充值 · 余额告警<br>大头在冷钱包</div>
+      </div>
+
+      <div style="flex:1 1 200px;background:#f0f9ff;border:1.5px solid #0ea5e9;border-radius:10px;padding:9px;box-sizing:border-box;min-width:170px;">
+        <div style="font-size:13px;font-weight:700;color:#0369a1;">L1 信封加密 ⭕ v0.8 可选</div>
+        <div style="font-size:12.5px;color:#0c4a6e;line-height:1.6;">keystore 用云 KMS /<br>OS 钥匙串信封加密<br>单文件泄露拿不到明文</div>
+      </div>
+
+      <div style="flex:1 1 200px;background:#f0f9ff;border:1.5px solid #0ea5e9;border-radius:10px;padding:9px;box-sizing:border-box;min-width:170px;">
+        <div style="font-size:13px;font-weight:700;color:#0369a1;">L2 KMS 签名 ⭕ v0.9 候选</div>
+        <div style="font-size:12.5px;color:#0c4a6e;line-height:1.6;">私钥生成在 KMS 内<br>服务器只调 Sign API<br>私钥永不出 KMS</div>
+      </div>
+
+      <div style="flex:1 1 200px;background:#fefce8;border:1.5px solid #ca8a04;border-radius:10px;padding:9px;box-sizing:border-box;min-width:170px;">
+        <div style="font-size:13px;font-weight:700;color:#a16207;">L3 Safe 智能账户 ★ v0.9 首选</div>
+        <div style="font-size:12.5px;color:#713f12;line-height:1.6;">Safe 多签 2/3 + 受限 module<br>额度在链上强制<br>审计在链上（评委最认）</div>
+      </div>
+
+      <div style="flex:1 1 200px;background:#faf5ff;border:1.5px solid #9333ea;border-radius:10px;padding:9px;box-sizing:border-box;min-width:170px;">
+        <div style="font-size:13px;font-weight:700;color:#7e22ce;">L4 MPC 2-of-3 · L5 TEE</div>
+        <div style="font-size:12.5px;color:#581c87;line-height:1.6;">分片签名无完整私钥<br>enclave 内签名<br>成本高 · 远期叙事</div>
+      </div>
+
+    </div>
+    <div style="font-size:12.5px;color:#5b6b82;margin-top:8px;">免 gas：x402 付款方天然免 gas（facilitator 付）；ERC-4337 + Circle Paymaster 可用 USDC 付 gas；Monad / Base 本身 gas 极低。</div>
+  </div>
+
+  <div style="font-size:11.5px;color:#94a3b8;margin-top:10px;">示意结构 · 事实来源：x402 白皮书 · Circle Paymaster · Para/BlockSec 签名架构对比 · Openfort/Crossmint/Alchemy agent wallet 对比 · MoneySwitch SPEC v0.7</div>
+</div>
+</html>

@@ -49,8 +49,13 @@ export function checkHostAllowedForChain(db: MoneySwitchDb, url: URL, key: Money
     try {
       checkHostAllowed(url, k);
     } catch (e) {
-      const err = e as MoneySwitchError;
-      throw new MoneySwitchError(err.code, undefined, { scope: scopeAt(i), keyPrefix: k.keyPrefix });
+      // Only re-wrap typed denials so the scope/prefix ride along. An unexpected
+      // error (e.g. a malformed allowed_hosts row) must not become a MoneySwitchError
+      // with an undefined code — that drops `code` from the /v1/fetch envelope.
+      if (e instanceof MoneySwitchError) {
+        throw new MoneySwitchError(e.code, undefined, { scope: scopeAt(i), keyPrefix: k.keyPrefix });
+      }
+      throw e;
     }
   });
 }

@@ -39,11 +39,18 @@ describe("approval task descriptions", () => {
       old.close();
       for (let i = 0; i < 2; i++) {
         const migrated = openDb({ filePath: file });
-        expect(migrated.sqlite.prepare("SELECT * FROM approvals WHERE id = 'old'").get()).toEqual({ ...before, purpose: null });
+        expect(migrated.sqlite.prepare("SELECT * FROM approvals WHERE id = 'old'").get()).toEqual({ ...before, purpose: null, fee_payer: null });
         expect(getApproval(migrated.db, "old")?.purpose).toBeNull();
         expect(migrated.sqlite.prepare("SELECT count(*) AS n FROM __migrations WHERE name = '0013_approval_purpose.sql'").get()).toEqual({ n: 1 });
         migrated.sqlite.close();
       }
-    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      // Windows may still hold SQLite WAL/SHM handles for a moment after close: retry, and a locked temp dir is not a test failure.
+      try {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      } catch {
+        /* Windows file locks are harmless: the OS cleans the temp directory up */
+      }
+    }
   });
 });

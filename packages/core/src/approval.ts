@@ -19,6 +19,7 @@ function rowToApproval(row: typeof schema.approvals.$inferSelect): ApprovalRow {
     asset: row.asset,
     payTo: row.payTo,
     amount: dbNumberToMicros(row.amount),
+    feePayer: row.feePayer ?? null,
     status: row.status,
     kind: row.kind,
     expiresAt: row.expiresAt,
@@ -46,6 +47,8 @@ export interface CreateApprovalInput {
   asset: string;
   payTo: string;
   amount: bigint;
+  /** The Solana fee sponsor from the seller's 402 quote (`extra.feePayer`), for display on the approval screen; omitted = none. */
+  feePayer?: string | null;
   /** Default 'payment'. */
   kind?: ApprovalKind;
   purpose?: string;
@@ -65,6 +68,7 @@ export function createApproval(db: MoneySwitchDb, input: CreateApprovalInput): A
     asset: input.asset,
     payTo: input.payTo,
     amount: microsToDbNumber(input.amount),
+    feePayer: input.feePayer ?? null,
     status: "pending" as const,
     kind: input.kind ?? ("payment" as const),
     expiresAt: new Date(now.getTime() + APPROVAL_TTL_MS).toISOString(),

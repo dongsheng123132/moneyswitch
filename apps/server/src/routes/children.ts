@@ -6,13 +6,15 @@ import {
   revokeDescendantKey,
   getKeyChain,
   effectiveStatus,
-  parseUsdcToMicros,
   formatMicrosToUsdc,
   writeAudit,
   DelegationError,
   MoneySwitchError,
   DEFAULT_MAX_KEY_DEPTH,
   limitFields,
+  parseKeyFields,
+  keyErrorFields,
+  type KeyBody,
   type CreateChildKeyInput,
   type NetworkMode,
 } from "@moneyswitch/core";
@@ -31,96 +33,30 @@ import { keyView } from "../keyview.js";
  * Error bodies: `{ error: <CODE>, code: <CODE>, message, field?, parent_value? }`.
  */
 
-type Body = {
-  name?: unknown;
-  daily_budget?: unknown;
-  total_budget?: unknown;
-  per_request_limit?: unknown;
-  approval_threshold?: unknown;
-  allowed_hosts?: unknown;
-  expires_at?: unknown;
-  can_delegate?: unknown;
-  max_payments_per_minute?: unknown;
-  network_mode?: unknown;
-};
+type Body = KeyBody & { network_mode?: unknown };
 
-function parseAmount(body: Body, field: keyof Body, required: boolean): bigint | null {
-  const raw = body[field];
-  if (raw === undefined || raw === null || raw === "") {
-    if (required) throw new DelegationError("INVALID_REQUEST", `${field} is required`, { field });
-    return null;
-  }
-  const str = typeof raw === "number" && Number.isFinite(raw) ? String(raw) : raw;
-  if (typeof str !== "string") {
-    throw new DelegationError("INVALID_REQUEST", `${field} must be a decimal USDC string like "1.00"`, { field });
-  }
-  try {
-    return parseUsdcToMicros(str);
-  } catch {
-    throw new DelegationError("INVALID_REQUEST", `${field} must be a decimal USDC string like "1.00"`, { field });
-  }
-}
-
-function parseStringArray(body: Body, field: "allowed_hosts"): string[] | null {
-  const raw = body[field];
-  if (raw === undefined || raw === null) return null;
-  if (!Array.isArray(raw) || raw.some((v) => typeof v !== "string")) {
-    throw new DelegationError("INVALID_REQUEST", `${field} must be an array of strings`, { field });
-  }
-  return raw as string[];
-}
-
+/**
+ * The child-key body: the shared key fields (core/keyinput.ts, the same
+ * reading POST /v1/keys gives them) plus what only a child key has — the
+ * network type, which must be its parent's.
+ */
 function parseBody(body: Body): CreateChildKeyInput {
   if (body == null || typeof body !== "object") {
     throw new DelegationError("INVALID_REQUEST", "JSON body required");
   }
-  if (typeof body.name !== "string") {
-    throw new DelegationError("INVALID_REQUEST", "name is required", { field: "name" });
-  }
-  if (body.can_delegate !== undefined && body.can_delegate !== null && typeof body.can_delegate !== "boolean") {
-    throw new DelegationError("INVALID_REQUEST", "can_delegate must be a boolean", { field: "can_delegate" });
-  }
-  if (body.expires_at !== undefined && body.expires_at !== null && typeof body.expires_at !== "string") {
-    throw new DelegationError("INVALID_REQUEST", "expires_at must be an ISO-8601 string", { field: "expires_at" });
-  }
   if (body.network_mode !== undefined && body.network_mode !== null && body.network_mode !== "testnet" && body.network_mode !== "mainnet") {
     throw new DelegationError("INVALID_REQUEST", 'network_mode must be "testnet" or "mainnet"', { field: "network_mode" });
   }
-  let maxPerMinute: number | undefined;
-  if (body.max_payments_per_minute !== undefined && body.max_payments_per_minute !== null) {
-    if (typeof body.max_payments_per_minute !== "number") {
-      throw new DelegationError("INVALID_REQUEST", "max_payments_per_minute must be a positive integer", {
-        field: "max_payments_per_minute",
-      });
-    }
-    maxPerMinute = body.max_payments_per_minute;
-  }
+  const fields = parseKeyFields(body);
   return {
-    name: body.name,
-    dailyBudget: parseAmount(body, "daily_budget", true)!,
-    totalBudget: parseAmount(body, "total_budget", true)!,
-    perRequestLimit: parseAmount(body, "per_request_limit", true)!,
-    approvalThreshold: parseAmount(body, "approval_threshold", false),
-    allowedHosts: parseStringArray(body, "allowed_hosts"),
-    expiresAt: (body.expires_at as string | null | undefined) ?? null,
-    canDelegate: body.can_delegate === true,
-    maxPaymentsPerMinute: maxPerMinute,
+    ...fields,
     networkMode: (body.network_mode as NetworkMode | null | undefined) ?? null,
   };
 }
 
-function wireParentValue(v: unknown): unknown {
-  return typeof v === "bigint" ? formatMicrosToUsdc(v) : v;
-}
-
+/** `{ error, code, message, field?, parent_value? }` with the status the code says (400 for these, 403 for a refusal). */
 function sendDelegationError(reply: FastifyReply, e: DelegationError) {
-  return reply.status(e.httpStatus).send({
-    error: e.code,
-    code: e.code,
-    message: e.message.replace(/^[A-Z_]+: /, ""),
-    ...(e.field ? { field: e.field } : {}),
-    ...(e.parentValue !== undefined ? { parent_value: wireParentValue(e.parentValue) } : {}),
-  });
+  return reply.status(e.httpStatus).send(keyErrorFields(e));
 }
 
 export function registerChildKeyRoutes(app: FastifyInstance, ctx: AppContext) {
