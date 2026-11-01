@@ -63,6 +63,7 @@ export function renderInstallPrompt(input: InstallPromptInput): string {
     ...(testPay
       ? [
           `保存后先查询额度，再做一笔测试付款（${TEST_PAYMENT_PRICE} 测试 USDC，无真实价值）/ Then call GET ${base}/v1/status with the key, then make ONE test payment (${TEST_PAYMENT_PRICE} test USDC, no real value): POST ${base}/v1/fetch with {"url":"${TEST_PAYMENT_URL}","method":"GET","max_price":"${TEST_PAYMENT_PRICE}"}. Do it once; if it fails, say why and stop: never retry it or pay another way.`,
+          "这条安装试付仅支持 Monad 测试网。用户明确指定 Base 或 Solana 时，跳过这条 Monad 试付，按 skill 的 network 字段使用兼容的卖家；没有可用卖家就报告原因。This installation test is Monad testnet only. If the user requests Base or Solana, skip this Monad test and use an appropriate seller with the skill's exact network field; if unavailable, explain why.",
           "正常只回复三行：是否已接入；测试付款的 tx_hash；今日剩余额度（remaining_today）。Reply in at most three short lines: setup result; the test payment's tx_hash; today's remaining budget (remaining_today). Omit file counts, directory audits and diagnostics unless blocked or asked.",
         ]
       : [

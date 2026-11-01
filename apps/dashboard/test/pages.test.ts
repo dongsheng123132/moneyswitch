@@ -339,8 +339,13 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
     url: `https://api.example.com/${id}`,
     method: "GET",
     network: "eip155:10143",
-    asset: "0xusdc",
+    network_kind: "testnet" as const,
+    network_family: "evm" as const,
+    asset: "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+    asset_label: "USDC",
     pay_to: "0x000000000000000000000000000000000000dEaD",
+    pay_to_url: "https://testnet.monadvision.com/address/0x000000000000000000000000000000000000dEaD",
+    fee_payer: null as string | null,
     amount: "0.15",
     status: "pending" as const,
     expires_at: "2026-10-04T12:10:00.000Z",
@@ -383,6 +388,17 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
     assert.ok(html.includes(fill(en.approvals.countdownLeft, { m: 5, s: "00" })));
     assert.equal(html.split(`>${en.approvals.approve}<`).length - 1, 2);
     assert.equal(html.split(`>${en.approvals.deny}<`).length - 1, 2);
+  });
+
+  it("shows task descriptions and reasons in pending cards and the recently decided list", () => {
+    const purpose = "Generate a USB product poster <script>alert(1)</script>";
+    const pending = view({ pending: [pendingRow("ap-1", { kind: "payment", purpose })] });
+    assert.ok(pending.includes(esc(purpose)) && pending.includes(esc(en.approvals.reasonPayment)));
+    assert.ok(!pending.includes("<script>alert(1)</script>"));
+    const recent = view({ pending: [], all: [pendingRow("ap-1", { kind: "host", purpose, host: "blockrun.ai:443", status: "expired" })] });
+    assert.ok(recent.includes("approval-context-compact"));
+    assert.ok(recent.includes(esc(purpose)) && recent.includes(esc(en.approvals.reasonHost)));
+    assert.ok(view({ pending: [pendingRow("ap-1", { purpose: null })] }).includes(esc(en.approvals.taskMissing)));
   });
 
   it("a link to a request that was already handled says what became of it instead of showing nothing", () => {
@@ -453,7 +469,7 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
       assert.ok(html.includes(esc(en.approvals.hostSource)));
       assert.ok(html.includes(fill(en.approvals.hostNote, { host: "api.newhost.example:443" })));
       assert.ok(!html.includes('class="approval-amount'), "no price yet, so no amount");
-      assert.ok(!html.includes("pay to"), "no payee yet");
+      assert.ok(!html.includes('data-testid="approval-facts"'), "no payee, asset or impact facts yet");
       assert.ok(!html.includes("<input"), "nothing to tick: approving is the one decision");
       assert.equal(html.split(`>${en.approvals.approve}<`).length - 1, 1);
       assert.equal(html.split(`>${en.approvals.deny}<`).length - 1, 1);
@@ -471,7 +487,7 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
       assert.ok(html.includes(fill(zh.hostNote, { host: "seller.example:8080" })));
     });
 
-    it("a payment approval looks exactly as before: amount and payee, no marker; so does one from a server that sends no kind", () => {
+    it("a payment approval shows the full recipient, the asset and what this payment can do; so does one from a server that sends no kind", () => {
       for (const row of [pendingRow("ap-p", { kind: "payment" }), pendingRow("ap-q")]) {
         const html = view({ pending: [row] });
         assert.ok(!html.includes("host-approval"));
@@ -479,8 +495,47 @@ describe("Approvals page: the link the AI sends opens it on the right request", 
         assert.ok(!html.includes("approval-host-note"));
         assert.ok(html.includes('class="approval-amount num"'));
         assert.ok(html.includes("0.15"));
-        assert.ok(html.includes("pay to"));
+        assert.ok(html.includes('data-testid="approval-facts"'));
+        assert.ok(html.includes("0x000000000000000000000000000000000000dEaD"), "the whole recipient, not a shortened one");
+        assert.ok(html.includes(fill(en.approvals.impactEvm, { amount: "0.15", chain: "eip155:10143" })));
+        assert.ok(html.includes(esc(en.approvals.impactFailure)));
       }
+    });
+
+    it("Solana Devnet: the full case-sensitive recipient, the mint, the sponsor and the no-SOL/no-approvals sentence", () => {
+      const payTo = "J7aN3PLJnTCF5qpEnvJHJsnCjcGuqC2rYtEM8Gv3xwg";
+      const feePayer = "So11111111111111111111111111111111111111112";
+      const solana = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+      const html = view({
+        pending: [
+          pendingRow("ap-s", {
+            network: solana,
+            network_family: "svm",
+            asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+            asset_label: "USDC",
+            pay_to: payTo,
+            pay_to_url: `https://explorer.solana.com/address/${payTo}?cluster=devnet`,
+            fee_payer: feePayer,
+          }),
+        ],
+        networks: [
+          {
+            network: solana,
+            chain_id: null,
+            usdc_address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+            network_label: "Solana Devnet",
+            explorer_base: "https://explorer.solana.com",
+            is_mainnet: false,
+          },
+        ],
+      });
+      assert.ok(html.includes('data-testid="approval-facts"'));
+      assert.ok(html.includes(payTo), "the full base58 address, case intact");
+      assert.ok(html.includes(`href="https://explorer.solana.com/address/${payTo}?cluster=devnet"`));
+      assert.ok(html.includes(fill(en.approvals.impactSvm, { amount: "0.15", chain: "Solana Devnet" })));
+      assert.ok(html.includes(esc(en.approvals.impactFailure)));
+      assert.ok(html.includes(fill(en.approvals.impactFeeKnown, { addr: "So1111...1112" })));
+      assert.ok(html.includes("4zMMC9"), "the devnet USDC mint is named");
     });
 
     it("the host:port shown is the server's `host` field, as it will be listed: the page reads no URL (IDN, upper case and a trailing dot included)", () => {
@@ -601,7 +656,7 @@ describe("Bills page", () => {
     assert.deepEqual(rows.map((r) => BillsModule.chargedOf(r as never)), ["yes", "no", "maybe", "maybe"]);
   });
 
-  it("one row per payment with time, key, amount, URL, chain, transaction and Charged yes / no / maybe", () => {
+  it("one row per payment with time, key, amount, host, chain and Charged yes / no / maybe; audit details start closed", () => {
     const html = render(
       h(BillsModule.BillsTable, {
         payments: rows as never,
@@ -609,15 +664,16 @@ describe("Bills page", () => {
         chainLabels: new Map([["eip155:10143", "Monad Testnet"], ["eip155:84532", "Base Sepolia"]]),
       })
     );
-    for (const col of [en.bills.colTime, en.bills.colKey, en.bills.colAmount, en.bills.colUrl, en.bills.colChain, en.bills.colTx, en.bills.colCharged]) {
+    for (const col of [en.bills.colTime, en.bills.colKey, en.bills.colAmount, en.bills.colPurpose, en.bills.colUrl, en.bills.colChain, en.bills.colCharged, en.bills.colDetails]) {
       assert.ok(html.includes(`>${col}<`), col);
     }
     assert.deepEqual([...html.matchAll(/data-charged="(\w+)"/g)].map((m) => m[1]), ["yes", "no", "maybe", "maybe"]);
     assert.ok(html.includes("Codex"));
-    assert.ok(html.includes("api.example.com:443/paid"));
+    assert.ok(html.includes("api.example.com:443"));
+    assert.ok(!html.includes("/paid?q=1"), "private request paths are absent from the collapsed DOM");
     assert.ok(html.includes("Monad Testnet") && html.includes("Base Sepolia"), "the chain is named, not its CAIP-2 id");
-    assert.ok(html.includes("0xabababab"), "the settled payment shows its transaction");
-    assert.ok(html.includes("PAYMENT_REJECTED") && html.includes("TIMEOUT_AFTER_PAYMENT"), "the reason stays visible next to a no / maybe");
+    assert.ok(!html.includes("0xabababab"), "transaction details are mounted on demand");
+    assert.ok(!html.includes("PAYMENT_REJECTED") && !html.includes("TIMEOUT_AFTER_PAYMENT"), "technical errors belong in the audit details, not the overview");
     assert.ok(html.includes(esc(en.bills.chargedMaybeHint)), "a maybe is explained");
   });
 
@@ -656,25 +712,26 @@ describe("Bills page", () => {
     assert.equal(render(h(BillsModule.BillsRenderCap, { shown: rows.length, matching: rows.length })), "");
   });
 
-  it("the CSV keeps its original columns in order and ends with pay_to, method, approval_id, network_kind", () => {
+  it("an explicit full CSV export keeps its original columns in order and appends purpose, asset and status", () => {
     const csv = BillsModule.billsCsv(
       [
         payment("paid", "settled", { approval_id: "appr-1", network_kind: "testnet" }),
         payment("refused", "failed", { error_code: "PAYMENT_REJECTED", network: "eip155:143", network_kind: "mainnet" }),
         payment("odd", "settled", { network: "eip155:999" }),
       ] as never,
-      new Map([["key-1", "Codex"]])
+      new Map([["key-1", "Codex"]]),
+      true
     );
     const [head, first, second, third] = csv.split("\n");
-    assert.equal(head, "time,key_id,key_name,host,url,network,amount,charged,tx_hash,error_code,pay_to,method,approval_id,network_kind");
+    assert.equal(head, "time,key_id,key_name,host,url,network,amount,charged,tx_hash,error_code,pay_to,method,approval_id,network_kind,purpose,asset,status");
     assert.ok(first.startsWith("2026-10-04T12:00:00.000Z,key-1,Codex,api.example.com:443,https://api.example.com/paid?q=1,eip155:10143,0.01,yes,0x"), first);
-    assert.ok(first.endsWith(",,0x000000000000000000000000000000000000dEaD,GET,appr-1,testnet"), first);
-    assert.ok(second.endsWith(",PAYMENT_REJECTED,0x000000000000000000000000000000000000dEaD,GET,,mainnet"), second);
-    assert.ok(third.endsWith(",0x000000000000000000000000000000000000dEaD,GET,,"), "a chain the server does not know: the column is empty, never guessed");
+    assert.ok(first.endsWith(",,0x000000000000000000000000000000000000dEaD,GET,appr-1,testnet,,0xusdc,settled"), first);
+    assert.ok(second.endsWith(",PAYMENT_REJECTED,0x000000000000000000000000000000000000dEaD,GET,,mainnet,,0xusdc,failed"), second);
+    assert.ok(third.endsWith(",0x000000000000000000000000000000000000dEaD,GET,,,,0xusdc,settled"), "a chain the server does not know: the column is empty, never guessed");
   });
 
   it("the CSV does not hand a spreadsheet a formula: a key name or URL that starts with = + - @ is written as text", () => {
-    const csv = BillsModule.billsCsv([payment("p", "settled", { url: "@evil.example/x" })] as never, new Map([["key-1", "=1+1"]]));
+    const csv = BillsModule.billsCsv([payment("p", "settled", { url: "@evil.example/x" })] as never, new Map([["key-1", "=1+1"]]), true);
     const [, line] = csv.split("\n");
     assert.ok(line.startsWith("2026-10-04T12:00:00.000Z,key-1,'=1+1,api.example.com:443,'@evil.example/x,eip155:10143,0.01,yes,"), line);
   });
@@ -701,16 +758,20 @@ describe("Bills page", () => {
       assert.ok(rowsHtml[2].includes("eip155:999") && !rowsHtml[2].includes("data-network-kind"));
     });
 
-    it("the totals are one per kind and never one sum: 2.50 + 0.50 real USDC, 0.01 test USDC (a refused payment counts for neither)", () => {
+    it("paid totals contain confirmed payments only: 2.50 real USDC and 0.01 test USDC; the unknown 0.50 is shown separately", () => {
       assert.deepEqual(BillsModule.billsTotalsByKind([mainnetPaid, mainnetMaybe, testnetPaid, testnetRefused] as never), [
-        { kind: "mainnet", total: "3" },
+        { kind: "mainnet", total: "2.5" },
         { kind: "testnet", total: "0.01" },
       ]);
+      assert.deepEqual(BillsModule.billsPendingTotalsByKind([mainnetPaid, mainnetMaybe, testnetPaid, testnetRefused] as never), [{ kind: "mainnet", total: "0.5" }]);
       const html = render(h(BillsModule.BillsSummary, { payments: [mainnetPaid, mainnetMaybe, testnetPaid, testnetRefused] as never }));
       assert.ok(html.includes(esc(en.bills.summaryTotalMainnet)) && html.includes(esc(en.bills.summaryTotalTestnet)));
-      assert.ok(/data-total-kind="mainnet"[^]*?3 USDC/.test(html), html);
-      assert.ok(/data-total-kind="testnet"[^]*?0\.01 USDC/.test(html), html);
-      assert.ok(!html.includes("3.01"), "the two kinds are never added");
+      const mainnetCard = html.match(/<article[^>]*data-total-kind="mainnet"[^]*?<\/article>/)?.[0].replace(/<[^>]*>/g, "");
+      const testnetCard = html.match(/<article[^>]*data-total-kind="testnet"[^]*?<\/article>/)?.[0].replace(/<[^>]*>/g, "");
+      assert.ok(mainnetCard?.includes("2.5 USDC"), html);
+      assert.ok(testnetCard?.includes("0.01 USDC"), html);
+      assert.ok(/data-pending-kind="mainnet"[^]*?0\.5 USDC/.test(html), html);
+      assert.ok(!html.includes("3.01") && !html.includes("2.51"), "neither uncertainty nor test tokens are combined with paid real money");
       assert.ok(!html.includes(`>${en.bills.summaryTotal}<`), "no single total across kinds");
     });
 

@@ -38,6 +38,25 @@ export function createReceiver({ payTo, mode, facilitatorClient, onSettled = () 
   // The container port is published only on loopback, behind one Caddy proxy.
   app.set('trust proxy', 1);
   app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  // x402 v2 carries the quote in the base64 PAYMENT-REQUIRED header (the canonical
+  // HTTP location; the spec leaves the response body to the server). The SDK
+  // middleware therefore writes an empty {} body. Some read-only preflight tools
+  // read only the body, so mirror the same PaymentRequired object into the 402
+  // JSON body. Pricing, verification and settlement are untouched; the header
+  // stays authoritative for x402 clients.
+  app.use((_req, res, next) => {
+    const sendJson = res.json.bind(res);
+    res.json = (body) => {
+      const header = res.statusCode === 402 ? res.getHeader('payment-required') : undefined;
+      if (header && body && typeof body === 'object' && !Array.isArray(body)) {
+        try {
+          return sendJson({ ...JSON.parse(Buffer.from(String(header), 'base64').toString('utf8')), ...body });
+        } catch { /* not base64 JSON: keep the SDK body as it is */ }
+      }
+      return sendJson(body);
+    };
+    next();
+  });
   app.get('/healthz', (_req, res) => res.json({ ok: true, network: network.caip2 }));
   app.get('/x402-testnet/', (_req, res) => res.type('html').send(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MoneySwitch · x402 收款验证</title><style>body{max-width:780px;margin:64px auto;padding:0 24px;font:18px/1.7 system-ui;color:#17233b}code{overflow-wrap:anywhere}strong{color:#a43b14}</style><h1>x402 收款验证</h1><p><strong>${networkNotice}</strong></p><p>收款钱包：<code>${payTo}</code></p><p>给 AI 的收费接口：<br><code>GET https://app.moneyswitch.dev${route}</code></p><p>用 MoneySwitch 调用 <code>POST /v1/fetch</code>，将 <code>url</code> 设为上面的接口，<code>max_price</code> 设为 <code>${price}</code>。</p><p>普通浏览器访问收费接口会返回 HTTP 402，这是报价，不会扣款。付款成功会返回验证结果和 PAYMENT-RESPONSE 收据。付款钱包必须解锁；收款方无需提供私钥。</p><p>测试网接口只接受 Monad 测试 USDC。创建 MoneyKey 时勾选「允许测试付款接口」（即允许域名 app.moneyswitch.dev:443），再让 AI 按上面的方式调用此接口。</p></html>`));
   app.use(paymentMiddleware({ [`GET ${route}`]: {

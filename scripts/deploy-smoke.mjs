@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const entry = process.env.MONEYSWITCH_SMOKE_ENTRY || path.join(repo, 'apps/server-pkg/dist/cli.js');
+const mainnetEnabled = process.env.MONEYSWITCH_SMOKE_SOLANA_MAINNET === '1';
+const mainnetCaip = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+const networks = ['eip155:10143', 'eip155:84532', 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1', ...(mainnetEnabled ? [mainnetCaip] : [])];
 const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'moneyswitch-acceptance-'));
 const holder = net.createServer();
 await new Promise((resolve) => holder.listen(0, '127.0.0.1', resolve));
@@ -21,8 +24,11 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function start() {
   output = '';
   proc = spawn(process.execPath, [entry, '--data-dir', dataDir, '--port', String(port)], {
-    env: { ...process.env, MONEYSWITCH_NETWORKS: 'eip155:10143,eip155:84532', MONEYSWITCH_DEFAULT_NETWORK: 'eip155:10143',
+    env: { ...process.env, MONEYSWITCH_NETWORKS: networks.join(','), MONEYSWITCH_DEFAULT_NETWORK: 'eip155:10143',
       MONEYSWITCH_PUBLIC_URL: base, MONEYSWITCH_TESTNET_RPC_URL: 'http://127.0.0.1:1',
+      MONEYSWITCH_BASE_SEPOLIA_RPC_URL: 'http://127.0.0.1:1',
+      MONEYSWITCH_SOLANA_DEVNET_RPC_URL: 'http://127.0.0.1:1',
+      MONEYSWITCH_SOLANA_MAINNET_RPC_URL: 'http://127.0.0.1:1',
       MONEYSWITCH_WALLET_PASSWORD: '', MONEYSWITCH_WALLET_PASSWORD_FILE: '',
       MONEYSWITCH_RECONCILE_INTERVAL_MS: '0' },
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
@@ -62,11 +68,16 @@ try {
   const html = await (await fetch(`${base}/`)).text();
   const asset = html.match(/src="([^"]+\.js)"/)?.[1];
   check('built Dashboard and its hashed JS are served', !!asset && (await fetch(`${base}${asset}`)).ok);
+  const icon = await fetch(`${base}/favicon.ico`);
+  check('the browser default favicon is served as an icon rather than the SPA', icon.ok && /image\//.test(icon.headers.get('content-type') ?? '') && (await icon.arrayBuffer()).byteLength > 22);
+  const demo = await fetch(`${base}/demoday.html`);
+  const demoHtml = await demo.text();
+  check('the standalone Demo Day HTML is public and is not the SPA fallback', demo.ok && /text\/html/.test(demo.headers.get('content-type') ?? '') && demoHtml.includes('data-moneyswitch-demoday="2026-10-11"') && !demoHtml.includes('<div id="root"'));
   const approvalPage = await fetch(`${base}/approvals?id=00000000-0000-4000-8000-000000000000`);
   check('an approval link opens the Dashboard', approvalPage.status === 200 && (await approvalPage.text()).includes(asset));
   check('admin metadata requires authentication', (await api('/v1/admin/meta', 'GET', undefined, '')).status === 403);
   const meta = await api('/v1/admin/meta');
-  check('both configured testnets are reported', meta.body.networks?.length === 2 && meta.body.networks.every((n) => !n.is_mainnet));
+  check('configured network types match the explicit mainnet opt-in', meta.body.networks?.length === networks.length && meta.body.networks.filter((n) => n.is_mainnet).length === (mainnetEnabled ? 1 : 0) && meta.body.networks.some((n) => n.caip2 === mainnetCaip || n.network === mainnetCaip) === mainnetEnabled && JSON.stringify(meta.body.networks).includes('solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'));
 
   // wallet: created by the server, unlocks itself, the words are shown once
   check('a fresh data directory has no wallet', (await api('/v1/admin/wallet')).body.has_keystore === false);
@@ -75,17 +86,27 @@ try {
   check('disposable wallet is created with twelve recovery words', created.status === 200 && /^0x[0-9a-fA-F]{40}$/.test(created.body.address) && typeof phrase === 'string' && phrase.trim().split(/\s+/).length === 12);
   const wallet = await api('/v1/admin/wallet');
   check('the new wallet is unlocked and its words are never shown again', wallet.body.unlocked === true && wallet.body.address === created.body.address && !JSON.stringify(wallet.body).includes(phrase));
+  const svmWallet = wallet.body.networks.find((n) => n.network.startsWith('solana:'));
+  check('the bundle derives a separate Solana address and Devnet explorer link', /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(svmWallet?.address ?? '') && svmWallet.address !== wallet.body.address && svmWallet.address_url.endsWith('?cluster=devnet'));
+  const mainnetBalance = wallet.body.solana_mainnet_balance;
+  check('Solana mainnet status follows opt-in and failed RPC never invents a zero balance', mainnetBalance?.address === svmWallet.address && mainnetBalance.address_url === `https://explorer.solana.com/address/${svmWallet.address}` && mainnetBalance.usdc_balance === null && mainnetBalance.payments_enabled === mainnetEnabled && wallet.body.networks.some((n) => n.network === mainnetCaip && n.is_mainnet) === mainnetEnabled);
   const files = await fs.readdir(dataDir);
   check('the unlock file is named after the wallet address', files.some((f) => /^wallet-unlock-0x[0-9a-fA-F]{40}\.secret$/.test(f) && f.toLowerCase() === `wallet-unlock-${created.body.address.toLowerCase()}.secret`));
   check('the unlock file is readable by this user only', wallet.body.health.secret_protected === true);
   check('writing the words down is recorded, for that wallet and no other', (await api('/v1/admin/wallet/backup/confirm', 'POST', { address: '0x' + '11'.repeat(20) })).status === 409 && (await api('/v1/admin/wallet/backup/confirm', 'POST', {})).status === 400 && (await api('/v1/admin/wallet/backup/confirm', 'POST', { address: created.body.address })).body.confirmed === true);
 
-  const created2 = await api('/v1/keys', 'POST', { name: 'acceptance-only', total_budget: '0.10', daily_budget: '0.05', per_request_limit: '0.01', allowed_hosts: ['app.moneyswitch.dev:443'] });
+  const created2 = await api('/v1/keys', 'POST', { name: 'acceptance-only', total_budget: '0.10', daily_budget: '0.05', per_request_limit: '0.01', allowed_hosts: ['app.moneyswitch.dev:443'], network_mode: 'testnet' });
   check('limited MoneyKey works', created2.status === 200 && (await api('/v1/status', 'GET', undefined, created2.body.key)).status === 200);
   const rotated = await api(`/v1/keys/${created2.body.id}/rotate`, 'POST', {});
   check('rotation immediately invalidates the old key', rotated.status === 200 && (await api('/v1/status', 'GET', undefined, created2.body.key)).status === 401);
   const status = await api('/v1/status', 'GET', undefined, rotated.body.key);
   check('new key retains the original budget', status.status === 200 && Number(status.body.remaining_total) === 0.10);
+  if (mainnetEnabled) {
+    check('testnet key cannot access the enabled Solana mainnet', Array.isArray(status.body.networks) && !status.body.networks.includes(mainnetCaip) && status.body.network_mode === 'testnet');
+    const liveKey = await api('/v1/keys', 'POST', { name: 'mainnet-acceptance-only', total_budget: '0.01', daily_budget: '0.01', per_request_limit: '0.01', allowed_hosts: ['seller.example:443'], network_mode: 'mainnet' });
+    const liveStatus = await api('/v1/status', 'GET', undefined, liveKey.body.key);
+    check('mainnet key sees only explicitly enabled Solana mainnet', liveKey.status === 200 && liveStatus.status === 200 && liveStatus.body.networks?.length === 1 && liveStatus.body.networks[0] === mainnetCaip && liveStatus.body.network_mode === 'mainnet');
+  }
   const skill = await (await fetch(`${base}/skill.md`)).text();
   check('public skill contains no secret and explains the approval link', skill.includes('/v1/fetch') && skill.includes('approve_url') && !skill.includes(admin) && !skill.includes(rotated.body.key));
   const gone = await Promise.all([
@@ -104,6 +125,7 @@ try {
   check('admin and rotated key survive a restart', (await api('/v1/keys')).body.keys.some((key) => key.id === created2.body.id) && (await api('/v1/status', 'GET', undefined, rotated.body.key)).status === 200);
   const after = await api('/v1/admin/wallet');
   check('the wallet unlocks itself after a restart: same address, no password given', after.body.unlocked === true && after.body.address === created.body.address && after.body.health.unlock_mode === 'auto' && after.body.health.auto_unlock_ok === true);
+  check('the Solana address survives a restart', after.body.networks.find((n) => n.network.startsWith('solana:'))?.address === svmWallet.address);
   check('the restart printed no new sign-in link and no admin token', !output.includes('Admin token (save this now') && !/\/login#ms_setup_/.test(output));
 
   // A lost administrator token (SPEC.md §2): the reset command, run on the server itself while the server keeps running.
@@ -119,7 +141,7 @@ try {
   } finally {
     await fs.rm(emptyDir, { recursive: true, force: true });
   }
-  console.log(JSON.stringify({ passed, failed: 0, real_payments: 0, data: 'disposable' }));
+  console.log(JSON.stringify({ passed, failed: 0, real_payments: 0, data: 'disposable', solana_mainnet_enabled: mainnetEnabled }));
 } catch (error) {
   console.error(String(error.message).replace(/(?:ms_admin_|ms_setup_|mk_live_)[A-Za-z0-9]+/g, '[redacted]'));
   process.exitCode = 1;

@@ -11,7 +11,7 @@ if (JSON.stringify(deps) !== JSON.stringify({'better-sqlite3':'13.0.3'})) throw 
 const out = path.join(root, '.data/us-release', rev.slice(0,7));
 fs.mkdirSync(out, {recursive:true});
 for (const d of ['dist','dashboard','migrations']) fs.cpSync(path.join(pkg,d),path.join(out,d),{recursive:true});
-for (const [src,dst] of [['deploy/prebuilt.Dockerfile','Dockerfile'],['deploy/moneyswitch.caddy','moneyswitch.caddy'],['deploy/activate-caddy.sh','activate-caddy.sh'],['docker-compose.yml','docker-compose.yml'],['deploy/upgrade-us.sh','upgrade-us.sh']]) fs.writeFileSync(path.join(out,dst),fs.readFileSync(path.join(root,src),'utf8').replace(/\r\n/g,'\n'));
+for (const [src,dst] of [['deploy/prebuilt.Dockerfile','Dockerfile'],['deploy/moneyswitch.caddy','moneyswitch.caddy'],['deploy/activate-caddy.sh','activate-caddy.sh'],['docker-compose.yml','docker-compose.yml'],['deploy/upgrade-us.sh','upgrade-us.sh'],['deploy/check-backup.sh','check-backup.sh']]) fs.writeFileSync(path.join(out,dst),fs.readFileSync(path.join(root,src),'utf8').replace(/\r\n/g,'\n'));
 fs.writeFileSync(path.join(out,'REVISION'),rev+'\n');
 function files(dir) {return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(path.join(dir,e.name)):[path.join(dir,e.name)]);}
 fs.writeFileSync(path.join(out,'SHA256SUMS'),files(out).filter(f=>!f.endsWith('SHA256SUMS')).map(f=>`${createHash('sha256').update(fs.readFileSync(f)).digest('hex')}  ${path.relative(out,f).replaceAll('\\','/')}\n`).join(''));

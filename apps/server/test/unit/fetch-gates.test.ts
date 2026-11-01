@@ -39,7 +39,7 @@ describe("/v1/fetch pre-flight gates", () => {
     expect(body.code).toBe("APPROVAL_REQUIRED");
     expect(body.charged).toBe("no");
     expect(body.approval_id).toBeTruthy();
-    expect(body.approve_url).toBe(`http://127.0.0.1:4020/approvals?id=${body.approval_id}`);
+    expect(body.approve_url).toBe(`http://127.0.0.1:4020/approvals?id=${body.approval_id}&mode=pin`);
   });
 
   it("SSRF_BLOCKED targeting MoneySwitch's own port, even if allow-listed", async () => {

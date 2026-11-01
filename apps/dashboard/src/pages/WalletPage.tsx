@@ -216,6 +216,9 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
   const t = useT(walletStrings);
   const tc = useT(common);
   const limit = wallet.health.float_limit;
+  const solanaNetworks = wallet.networks.filter((n) => n.network.startsWith("solana:"));
+  const solanaMainnet = wallet.solana_mainnet_balance;
+  const solanaAddress = solanaMainnet?.address ?? solanaNetworks.find((n) => n.address)?.address;
   // SPEC.md §2: the balances in two groups, real money first, and only the groups this instance enables. Each group carries its own funding note.
   const groups = (["mainnet", "testnet"] as const)
     .map((kind) => ({ kind, networks: wallet.networks.filter((n) => Boolean(n.is_mainnet) === (kind === "mainnet")) }))
@@ -223,8 +226,33 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
   return (
     <div className="card">
       <h2>{t("addressTitle")}</h2>
-      {wallet.address && <PublicAddress address={wallet.address} qr="toggle" size="lg" />}
+      {wallet.address && <PublicAddress address={wallet.address} label={t("evmAddressLabel")} qr="toggle" size="lg" />}
       <p className="wallet-lead">{t("addressLead")}</p>
+      {(solanaNetworks.length > 0 || solanaMainnet) && (
+        <section data-address-family="solana" aria-label={t("solanaAddressLabel")}>
+          {solanaAddress ? (
+            <>
+              <PublicAddress address={solanaAddress} label={t("solanaAddressLabel")} showNote={false} qr="toggle" size="lg" />
+              {solanaMainnet && !solanaMainnet.payments_enabled && (
+                <p className="wallet-lead" data-testid="solana-mainnet-balance">
+                  <strong>{t("solanaMainnetBalance")}</strong>{" "}
+                  {solanaMainnet.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(solanaMainnet.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
+                  {" · "}{t("solanaMainnetReadOnly")}
+                </p>
+              )}
+              <p className="wallet-lead">
+                {t("solanaNetworkNote")}{" "}
+                <a href={`https://explorer.solana.com/address/${solanaAddress}`} target="_blank" rel="noreferrer">
+                  {t("viewSolanaMainnet")}
+                </a>
+              </p>
+              {solanaMainnet?.payments_enabled && (
+                <p className="wallet-lead" data-testid="solana-mainnet-payments">{t("solanaMainnetPaymentsEnabled")}</p>
+              )}
+            </>
+          ) : <p className="dim">{t("solanaUnavailable")}</p>}
+        </section>
+      )}
       {groups.map((g) => (
         <div className="wallet-group" key={g.kind} data-network-group={g.kind}>
           <h3 className="wallet-group-title">{t(g.kind === "mainnet" ? "groupMainnet" : "groupTestnet")}</h3>
@@ -239,11 +267,7 @@ function AddressCard({ wallet, meta }: { wallet: WalletInfo; meta: AdminMeta | n
             <tbody>
               {g.networks.map((n) => (
                 <tr key={n.network} data-network={n.network}>
-                  <td>{n.label}
-                    {n.network.startsWith("solana:") && (n.address
-                      ? <PublicAddress address={n.address} size="sm" qr="toggle" />
-                      : <p className="dim">{t("solanaUnavailable")}</p>)}
-                  </td>
+                  <td>{n.label}</td>
                   <td className="num">
                     {n.usdc_balance == null ? <span className="dim">{t("balanceUnknown")}</span> : `${formatUsdc(n.usdc_balance, { maxDecimals: 4 })} ${tc("usdc")}`}
                     {n.over_float_limit && <div className="wallet-over-limit">{t("overLimit", { limit })}</div>}

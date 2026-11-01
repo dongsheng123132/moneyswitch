@@ -118,13 +118,13 @@ describe("atomic trim: the removed features answer 404", () => {
       .run(keyId, now, now);
     const history = (await t.app.inject({ url: "/v1/history", headers: asKey() })).json().history as Array<Record<string, unknown>>;
     const row = history.find((h) => h.id === "old-chat-1");
-    expect(row).toMatchObject({ kind: "chat", url: "https://llm.example.com/v1/chat/completions", amount: "0.01", status: "settled" });
+    expect(row).toMatchObject({ purpose: null, pay_to: "0xb", asset: "0xa", kind: "chat", url: "https://llm.example.com/v1/chat/completions", amount: "0.01", status: "settled" });
     expect(row).not.toHaveProperty("model");
     expect(row).not.toHaveProperty("prompt_tokens");
     expect(row).not.toHaveProperty("completion_tokens");
     const usage = (await t.app.inject({ url: "/v1/admin/usage", headers: asAdmin() })).json().payments as Array<Record<string, unknown>>;
     const urow = usage.find((p) => p.id === "old-chat-1");
-    expect(urow).toMatchObject({ kind: "chat", key_id: keyId, status: "settled" });
+    expect(urow).toMatchObject({ purpose: null, key_name: "agent", kind: "chat", key_id: keyId, status: "settled" });
     expect(urow).not.toHaveProperty("model");
     expect(urow).not.toHaveProperty("prompt_tokens");
   });

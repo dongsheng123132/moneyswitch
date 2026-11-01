@@ -84,3 +84,22 @@ a.btn:hover {
 
 /* Setup-guide link + sign-out sit together at the bottom of the sidebar. */
 
+/* Keep the ledger and other pages usable when the viewport cannot fit a sidebar. */
+@media (max-width: 700px) {
+  .app-shell { flex-direction: column; }
+  .sidebar {
+    width: 100%; height: auto; position: static; overflow: visible;
+    padding: 12px 0 8px; border-right: none; border-bottom: 1px solid var(--panel-border);
+  }
+  .sidebar .brand { padding: 0 12px 10px; margin-bottom: 6px; }
+  .sidebar > nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0 8px; }
+  .sidebar nav a { gap: 5px; padding: 9px 6px; font-size: 12px; }
+  .sidebar-footer { margin-top: 6px; padding-top: 0; display: flex; flex-wrap: wrap; align-items: center; }
+  .sidebar-footer nav { flex: 1; flex-direction: row; flex-wrap: wrap; border-top: none; padding: 0 8px; }
+  .sidebar-footer nav a { font-size: 11px; }
+  .sidebar .logout { padding: 9px 12px; font-size: 11px; gap: 5px; }
+  .topbar { height: auto; min-height: 58px; padding: 12px; gap: 8px; flex-wrap: wrap; }
+  .topbar-right { gap: 8px; flex-wrap: wrap; }
+  .main { padding: 18px 12px 32px; }
+}
+

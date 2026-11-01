@@ -99,7 +99,11 @@ const link = (over: Record<string, unknown> = {}) => ({
   network: "eip155:143",
   network_kind: "mainnet" as const,
   network_label: "Monad mainnet",
+  network_family: "evm" as const,
   asset: "0xusdc",
+  asset_label: "USDC",
+  pay_to_url: "https://monadvision.com/address/0x000000000000000000000000000000000000dEaD",
+  fee_payer: null as string | null,
   pay_to: "0x000000000000000000000000000000000000dEaD",
   amount: "0.15",
   status: "pending" as const,
@@ -149,9 +153,15 @@ describe("the approval link opens without a login (SPEC.md §3)", () => {
     assert.ok(!html.includes('id="approval-pin"'));
   });
 
+  it("an explicit PIN link stays on the public confirmation page when signed in", () => {
+    store.set("moneyswitch_admin_token", "ms_admin_testtoken");
+    const html = render(h(App), "en", "/approvals?id=ap-1&mode=pin");
+    assert.ok(!html.includes("app-shell"));
+  });
+
   it("only a link with an id is public: the source gives /approvals?id=… the PIN page and every other path the login", () => {
     const app = fs.readFileSync(path.join(here, "../src/App.tsx"), "utf8");
-    assert.ok(/location\.pathname === "\/approvals" && new URLSearchParams\(location\.search\)\.get\("id"\)/.test(app));
+    assert.ok(app.includes("shouldUsePinApproval(location.pathname, location.search, Boolean(token))"), "the app binds to the tested PIN route selector");
     assert.ok(/if \(!token\) return <Navigate to=\{loginUrlFor/.test(app), "everything else still asks for the administrator's login");
   });
 });
@@ -168,11 +178,52 @@ describe("the approval link's page", () => {
     assert.ok(html.includes(esc(en.approvals.linkLead)));
   });
 
+  it("shows what a Solana payment can do: the whole devnet recipient, the mint, the fee sponsor and the no-approval sentence", () => {
+    const payTo = "J7aN3PLJnTCF5qpEnvJHJsnCjcGuqC2rYtEM8Gv3xwg";
+    const feePayer = "So11111111111111111111111111111111111111112";
+    const solanaApproval = link({
+      network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+      network_kind: "testnet",
+      network_label: "Solana Devnet",
+      network_family: "svm",
+      asset: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      asset_label: "USDC",
+      pay_to: payTo,
+      pay_to_url: `https://explorer.solana.com/address/${payTo}?cluster=devnet`,
+      fee_payer: feePayer,
+    });
+    const html = linkView({ approval: solanaApproval });
+    assert.ok(html.includes('data-testid="approval-facts"'));
+    assert.ok(html.includes(payTo), "the whole address, not a shortened one");
+    assert.ok(html.includes(`href="https://explorer.solana.com/address/${payTo}?cluster=devnet"`));
+    assert.ok(html.includes(fill(en.approvals.impactSvm, { amount: "0.15", chain: "Solana Devnet" })));
+    assert.ok(html.includes(fill(en.approvals.impactFeeKnown, { addr: "So1111...1112" })));
+    assert.ok(html.includes(esc(en.approvals.impactFailure)));
+    const zhHtml = linkView({ approval: solanaApproval }, "zh");
+    assert.ok(zhHtml.includes(fill(zh.approvals.impactSvm, { amount: "0.15", chain: "Solana Devnet" })));
+    assert.ok(zhHtml.includes(fill(zh.approvals.impactFeeKnown, { addr: "So1111...1112" })));
+  });
+
   it("a new host shows its host:port and no amount or chain, as on the administrator's page", () => {
     const html = linkView({ approval: link({ kind: "host", host: "api.newhost.example:443", network: "", network_kind: null, network_label: null, amount: "0", pay_to: "" }) });
     assert.ok(html.includes('data-testid="host-approval"') && html.includes("api.newhost.example:443"));
     assert.ok(html.includes(esc(en.approvals.hostBadge)));
     assert.ok(!html.includes("approval-chain"));
+    assert.ok(!html.includes('data-testid="approval-facts"'), "no payment facts for a host request");
+  });
+
+  it("shows the explicit task and why approval is needed in English and Chinese, escaping HTML", () => {
+    const purpose = "为虾盘制作海报 <img src=x onerror=alert(1)>";
+    for (const lang of ["en", "zh"] as const) {
+      const html = linkView({ approval: link({ purpose }) }, lang);
+      const strings = lang === "en" ? en.approvals : zh.approvals;
+      assert.ok(html.includes(esc(purpose)));
+      assert.ok(!html.includes("<img src=x"));
+      assert.ok(html.includes(esc(strings.taskLabel)) && html.includes(esc(strings.reasonPayment)));
+      const host = linkView({ approval: link({ purpose, kind: "host", host: "blockrun.ai:443" }) }, lang);
+      assert.ok(host.includes(esc(strings.reasonHost)));
+      assert.ok(linkView({ approval: link({ purpose: null }) }, lang).includes(esc(strings.taskMissing)));
+    }
   });
 
   it("asks for the PIN: a masked numeric field of at most six digits, with Approve and Deny, both disabled until 4 to 6 digits are typed", () => {

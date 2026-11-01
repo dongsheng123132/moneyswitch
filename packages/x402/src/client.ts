@@ -195,6 +195,10 @@ export interface PaidFetchInput {
    */
   body?: unknown;
   maxPrice?: bigint;
+  /** When supplied, this exact CAIP-2 chain is required: never fall back to another offer. */
+  network?: string;
+  /** Optional caller-provided audit note; not a verified task or the full prompt. */
+  purpose?: string;
   approvalId?: string | null;
 }
 
@@ -379,7 +383,11 @@ export async function performPaidFetch(
   } catch {
     // the key is gone or its chain is broken: the row we were given decides here, and the policy engine reports the rest when it reserves
   }
-  const networks = typeChain ? getEnabledNetworksForChain(typeChain) : getEnabledNetworksFor(key.networkMode);
+  const allowedNetworks = typeChain ? getEnabledNetworksForChain(typeChain) : getEnabledNetworksFor(key.networkMode);
+  if (input.network !== undefined && !allowedNetworks.some((n) => n.caip2 === input.network)) {
+    throw new MoneySwitchError("UNSUPPORTED_PAYMENT", "The requested payment network is not enabled for this key; no other chain will be used");
+  }
+  const networks = input.network === undefined ? allowedNetworks : allowedNetworks.filter((n) => n.caip2 === input.network);
   let network = getActiveNetwork();
   const { probeMs, paidMs } = resolvePaidFetchTimeouts();
   let paymentId: string | null = null;
@@ -404,6 +412,12 @@ export async function performPaidFetch(
   // True once the payment authorization is signed and about to be sent — the
   // point of no return after which a lost response means "maybe charged".
   let signed = false;
+  // Monotonic evidence of entering a signer / attempting a paid request. The
+  // after-creation hook can fail while capturing an already-created signature,
+  // so `signed` alone cannot prove a construction failure happened before signing.
+  let signingStarted = false;
+  let signingCallsStarted = 0;
+  let paidRequestStarted = false;
   // True when the probe deadline expired before the payment could be sent (see
   // the two hooks below). Nothing was sent, so this is an ordinary upstream
   // timeout with charged "no" — never "payment_unknown".
@@ -434,8 +448,8 @@ export async function performPaidFetch(
   let balanceAddress = null as string | null;
   // Every requirement the seller offered was removed by our own policy filter (wrong asset or network, a Permit2 request, ...).
   let offerRefusedByPolicy = false;
-  // The wallet refused to sign because it was replaced or locked after this request took its signer (WALLET_CHANGED).
-  // Nothing was signed, so the reservation must be RELEASED (failed), never held as `unknown` like a transport error.
+  // A first signer call refused with WALLET_CHANGED, which our wallet throws
+  // before signing. A refusal during SDK recovery cannot erase an earlier attempt.
   let signerRefused = false;
   const leasedSigner: EvmTypedDataSigner = {
     get address() {
@@ -444,10 +458,13 @@ export async function performPaidFetch(
     },
     async signTypedData(msg) {
       if (!lease) throw new Error("the wallet's signer was used before a lease on it was taken");
+      const firstSigningAttempt = ++signingCallsStarted === 1;
+      signingStarted = true;
+      signerRefused = false;
       try {
         return await (lease as SignerLease).signer.signTypedData(msg);
       } catch (e) {
-        if ((e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
+        if (firstSigningAttempt && signingCallsStarted === 1 && (e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
         throw e;
       }
     },
@@ -460,9 +477,12 @@ export async function performPaidFetch(
     },
     async signTransactions(transactions, config) {
       if (!lease) throw new Error("SVM signer used before taking a lease");
+      const firstSigningAttempt = ++signingCallsStarted === 1;
+      signingStarted = true;
+      signerRefused = false;
       try { return await (lease as SvmSignerLease).signer.signTransactions(transactions, config); }
       catch (e) {
-        if ((e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
+        if (firstSigningAttempt && signingCallsStarted === 1 && (e as { code?: unknown } | null)?.code === "WALLET_CHANGED") signerRefused = true;
         throw e;
       }
     },
@@ -526,7 +546,11 @@ export async function performPaidFetch(
         const cancelled = new Promise<never>((_resolve, reject) => {
           abort = () => {
             deadlineBeforeSend = true;
-            if (paymentId) {
+            // The losing construction promise cannot hand its payload to the
+            // SDK, even if a local signature completes later. All subsequent
+            // paid HTTP is blocked too. This proves no send only when there was
+            // no earlier paid request in an SDK recovery cycle.
+            if (paymentId && !paidRequestStarted) {
               try { failPayment(db, paymentId, "ABORTED_BEFORE_SEND"); } catch { /* reservation stays counted */ }
             }
             reject(new Error("SVM payment creation deadline expired"));
@@ -558,11 +582,15 @@ export async function performPaidFetch(
       }
       network = selected;
       balanceAddress = deps.balanceReader ? balanceAddresses.get(selected.caip2) ?? null : null;
+      // The Solana fee sponsor from the quote (extra.feePayer), recorded with a new approval so its screen can say who pays the network
+      // fee; EVM leaves it null (the buyer signs EIP-3009 and the facilitator submits the transfer).
+      let feePayer: string | null = null;
       if (isSvmNetwork(selected)) {
         // The x402 facilitator must sponsor fees. A quote may not spend this wallet's SOL outside its USDC limits.
         try {
-          const feePayer = ctx.selectedRequirements.extra?.feePayer;
-          if (typeof feePayer !== "string" || svmAddress(feePayer) === addressFor(selected)) throw new Error("Invalid fee payer");
+          const sponsor = ctx.selectedRequirements.extra?.feePayer;
+          if (typeof sponsor !== "string" || svmAddress(sponsor) === addressFor(selected)) throw new Error("Invalid fee payer");
+          feePayer = sponsor;
         } catch {
           ownAbortCode = "UNSUPPORTED_PAYMENT";
           return { abort: true, reason: "UNSUPPORTED_PAYMENT" };
@@ -614,10 +642,12 @@ export async function performPaidFetch(
           host: input.host,
           method: input.method,
           body: input.body,
+          purpose: input.purpose,
           network: ctx.selectedRequirements.network,
           asset: ctx.selectedRequirements.asset,
           payTo: ctx.selectedRequirements.payTo,
           amount,
+          feePayer,
           maxPrice: input.maxPrice,
           approvalId: input.approvalId,
         });
@@ -663,7 +693,7 @@ export async function performPaidFetch(
       // cannot slip in between.)
       if (timedOut || controller.signal.aborted) {
         deadlineBeforeSend = true;
-        if (paymentId) {
+        if (paymentId && !paidRequestStarted) {
           try {
             failPayment(db, paymentId, "ABORTED_BEFORE_SEND");
           } catch {
@@ -761,6 +791,8 @@ export async function performPaidFetch(
       // expired; nothing may be sent on its behalf.
       return Promise.reject(new DOMException("payment released before send", "AbortError"));
     }
+    const outboundHeaders = new Headers(init?.headers ?? (fetchInput instanceof Request ? fetchInput.headers : undefined));
+    if (outboundHeaders.has("payment-signature") || outboundHeaders.has("x-payment")) paidRequestStarted = true;
     return fetch(fetchInput, {
       ...init,
       redirect: "manual",
@@ -840,15 +872,17 @@ export async function performPaidFetch(
         signal: controller.signal,
       });
     } catch (e) {
-      // deadlineBeforeSend: the row (if any) was already released as failed by the
-      // after-creation hook; do not turn it back into a held `unknown` one.
-      if (!signed && paymentId && !deadlineBeforeSend) {
-        if (signerRefused) {
-          // The signer refused before producing a signature: no authorization exists, no money can move. Release the budget.
-          failPayment(db, paymentId, "WALLET_CHANGED");
-        } else {
-          markUnknown(db, paymentId, "UPSTREAM_ERROR");
-        }
+      const refusedBeforeSigning = signerRefused && !signed && !paidRequestStarted;
+      // The existing deadline guard prevents the signed payload from leaving the
+      // process. It cannot release a retry's budget after an earlier paid request.
+      const stoppedBeforeSend = deadlineBeforeSend && !paidRequestStarted;
+      if (!stoppedBeforeSend && (paidRequestStarted || signed || (signingStarted && !refusedBeforeSigning))) {
+        return afterSignFailure(e, null);
+      }
+      if (paymentId && !stoppedBeforeSend) {
+        // No signer was called and no paid HTTP request started, or our wallet
+        // definitively refused its first call before signing. Release the budget.
+        failPayment(db, paymentId, refusedBeforeSigning ? "WALLET_CHANGED" : "UPSTREAM_ERROR");
       }
       if (ownAbortApprovalId) {
         throw new ApprovalRequiredError(ownAbortApprovalId);
@@ -856,13 +890,10 @@ export async function performPaidFetch(
       if (ownAbortCode) {
         throw new MoneySwitchError(ownAbortCode, undefined, ownAbortLimit);
       }
-      if (signerRefused) {
+      if (refusedBeforeSigning) {
         throw new MoneySwitchError("WALLET_LOCKED", "The wallet was replaced or locked while this request was in progress; nothing was signed and nothing was charged");
       }
-      if (signed) {
-        return afterSignFailure(e, null);
-      }
-      if (deadlineBeforeSend) {
+      if (stoppedBeforeSend) {
         // Our own probe deadline: nothing was sent, nothing is charged.
         throw new MoneySwitchError("UPSTREAM_ERROR", `upstream did not answer within ${probeMs}ms (no payment was sent)`);
       }

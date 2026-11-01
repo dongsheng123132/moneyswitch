@@ -28,7 +28,7 @@ export function registerApprovalStatusRoutes(app: FastifyInstance, ctx: AppConte
     const { id } = req.params as { id: string };
 
     // Same staleness sweep the admin list uses, so a poller sees `expired`
-    // as soon as the 10-minute TTL has passed instead of a stale `pending`.
+    // as soon as the 30-minute TTL has passed instead of a stale `pending`.
     expireStaleApprovals(ctx.db);
 
     const approval = getApproval(ctx.db, id);
@@ -40,6 +40,7 @@ export function registerApprovalStatusRoutes(app: FastifyInstance, ctx: AppConte
       id: approval.id,
       status: approval.status,
       kind: approval.kind,
+      purpose: approval.purpose,
       ...(approval.kind === "host" ? { host: hostOfApproval(approval) } : {}),
       amount: formatMicrosToUsdc(approval.amount),
       currency: "USDC",

@@ -11,7 +11,7 @@ import {
   recordWalletRetirement,
   writeAudit,
 } from "@moneyswitch/core";
-import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork, isSvmNetwork, explorerUrl, type NetworkConfig } from "@moneyswitch/x402";
+import { getActiveNetwork, getEnabledNetworks, isMainnetNetwork, isSvmNetwork, explorerUrl, SOLANA_MAINNET, type NetworkConfig } from "@moneyswitch/x402";
 import { WalletError } from "@moneyswitch/wallet";
 import type { AppContext } from "../context.js";
 import { requireAdmin } from "../auth.js";
@@ -66,6 +66,14 @@ export interface WalletNetworkView {
   over_float_limit: boolean | null;
 }
 
+/** Mainnet funds and whether this instance has enabled Solana mainnet payments. */
+export interface SolanaMainnetBalanceView {
+  address: string;
+  address_url: string;
+  usdc_balance: string | null;
+  payments_enabled: boolean;
+}
+
 export interface RetiredWalletView {
   solana_address: string | null;
   address: string;
@@ -104,22 +112,47 @@ interface CachedBalance {
 }
 const balanceCaches = new WeakMap<AppContext, Map<string, CachedBalance>>();
 
-async function readBalance(ctx: AppContext, address: string, network: NetworkConfig): Promise<bigint | null> {
+async function readCachedBalance(ctx: AppContext, key: string, read: () => Promise<bigint>): Promise<bigint | null> {
   let cache = balanceCaches.get(ctx);
   if (!cache) balanceCaches.set(ctx, (cache = new Map()));
-  const key = `${network.caip2}:${isSvmNetwork(network) ? address : address.toLowerCase()}`;
   const hit = cache.get(key);
   if (hit?.pending) return hit.pending;
   if (hit && Date.now() - hit.at < hit.ttl) return hit.value;
-  const pending = (isSvmNetwork(network)
-    ? ctx.wallet.getSolanaUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress)
-    : ctx.wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress))
+  const pending = read()
     .then((value): bigint | null => value)
     .catch((): bigint | null => null);
   cache.set(key, { at: Date.now(), ttl: BALANCE_FAILURE_TTL_MS, value: hit?.value ?? null, pending });
   const value = await pending;
   cache.set(key, { at: Date.now(), ttl: value === null ? BALANCE_FAILURE_TTL_MS : BALANCE_TTL_MS, value });
   return value;
+}
+
+async function readBalance(ctx: AppContext, address: string, network: NetworkConfig): Promise<bigint | null> {
+  const key = `${network.caip2}:${isSvmNetwork(network) ? address : address.toLowerCase()}`;
+  return readCachedBalance(ctx, key, () => isSvmNetwork(network)
+    ? ctx.wallet.getSolanaUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress)
+    : ctx.wallet.getUsdcBalanceOf(address, network.rpcUrl, network.usdcAddress));
+}
+
+async function readSolanaMainnetBalance(
+  ctx: AppContext,
+  address: string | null,
+  networks: NetworkConfig[],
+  enabledBalances: Promise<Map<string, bigint | null>>,
+): Promise<SolanaMainnetBalanceView | null> {
+  if (!address) return null;
+  const paymentsEnabled = networks.some((n) => n.caip2 === SOLANA_MAINNET.caip2);
+  const rpcUrl = process.env.MONEYSWITCH_SOLANA_MAINNET_RPC_URL || SOLANA_MAINNET.rpcUrl;
+  const balance = paymentsEnabled
+    ? (await enabledBalances).get(SOLANA_MAINNET.caip2) ?? null
+    : await readCachedBalance(ctx, `solana:mainnet:${address}:${rpcUrl}`, () =>
+      ctx.wallet.getSolanaUsdcBalanceOf(address, rpcUrl, SOLANA_MAINNET.usdcAddress));
+  return {
+    address,
+    address_url: `https://explorer.solana.com/address/${encodeURIComponent(address)}`,
+    usdc_balance: balance === null ? null : formatMicrosToUsdc(balance),
+    payments_enabled: paymentsEnabled,
+  };
 }
 
 /** Balance on every enabled chain where it can be read (null = unknown). */
@@ -210,7 +243,11 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     const active = getActiveNetwork();
     const address = ctx.wallet.getAddress();
     const solanaAddress = ctx.wallet.getSolanaAddress();
-    const balances = await balancesByNetwork(ctx, address, networks, solanaAddress);
+    const enabledBalances = balancesByNetwork(ctx, address, networks, solanaAddress);
+    const [balances, solanaMainnetBalance] = await Promise.all([
+      enabledBalances,
+      readSolanaMainnetBalance(ctx, solanaAddress, networks, enabledBalances),
+    ]);
     const health = buildHealth(address, balances);
     const limit = walletFloatLimit();
 
@@ -223,6 +260,7 @@ export function registerWalletRoutes(app: FastifyInstance, ctx: AppContext) {
     const selected = balances.get(active.caip2) ?? null;
     return reply.send({
       address,
+      solana_mainnet_balance: solanaMainnetBalance,
       unlocked: ctx.wallet.isUnlocked(),
       has_keystore: ctx.wallet.hasKeystore(),
       has_recovery_phrase: ctx.wallet.hasKeystore() && ctx.wallet.keystoreHasRecoveryPhrase(),

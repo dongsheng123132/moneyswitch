@@ -53,6 +53,8 @@ export interface PaymentRow {
   network: string;
   asset: string;
   payTo: string;
+  /** Optional Agent-supplied purpose, not a verified task record. */
+  purpose: string | null;
   amount: bigint;
   status: PaymentStatus;
   txHash: string | null;
@@ -75,6 +77,8 @@ export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "us
 export type ApprovalKind = "payment" | "host";
 
 export interface ApprovalRow {
+  /** Agent-supplied task description, not inferred from the request body. */
+  purpose: string | null;
   id: string;
   keyId: string;
   url: string;
@@ -84,6 +88,8 @@ export interface ApprovalRow {
   asset: string;
   payTo: string;
   amount: bigint;
+  /** The Solana fee sponsor from the seller's 402 quote, or null (EVM, a new host, or an approval from before migration 0014). */
+  feePayer: string | null;
   status: ApprovalStatus;
   kind: ApprovalKind;
   expiresAt: string;

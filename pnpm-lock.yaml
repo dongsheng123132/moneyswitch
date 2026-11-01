@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@solana/rpc-transport-http@5.1.0':
+    hash: 9650452a8c1f487a3c0df73ee3abb1fff676f976a5255773908ea09f429fec7d
+    path: patches/@solana__rpc-transport-http@5.1.0.patch
+
 importers:
 
   .:
@@ -3822,7 +3827,7 @@ snapshots:
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
 
-  '@solana/rpc-transport-http@5.1.0(typescript@5.7.3)':
+  '@solana/rpc-transport-http@5.1.0(patch_hash=9650452a8c1f487a3c0df73ee3abb1fff676f976a5255773908ea09f429fec7d)(typescript@5.7.3)':
     dependencies:
       '@solana/errors': 5.1.0(typescript@5.7.3)
       '@solana/rpc-spec': 5.1.0(typescript@5.7.3)
@@ -3851,7 +3856,7 @@ snapshots:
       '@solana/rpc-spec': 5.1.0(typescript@5.7.3)
       '@solana/rpc-spec-types': 5.1.0(typescript@5.7.3)
       '@solana/rpc-transformers': 5.1.0(typescript@5.7.3)
-      '@solana/rpc-transport-http': 5.1.0(typescript@5.7.3)
+      '@solana/rpc-transport-http': 5.1.0(patch_hash=9650452a8c1f487a3c0df73ee3abb1fff676f976a5255773908ea09f429fec7d)(typescript@5.7.3)
       '@solana/rpc-types': 5.1.0(typescript@5.7.3)
       typescript: 5.7.3
     transitivePeerDependencies:

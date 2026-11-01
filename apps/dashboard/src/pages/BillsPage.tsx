@@ -1,10 +1,9 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Download, Search } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Clock3, Download, LockKeyhole, Search, ShieldCheck } from "lucide-react";
 import { usePolling } from "../usePolling";
 import { listBills, listKeys, isMockPayment, type BillsList, type MoneyKeyRow, type NetworkMode, type PaymentRow } from "../api";
-import { formatUsdc, sumDecimalStrings, toCsv, downloadCsv, urlPath, isTodayUtc } from "../money";
-import Pill from "../components/Pill";
+import { formatUsdc, sumDecimalStrings, toCsv, downloadCsv, isTodayUtc } from "../money";
 import NetworkKindPill from "../components/NetworkKindPill";
 import Callout from "../components/Callout";
 import TxLink from "../components/TxLink";
@@ -31,10 +30,9 @@ type RangeFilter = "today" | "24h" | "7d" | "all";
 type ChargedFilter = "all" | Charged;
 type KindFilter = "all" | NetworkMode;
 
-const CHARGED_OPTIONS: ChargedFilter[] = ["all", "yes", "no", "maybe"];
+const CHARGED_OPTIONS: ChargedFilter[] = ["all", "maybe", "yes", "no"];
 const RANGE_OPTIONS: RangeFilter[] = ["today", "24h", "7d", "all"];
 const KIND_OPTIONS: KindFilter[] = ["all", "mainnet", "testnet"];
-const CHARGED_TONE: Record<Charged, "green" | "gray" | "yellow"> = { yes: "green", no: "gray", maybe: "yellow" };
 
 /** Mainnet money and testnet tokens are never added together (SPEC.md §2); a chain the server does not know is a bucket of its own, never folded into either. */
 export type BillsBucket = NetworkMode | "other";
@@ -45,15 +43,21 @@ export function bucketOf(p: Pick<PaymentRow, "network_kind">): BillsBucket {
 
 const BUCKET_ORDER: BillsBucket[] = ["mainnet", "testnet", "other"];
 
-/**
- * The totals of the bills, one per kind of chain that has a payment in the list (mainnet first); never one number across kinds.
- * What counts is what the summary always counted: every payment that was not refused for good (charged yes or maybe).
- */
-export function billsTotalsByKind(payments: PaymentRow[]): Array<{ kind: BillsBucket; total: string }> {
+function totalsByCharge(payments: PaymentRow[], charged: Charged): Array<{ kind: BillsBucket; total: string }> {
   return BUCKET_ORDER.filter((kind) => payments.some((p) => bucketOf(p) === kind)).map((kind) => ({
     kind,
-    total: sumDecimalStrings(payments.filter((p) => bucketOf(p) === kind && chargedOf(p) !== "no").map((p) => p.amount)),
+    total: sumDecimalStrings(payments.filter((p) => bucketOf(p) === kind && chargedOf(p) === charged).map((p) => p.amount)),
   }));
+}
+
+/** Only confirmed payments belong to the paid total; mainnet money and test tokens remain separate. */
+export function billsTotalsByKind(payments: PaymentRow[]): Array<{ kind: BillsBucket; total: string }> {
+  return totalsByCharge(payments, "yes");
+}
+
+/** Unknown and reserved payments are a separate amount to check, never an asserted expense. */
+export function billsPendingTotalsByKind(payments: PaymentRow[]): Array<{ kind: BillsBucket; total: string }> {
+  return totalsByCharge(payments.filter((p) => chargedOf(p) === "maybe"), "maybe");
 }
 
 /** The Network type filter: every payment, or only those on mainnets, or only those on testnets. */
@@ -68,68 +72,107 @@ function withinRange(iso: string, range: RangeFilter, now: number): boolean {
   return now - new Date(iso).getTime() <= ms;
 }
 
-/** One ledger row per payment: time, key, amount, URL, chain, transaction and whether the money left (yes / no / maybe). */
+/** A key is an attribution label, not a verified agent identity (keys can be shared). */
+export function billKeyName(p: Pick<PaymentRow, "key_id" | "key_name">, keyNames: Map<string, string>): string {
+  return p.key_name || keyNames.get(p.key_id) || p.key_id.slice(0, 8);
+}
+
+/** Audit details are mounted only after an explicit request, so a collapsed row has no private URL or purpose in its DOM. */
+export function BillsPaymentDetails({ payment: p, keyName, chainLabel, showPurpose = false }: {
+  payment: PaymentRow;
+  keyName: string;
+  chainLabel: string;
+  showPurpose?: boolean;
+}) {
+  const t = useT(billsStrings);
+  const dateTime = useDateTime();
+  return (
+    <dl className="bills-details" data-testid="bill-details">
+      <div><dt>{t("colTime")}</dt><dd><time dateTime={p.created_at}>{dateTime(p.created_at)}</time></dd></div>
+      <div><dt>{t("colKey")}</dt><dd>{keyName} <span className="mono dim">({p.key_id})</span></dd></div>
+      <div><dt>{t("colPurpose")}</dt><dd>{!p.purpose ? t("purposeMissing") : showPurpose ? p.purpose : t("purposeHidden")}</dd></div>
+      <div><dt>{t("fullRequest")}</dt><dd className="mono">{p.method} {p.url}</dd></div>
+      <div><dt>{t("colRecipient")}</dt><dd className="mono">{p.pay_to || "—"}</dd></div>
+      <div><dt>{t("colAmount")}</dt><dd>{formatUsdc(p.amount, { maxDecimals: 6 })} USDC</dd></div>
+      <div><dt>{t("colChain")}</dt><dd>{chainLabel} <NetworkKindPill kind={p.network_kind} /><span className="mono dim bills-detail-secondary">{p.network}</span></dd></div>
+      <div><dt>{t("asset")}</dt><dd className="mono">{p.asset || "—"}</dd></div>
+      <div><dt>{t("colTx")}</dt><dd><TxLink txHash={p.tx_hash} mock={isMockPayment(p)} network={p.network} /><span className="mono bills-detail-secondary">{p.tx_hash ?? "—"}</span></dd></div>
+      <div><dt>{t("paymentId")}</dt><dd className="mono">{p.id}</dd></div>
+      {p.approval_id && <div><dt>{t("approvalId")}</dt><dd className="mono">{p.approval_id}</dd></div>}
+      <div><dt>{t("paymentStatus")}</dt><dd>{t(p.status === "settled" ? "statusSettled" : p.status === "failed" ? "statusFailed" : p.status === "reserved" ? "statusReserved" : "statusUnknown")}{p.error_code && <span className="mono bills-detail-secondary">{p.error_code}</span>}</dd></div>
+    </dl>
+  );
+}
+
+function BillsRow({ payment: p, keyNames, chainLabels, onPickKey, showPurpose }: {
+  payment: PaymentRow;
+  keyNames: Map<string, string>;
+  chainLabels: Map<string, string>;
+  onPickKey?: (keyId: string) => void;
+  showPurpose: boolean;
+}) {
+  const t = useT(billsStrings);
+  const dateTime = useDateTime();
+  const [expanded, setExpanded] = useState(false);
+  const charged = chargedOf(p);
+  const name = billKeyName(p, keyNames);
+  const chainLabel = chainLabels.get(p.network) ?? p.network;
+  const detailId = `bill-detail-${p.id}`;
+  const chainMark = p.network.startsWith("solana:") ? "S" : p.network === "eip155:8453" || p.network === "eip155:84532" ? "B" : p.network === "eip155:143" || p.network === "eip155:10143" ? "M" : "·";
+  return (
+    <>
+      <tr className={`bills-record ${charged === "maybe" ? "row-unknown" : ""}`} data-charged={charged}>
+        <td data-label={t("colAmount")} className="bills-amount-cell"><span className="bills-row-amount num">{formatUsdc(p.amount, { maxDecimals: 6 })} <span>USDC</span></span></td>
+        <td data-label={t("colKey")} className="bills-key"><span className="bills-agent"><span className="bills-agent-mark" aria-hidden>{name.slice(0, 1).toUpperCase()}</span>{onPickKey ? <button type="button" className="linklike-btn" onClick={() => onPickKey(p.key_id)}>{name}</button> : <span>{name}</span>}</span></td>
+        <td data-label={t("colPurpose")} className="bills-purpose">{!p.purpose ? <span className="dim">{t("purposeMissing")}</span> : showPurpose ? p.purpose : <span className="bills-hidden"><LockKeyhole size={12} aria-hidden />{t("purposeHidden")}</span>}</td>
+        <td data-label={t("colTime")} className="bills-time"><time dateTime={p.created_at}>{dateTime(p.created_at)}</time></td>
+        <td data-label={t("colChain")} className="bills-chain"><span className={`bills-chain-mark bills-chain-${chainMark.toLowerCase()}`} aria-hidden>{chainMark}</span><span className="bills-chain-name">{chainLabel}<NetworkKindPill kind={p.network_kind} /></span></td>
+        <td data-label={t("colUrl")} className="bills-url">{p.host}</td>
+        <td data-label={t("colCharged")} className="bills-status-cell">
+          <span title={t(charged === "yes" ? "chargedYesHint" : charged === "no" ? "chargedNoHint" : "chargedMaybeHint")}>
+            <span className={`bills-status bills-status-${charged}`}><span aria-hidden />{t(p.status === "reserved" ? "statusReserved" : charged === "yes" ? "chargedYes" : charged === "no" ? "chargedNo" : "chargedMaybe")}</span>
+          </span>
+          {charged === "maybe" && <span className="bills-pending-hint">{t("pendingShortHint")}</span>}
+        </td>
+        <td data-label={t("colDetails")} className="bills-detail-cell"><button type="button" className="bills-detail-button" aria-expanded={expanded} aria-controls={expanded ? detailId : undefined} onClick={() => setExpanded(!expanded)}>{t(expanded ? "hideDetails" : "showDetails")}<ChevronDown size={13} aria-hidden /></button></td>
+      </tr>
+      {expanded && <tr className="bills-detail-row"><td colSpan={8} id={detailId}><BillsPaymentDetails payment={p} keyName={name} chainLabel={chainLabel} showPurpose={showPurpose} /></td></tr>}
+    </>
+  );
+}
+
+/** One row per payment; the overview includes only the request host, with private audit details available on demand. */
 export function BillsTable({
   payments,
   keyNames,
   chainLabels,
   onPickKey,
+  showPurpose = false,
 }: {
   payments: PaymentRow[];
   keyNames: Map<string, string>;
   /** CAIP-2 → display name of the chain. */
   chainLabels: Map<string, string>;
   onPickKey?: (keyId: string) => void;
+  showPurpose?: boolean;
 }) {
   const t = useT(billsStrings);
-  const dateTime = useDateTime();
   return (
-    <table>
+    <table className="bills-table">
       <thead>
         <tr>
-          <th>{t("colTime")}</th>
+          <th>{t("colAmount")}</th>
           <th>{t("colKey")}</th>
-          <th className="num">{t("colAmount")}</th>
-          <th>{t("colUrl")}</th>
+          <th>{t("colPurpose")}</th>
+          <th>{t("colTime")}</th>
           <th>{t("colChain")}</th>
-          <th>{t("colTx")}</th>
+          <th>{t("colUrl")}</th>
           <th>{t("colCharged")}</th>
+          <th>{t("colDetails")}</th>
         </tr>
       </thead>
       <tbody>
-        {payments.map((p) => {
-          const mock = isMockPayment(p);
-          const charged = chargedOf(p);
-          const name = keyNames.get(p.key_id);
-          return (
-            <tr key={p.id} className={charged === "maybe" ? "row-unknown" : ""} data-charged={charged}>
-              <td>{dateTime(p.created_at)}</td>
-              <td>
-                {name ? (
-                  <button type="button" className="linklike-btn" onClick={() => onPickKey?.(p.key_id)}>
-                    {name}
-                  </button>
-                ) : (
-                  <span className="mono">{p.key_id.slice(0, 8)}</span>
-                )}
-              </td>
-              <td className="num">{formatUsdc(p.amount, { maxDecimals: 4 })}</td>
-              <td className="mono bills-url">{`${p.host}${urlPath(p.url)}`}</td>
-              <td>
-                {chainLabels.get(p.network) ?? p.network} <NetworkKindPill kind={p.network_kind} />
-              </td>
-              <td>
-                <TxLink txHash={p.tx_hash} mock={mock} network={p.network} />
-              </td>
-              <td>
-                <span title={t(charged === "yes" ? "chargedYesHint" : charged === "no" ? "chargedNoHint" : "chargedMaybeHint")}>
-                  <Pill tone={CHARGED_TONE[charged]}>{t(charged === "yes" ? "chargedYes" : charged === "no" ? "chargedNo" : "chargedMaybe")}</Pill>
-                </span>
-                {p.error_code && charged !== "yes" && <span className="bills-error-code">{p.error_code}</span>}
-              </td>
-            </tr>
-          );
-        })}
+        {payments.map((p) => <BillsRow key={p.id} payment={p} keyNames={keyNames} chainLabels={chainLabels} onPickKey={onPickKey} showPurpose={showPurpose} />)}
       </tbody>
     </table>
   );
@@ -150,34 +193,41 @@ export function BillsKindFilter({ value, onChange }: { value: KindFilter; onChan
   );
 }
 
-/** The summary above the table: how many payments, one total per kind of chain (never one number across kinds), and how many have an unknown charge. */
-export function BillsSummary({ payments }: { payments: PaymentRow[] }) {
+/** The summary covers the current key/date/network scope; status tabs only change the records below. */
+export function BillsSummary({ payments, onReview }: { payments: PaymentRow[]; onReview?: () => void }) {
   const t = useT(billsStrings);
   const tc = useT(common);
   const totals = useMemo(() => billsTotalsByKind(payments), [payments]);
+  const pendingTotals = useMemo(() => billsPendingTotalsByKind(payments), [payments]);
   const maybeCount = payments.filter((p) => chargedOf(p) === "maybe").length;
+  const settledCount = payments.filter((p) => chargedOf(p) === "yes").length;
+  const failedCount = payments.filter((p) => chargedOf(p) === "no").length;
   return (
-    <div style={{ display: "flex", gap: 32 }}>
-      <div>
-        <div className="stat-label">{t("summaryCount")}</div>
-        <div className="stat-value num">{payments.length}</div>
-      </div>
+    <section className="bills-overview" aria-label={t("overviewLabel")}>
+      <div className="bills-summary">
       {(totals.length > 0 ? totals : [{ kind: null, total: "0" }]).map((s) => (
-        <div key={s.kind ?? "none"} data-total-kind={s.kind ?? undefined}>
-          <div className="stat-label">
+        <article key={s.kind ?? "none"} className={`bills-total-card bills-total-${s.kind ?? "none"}`} data-total-kind={s.kind ?? undefined}>
+          <div className="bills-total-header"><span className="bills-total-label">
             {t(s.kind === "mainnet" ? "summaryTotalMainnet" : s.kind === "testnet" ? "summaryTotalTestnet" : s.kind === "other" ? "summaryTotalOther" : "summaryTotal")}
-          </div>
-          <div className="stat-value num">
-            {formatUsdc(s.total, { maxDecimals: 4 })} {tc("usdc")}
-          </div>
-        </div>
+          </span><ArrowUpRight size={17} aria-hidden /></div>
+          <div className="bills-total-amount num">{formatUsdc(s.total, { maxDecimals: 6 })} <span>{tc("usdc")}</span></div>
+          <p className="bills-total-caption">{t(s.kind === "mainnet" ? "realMoneyHint" : s.kind === "testnet" ? "testMoneyHint" : "confirmedOnlyHint")}</p>
+        </article>
       ))}
-      <div>
-        <div className="stat-label">{t("summaryMaybe")}</div>
-        <div className="stat-value num">{maybeCount}</div>
       </div>
-    </div>
+      <div className="bills-counts"><span>{t("summaryCount")} <strong>{payments.length}</strong></span><span>{t("chargedYes")} <strong>{settledCount}</strong></span><span>{t("chargedNo")} <strong>{failedCount}</strong></span><span>{t("summaryMaybe")} <strong>{maybeCount}</strong></span></div>
+      {maybeCount > 0 && <div className="bills-review" data-testid="pending-summary">
+        <span className="bills-review-icon"><Clock3 size={19} aria-hidden /></span>
+        <div className="bills-review-copy"><strong>{t("reviewTitle", { count: maybeCount })}</strong><p>{t("reviewHint")}</p><div className="bills-pending-totals">{pendingTotals.map((s) => <span key={s.kind} data-pending-kind={s.kind}>{s.kind === "mainnet" ? tc("kindMainnet") : s.kind === "testnet" ? tc("kindTestnet") : t("otherNetworks")} <strong className="num">{formatUsdc(s.total, { maxDecimals: 6 })} USDC</strong></span>)}</div></div>
+        {onReview && <button type="button" className="bills-review-button" onClick={onReview}>{t("reviewAction")}<ArrowUpRight size={14} aria-hidden /></button>}
+      </div>}
+    </section>
   );
+}
+
+export function BillsStatusFilter({ value, payments, onChange }: { value: ChargedFilter; payments: PaymentRow[]; onChange: (value: ChargedFilter) => void }) {
+  const t = useT(billsStrings);
+  return <div className="bills-status-tabs" role="group" aria-label={t("colCharged")}>{CHARGED_OPTIONS.map((opt) => <button key={opt} type="button" className={value === opt ? "active" : ""} aria-pressed={value === opt} data-status-filter={opt} onClick={() => onChange(opt)}>{t(opt === "all" ? "chargedAny" : opt === "yes" ? "chargedYes" : opt === "no" ? "chargedNo" : "chargedMaybe")}<span>{opt === "all" ? payments.length : payments.filter((p) => chargedOf(p) === opt).length}</span></button>)}</div>;
 }
 
 /** Said whenever the server held more payments than it sent: the list, the totals and the CSV then cover only the newest ones. */
@@ -206,15 +256,15 @@ export function BillsRenderCap({ shown, matching }: { shown: number; matching: n
   return <Callout tone="info">{t("renderCapNotice", { shown, matching })}</Callout>;
 }
 
-/** The CSV of the bills: the original columns first, in their original order, then pay_to, method, approval_id and network_kind (mainnet / testnet, empty when unknown). */
-export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>): string {
-  const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code", "pay_to", "method", "approval_id", "network_kind"];
+/** Keep existing CSV columns stable. Private request paths and caller purposes require an explicit export choice. */
+export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>, includePrivateDetails = false): string {
+  const headers = ["time", "key_id", "key_name", "host", "url", "network", "amount", "charged", "tx_hash", "error_code", "pay_to", "method", "approval_id", "network_kind", "purpose", "asset", "status"];
   const rows = payments.map((p) => [
     p.created_at,
     p.key_id,
-    keyNames.get(p.key_id) ?? "",
+    p.key_name || keyNames.get(p.key_id) || "",
     p.host,
-    p.url,
+    includePrivateDetails ? p.url : "",
     p.network,
     p.amount,
     chargedOf(p),
@@ -224,6 +274,9 @@ export function billsCsv(payments: PaymentRow[], keyNames: Map<string, string>):
     p.method,
     p.approval_id ?? "",
     p.network_kind ?? "",
+    includePrivateDetails ? p.purpose ?? "" : "",
+    p.asset,
+    p.status,
   ]);
   return toCsv(headers, rows);
 }
@@ -237,6 +290,8 @@ export default function BillsPage() {
   const payments = bills?.payments;
   const { data: keys } = usePolling(listKeys);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [showPurpose, setShowPurpose] = useState(false);
+  const [includePrivateExport, setIncludePrivateExport] = useState(false);
 
   const keyFilter = searchParams.get("key") ?? "all";
   const chargedFilter = (searchParams.get("charged") as ChargedFilter) ?? "all";
@@ -254,22 +309,23 @@ export default function BillsPage() {
   const keyNames = useMemo(() => new Map((keys ?? []).map((k: MoneyKeyRow) => [k.id, k.name] as const)), [keys]);
   const chainLabels = useMemo(() => new Map((meta?.networks ?? []).map((n) => [n.network, n.network_label] as const)), [meta]);
 
-  const filtered = useMemo(() => {
+  const scopePayments = useMemo(() => {
     if (!payments) return [];
     const now = Date.now();
     const needle = q.trim().toLowerCase();
     return payments.filter((p) => {
       if (keyFilter !== "all" && p.key_id !== keyFilter) return false;
-      if (chargedFilter !== "all" && chargedOf(p) !== chargedFilter) return false;
       if (!kindMatches(p, kindFilter)) return false;
       if (!withinRange(p.created_at, range, now)) return false;
       if (needle) {
-        const haystack = [p.tx_hash, p.url, p.host, p.id].filter(Boolean).join(" ").toLowerCase();
+        const haystack = [p.tx_hash, p.url, p.host, p.id, p.pay_to, billKeyName(p, keyNames), ...(showPurpose ? [p.purpose] : [])].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(needle)) return false;
       }
       return true;
     });
-  }, [payments, keyFilter, chargedFilter, kindFilter, range, q]);
+  }, [payments, keyNames, showPurpose, keyFilter, kindFilter, range, q]);
+
+  const filtered = useMemo(() => scopePayments.filter((p) => chargedFilter === "all" || chargedOf(p) === chargedFilter), [scopePayments, chargedFilter]);
 
   const visible = useMemo(() => visibleBills(filtered), [filtered]);
 
@@ -280,14 +336,28 @@ export default function BillsPage() {
   }
 
   function exportCsv() {
-    downloadCsv(`moneyswitch-bills-${new Date().toISOString().slice(0, 10)}.csv`, billsCsv(filtered, keyNames));
+    downloadCsv(`moneyswitch-bills-${new Date().toISOString().slice(0, 10)}.csv`, billsCsv(filtered, keyNames, includePrivateExport));
   }
 
   return (
-    <div>
-      <div className="toolbar">
-        <div className="filters">
-          <select value={keyFilter} onChange={(e) => updateParam("key", e.target.value, "all")}>
+    <div className="bills-page">
+      <div className="bills-page-header">
+        <div><span className="bills-eyebrow">{t("ledgerEyebrow")}</span><h2>{t("ledgerTitle")}</h2><p>{t("ledgerIntro")}</p></div>
+        <div className="bills-export">
+          <button className="btn secondary" onClick={exportCsv} disabled={filtered.length === 0}><Download size={15} aria-hidden />{t("exportCsv")}</button>
+          <details className="bills-export-options"><summary>{t("exportOptions")}<ChevronDown size={12} aria-hidden /></summary><label className="bills-checkbox"><input type="checkbox" checked={includePrivateExport} onChange={(e) => setIncludePrivateExport(e.target.checked)} />{t("exportPrivate")}</label></details>
+        </div>
+      </div>
+
+      {error && <div className="error-banner">{tc("requestFailed", { message: error })}</div>}
+      <BillsTruncation bills={bills} />
+      <BillsSummary payments={scopePayments} onReview={() => updateParam("charged", "maybe", "all")} />
+      <p className="bills-scope-hint">{t("summaryScopeHint")}</p>
+
+      <div className="bills-filter-panel">
+        <BillsStatusFilter value={chargedFilter} payments={scopePayments} onChange={(value) => updateParam("charged", value, "all")} />
+        <div className="filters bills-filters">
+          <select aria-label={t("colKey")} value={keyFilter} onChange={(e) => updateParam("key", e.target.value, "all")}>
             <option value="all">{t("allKeys")}</option>
             {(keys ?? []).map((k) => (
               <option key={k.id} value={k.id}>
@@ -295,15 +365,8 @@ export default function BillsPage() {
               </option>
             ))}
           </select>
-          <div className="segmented" role="group" aria-label={t("colCharged")}>
-            {CHARGED_OPTIONS.map((opt) => (
-              <button key={opt} type="button" className={chargedFilter === opt ? "active" : ""} onClick={() => updateParam("charged", opt, "all")}>
-                {opt === "all" ? t("chargedAny") : t(opt === "yes" ? "chargedYes" : opt === "no" ? "chargedNo" : "chargedMaybe")}
-              </button>
-            ))}
-          </div>
           <BillsKindFilter value={kindFilter} onChange={(kind) => updateParam("network", kind, "all")} />
-          <select value={range} onChange={(e) => updateParam("range", e.target.value, "7d")}>
+          <select aria-label={t("rangeFilterLabel")} value={range} onChange={(e) => updateParam("range", e.target.value, "7d")}>
             {RANGE_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {t(opt === "today" ? "rangeToday" : opt === "24h" ? "range24h" : opt === "7d" ? "range7d" : "rangeAll")}
@@ -312,7 +375,7 @@ export default function BillsPage() {
           </select>
           <label className="search-input">
             <Search size={13} aria-hidden />
-            <input type="text" value={q} placeholder={t("searchPlaceholder")} onChange={(e) => updateParam("q", e.target.value, "")} />
+            <input type="text" aria-label={t("searchPlaceholder")} value={q} placeholder={t("searchPlaceholder")} onChange={(e) => updateParam("q", e.target.value, "")} />
           </label>
           {hasActiveFilters && (
             <button type="button" className="btn secondary small" onClick={clearFilters}>
@@ -320,23 +383,12 @@ export default function BillsPage() {
             </button>
           )}
         </div>
-        <button className="btn secondary" onClick={exportCsv} disabled={filtered.length === 0}>
-          <Download size={14} />
-          {t("exportCsv")}
-        </button>
       </div>
 
-      {error && <div className="error-banner">{tc("requestFailed", { message: error })}</div>}
-
-      <BillsTruncation bills={bills} />
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <BillsSummary payments={filtered} />
-      </div>
-
-      <div className="card">
+      <section className="card bills-ledger">
+        <div className="bills-ledger-header"><div><h3>{t("activityTitle")}</h3><span>{t("recordsCount", { count: filtered.length })}</span></div><label className="bills-checkbox"><input type="checkbox" checked={showPurpose} onChange={(e) => setShowPurpose(e.target.checked)} /><LockKeyhole size={13} aria-hidden />{t("showPurposes")}</label></div>
         {loading && !payments ? (
-          <SkeletonTable rows={6} cols={7} />
+          <SkeletonTable rows={6} cols={8} />
         ) : !payments || payments.length === 0 ? (
           <EmptyState
             title={t("emptyNoPaymentsTitle")}
@@ -362,10 +414,11 @@ export default function BillsPage() {
         ) : (
           <>
             <BillsRenderCap shown={visible.length} matching={filtered.length} />
-            <BillsTable payments={visible} keyNames={keyNames} chainLabels={chainLabels} onPickKey={(id) => updateParam("key", id, "all")} />
+            <div className="bills-table-wrap"><BillsTable payments={visible} keyNames={keyNames} chainLabels={chainLabels} showPurpose={showPurpose} onPickKey={(id) => updateParam("key", id, "all")} /></div>
           </>
         )}
-      </div>
+        <div className="bills-ledger-footer"><span><ShieldCheck size={13} aria-hidden />{t("overviewPrivacyShort")}</span><details className="bills-privacy-explanation"><summary>{t("privacyDetails")}<ChevronDown size={12} aria-hidden /></summary><p>{t("privacyHint")}</p><p>{t("purposeHint")}</p></details></div>
+      </section>
     </div>
   );
 }

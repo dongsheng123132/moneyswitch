@@ -32,7 +32,7 @@ import {
   type KeyBody,
   type ParsedKeyFields,
 } from "@moneyswitch/core";
-import { getEnabledNetworks, NETWORKS } from "@moneyswitch/x402";
+import { getEnabledNetworks, NETWORKS, explorerUrl, sameNetworkAddress } from "@moneyswitch/x402";
 import type { AppContext } from "../context.js";
 import { requireAdmin, requireAdminOrApprovalPin } from "../auth.js";
 import { keyView, networkFacts, statusFromIndex } from "../keyview.js";
@@ -184,16 +184,28 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /** One approval as the list and the approval link show it. */
   function approvalFields(a: ApprovalRow) {
+    // Everything the screen needs is computed here (the page parses nothing): the chain's family for the "no ETH / no SOL" sentence,
+    // the USDC label, the recipient's explorer URL, and the Solana fee sponsor recorded with the quote.
+    const chain = NETWORKS[a.network];
     return {
       id: a.id,
       key_id: a.keyId,
+      purpose: a.purpose,
       url: a.url,
       method: a.method,
       network: a.network,
       // 'mainnet' / 'testnet'; null for a host approval (no chain yet) or a chain the configuration table does not know
-      network_kind: NETWORKS[a.network]?.kind ?? null,
+      network_kind: chain?.kind ?? null,
+      /** 'evm' / 'svm', so the page can say "no ETH" or "no SOL" without parsing a CAIP-2 id; null without a known chain. */
+      network_family: chain ? chain.family ?? "evm" : null,
       asset: a.asset,
+      /** "USDC" when the asset is the chain's own USDC (what the client only ever pays), null for a new host or an unknown chain. */
+      asset_label: chain && sameNetworkAddress(a.network, a.asset, chain.usdcAddress) ? "USDC" : null,
       pay_to: a.payTo,
+      /** The recipient's explorer page on its own chain (the same helper the wallet page uses); null for a new host or an unknown chain. */
+      pay_to_url: chain && a.payTo ? explorerUrl(chain, "address", a.payTo) : null,
+      /** The Solana fee sponsor from the seller's quote (extra.feePayer); null for EVM payments and approvals from before migration 0014. */
+      fee_payer: a.feePayer,
       amount: formatMicrosToUsdc(a.amount),
       status: a.status,
       kind: a.kind,
@@ -266,12 +278,15 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get("/v1/admin/usage", { preHandler: adminGuard }, async (_req, reply) => {
     const { rows, truncated, total } = listPaymentsForBills(ctx.db);
+    const keyNames = new Map(listMoneyKeys(ctx.db).map((k) => [k.id, k.name]));
     return reply.send({
       truncated,
       total,
       payments: rows.map((p) => ({
         id: p.id,
         key_id: p.keyId,
+        key_name: keyNames.get(p.keyId) ?? null,
+        purpose: p.purpose,
         url: p.url,
         host: p.host,
         method: p.method,

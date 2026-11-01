@@ -1,3 +1,5 @@
 # Shell scripts must keep LF line endings in every checkout. With core.autocrlf=true a Windows checkout turned deploy/*.sh
 # into CRLF files, and sh then fails on them with "carriage return: command not found".
 *.sh text eol=lf
+# pnpm records the dependency patch's content hash; keep it identical on Windows and Linux.
+patches/*.patch text eol=lf

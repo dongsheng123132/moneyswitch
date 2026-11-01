@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b18">
+  <meta name="description" content="MoneySwitch 深圳 Demo Day：一把 MoneyKey，花钱可控、账单可查。5 分钟中文演示，包含 Base 与 Solana 测试付款证据。">
+  <title>MoneySwitch · 深圳 Demo Day · 5 分钟</title>
+  <style>
+    :root { color-scheme: dark; --bg:#080b18; --panel:#11172c; --line:rgba(173,187,233,.15); --text:#f5f7ff; --muted:#a2afcf; --blue:#75a5ff; --violet:#a78aff; --green:#67e8b0; --amber:#ffc57b; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; height:100%; }
+    body { font-family:Inter,"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif; color:var(--text); background:radial-gradient(ellipse at 18% 0%,#151833 0%,var(--bg) 56%); overflow:hidden; }
+    button,a { -webkit-tap-highlight-color:transparent; }
+    button { font:inherit; cursor:pointer; }
+    button:focus-visible,a:focus-visible { outline:3px solid #a8c5ff; outline-offset:5px; }
+    a { color:inherit; }
+    .svg-library { position:absolute; width:0; height:0; overflow:hidden; }
+    .icon { width:1.25em; height:1.25em; flex:none; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+    .presentation { height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:16px 16px 86px; }
+    .deck { width:min(1600px,100%); aspect-ratio:16/9; position:relative; container-type:inline-size; border:1px solid rgba(139,158,224,.19); border-radius:18px; overflow:hidden; background:#0c1022; box-shadow:0 30px 100px #0008; flex:none; }
+    .slide { position:absolute; inset:0; padding:4.3cqw 5cqw; display:flex; flex-direction:column; font-size:1.48cqw; background:radial-gradient(ellipse at 94% 15%,#24204285,transparent 44%),radial-gradient(ellipse at 0% 100%,#10274880,transparent 44%),#0c1022; overflow:hidden; }
+    .slide[hidden] { display:none!important; }
+    .slide::after { content:""; position:absolute; width:26cqw; height:26cqw; border:1px solid #819bea0d; border-radius:50%; right:-11cqw; top:-13cqw; box-shadow:0 0 0 5cqw #819bea05,0 0 0 11cqw #819bea03; pointer-events:none; }
+    .kicker { display:flex; align-items:center; gap:.65em; font-size:1.08cqw; letter-spacing:.12em; font-weight:700; color:var(--blue); text-transform:uppercase; margin:0 0 1.4cqw; }
+    .kicker .dot { width:.46em; height:.46em; border-radius:50%; background:var(--blue); box-shadow:0 0 16px var(--blue); }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:5.5cqw; line-height:1.22; letter-spacing:-.055em; font-weight:800; }
+    h2 { font-size:3.6cqw; line-height:1.28; letter-spacing:-.04em; font-weight:750; }
+    h3 { font-size:1.75cqw; line-height:1.4; }
+    .gradient { background:linear-gradient(100deg,#8ab4ff 0%,#bc9bff 80%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    .subtitle { font-size:1.57cqw; line-height:1.7; color:var(--muted); margin-top:1.05cqw; }
+    .small { color:var(--muted); font-size:1.25cqw; line-height:1.65; }
+    .dim { color:var(--muted); }
+    .green { color:var(--green); }
+    .blue { color:var(--blue); }
+    .amber { color:var(--amber); }
+    .eyebrow { color:var(--muted); font-size:1.2cqw; letter-spacing:.07em; font-weight:650; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:2.4cqw; }
+    .content { margin-top:3cqw; flex:1; min-height:0; }
+    .panel { padding:2.1cqw; border:1px solid var(--line); border-radius:1.3cqw; background:linear-gradient(130deg,#1b2344a6,#101529de); box-shadow:0 12px 30px #0002; }
+    .tag { display:inline-flex; align-items:center; gap:.45em; padding:.42em .7em; border-radius:99px; border:1px solid #819fea40; background:#8aa7ff0d; color:#b7d0ff; font-size:1cqw; line-height:1; white-space:nowrap; }
+    .tag.green { color:var(--green); border-color:#67e8b03b; background:#67e8b010; }
+    .tag.amber { color:var(--amber); border-color:#ffc57b33; background:#ffc57b0a; }
+    .tag.muted { color:var(--muted); border-color:var(--line); background:#ffffff04; }
+    .row { display:flex; align-items:center; justify-content:space-between; gap:1cqw; }
+    .stack { display:flex; flex-direction:column; gap:1cqw; }
+    .numeric { font-variant-numeric:tabular-nums; letter-spacing:-.045em; }
+    .number { font-size:4.1cqw; font-weight:750; line-height:1.25; }
+    .unit { font-size:1.2cqw; letter-spacing:0; color:var(--muted); font-weight:500; }
+    .meter { height:.6cqw; background:#6978a52b; border-radius:99px; overflow:hidden; margin:.9cqw 0; }
+    .meter > span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#6f9fff,#b18bff); box-shadow:0 0 22px #829bff80; }
+    .slide-foot { display:flex; justify-content:space-between; align-items:center; gap:1cqw; margin-top:auto; padding-top:1.6cqw; color:#8794b8; font-size:.96cqw; }
+    .brand { display:flex; align-items:center; gap:.7em; letter-spacing:-.02em; color:#e9eeff; font-weight:750; }
+    .mark { width:1.75em; height:1.75em; border-radius:.48em; display:grid; place-items:center; color:#c6d6ff; background:linear-gradient(145deg,#25458b,#54318d); border:1px solid #93aaff44; font-weight:900; font-style:italic; }
+    .slide-number { font-variant-numeric:tabular-nums; letter-spacing:.08em; }
+    .cover-grid { display:grid; grid-template-columns:1.25fr 1fr; gap:4cqw; align-items:center; flex:1; margin-top:.9cqw; }
+    .cover-sub { margin-top:1.8cqw; font-size:1.7cqw; color:#cbd5f0; line-height:1.6; }
+    .cover-tags { display:flex; gap:.65cqw; flex-wrap:wrap; margin-top:2.1cqw; }
+    .hero-ui { position:relative; padding:2cqw 0 2cqw; }
+    .hero-card { position:relative; background:linear-gradient(145deg,#24376d88,#191930e8); border-color:#859bff55; box-shadow:0 15px 90px #5938a52a; transform:rotate(-3deg); padding:2.25cqw; }
+    .hero-card::before { content:""; position:absolute; inset:-.7cqw; z-index:-1; border:1px solid #92a6ff1a; border-radius:1.7cqw; transform:rotate(6deg); }
+    .hero-title { font-size:1.65cqw; font-weight:700; margin:1.4cqw 0 .65cqw; }
+    .hero-card .number { margin-top:.65cqw; }
+    .hero-float { position:relative; margin:1.4cqw -1.5cqw 0 3cqw; padding:1.05cqw 1.35cqw; display:flex; gap:1cqw; align-items:center; border-radius:1cqw; background:#152d30; border:1px solid #67e8b033; box-shadow:0 12px 28px #0003; transform:rotate(2deg); }
+    .hero-float .icon { color:var(--green); width:2cqw; height:2cqw; }
+    .three { display:grid; grid-template-columns:repeat(3,1fr); gap:1.45cqw; }
+    .pain { padding:2.4cqw 1.95cqw; min-height:20cqw; display:flex; flex-direction:column; }
+    .pain-icon { width:4.2cqw; height:4.2cqw; display:grid; place-items:center; border-radius:1cqw; background:#718fff14; border:1px solid #93aaff26; margin-bottom:2.4cqw; color:#b5c9ff; }
+    .pain-icon .icon { width:2.2cqw; height:2.2cqw; }
+    .pain p { margin-top:1cqw; color:var(--muted); line-height:1.7; font-size:1.3cqw; }
+    .pain .index { margin-top:auto; padding-top:2cqw; font-size:1cqw; color:#697999; }
+    .thesis { margin-top:2.1cqw; font-size:1.55cqw; color:#dce4fa; text-align:center; }
+    .flow { display:grid; grid-template-columns:1fr .23fr 1fr .23fr 1.22fr .23fr 1fr; align-items:center; margin:4.5cqw 0 2.4cqw; }
+    .flow-node { min-height:13cqw; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:1.2cqw .9cqw; border:1px solid var(--line); background:#121a31; border-radius:1.25cqw; gap:.9cqw; }
+    .flow-node .icon { width:2.7cqw; height:2.7cqw; color:#a6c3ff; }
+    .flow-node h3 { font-size:1.5cqw; }
+    .flow-node p { color:var(--muted); font-size:1.25cqw; }
+    .flow-node.switch { border-color:#9a8aff66; background:linear-gradient(130deg,#263a6b,#342052); box-shadow:0 0 42px #8c7cff18; }
+    .flow-arrow { text-align:center; color:#7d8fb4; font-size:2.3cqw; }
+    .guardrail { display:grid; grid-template-columns:1fr 1fr; gap:1.3cqw; }
+    .guardrail > div { padding:1.35cqw 1.5cqw; border:1px solid var(--line); border-radius:1cqw; display:flex; align-items:center; gap:.8cqw; font-size:1.2cqw; color:#d0dbf5; background:#ffffff03; }
+    .guardrail .icon { color:var(--green); }
+    .rules-panel .rule { padding:1.1cqw 0; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:1cqw; }
+    .rules-panel .rule:last-child { border-bottom:0; }
+    .rule-label { color:#b6c3de; font-size:1.25cqw; }
+    .rule-value { font-size:1.5cqw; font-weight:650; }
+    .decision { padding:1.4cqw 1.6cqw; display:flex; gap:1.1cqw; align-items:center; border-radius:1cqw; border:1px solid var(--line); background:#ffffff03; }
+    .decision .signal { flex:none; width:2.3cqw; height:2.3cqw; display:grid; place-items:center; border-radius:50%; background:#67e8b018; color:var(--green); }
+    .decision.wait .signal { background:#ffc57b14; color:var(--amber); }
+    .decision.stop .signal { background:#ff829a14; color:#ffa1b3; }
+    .decision strong { font-size:1.45cqw; }
+    .decision p { margin-top:.35cqw; color:var(--muted); font-size:1.05cqw; }
+    .control-note { display:flex; align-items:center; gap:.8cqw; margin-top:1.4cqw; color:#c9d5f0; font-size:1.25cqw; }
+    .control-note .icon { color:var(--violet); }
+    .review-grid { display:grid; grid-template-columns:.85fr 1.3fr; gap:1.8cqw; margin-top:2.5cqw; }
+    .review-card { padding:1.7cqw; }
+    .avatar { width:2.5cqw; height:2.5cqw; flex:none; display:grid; place-items:center; border-radius:.65cqw; background:linear-gradient(130deg,#3a4e8a,#725491); color:#e2eaff; font-weight:700; font-size:1.15cqw; }
+    .review-card .number { font-size:3.1cqw; margin-top:1.6cqw; }
+    .ledger { padding:1.6cqw; }
+    .ledger-total { display:flex; align-items:baseline; gap:.6cqw; margin:1.15cqw 0 1.6cqw; }
+    .ledger-total strong { font-size:3cqw; }
+    .table-head,.bill-row { display:grid; grid-template-columns:1.3fr .85fr .8fr .7fr; gap:.6cqw; align-items:center; }
+    .table-head { padding:.7cqw .6cqw; color:#8594b7; font-size:.95cqw; border-bottom:1px solid var(--line); }
+    .bill-row { padding:1cqw .6cqw; border-bottom:1px solid var(--line); font-size:1.25cqw; }
+    .bill-row strong { font-size:1.22cqw; font-variant-numeric:tabular-nums; }
+    .bill-row .state { color:var(--green); font-size:1.15cqw; }
+    .pending-strip { margin-top:1cqw; padding:.75cqw .8cqw; border:1px solid #ffc57b26; border-radius:.65cqw; background:#ffc57b08; color:#edc799; font-size:.95cqw; }
+    .privacy-strip { display:flex; gap:.7cqw; align-items:center; margin-top:1.35cqw; color:#b1bfdc; font-size:1.12cqw; }
+    .privacy-strip .icon { color:var(--violet); }
+    .evidence-card { display:flex; flex-direction:column; min-height:23cqw; padding:2.1cqw; position:relative; overflow:hidden; }
+    .chain-logo { width:3.3cqw; height:3.3cqw; flex:none; border-radius:50%; display:grid; place-items:center; background:#2258e9; box-shadow:0 0 40px #2258e938; }
+    .chain-logo.base::after { content:""; width:1.7cqw; height:.3cqw; background:white; }
+    .chain-logo.sol { border-radius:.85cqw; background:#092d31; }
+    .sol-bars { display:flex; flex-direction:column; gap:.25cqw; transform:skew(-22deg); }
+    .sol-bars i { display:block; width:1.7cqw; height:.32cqw; background:linear-gradient(90deg,#b095ff,#63edbf); }
+    .evidence-card .number { font-size:5.4cqw; margin:2cqw 0 1cqw; }
+    .evidence-link { margin-top:auto; padding-top:1.55cqw; font-size:1.2cqw; font-weight:650; color:#b8d1ff; text-decoration:none; display:flex; align-items:center; gap:.5cqw; }
+    .evidence-link:hover { color:#e6efff; }
+    .evidence-card.sol-card { border-color:#67e8b035; background:linear-gradient(135deg,#19323b80,#16172fcc); }
+    .evidence-note { display:flex; align-items:center; justify-content:center; gap:.8cqw; margin-top:1.6cqw; color:#a9b6d1; font-size:1.13cqw; }
+    .demo-layout { display:grid; grid-template-columns:1.1fr 1fr; gap:2cqw; margin-top:2.4cqw; flex:1; min-height:0; }
+    .demo-sim { padding:1.7cqw; }
+    .demo-steps { display:flex; flex-direction:column; gap:.8cqw; margin:1.25cqw 0; }
+    .demo-step { display:flex; align-items:center; gap:.8cqw; color:#8492b2; padding:.9cqw 1cqw; border:1px solid var(--line); border-radius:.8cqw; background:#ffffff02; transition:background .18s,border-color .18s,color .18s; font-size:1.3cqw; }
+    .demo-step .step-dot { width:1.65cqw; height:1.65cqw; display:grid; place-items:center; border-radius:50%; border:1px solid #a0b1df40; font-size:.9cqw; }
+    .demo-step.complete { color:#dce9ff; border-color:#8fa7ff66; background:#8fa7ff0e; }
+    .demo-step.complete .step-dot { color:var(--green); border-color:#67e8b066; background:#67e8b010; }
+    .demo-controls { display:flex; gap:.7cqw; align-items:center; flex-wrap:wrap; }
+    .cta { display:inline-flex; align-items:center; justify-content:center; gap:.6em; border-radius:.75cqw; padding:.88cqw 1.2cqw; font-size:1.12cqw; font-weight:700; border:1px solid #a5b9ff44; background:linear-gradient(110deg,#4778df,#8052d4); color:white; text-decoration:none; box-shadow:0 6px 22px #7356dd26; }
+    .cta:hover { filter:brightness(1.12); }
+    .cta.secondary { background:#ffffff06; box-shadow:none; color:#c4d4f5; border-color:var(--line); }
+    .receipt { margin-top:1.25cqw; padding:1.2cqw; border:1px solid #67e8b040; border-radius:.8cqw; background:#67e8b009; }
+    .receipt p { margin-top:.4cqw; font-size:.95cqw; color:#a6c4bf; }
+    .receipt[hidden] { display:none; }
+    .live-actions { display:flex; flex-direction:column; gap:1cqw; margin-top:1.7cqw; }
+    .live-link { padding:1.35cqw; border:1px solid var(--line); border-radius:1cqw; display:flex; align-items:center; justify-content:space-between; gap:1cqw; color:#d8e4ff; text-decoration:none; background:#ffffff04; }
+    .live-link:hover { background:#8aa7ff0b; border-color:#8aa7ff60; }
+    .live-link strong { display:block; font-size:1.4cqw; margin-bottom:.4cqw; }
+    .live-link span { display:block; color:var(--muted); font-size:1cqw; }
+    .closing-grid { display:grid; grid-template-columns:1.45fr .8fr; gap:4cqw; align-items:center; flex:1; margin-top:1.5cqw; }
+    .closing-title { font-size:4.5cqw; line-height:1.3; }
+    .closing-text { color:#b9c6e1; font-size:1.5cqw; line-height:1.7; margin-top:1.5cqw; }
+    .closing-links { display:flex; gap:.8cqw; margin-top:2cqw; flex-wrap:wrap; }
+    .qr-wrap { text-align:center; padding:1.8cqw; border:1px solid var(--line); border-radius:1.5cqw; background:linear-gradient(140deg,#25304c88,#19172dcc); }
+    #demo-qr-slot { display:grid; place-items:center; margin:auto auto 1.1cqw; width:14cqw; height:14cqw; padding:.6cqw; border-radius:.75cqw; background:white; color:#182039; font-size:1.3cqw; overflow:hidden; }
+    #demo-qr-slot:empty::after { content:"公开演示页\A二维码"; white-space:pre; line-height:1.8; }
+    #demo-qr-slot svg,#demo-qr-slot img { width:100%; height:100%; object-fit:contain; }
+    .qr-url { font-size:.9cqw; color:#aabbdb; margin-top:.55cqw; overflow-wrap:anywhere; }
+    .toolbar { position:fixed; bottom:0; left:0; right:0; z-index:10; min-height:68px; padding:11px 20px 14px; display:flex; justify-content:space-between; align-items:center; gap:14px; background:linear-gradient(0deg,#080b18 75%,#080b1800); font-size:12px; }
+    .toolbar-brand { display:flex; gap:10px; align-items:center; color:#93a1c3; }
+    .toolbar-brand strong { color:#dae3fa; font-size:13px; }
+    .toolbar-center,.toolbar-actions { display:flex; align-items:center; gap:8px; }
+    .tool { border:1px solid #859ed02d; border-radius:9px; background:#ffffff06; color:#c9d7f4; height:36px; padding:0 12px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:12px; text-decoration:none; }
+    .tool:hover { background:#829fff19; border-color:#8ca9ed66; }
+    .tool[aria-pressed=true] { color:#ecf2ff; background:#7b82ee25; border-color:#999ffd77; }
+    .tool:disabled { opacity:.33; cursor:default; }
+    .nav-tool { min-width:38px; font-size:19px; }
+    .page-label { min-width:45px; text-align:center; font-variant-numeric:tabular-nums; color:#bac9e8; }
+    .timer { font-variant-numeric:tabular-nums; min-width:75px; }
+    .timer.over { color:var(--amber); border-color:#ffc57b66; }
+    .progress-track { position:fixed; bottom:0; left:0; height:3px; width:100%; background:#68779819; z-index:20; }
+    .progress { height:100%; width:12.5%; background:linear-gradient(90deg,#6c9dff,#b08cff); transition:width .18s; }
+    .notes { width:min(850px,100%); padding:13px 17px; font-size:13px; color:#c3cfeb; line-height:1.7; background:#131a30; border:1px solid var(--line); border-radius:12px; max-height:145px; overflow:auto; }
+    .notes[hidden] { display:none; }
+    .notes strong { color:#92b5ff; display:block; margin-bottom:4px; font-size:12px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    @media (max-width:900px) { .toolbar-brand span,.key-hint { display:none; } .toolbar { gap:6px; padding:10px 12px 14px; } .toolbar-actions { gap:5px; } .tool { padding:0 9px; } }
+    @media (max-width:699px) {
+      body { overflow:hidden; } .presentation { padding:12px 10px 108px; justify-content:flex-start; gap:8px; }
+      .deck { width:100%!important; height:calc(100dvh - 124px); aspect-ratio:auto; border-radius:14px; }
+      .slide { overflow-y:auto; padding:28px 23px; font-size:15px; }
+      .slide [style*="font-size:"] { font-size:14px!important; }
+      .kicker { font-size:10px; gap:7px; margin-bottom:16px; } h1 { font-size:40px; letter-spacing:-.06em; } h2 { font-size:29px; } h3 { font-size:19px; }
+      .subtitle { font-size:14px; margin-top:12px; } .small { font-size:11px; } .eyebrow { font-size:10px; } .tag { font-size:10px; }
+      .slide-foot { font-size:10px; padding-top:22px; margin-top:25px; } .brand .mark { width:20px; height:20px; }
+      .cover-grid,.closing-grid { display:flex; flex-direction:column; align-items:stretch; gap:24px; margin-top:8px; } .cover-sub { font-size:15px; margin-top:17px; } .cover-tags { gap:7px; margin-top:17px; }
+      .hero-ui { padding:4px 16px 8px; } .panel { padding:18px; border-radius:13px; } .hero-card { padding:20px; } .hero-title { font-size:17px; margin:13px 0 7px; } .number { font-size:40px; } .unit { font-size:12px; }
+      .meter { height:6px; margin:10px 0; } .hero-float { margin:17px -10px 0 20px; padding:11px; border-radius:10px; gap:10px; } .hero-float .icon { width:23px; height:23px; }
+      .content { margin-top:23px; } .three { grid-template-columns:1fr; gap:12px; } .pain { min-height:0; padding:17px; display:grid; grid-template-columns:42px 1fr; gap:0 13px; } .pain-icon { width:40px; height:40px; border-radius:10px; margin:0; grid-row:span 2; } .pain-icon .icon { width:23px; height:23px; } .pain p { font-size:12px; margin-top:5px; } .pain .index { display:none; } .thesis { font-size:15px; margin-top:20px; }
+      .flow { grid-template-columns:1fr; margin:22px 0; gap:7px; } .flow-node { min-height:0; flex-direction:row; justify-content:flex-start; gap:14px; text-align:left; padding:14px 16px; border-radius:12px; } .flow-node .icon { width:25px; height:25px; } .flow-node h3 { font-size:16px; } .flow-node p { font-size:11px; margin-top:3px; } .flow-arrow { font-size:18px; line-height:1; transform:rotate(90deg); } .guardrail { grid-template-columns:1fr; gap:10px; } .guardrail > div { padding:13px; border-radius:10px; font-size:12px; gap:10px; }
+      .grid2 { grid-template-columns:1fr; gap:15px; } .rules-panel .rule { padding:11px 0; } .rule-label { font-size:13px; } .rule-value { font-size:17px; } .stack { gap:10px; } .decision { padding:13px; gap:12px; border-radius:10px; } .decision .signal { width:27px; height:27px; } .decision strong { font-size:15px; } .decision p { font-size:11px; margin-top:4px; } .control-note { font-size:13px; gap:10px; margin-top:13px; }
+      .review-grid { grid-template-columns:1fr; gap:15px; margin-top:22px; } .review-card,.ledger { padding:16px; } .avatar { width:30px; height:30px; border-radius:8px; font-size:13px; } .row { gap:10px; } .review-card .number { font-size:34px; margin-top:15px; } .ledger-total { gap:8px; margin:12px 0 14px; } .ledger-total strong { font-size:30px; } .table-head { font-size:10px; padding:7px 3px; } .bill-row { padding:10px 3px; font-size:10px; gap:4px; } .bill-row strong { font-size:13px; } .bill-row .state { font-size:10px; } .pending-strip { margin-top:12px; padding:9px; border-radius:8px; font-size:10px; } .privacy-strip { margin-top:15px; gap:8px; font-size:11px; }
+      .evidence-card { min-height:220px; padding:19px; } .chain-logo { width:36px; height:36px; } .chain-logo.base::after { width:19px; height:3px; } .chain-logo.sol { border-radius:9px; } .sol-bars { gap:3px; } .sol-bars i { width:19px; height:4px; } .evidence-card .number { font-size:47px; margin:20px 0 9px; } .evidence-link { padding-top:16px; font-size:13px; gap:7px; } .evidence-note { font-size:11px; margin-top:14px; gap:7px; text-align:center; }
+      .demo-layout { grid-template-columns:1fr; gap:16px; margin-top:20px; } .demo-sim { padding:16px; } .demo-steps { gap:9px; margin:15px 0; } .demo-step { gap:10px; padding:11px; border-radius:9px; font-size:12px; } .demo-step .step-dot { width:22px; height:22px; font-size:11px; } .cta { padding:12px 15px; border-radius:9px; font-size:12px; } .demo-controls { gap:8px; } .receipt { margin-top:13px; padding:12px; border-radius:9px; } .receipt p { font-size:11px; margin-top:6px; } .live-actions { gap:10px; margin-top:15px; } .live-link { padding:13px; border-radius:10px; } .live-link strong { font-size:15px; margin-bottom:4px; } .live-link span { font-size:11px; }
+      .closing-title { font-size:33px; } .closing-text { font-size:14px; margin-top:14px; } .closing-links { gap:8px; margin-top:18px; } .qr-wrap { padding:18px; border-radius:14px; } #demo-qr-slot { width:145px; height:145px; padding:7px; border-radius:9px; font-size:14px; margin-bottom:13px; } .qr-url { font-size:10px; margin-top:7px; }
+      .toolbar { flex-wrap:wrap; justify-content:center; padding:8px 8px 13px; gap:5px 12px; min-height:98px; } .toolbar-brand { display:none; } .toolbar-center { width:100%; justify-content:center; } .toolbar-actions { gap:5px; } .tool { height:32px; font-size:11px; padding:0 9px; } .notes { max-height:120px; font-size:12px; } body.notes-open .deck { height:calc(100dvh - 250px); }
+    }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } }
+    @media print {
+      @page { size:16in 9in; margin:0; }
+      html,body { height:auto; overflow:visible; background:#0c1022; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .presentation { height:auto; display:block; padding:0; }
+      .deck { width:16in!important; height:auto!important; aspect-ratio:auto; border:0; border-radius:0; overflow:visible; box-shadow:none; }
+      .slide,.slide[hidden] { display:flex!important; position:relative; width:16in; height:9in; overflow:hidden; break-after:page; page-break-after:always; }
+      .slide:last-child { break-after:auto; page-break-after:auto; }
+      .toolbar,.progress-track,.notes,.sr-only { display:none!important; }
+      .hero-card,.hero-float { transform:none; }
+      .receipt[hidden] { display:block; }
+      a { text-decoration:none; }
+    }
+  </style>
+</head>
+<body data-moneyswitch-demoday="2026-10-11">
+<svg class="svg-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"/><path d="m11.5 11.5 9 9M16 16l2-2m0 4 2-2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V5H6a3 3 0 0 0 0 6h15v9H6a3 3 0 0 1-3-3V8"/><path d="M21 11h-6v5h6"/><path d="M17 13.5h.01"/></symbol>
+  <symbol id="i-agent" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 7V3m-7 9H2m20 0h-3M9 12h.01M15 12h.01m-6 4h6"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6m-6 4h6m-6 4h3"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 12V5a2 2 0 0 1 4 0v6-1a2 2 0 0 1 4 0v1a2 2 0 0 1 4 0v6a5 5 0 0 1-5 5h-3a5 5 0 0 1-4-2l-5-7a2 2 0 0 1 3-2l2 2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6m0-6L10 14M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18m-9-9c5 5 5 13 0 18-5-5-5-13 0-18Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+</defs></svg>
+<main class="presentation" aria-label="MoneySwitch 五分钟演示">
+<div class="deck" id="deck">
+  <section class="slide" id="slide-1" aria-labelledby="title-1" tabindex="-1" data-note="00:00–00:25。一把 MoneyKey，花钱可控、账单可查。AI 已经会写代码、查资料、执行任务，也会遇到付费服务。MoneySwitch 让 AI 可以付款，同时让出钱的人掌握额度、审批和账单。">
+    <p class="kicker"><span class="dot"></span>深圳 DEMO DAY · 2026.10.11</p>
+    <div class="cover-grid">
+      <div><p class="brand" style="font-size:1.7cqw;margin-bottom:1.8cqw"><span class="mark">M</span>MoneySwitch</p><h1 id="title-1">给 AI 一个<br><span class="gradient">花钱的 API Key</span></h1><p class="cover-sub">一把 MoneyKey，<br>花钱可控、账单可查。</p><div class="cover-tags"><span class="tag">自托管</span><span class="tag">人掌握规则</span><span class="tag">x402 + USDC</span></div></div>
+      <div class="hero-ui"><div class="panel hero-card"><div class="row"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg><span class="tag muted">界面示意 · 模拟数据</span></div><p class="hero-title">Research Agent</p><p class="eyebrow">MONEYKEY · 独立支出规则</p><div class="number numeric">0.12 <span class="unit">/ 0.50 USDC</span></div><div class="meter" role="img" aria-label="演示每日额度占用 24%"><span style="width:24%"></span></div><div class="row small"><span>每日额度占用</span><span>24%</span></div><div class="row" style="margin-top:1.8cqw"><span class="tag">测试网</span><span class="small">达到审批线 · 等待人确认</span></div></div><div class="hero-float"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg><div><strong style="font-size:1.2cqw">签名密钥留在你的服务器</strong><p class="small">Agent 只拿 MoneyKey</p></div></div></div>
+    </div><div class="slide-foot"><span>让 AI 继续做事，让人看得清钱。</span><span class="slide-number">01 / 08</span></div>
+  </section>
+  <section class="slide" id="slide-2" aria-labelledby="title-2" tabindex="-1" hidden inert data-note="00:25–00:55。假设有三个 Agent，分别查数据、写代码、处理内容。直接交钱包容易暴露签名能力；每次手工付款会打断任务；账单混在一起，很难分清是谁付给了哪个服务。AI 的付款能力，需要人的控制入口。">
+    <p class="kicker"><span class="dot"></span>THE PROBLEM</p><h2 id="title-2">AI 会做事，<span class="gradient">付钱还得找人。</span></h2><p class="subtitle">任务走得越来越快，人的资金控制与审核不能掉队。</p>
+    <div class="content"><div class="three"><article class="panel pain"><div class="pain-icon"><svg class="icon" aria-hidden="true"><use href="#i-wallet"/></svg></div><h3>钱包直接交给 AI</h3><p>调用能力与签名密钥混在一起，<br>权限难以收住。</p><span class="index">01 · 资金控制</span></article><article class="panel pain"><div class="pain-icon"><svg class="icon" aria-hidden="true"><use href="#i-hand"/></svg></div><h3>每次手工去付款</h3><p>任务做到一半等人操作，<br>Agent 的工作被反复打断。</p><span class="index">02 · 执行连续性</span></article><article class="panel pain"><div class="pain-icon"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg></div><h3>费用混在一起</h3><p>谁发起、付给谁、用哪条链？<br>人审核的时候看不清。</p><span class="index">03 · 支出可追溯</span></article></div><p class="thesis">给 AI 一个付款能力，也给人一个控制入口。</p></div>
+    <div class="slide-foot"><span class="brand"><span class="mark">M</span>MoneySwitch</span><span class="slide-number">02 / 08</span></div>
+  </section>
+  <section class="slide" id="slide-3" aria-labelledby="title-3" tabindex="-1" hidden inert data-note="00:55–01:30。人给 Agent 一把 MoneyKey 并设定规则，Agent 请求付费资源。MoneySwitch 遇到兼容的 x402 服务后检查报价和规则，再签名、付款、记账。签名密钥留在服务器上；请求指定公链时，不匹配就拒绝，不悄悄换链。">
+    <p class="kicker"><span class="dot"></span>HOW IT WORKS</p><h2 id="title-3">AI 请求服务，<span class="gradient">MoneySwitch 按规则付款。</span></h2><p class="subtitle">一个 HTTP 接口，把任务执行与资金控制接起来。</p>
+    <div class="flow"><div class="flow-node"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg><div><h3>人设 MoneyKey</h3><p>额度 · 域名 · 审批</p></div></div><span class="flow-arrow" aria-hidden="true">→</span><div class="flow-node"><svg class="icon" aria-hidden="true"><use href="#i-agent"/></svg><div><h3>Agent 请求</h3><p>付费数据或服务</p></div></div><span class="flow-arrow" aria-hidden="true">→</span><div class="flow-node switch"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg><div><h3>MoneySwitch</h3><p>校验 → 签名 → 记账</p></div></div><span class="flow-arrow" aria-hidden="true">→</span><div class="flow-node"><svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg><div><h3>x402 服务</h3><p>收款 · 返回资源</p></div></div></div>
+    <div class="guardrail"><div><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span>签名密钥留在部署者自己的服务器</span></div><div><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg><span>指定 network：不匹配就拒绝</span></div></div>
+    <div class="slide-foot"><span class="brand"><span class="mark">M</span>MoneySwitch</span><span class="slide-number">03 / 08</span></div>
+  </section>
+  <section class="slide" id="slide-4" aria-labelledby="title-4" tabindex="-1" hidden inert data-note="01:30–02:05。每日、累计、单次额度，加允许域名和审批线。达到审批线交给人决定，批准仍然不能突破硬额度。测试网 Key 与主网 Key 分开，随时可以停用 Key，让权限收住。画面数值是模拟规则，不是现场钱包余额。">
+    <p class="kicker"><span class="dot"></span>YOUR WALLET · YOUR RULES</p><h2 id="title-4">小额按规则走，<span class="gradient">关键一步由人决定。</span></h2><p class="subtitle">额度、访问范围与审批，都由出钱的人设定。</p>
+    <div class="grid2 content"><div class="panel rules-panel"><div class="row"><h3>Research Agent</h3><span class="tag muted">模拟规则</span></div><div class="rule"><span class="rule-label">每日 / 累计额度</span><strong class="rule-value numeric">0.50 / 2.00 <span class="unit">USDC</span></strong></div><div class="rule"><span class="rule-label">单次上限</span><strong class="rule-value numeric">0.10 <span class="unit">USDC</span></strong></div><div class="rule"><span class="rule-label">访问范围</span><strong class="rule-value">允许域名</strong></div><div class="rule"><span class="rule-label">付款网络</span><span class="tag">测试网 Key</span></div><p class="small" style="margin-top:1.1cqw">测试网 / 主网分开，避免测试跨到真实资金。</p></div><div class="stack"><div class="decision"><span class="signal">✓</span><div><strong>规则以内 · 继续任务</strong><p>按设定额度和域名访问</p></div></div><div class="decision wait"><span class="signal">⌛</span><div><strong>达到审批线 · 等人点头</strong><p>批准之后，硬额度仍然有效</p></div></div><div class="decision stop"><span class="signal">×</span><div><strong>超过硬额度 · 拒绝</strong><p>付款能力有明确边界</p></div></div><p class="control-note"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg>随时停用 MoneyKey，收回调用权限。</p></div></div>
+    <div class="slide-foot"><span class="brand"><span class="mark">M</span>MoneySwitch</span><span class="slide-number">04 / 08</span></div>
+  </section>
+  <section class="slide" id="slide-5" aria-labelledby="title-5" tabindex="-1" hidden inert data-note="02:05–02:35。Key 是预算卡片，可以搜索、筛选并直达对应账单。账单把真实资金与测试币分开汇总；待核对金额单独展示。金额、Key、时间和状态先看，详情再看请求、收款方和交易。用途可选、默认隐藏，是 Agent 自述备注，不是经过验证的任务。">
+    <p class="kicker"><span class="dot"></span>BUILT FOR HUMAN REVIEW</p><h2 id="title-5">人看得懂的预算，<span class="gradient">人核得清的账单。</span></h2><p class="subtitle">从“哪个 Agent 在花钱”，到“这笔钱付给了谁”。</p>
+    <div class="review-grid"><div class="panel review-card"><div class="row"><div class="row"><span class="avatar">R</span><strong style="font-size:1.3cqw">Research Agent</strong></div><span class="tag">测试网</span></div><p class="eyebrow" style="margin-top:1.6cqw">每日额度占用</p><div class="number numeric">0.12 <span class="unit">/ 0.50</span></div><div class="meter" role="img" aria-label="演示额度占用 24%"><span style="width:24%"></span></div><div class="row small"><span>USDC</span><strong>24%</strong></div><div class="row" style="margin-top:2cqw;padding-top:1.3cqw;border-top:1px solid var(--line)"><span class="small">启用中 · 可搜索 / 筛选</span><span class="blue" style="font-size:1.1cqw">查看账单 →</span></div></div><div class="panel ledger"><div class="row"><span class="eyebrow">测试网 · 已付款</span><span class="tag muted">界面示意 · 模拟数据</span></div><div class="ledger-total"><strong class="numeric">0.02</strong><span class="unit">测试 USDC</span></div><div class="table-head"><span>Agent / Key</span><span>金额</span><span>网络</span><span>状态</span></div><div class="bill-row"><span>Research Agent</span><strong>0.01</strong><span>Sol Devnet</span><span class="state">已付款</span></div><div class="bill-row"><span>Build Agent</span><strong>0.01</strong><span>Base Sepolia</span><span class="state">已付款</span></div><div class="pending-strip">待核对单独提醒 · 不计入已付款汇总</div></div></div><p class="privacy-strip"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>用途选填、默认隐藏；自述备注帮助核对，不自动收集完整任务。<span class="dim">隐藏为展示选择。</span></p>
+    <div class="slide-foot"><span class="brand"><span class="mark">M</span>MoneySwitch</span><span class="slide-number">05 / 08</span></div>
+  </section>
+  <section class="slide" id="slide-6" aria-labelledby="title-6" tabindex="-1" hidden inert data-note="02:35–03:15。今天在 Base Sepolia 和 Solana Devnet 各实际完成 0.01 测试 USDC 付款。Solana 独立查询确认为 finalized。测试币没有真实货币价值，Solana 主网付款仍未启用。两个链接可以独立核验，不展示私人余额或凭据。">
+    <p class="kicker"><span class="dot"></span>REAL TESTNET TRANSACTIONS</p><h2 id="title-6">Base 与 Solana，<span class="gradient">付款已经跑通。</span></h2><p class="subtitle">实际完成的测试网交易，可在独立浏览器核验。</p>
+    <div class="grid2 content"><article class="panel evidence-card"><div class="row"><div class="row"><span class="chain-logo base" aria-hidden="true"></span><div><h3>Base Sepolia</h3><p class="small">EVM · 测试网</p></div></div><span class="tag green">已确认付款</span></div><p class="number numeric">0.01 <span class="unit">测试 USDC</span></p><p class="small">实际支付 · 交易回执核验通过</p><a class="evidence-link" href="https://sepolia.basescan.org/tx/0x095a04dec1dbcc55e87c96abb69b0c0312a0c2606d5a3f8fa635deb71c7ea633" target="_blank" rel="noopener noreferrer">查看 Base 交易<svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a></article><article class="panel evidence-card sol-card"><div class="row"><div class="row"><span class="chain-logo sol" aria-hidden="true"><span class="sol-bars"><i></i><i></i><i></i></span></span><div><h3>Solana Devnet</h3><p class="small">SVM · 测试网</p></div></div><span class="tag green">Finalized</span></div><p class="number numeric">0.01 <span class="unit">测试 USDC</span></p><p class="small">已结算 · 独立链上查询确认最终完成</p><a class="evidence-link" href="https://explorer.solana.com/tx/3aBQPBbW2thr3k7WMv4UkFXcDgNDhfLvKv7QVLDFEcaR8PJYEMPmquZcf79bTt18RSz6s9TVdU3UvyL8NBxpQBCu?cluster=devnet" target="_blank" rel="noopener noreferrer">查看 Solana 交易<svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a></article></div><p class="evidence-note"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>测试币没有货币价值 · Solana 主网付款尚未启用</p>
+    <div class="slide-foot"><span>2026.10.11 · 两笔独立请求，两份链上证据。</span><span class="slide-number">06 / 08</span></div>
+  </section>
+  <section class="slide" id="slide-7" aria-labelledby="title-7" tabindex="-1" hidden inert data-note="03:15–03:45 讲这一页。点击按钮三次模拟选链、检查规则和记账，不请求服务、不付款。03:45–04:45 切到已登录的 Key 页面，展示筛选与额度；账单筛选测试网和已付款，展开 Solana 12:28 左右的成功记录，再切独立 Sol explorer。网络慢就留在模拟界面，不现场重试付款。">
+    <p class="kicker"><span class="dot"></span>ONE MINUTE · LIVE DEMO</p><h2 id="title-7">从一个 Agent，<span class="gradient">看到一笔付款。</span></h2><p class="subtitle">先看公开模拟，再切到管理员现场演示。</p>
+    <div class="demo-layout"><div class="panel demo-sim"><div class="row"><h3>演示一次请求</h3><span class="tag muted">纯本地模拟 · 不付款</span></div><div class="demo-steps"><div class="demo-step" data-demo-step="1"><span class="step-dot">1</span><span>指定网络 · Solana Devnet</span></div><div class="demo-step" data-demo-step="2"><span class="step-dot">2</span><span>域名与额度规则 · 校验通过</span></div><div class="demo-step" data-demo-step="3"><span class="step-dot">3</span><span>生成一条模拟账单</span></div></div><div class="demo-controls"><button type="button" class="cta" id="demo-run">演示一次请求 <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button><span class="small" id="demo-status" aria-live="polite">点击按钮，逐步展示。</span></div><div class="receipt" id="demo-receipt" hidden><div class="row"><strong class="green" style="font-size:1.2cqw">✓ 模拟付款记录</strong><strong class="numeric" style="font-size:1.4cqw">0.01 <span class="unit">测试 USDC</span></strong></div><p>Research Agent · Solana Devnet · 模拟结果，不是链上交易</p></div></div><div><p class="eyebrow">已部署的网站 · 管理员演示</p><div class="live-actions"><a class="live-link" href="https://app.moneyswitch.dev/keys" target="_blank" rel="noopener noreferrer"><div><strong>① 看 Key 的预算卡片</strong><span>搜索 / 筛选 → 查看额度占用</span></div><svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a><a class="live-link" href="https://app.moneyswitch.dev/bills" target="_blank" rel="noopener noreferrer"><div><strong>② 审核已付款账单</strong><span>金额 / Key / 网络 → 展开交易详情</span></div><svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a></div><p class="small" style="margin-top:1.25cqw">管理页需要登录。此演示页公开可看，无需登录。<br>现场查看已确认记录，不重复发起付款。</p></div></div>
+    <div class="slide-foot"><span class="brand"><span class="mark">M</span>MoneySwitch</span><span class="slide-number">07 / 08</span></div>
+  </section>
+  <section class="slide" id="slide-8" aria-labelledby="title-8" tabindex="-1" hidden inert data-note="04:45–05:00。欢迎开发者测试 Key 配置、审批、选链和账单体验。项目开源，可以按文档自托管；现场实例需要管理员登录。希望 AI 能继续完成任务，人也能掌握每一笔支出。谢谢。">
+    <p class="kicker"><span class="dot"></span>LET YOUR AGENT TRY</p><div class="closing-grid"><div><h2 class="closing-title" id="title-8">让你的 Agent<br><span class="gradient">在规则里花钱。</span></h2><p class="closing-text">欢迎开发者一起测试：<br>Key 配置 · 人工审批 · 选链 · 账单体验</p><div class="closing-links"><a class="cta" href="https://github.com/dongsheng123132/moneyswitch" target="_blank" rel="noopener noreferrer">开源 / 自托管文档<svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a><a class="cta secondary" href="https://moneyswitch.dev" target="_blank" rel="noopener noreferrer">产品网站<svg class="icon" aria-hidden="true"><use href="#i-external"/></svg></a></div><p class="small" style="margin-top:1.4cqw">一把 MoneyKey，花钱可控、账单可查。</p></div><div class="qr-wrap"><div id="demo-qr-slot"><svg height="220" width="220" viewBox="0 0 37 37" role="img"><title>扫码打开 MoneySwitch Demo Day</title><path fill="#FFFFFF" d="M0,0 h37v37H0z" shape-rendering="crispEdges"></path><path fill="#000000" d="M4 4h7v1H4zM13 4h1v1H13zM15 4h3v1H15zM20 4h5v1H20zM26,4 h7v1H26zM4 5h1v1H4zM10 5h1v1H10zM14 5h2v1H14zM19 5h1v1H19zM22 5h1v1H22zM24 5h1v1H24zM26 5h1v1H26zM32,5 h1v1H32zM4 6h1v1H4zM6 6h3v1H6zM10 6h1v1H10zM12 6h4v1H12zM20 6h1v1H20zM22 6h2v1H22zM26 6h1v1H26zM28 6h3v1H28zM32,6 h1v1H32zM4 7h1v1H4zM6 7h3v1H6zM10 7h1v1H10zM12 7h2v1H12zM15 7h1v1H15zM17 7h2v1H17zM21 7h2v1H21zM26 7h1v1H26zM28 7h3v1H28zM32,7 h1v1H32zM4 8h1v1H4zM6 8h3v1H6zM10 8h1v1H10zM12 8h2v1H12zM15 8h2v1H15zM18 8h1v1H18zM21 8h4v1H21zM26 8h1v1H26zM28 8h3v1H28zM32,8 h1v1H32zM4 9h1v1H4zM10 9h1v1H10zM12 9h1v1H12zM14 9h1v1H14zM16 9h1v1H16zM18 9h4v1H18zM26 9h1v1H26zM32,9 h1v1H32zM4 10h7v1H4zM12 10h1v1H12zM14 10h1v1H14zM16 10h1v1H16zM18 10h1v1H18zM20 10h1v1H20zM22 10h1v1H22zM24 10h1v1H24zM26,10 h7v1H26zM12 11h1v1H12zM14 11h3v1H14zM19 11h1v1H19zM22 11h1v1H22zM24 11h1v1H24zM4 12h1v1H4zM6 12h5v1H6zM14 12h1v1H14zM17 12h2v1H17zM20 12h2v1H20zM24 12h1v1H24zM26 12h5v1H26zM4 13h1v1H4zM7 13h3v1H7zM13 13h1v1H13zM16 13h2v1H16zM20 13h1v1H20zM22 13h7v1H22zM32,13 h1v1H32zM5 14h1v1H5zM9 14h2v1H9zM16 14h1v1H16zM18 14h3v1H18zM24 14h1v1H24zM26 14h1v1H26zM4 15h2v1H4zM7 15h2v1H7zM11 15h4v1H11zM16 15h1v1H16zM18 15h2v1H18zM22 15h1v1H22zM27 15h1v1H27zM29 15h1v1H29zM31 15h1v1H31zM6 16h1v1H6zM10 16h2v1H10zM13 16h2v1H13zM17 16h3v1H17zM21 16h1v1H21zM23 16h1v1H23zM29 16h2v1H29zM6 17h4v1H6zM14 17h1v1H14zM16 17h2v1H16zM20 17h1v1H20zM22 17h5v1H22zM28 17h1v1H28zM32,17 h1v1H32zM7 18h1v1H7zM9 18h3v1H9zM13 18h4v1H13zM18 18h2v1H18zM24 18h1v1H24zM26 18h1v1H26zM28 18h3v1H28zM4 19h1v1H4zM6 19h4v1H6zM15 19h2v1H15zM19 19h2v1H19zM23 19h2v1H23zM26 19h1v1H26zM28 19h1v1H28zM31 19h1v1H31zM4 20h2v1H4zM8 20h7v1H8zM16 20h1v1H16zM19 20h1v1H19zM21 20h1v1H21zM24 20h1v1H24zM27 20h1v1H27zM29 20h2v1H29zM4 21h1v1H4zM6 21h2v1H6zM11 21h1v1H11zM14 21h2v1H14zM17 21h1v1H17zM20 21h1v1H20zM23 21h6v1H23zM30 21h1v1H30zM32,21 h1v1H32zM4 22h1v1H4zM8 22h1v1H8zM10 22h1v1H10zM12 22h1v1H12zM16 22h6v1H16zM24 22h1v1H24zM26 22h1v1H26zM28 22h1v1H28zM30 22h1v1H30zM4 23h1v1H4zM6 23h2v1H6zM9 23h1v1H9zM13 23h5v1H13zM20 23h1v1H20zM22 23h2v1H22zM25 23h2v1H25zM28 23h1v1H28zM31 23h1v1H31zM4 24h1v1H4zM6 24h2v1H6zM10 24h1v1H10zM12 24h1v1H12zM14 24h1v1H14zM18 24h1v1H18zM21 24h2v1H21zM24 24h5v1H24zM30,24 h3v1H30zM12 25h1v1H12zM16 25h1v1H16zM20 25h5v1H20zM28,25 h5v1H28zM4 26h7v1H4zM13 26h3v1H13zM19 26h3v1H19zM23 26h2v1H23zM26 26h1v1H26zM28 26h3v1H28zM4 27h1v1H4zM10 27h1v1H10zM12 27h1v1H12zM14 27h2v1H14zM18 27h3v1H18zM23 27h2v1H23zM28 27h1v1H28zM31 27h1v1H31zM4 28h1v1H4zM6 28h3v1H6zM10 28h1v1H10zM12 28h2v1H12zM21 28h1v1H21zM24 28h5v1H24zM30,28 h3v1H30zM4 29h1v1H4zM6 29h3v1H6zM10 29h1v1H10zM12 29h1v1H12zM14 29h2v1H14zM17 29h2v1H17zM20 29h1v1H20zM22 29h2v1H22zM27 29h1v1H27zM29,29 h4v1H29zM4 30h1v1H4zM6 30h3v1H6zM10 30h1v1H10zM12 30h2v1H12zM15 30h3v1H15zM19 30h2v1H19zM24 30h8v1H24zM4 31h1v1H4zM10 31h1v1H10zM14 31h1v1H14zM18 31h3v1H18zM22 31h3v1H22zM27 31h3v1H27zM31 31h1v1H31zM4 32h7v1H4zM12 32h1v1H12zM15 32h1v1H15zM17 32h1v1H17zM19 32h1v1H19zM21 32h1v1H21zM23 32h1v1H23zM28 32h1v1H28zM30 32h1v1H30z" shape-rendering="crispEdges"></path></svg></div><strong style="font-size:1.35cqw">扫码看这份演示</strong><p class="small" style="margin-top:.5cqw">公开页面 · 无需登录</p><p class="qr-url">app.moneyswitch.dev/demoday.html</p></div></div><div class="slide-foot"><span class="brand"><span class="mark">M</span>MoneySwitch <span class="dim">· 深圳 Demo Day</span></span><span class="slide-number">THANK YOU · 08 / 08</span></div>
+  </section>
+</div>
+<aside class="notes" id="notes" aria-label="当前页演讲备注" hidden><strong>演讲备注 · N 开关</strong><p id="note-text"></p></aside>
+</main>
+<nav class="toolbar" aria-label="演示控制">
+  <div class="toolbar-brand"><strong>MoneySwitch</strong><span>深圳 Demo Day</span></div>
+  <div class="toolbar-center"><button type="button" class="tool nav-tool" id="prev" aria-label="上一页" title="上一页 · ←">←</button><span class="page-label" id="page-label" aria-live="polite">1 / 8</span><button type="button" class="tool nav-tool" id="next" aria-label="下一页" title="下一页 · → / 空格">→</button><span class="dim key-hint">← → 翻页</span></div>
+  <div class="toolbar-actions"><button type="button" class="tool timer" id="timer" aria-pressed="false" title="从 0 开始 / 暂停 · T；暂停后双击归零">T · 00:00</button><button type="button" class="tool" id="notes-toggle" aria-pressed="false" title="演讲备注 · N">N 备注</button><button type="button" class="tool" id="fullscreen" aria-pressed="false" title="全屏 · F">F 全屏</button><a class="tool" id="download" download="MoneySwitch-DemoDay-5min.html">下载 HTML</a></div>
+</nav>
+<div class="progress-track" aria-hidden="true"><div class="progress" id="progress"></div></div><p class="sr-only" id="announcement" aria-live="polite"></p>
+<script>
+  (() => {
+    'use strict';
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const deck = document.getElementById('deck');
+    const notes = document.getElementById('notes');
+    const notesToggle = document.getElementById('notes-toggle');
+    const pageLabel = document.getElementById('page-label');
+    const progress = document.getElementById('progress');
+    const previous = document.getElementById('prev');
+    const next = document.getElementById('next');
+    const timerButton = document.getElementById('timer');
+    const announcement = document.getElementById('announcement');
+    let current = 0;
+    let notesOpen = false;
+    let runningSince = null;
+    let elapsedBefore = 0;
+    let fiveMinuteNotice = false;
+    let demoPhase = 0;
+
+    function readSlide() {
+      const match = /^#slide=([1-8])$/.exec(location.hash);
+      return match ? Number(match[1]) - 1 : 0;
+    }
+    function fitDeck() {
+      if (window.innerWidth < 700) { deck.style.width = ''; return; }
+      const noteHeight = notesOpen ? notes.offsetHeight + 12 : 0;
+      const height = Math.max(150, window.innerHeight - 110 - noteHeight);
+      deck.style.width = Math.min(1680, window.innerWidth - 32, height * 16 / 9) + 'px';
+    }
+    function showSlide(index, updateHash = true) {
+      const clamped = Math.max(0, Math.min(slides.length - 1, index));
+      const focusWasInSlide = slides.some(slide => slide.contains(document.activeElement));
+      current = clamped;
+      slides.forEach((slide, i) => { slide.hidden = i !== current; slide.inert = i !== current; });
+      slides[current].scrollTop = 0;
+      pageLabel.textContent = (current + 1) + ' / ' + slides.length;
+      progress.style.width = ((current + 1) / slides.length * 100) + '%';
+      previous.disabled = current === 0;
+      next.disabled = current === slides.length - 1;
+      document.getElementById('note-text').textContent = slides[current].dataset.note || '';
+      document.title = 'MoneySwitch · ' + (current + 1) + '/8 · 深圳 Demo Day';
+      if (updateHash) { history.replaceState(null, '', '#slide=' + (current + 1)); }
+      if (focusWasInSlide) { slides[current].focus({ preventScroll:true }); }
+      requestAnimationFrame(fitDeck);
+    }
+    function toggleNotes() {
+      notesOpen = !notesOpen;
+      notes.hidden = !notesOpen;
+      notesToggle.setAttribute('aria-pressed', String(notesOpen));
+      document.body.classList.toggle('notes-open', notesOpen);
+      requestAnimationFrame(fitDeck);
+    }
+    async function toggleFullscreen() {
+      try {
+        if (document.fullscreenElement) { await document.exitFullscreen(); }
+        else if (document.documentElement.requestFullscreen) { await document.documentElement.requestFullscreen(); }
+        else { announcement.textContent = '当前浏览器不支持网页全屏，可使用浏览器全屏功能。'; }
+      } catch { announcement.textContent = '未能进入全屏，可使用浏览器全屏功能。'; }
+    }
+    function elapsed() { return elapsedBefore + (runningSince === null ? 0 : performance.now() - runningSince); }
+    function renderTimer() {
+      const seconds = Math.floor(elapsed() / 1000);
+      const label = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+      timerButton.textContent = (seconds >= 300 ? '5:00 · ' : 'T · ') + label;
+      timerButton.classList.toggle('over', seconds >= 300);
+      timerButton.setAttribute('aria-label', (runningSince === null ? '开始或继续计时，' : '暂停计时，') + '已讲 ' + label);
+      if (seconds >= 300 && !fiveMinuteNotice) { announcement.textContent = '已到五分钟，请准备收尾。'; fiveMinuteNotice = true; }
+    }
+    function toggleTimer() {
+      if (runningSince === null) { runningSince = performance.now(); }
+      else { elapsedBefore = elapsed(); runningSince = null; }
+      timerButton.setAttribute('aria-pressed', String(runningSince !== null));
+      renderTimer();
+    }
+    function resetTimer() {
+      runningSince = null; elapsedBefore = 0; fiveMinuteNotice = false;
+      timerButton.setAttribute('aria-pressed', 'false'); renderTimer();
+    }
+    function demoStep() {
+      demoPhase = demoPhase === 3 ? 0 : demoPhase + 1;
+      document.querySelectorAll('[data-demo-step]').forEach(step => step.classList.toggle('complete', Number(step.dataset.demoStep) <= demoPhase));
+      const states = ['点击按钮，逐步展示。', '已指定 Solana Devnet。', '规则检查通过，准备模拟记账。', '模拟账单已生成，没有实际付款。'];
+      const buttons = ['演示一次请求 →', '继续：校验规则 →', '继续：生成模拟账单 →', '重新演示 ↻'];
+      document.getElementById('demo-status').textContent = states[demoPhase];
+      document.getElementById('demo-run').textContent = buttons[demoPhase];
+      document.getElementById('demo-receipt').hidden = demoPhase !== 3;
+    }
+    previous.addEventListener('click', () => showSlide(current - 1));
+    next.addEventListener('click', () => showSlide(current + 1));
+    notesToggle.addEventListener('click', toggleNotes);
+    document.getElementById('fullscreen').addEventListener('click', toggleFullscreen);
+    timerButton.addEventListener('click', toggleTimer);
+    timerButton.addEventListener('dblclick', resetTimer);
+    document.getElementById('demo-run').addEventListener('click', demoStep);
+    document.addEventListener('fullscreenchange', () => {
+      document.getElementById('fullscreen').setAttribute('aria-pressed', String(Boolean(document.fullscreenElement)));
+      fitDeck();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input,textarea,select,[contenteditable="true"]')) return;
+      const key = event.key.toLowerCase();
+      if (key === ' ' && target instanceof Element && target.closest('button,a')) return;
+      if (['arrowright','pagedown',' '].includes(key)) { event.preventDefault(); showSlide(current + 1); }
+      else if (['arrowleft','pageup'].includes(key)) { event.preventDefault(); showSlide(current - 1); }
+      else if (key === 'home') { event.preventDefault(); showSlide(0); }
+      else if (key === 'end') { event.preventDefault(); showSlide(slides.length - 1); }
+      else if (key === 'n') { event.preventDefault(); toggleNotes(); }
+      else if (key === 'f') { event.preventDefault(); toggleFullscreen(); }
+      else if (key === 't') { event.preventDefault(); if (!event.repeat) toggleTimer(); }
+    });
+    let touchStart = null;
+    deck.addEventListener('touchstart', event => {
+      if (event.touches.length !== 1 || event.target.closest('a,button')) { touchStart = null; return; }
+      touchStart = { x:event.touches[0].clientX, y:event.touches[0].clientY };
+    }, { passive:true });
+    deck.addEventListener('touchend', event => {
+      if (!touchStart || event.changedTouches.length !== 1) return;
+      const dx = event.changedTouches[0].clientX - touchStart.x;
+      const dy = event.changedTouches[0].clientY - touchStart.y;
+      touchStart = null;
+      if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.5) showSlide(current + (dx < 0 ? 1 : -1));
+    }, { passive:true });
+    deck.addEventListener('touchcancel', () => { touchStart = null; }, { passive:true });
+    window.addEventListener('resize', fitDeck);
+    window.addEventListener('hashchange', () => showSlide(readSlide(), false));
+    const downloadUrl = new URL(location.href); downloadUrl.hash = '';
+    document.getElementById('download').href = downloadUrl.href;
+    setInterval(renderTimer, 500);
+    showSlide(readSlide(), false);
+    renderTimer();
+  })();
+</script>
+</body>
+</html>

@@ -296,18 +296,19 @@ describe("the approval link (SPEC.md §3)", () => {
     config.publicUrl = null;
   });
 
-  it("approval_required carries approve_url = {base}/approvals?id=<id>; the link holds no token, key or secret", async () => {
+  it("approval_required carries approve_url = {base}/approvals?id=<id>&mode=pin; the link holds no token, key or secret", async () => {
     const key = await createKey({ approval_threshold: "0.10", per_request_limit: "1" });
     const first = (await ask(key)).json();
     expect(first.status).toBe("approval_required");
     expect(first.charged).toBe("no");
     const url = new URL(first.approve_url);
     expect(url.pathname).toBe("/approvals");
-    expect([...url.searchParams.keys()]).toEqual(["id"]);
+    expect([...url.searchParams.keys()]).toEqual(["id", "mode"]);
     expect(url.searchParams.get("id")).toBe(first.approval_id);
+    expect(url.searchParams.get("mode")).toBe("pin");
     expect(url.username + url.password + url.hash).toBe("");
     // without a public URL the link points at the address the server itself listens on
-    expect(first.approve_url).toBe(`http://127.0.0.1:${SERVER_PORT}/approvals?id=${first.approval_id}`);
+    expect(first.approve_url).toBe(`http://127.0.0.1:${SERVER_PORT}/approvals?id=${first.approval_id}&mode=pin`);
     for (const secret of [key, adminToken]) expect(first.approve_url).not.toContain(secret);
     expect(first.approve_url).not.toMatch(/mk_live_|ms_admin_|ms_setup_|token|secret|password/i);
   });
@@ -316,7 +317,7 @@ describe("the approval link (SPEC.md §3)", () => {
     config.publicUrl = "https://pay.example.com";
     const key = await createKey({ approval_threshold: "0.10", per_request_limit: "1" });
     const first = (await ask(key)).json();
-    expect(first.approve_url).toBe(`https://pay.example.com/approvals?id=${first.approval_id}`);
+    expect(first.approve_url).toBe(`https://pay.example.com/approvals?id=${first.approval_id}&mode=pin`);
   });
 
   it("a forged Host (or X-Forwarded-*) cannot steer the link: the skill tells the AI to forward it, so it must stay on this server", async () => {
@@ -325,12 +326,12 @@ describe("the approval link (SPEC.md §3)", () => {
     const res = await app.inject({ method: "POST", url: "/v1/fetch", headers: { authorization: `Bearer ${key}`, ...forged }, payload: { url: DEEP() } });
     const first = res.json();
     expect(first.status).toBe("approval_required");
-    expect(first.approve_url).toBe(`http://127.0.0.1:${SERVER_PORT}/approvals?id=${first.approval_id}`);
+    expect(first.approve_url).toBe(`http://127.0.0.1:${SERVER_PORT}/approvals?id=${first.approval_id}&mode=pin`);
     expect(first.approve_url).not.toContain("phish.example");
     // and with a public URL configured, that one - still not the request's
     config.publicUrl = "https://pay.example.com";
     const again = (await app.inject({ method: "POST", url: "/v1/fetch", headers: { authorization: `Bearer ${key}`, ...forged }, payload: { url: DEEP() } })).json();
-    expect(again.approve_url).toBe(`https://pay.example.com/approvals?id=${again.approval_id}`);
+    expect(again.approve_url).toBe(`https://pay.example.com/approvals?id=${again.approval_id}&mode=pin`);
   });
 
   it("only the other statuses stay link-free", async () => {

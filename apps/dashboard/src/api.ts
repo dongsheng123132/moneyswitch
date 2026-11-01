@@ -177,13 +177,23 @@ export async function setApprovalPin(id: string, pin?: string): Promise<{ id: st
 // ---------------------------------------------------------------------------
 
 export interface ApprovalRow {
+  /** Optional for compatibility with older servers. Visible to holders of this approval link. */
+  purpose?: string | null;
   id: string;
   key_id: string;
   url: string;
   method: string;
   network: string;
   asset: string;
+  /** 'evm' / 'svm': lets the page say "no ETH" or "no SOL" without parsing a CAIP-2 id; null/absent when the server does not know the chain. */
+  network_family?: "evm" | "svm" | null;
+  /** "USDC" when the asset is the chain's own USDC; null for a new host, an unknown chain, or a server that does not send it. */
+  asset_label?: string | null;
   pay_to: string;
+  /** The recipient's explorer page, computed by the server (the page parses nothing); null for a new host or an unknown chain. */
+  pay_to_url?: string | null;
+  /** The Solana fee sponsor recorded with the seller's quote; null for EVM payments and approvals from before migration 0014. */
+  fee_payer?: string | null;
   amount: string;
   status: "pending" | "approved" | "denied" | "expired" | "used";
   /** "payment" = a price over the approval line; "host" = a request to a host outside the key's list (no price yet: amount "0"). */
@@ -239,6 +249,10 @@ export async function decideWithPin(id: string, decision: "approve" | "deny", pi
 export interface PaymentRow {
   id: string;
   key_id: string;
+  /** Key label supplied by the ledger API; the label does not prove which agent used the key. */
+  key_name?: string | null;
+  /** Optional caller-provided payment purpose, never inferred from a task or prompt. */
+  purpose?: string | null;
   url: string;
   host: string;
   method: string;
@@ -335,6 +349,8 @@ export interface RetiredWalletRow {
 }
 
 export interface WalletInfo {
+  /** Solana mainnet funds and this instance's actual payment enablement. */
+  solana_mainnet_balance?: { address: string; address_url: string; usdc_balance: string | null; payments_enabled: boolean } | null;
   address: string | null;
   unlocked: boolean;
   has_keystore: boolean;

@@ -60,6 +60,8 @@ export const payments = sqliteTable("payments", {
   network: text("network").notNull(),
   asset: text("asset").notNull(),
   payTo: text("pay_to").notNull(),
+  /** Optional Agent-supplied coarse purpose, never automatically collected from a task or request body. */
+  purpose: text("purpose"),
   amount: integer("amount").notNull(),
   status: text("status", { enum: ["reserved", "settled", "failed", "unknown"] }).notNull(),
   txHash: text("tx_hash"),
@@ -88,6 +90,8 @@ export const payments = sqliteTable("payments", {
 });
 
 export const approvals = sqliteTable("approvals", {
+  /** Explicit, coarse task description visible on the approval link and administrator page. */
+  purpose: text("purpose"),
   id: text("id").primaryKey(),
   keyId: text("key_id").notNull(),
   url: text("url").notNull(),
@@ -97,6 +101,8 @@ export const approvals = sqliteTable("approvals", {
   asset: text("asset").notNull(),
   payTo: text("pay_to").notNull(),
   amount: integer("amount").notNull(),
+  /** The Solana fee sponsor from the seller's 402 quote (`extra.feePayer`), recorded so the approval screen can name who pays the network fee; NULL for EVM payments and approvals created before migration 0014. */
+  feePayer: text("fee_payer"),
   status: text("status", { enum: ["pending", "approved", "denied", "expired", "used"] }).notNull(),
   expiresAt: text("expires_at").notNull(),
   decidedAt: text("decided_at"),

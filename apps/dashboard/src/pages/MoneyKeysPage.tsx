@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, KeyRound, Search } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Plus, KeyRound, Search, ShieldCheck, ArrowUpRight, ChevronDown } from "lucide-react";
 import { usePolling } from "../usePolling";
 import { listKeys, createKey, revokeKey, rotateKey, setApprovalPin, ApiError, type NetworkMode } from "../api";
 import { toMicros, ratioMicros, formatUsdc } from "../money";
 import Avatar from "../components/Avatar";
-import Pill from "../components/Pill";
 import { pinProblem } from "../approvalPin";
 import ApprovalPinField from "../components/ApprovalPinField";
 import ApprovalPinNotice from "../components/ApprovalPinNotice";
@@ -30,6 +30,7 @@ import { skillBaseUrl, testPaymentAvailable, withTestHost } from "../skillText";
 import { handoffFromCreated, rotateToHandoff, type Handoff } from "../keyHandoff";
 import { useAdminMeta } from "../useAdminMeta";
 import { effectiveNetworkMode, enabledNetworkKinds, realMoneyConfirmed } from "../networkMode";
+import { keyOverview, visibleKeys, type KeyStateFilter } from "../keyOverview";
 import "../styles/keys.css";
 
 const DECIMAL_RE = /^\d+(\.\d{1,6})?$/;
@@ -114,6 +115,8 @@ export default function MoneyKeysPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
+  const [stateFilter, setStateFilter] = useState<KeyStateFilter>("active");
+  const [networkFilter, setNetworkFilter] = useState<NetworkMode | "all">("all");
   const [form, setForm] = useState<FormState>(() => emptyForm(""));
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -185,8 +188,8 @@ export default function MoneyKeysPage() {
   const dailyMicros = toMicros(form.daily_budget);
   const totalMicros = toMicros(form.total_budget);
   const dailyAboveTotal = dailyMicros > 0n && totalMicros > 0n && dailyMicros > totalMicros;
-  const searchTerm = search.trim().toLocaleLowerCase();
-  const filteredKeys = (keys ?? []).filter((key) => !searchTerm || key.name.toLocaleLowerCase().includes(searchTerm) || key.key_prefix.toLocaleLowerCase().includes(searchTerm));
+  const overview = keyOverview(keys ?? []);
+  const filteredKeys = visibleKeys(keys ?? [], search, stateFilter, networkFilter);
 
   function moneyField(field: "daily_budget" | "total_budget" | "per_request_limit" | "approval_threshold", label: "lblDaily" | "lblTotal" | "lblPerReq" | "lblThreshold") {
     const id = `key-${field}`;
@@ -226,6 +229,9 @@ export default function MoneyKeysPage() {
         approval_pin: form.approval_pin ? form.approval_pin : undefined,
       });
       setHandoff(handoffFromCreated(res));
+      setSearch("");
+      setStateFilter("active");
+      setNetworkFilter("all");
       refresh();
     } catch (err) {
       if (err instanceof Error && err.name === "TimeoutError") {
@@ -302,18 +308,23 @@ export default function MoneyKeysPage() {
 
   return (
     <div className="keys-page">
-      <div className="toolbar">
-        <div />
-        <button className="btn" onClick={openCreate}>
-          <Plus size={15} />
-          {t("createKeyBtn")}
-        </button>
-      </div>
-      <div className="keys-intro">
-        {t("pageIntroPre")}
-        <Term k="moneyKey">{t("pageIntroTerm")}</Term>
-        {t("pageIntroPost")}
-      </div>
+      <section className="keys-hero" aria-labelledby="keys-hero-title">
+        <div className="keys-hero-copy">
+          <div className="keys-eyebrow"><ShieldCheck size={16} aria-hidden="true" />{t("portfolioEyebrow")}</div>
+          <h2 id="keys-hero-title">{t("portfolioTitle")}</h2>
+          <p>{t("portfolioIntro")}</p>
+          <button className="btn keys-create-button" onClick={openCreate}><Plus size={17} />{t("createKeyBtn")}<ArrowUpRight size={16} aria-hidden="true" /></button>
+        </div>
+        <div className="keys-hero-overview">
+          <div className="keys-active-number num">{loading && !keys ? "—" : overview.active}<span>{t("activeKeys")}</span></div>
+          <dl className="keys-overview-counts">
+            <div><dt>{t("networkModeMainnet")}</dt><dd className="num">{loading && !keys ? "—" : overview.mainnet}</dd></div>
+            <div><dt>{t("networkModeTestnet")}</dt><dd className="num">{loading && !keys ? "—" : overview.testnet}</dd></div>
+            <div><dt>{t("filterInactive")}</dt><dd className="num">{loading && !keys ? "—" : overview.inactive}</dd></div>
+          </dl>
+          {overview.legacy > 0 && <div className="keys-legacy-count">{t("activeLegacy", { count: overview.legacy })}</div>}
+        </div>
+      </section>
       {error && <Callout tone="error">{error}</Callout>}
       {revokeError && <Callout tone="error">{revokeError}</Callout>}
       {revokeSuccess && <Callout tone="success">{revokeSuccess}</Callout>}
@@ -331,14 +342,21 @@ export default function MoneyKeysPage() {
         </Callout>
       )}
 
-      <div className="card keys-card">
+      <section className="keys-portfolio" aria-label={t("portfolioList")}>
         {!!keys?.length && (
-          <div className="keys-table-toolbar">
+          <div className="keys-portfolio-toolbar">
+            <div className="keys-state-tabs" role="group" aria-label={t("statusFilter")}>
+              {(["active", "all", "inactive"] as const).map((state) => <button type="button" key={state} className={stateFilter === state ? "is-selected" : ""} aria-pressed={stateFilter === state} onClick={() => setStateFilter(state)}>{t(state === "active" ? "filterActive" : state === "all" ? "filterAll" : "filterInactive")}<span className="num">{state === "active" ? overview.active : state === "all" ? overview.total : overview.inactive}</span></button>)}
+            </div>
+            <div className="keys-portfolio-search">
+              <select aria-label={t("networkModeLabel")} value={networkFilter} onChange={(e) => setNetworkFilter(e.target.value as NetworkMode | "all")}>
+                <option value="all">{t("allNetworks")}</option><option value="mainnet">{t("networkModeMainnet")}</option><option value="testnet">{t("networkModeTestnet")}</option>
+              </select>
             <div className="keys-search">
               <Search size={16} aria-hidden="true" />
               <input type="search" aria-label={t("searchKeys")} placeholder={t("searchKeys")} value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <span className="keys-count">{t("keysCount", { n: filteredKeys.length })}</span>
+            </div>
           </div>
         )}
         {loading && !keys ? (
@@ -346,23 +364,7 @@ export default function MoneyKeysPage() {
         ) : !keys || keys.length === 0 ? (
           <NoKeysYet onCreate={openCreate} />
         ) : (
-          <div className="keys-table-scroll"><table className="keys-table">
-            <thead>
-              <tr>
-                <th>{t("colKeyPrefix")}</th>
-                <th>
-                  <Term k="subtreeUsage">{t("colToday")}</Term>
-                </th>
-                <th className="num">
-                  <Term k="totalBudget">{t("colTotal")}</Term>
-                </th>
-                <th>{t("colPaymentRules")}</th>
-                <th>{t("expiresDateLabel")}</th>
-                <th>{t("colLastUsed")}</th>
-                <th><span className="sr-only">{t("colActions")}</span></th>
-              </tr>
-            </thead>
-            <tbody>
+          <div className="keys-grid">
               {filteredKeys.map((k) => {
                 const usedMicros = toMicros(k.used_today);
                 const dMicros = toMicros(k.daily_budget);
@@ -373,42 +375,9 @@ export default function MoneyKeysPage() {
                 const statusTone = status === "active" ? "green" : status === "expired" || status === "ancestor_expired" ? "yellow" : "red";
                 const isAncestorDisabled = status === "ancestor_revoked" || status === "ancestor_expired";
                 return (
-                  <tr key={k.id} className={status !== "active" ? "is-inactive" : undefined}>
-                    <td className="key-identity">
-                      <div className="agent-row">
-                        <Avatar name={k.name} size={24} />
-                        <span className="agent-name">{k.name}</span>
-                      </div>
-                      <div className="mono key-prefix">{k.key_prefix}••••</div>
-                      <div className="key-network">
-                        <KeyNetworkBadge compact mode={k.network_mode} active={k.status === "active"} chains={(k.networks ?? []).map((c) => chainLabels.get(c) ?? c)} />
-                        {isAncestorDisabled ? (
-                          <Term k={status === "ancestor_revoked" ? "ancestorRevoked" : "ancestorExpired"}>
-                            <Pill tone={statusTone}>{t(`status${status[0].toUpperCase()}${status.slice(1)}` as keyof typeof keysStrings.en)}</Pill>
-                          </Term>
-                        ) : (
-                          <Pill tone={statusTone}>{t(`status${status[0].toUpperCase()}${status.slice(1)}` as keyof typeof keysStrings.en)}</Pill>
-                        )}
-                      </div>
-                      {k.status === "active" && <KeyPinState state={k.approval_pin_state} failures={k.approval_pin_failures} />}
-                    </td>
-                    <td style={{ minWidth: 130 }}>
-                      <div className="num" style={{ fontSize: 12 }}>
-                        {formatUsdc(k.used_today, { maxDecimals: 4 })} / {formatUsdc(k.daily_budget, { maxDecimals: 4 })}
-                      </div>
-                      <ProgressBar ratio={r} />
-                    </td>
-                    <td className="num">
-                      {formatUsdc(k.used_total, { maxDecimals: 4 })} / {formatUsdc(k.total_budget, { maxDecimals: 4 })}
-                      <ProgressBar ratio={ratioMicros(toMicros(k.used_total), toMicros(k.total_budget))} />
-                    </td>
-                    <td>
-                      <div className="key-rule-line"><span className="key-rule-label">{t("colPerRequest")}</span> ${formatUsdc(k.per_request_limit, { maxDecimals: 4 })}</div>
-                      <div className="key-rule-line key-rule-label">{k.approval_threshold != null ? t("ruleApproval", { amount: formatUsdc(k.approval_threshold, { maxDecimals: 4 }) }) : t("ruleNoAmountApproval")}</div>
-                    </td>
-                    <td>{k.expires_at ? <time dateTime={k.expires_at} title={new Date(k.expires_at).toISOString()}>{new Date(k.expires_at).toLocaleDateString(undefined, { timeZone: "UTC" })}</time> : t("expiresNever")}</td>
-                    <td>{k.last_used_at ? relTime(k.last_used_at) : t("lastUsedNever")}</td>
-                    <td>
+                  <article key={k.id} className={`key-budget-card${status !== "active" ? " is-inactive" : ""}`} data-network-kind={k.network_mode ?? "legacy"}>
+                    <div className="key-card-heading">
+                      <div className="key-card-identity"><Avatar name={k.name} size={38} /><div><h3 title={k.name}>{k.name}</h3><span className="mono key-prefix">{k.key_prefix}••••</span></div></div>
                       <KeyRowActions
                         compact
                         status={k.status}
@@ -432,15 +401,38 @@ export default function MoneyKeysPage() {
                         onRevoke={() => onRevoke(k.id)}
                         onCancelRevoke={() => setRevokeConfirmId(null)}
                       />
-                    </td>
-                  </tr>
+                    </div>
+                    <div className="key-card-status">
+                      <KeyNetworkBadge compact mode={k.network_mode} active={k.status === "active"} chains={(k.networks ?? []).map((c) => chainLabels.get(c) ?? c)} />
+                      <span className={`key-status-text ${statusTone}`}><i aria-hidden="true" />{isAncestorDisabled ? <Term k={status === "ancestor_revoked" ? "ancestorRevoked" : "ancestorExpired"}>{t(`status${status[0].toUpperCase()}${status.slice(1)}` as keyof typeof keysStrings.en)}</Term> : t(`status${status[0].toUpperCase()}${status.slice(1)}` as keyof typeof keysStrings.en)}</span>
+                    </div>
+                    <div className="key-budget-section">
+                      <div className="key-budget-heading"><Term k="subtreeUsage">{t("dailyAllowance")}</Term><span className="num">{Math.round(r * 100)}%</span></div>
+                      <div className="key-budget-amount num">{formatUsdc(k.used_today)}<span> / {formatUsdc(k.daily_budget)} <small>USDC</small></span></div>
+                      <ProgressBar ratio={r} />
+                      <div className="key-lifetime-budget"><Term k="totalBudget">{t("lifetimeAllowance")}</Term><span className="num">{formatUsdc(k.used_total)} / {formatUsdc(k.total_budget)}</span></div>
+                      <ProgressBar ratio={ratioMicros(toMicros(k.used_total), toMicros(k.total_budget))} />
+                    </div>
+                    {k.status === "active" && <KeyPinState state={k.approval_pin_state} failures={k.approval_pin_failures} />}
+                    <details className="key-review-details">
+                      <summary><span>{t("colPaymentRules")}</span><span className="num">{t("colPerRequest")} {formatUsdc(k.per_request_limit)} USDC<ChevronDown size={13} aria-hidden="true" /></span></summary>
+                      <dl>
+                        <div><dt>{t("nameLabel")}</dt><dd>{k.name}</dd></div>
+                        <div><dt>{t("colApproval")}</dt><dd>{k.approval_threshold != null ? `${formatUsdc(k.approval_threshold)} USDC` : t("ruleNoAmountApproval")}</dd></div>
+                        <div><dt>{t("allowedHostsLabel")}</dt><dd>{k.allowed_hosts.length ? k.allowed_hosts.join(", ") : t("sitesNeedApproval")}</dd></div>
+                        <div><dt>{t("expiresDateLabel")}</dt><dd>{k.expires_at ? <time dateTime={k.expires_at}>{new Date(k.expires_at).toLocaleDateString(undefined, { timeZone: "UTC" })}</time> : t("expiresNever")}</dd></div>
+                        <div><dt>{t("rateLimitLabel")}</dt><dd className="num">{k.max_payments_per_minute}</dd></div>
+                      </dl>
+                    </details>
+                    <footer className="key-card-footer"><span>{t("colLastUsed")}<strong>{k.last_used_at ? relTime(k.last_used_at) : t("lastUsedNever")}</strong></span><Link to={`/bills?key=${encodeURIComponent(k.id)}&range=all`}>{t("viewBills")}<ArrowUpRight size={13} aria-hidden="true" /></Link></footer>
+                  </article>
                 );
               })}
-              {filteredKeys.length === 0 && <tr><td colSpan={7}>{t("searchEmpty")}</td></tr>}
-            </tbody>
-          </table></div>
+              {filteredKeys.length === 0 && <div className="keys-filter-empty"><KeyRound size={26} aria-hidden="true" /><p>{t("searchEmpty")}</p><button type="button" className="btn secondary small" onClick={() => { setSearch(""); setStateFilter("all"); setNetworkFilter("all"); }}>{t("showAllKeys")}</button></div>}
+          </div>
         )}
-      </div>
+        {!!keys?.length && <p className="keys-budget-footnote">{t("budgetOccupancyHint")}</p>}
+      </section>
 
       <KeyDialog
         open={showCreate}

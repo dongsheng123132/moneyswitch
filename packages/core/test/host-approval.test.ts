@@ -334,7 +334,7 @@ describe("a trailing dot does not make another host", () => {
 });
 
 describe("createHostApproval", () => {
-  it("is a pending 'host' approval bound to key/url/method/body hash, with no price and the usual 10 minute TTL", () => {
+  it("is a pending 'host' approval bound to key/url/method/body hash, with no price and the usual 30 minute TTL", () => {
     const { db, sqlite } = freshDb();
     const k = key(db);
     const before = Date.now();
