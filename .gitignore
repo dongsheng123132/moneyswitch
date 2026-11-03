@@ -35,3 +35,6 @@ docs/pitch/deck-v2/tools/
 
 .vercel
 deploy/secrets/
+
+# local mirror config (contains username/repo paths; tokens live in env vars)
+scripts/mirror.config.json
