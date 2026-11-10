@@ -1,0 +1,110 @@
+# Mirror MoneySwitch to alternative code-hosting platforms.
+#
+# Canonical repo: github.com/dongsheng123132/moneyswitch
+# This workflow only PUSHES mirrors; issues/PRs stay on GitHub.
+#
+# Required repository secrets (skip any platform by leaving its secret empty):
+#   GITEE_TOKEN, GITEE_REPO     e.g. "yourname/moneyswitch"
+#   GITLAB_TOKEN, GITLAB_REPO   e.g. "yourname/moneyswitch"
+#   CODEBERG_TOKEN, CODEBERG_REPO
+#   CNB_TOKEN, CNB_REPO         e.g. "yourname/moneyswitch"  (cnb.cool)
+#   GITCODE_TOKEN, GITCODE_REPO e.g. "yourname/moneyswitch"
+#
+# Gitee / GitCode / CNB receive the China-audit-safe README (README.cn-mirror.md).
+# GitLab / Codeberg receive the original README.
+
+name: Mirror
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: push mirrors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "moneyswitch-mirror-bot"
+          git config user.email "mirror-bot@users.noreply.github.com"
+
+      # ---- international mirrors (original README) ----
+      - name: Push to GitLab
+        if: ${{ secrets.GITLAB_TOKEN != '' && secrets.GITLAB_REPO != '' }}
+        env:
+          TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          REPO: ${{ secrets.GITLAB_REPO }}
+        run: |
+          git remote add gitlab "https://oauth2:${TOKEN}@gitlab.com/${REPO}.git"
+          git push gitlab --mirror --force
+          git remote remove gitlab
+
+      - name: Push to Codeberg
+        if: ${{ secrets.CODEBERG_TOKEN != '' && secrets.CODEBERG_REPO != '' }}
+        env:
+          TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+          REPO: ${{ secrets.CODEBERG_REPO }}
+        run: |
+          git remote add codeberg "https://${TOKEN}@codeberg.org/${REPO}.git"
+          git push codeberg --mirror --force
+          git remote remove codeberg
+
+      # ---- China-platform mirrors (audit-safe README) ----
+      # Swap README.md for README.cn-mirror.md in a temporary commit, push,
+      # then restore the working tree so GitHub stays untouched.
+      - name: Swap in China-safe README
+        run: |
+          cp README.md /tmp/README.github.md
+          cp README.cn-mirror.md README.md
+          git add README.md
+          git commit -m "docs: China-mirror README (audit-safe wording)" --allow-empty
+
+      - name: Push to Gitee
+        if: ${{ secrets.GITEE_TOKEN != '' && secrets.GITEE_REPO != '' }}
+        env:
+          TOKEN: ${{ secrets.GITEE_TOKEN }}
+          REPO: ${{ secrets.GITEE_REPO }}
+        run: |
+          git remote add gitee "https://oauth2:${TOKEN}@gitee.com/${REPO}.git"
+          # push HEAD (safe README) to main; also push tags
+          git push gitee HEAD:refs/heads/main --force
+          git push gitee --tags --force
+          git remote remove gitee
+
+      - name: Push to GitCode
+        if: ${{ secrets.GITCODE_TOKEN != '' && secrets.GITCODE_REPO != '' }}
+        env:
+          TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          REPO: ${{ secrets.GITCODE_REPO }}
+        run: |
+          git remote add gitcode "https://oauth2:${TOKEN}@gitcode.com/${REPO}.git"
+          git push gitcode HEAD:refs/heads/main --force
+          git push gitcode --tags --force
+          git remote remove gitcode
+
+      - name: Push to CNB
+        if: ${{ secrets.CNB_TOKEN != '' && secrets.CNB_REPO != '' }}
+        env:
+          TOKEN: ${{ secrets.CNB_TOKEN }}
+          REPO: ${{ secrets.CNB_REPO }}
+        run: |
+          git remote add cnb "https://oauth2:${TOKEN}@cnb.cool/${REPO}.git"
+          git push cnb HEAD:refs/heads/main --force
+          git push cnb --tags --force
+          git remote remove cnb
+
+      - name: Restore original README
+        if: always()
+        run: |
+          cp /tmp/README.github.md README.md

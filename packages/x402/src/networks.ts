@@ -96,6 +96,35 @@ export const BASE_SEPOLIA: NetworkConfig = {
   kind: "testnet", label: "Base Sepolia", explorerBase: "https://sepolia.basescan.org",
 };
 
+/**
+ * QDay Aevum testnet (chain ID 44005). Every value below was checked against the chain on 2026-11-10, not copied from a doc:
+ * - `eth_chainId` answers `0xabe5` (44005) on https://rpc-test.qday.info.
+ * - tUSD8 is a transparent proxy; its implementation (0xd6be…7597) carries EIP-3009 `transferWithAuthorization` /
+ *   `receiveWithAuthorization` / `authorizationState` and EIP-2612 `permit`, which is what the exact-EVM scheme needs.
+ * - `DOMAIN_SEPARATOR()` equals the EIP-712 domain `{name:"tUSD8", version:"2", chainId:44005, verifyingContract:tUSD8}`,
+ *   so the `extra.name`/`extra.version` this config quotes cannot silently drift from the token.
+ * - A settlement was replayed on an anvil fork of this chain: a signed `TransferWithAuthorization` moved 12.5 tUSD8 and
+ *   `authorizationState(nonce)` flipped to true.
+ * QDay publishes no x402 facilitator, so the default points at the self-hosted one in `apps/qday-facilitator`
+ * (verify + a relayer paying tQDAY gas). Testnet only: tUSD8 has no value.
+ */
+export const QDAY_TESTNET: NetworkConfig = {
+  caip2: env("MONEYSWITCH_QDAY_TESTNET_CAIP2", "eip155:44005"),
+  rpcUrl: env("MONEYSWITCH_QDAY_TESTNET_RPC_URL", "https://rpc-test.qday.info"),
+  // The field is named usdcAddress because every other chain settles in USDC; on QDay the x402 asset is tUSD8.
+  usdcAddress: env(
+    "MONEYSWITCH_QDAY_TESTNET_TUSD8_ADDRESS",
+    "0x456569838f1d43009A91ebA4263147Afd7233483"
+  ),
+  usdcDomainName: env("MONEYSWITCH_QDAY_TESTNET_TUSD8_NAME", "tUSD8"),
+  usdcDomainVersion: env("MONEYSWITCH_QDAY_TESTNET_TUSD8_VERSION", "2"),
+  usdcDecimals: Number(env("MONEYSWITCH_QDAY_TESTNET_TUSD8_DECIMALS", "6")),
+  facilitatorUrl: env("MONEYSWITCH_QDAY_FACILITATOR_URL", "http://127.0.0.1:4098"),
+  kind: "testnet",
+  label: env("MONEYSWITCH_QDAY_TESTNET_LABEL", "QDay Aevum testnet"),
+  explorerBase: env("MONEYSWITCH_QDAY_TESTNET_EXPLORER_BASE", "https://explorer-test.qday.info"),
+};
+
 /** Official x402 CAIP-2 identifier and Circle's Devnet mint, verified 2026-10-11. Testnet only: a Devnet key pays test USDC that has no value. */
 export const SOLANA_DEVNET: NetworkConfig = {
   family: "svm", caip2: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
@@ -133,7 +162,7 @@ export function explorerUrl(network: NetworkConfig, type: "address" | "tx", valu
 }
 
 export const NETWORKS: Readonly<Record<string, NetworkConfig>> = Object.freeze(
-  Object.fromEntries([TESTNET, MAINNET, BASE, BASE_SEPOLIA, SOLANA_DEVNET, SOLANA_MAINNET].map((n) => [n.caip2, n]))
+  Object.fromEntries([TESTNET, MAINNET, BASE, BASE_SEPOLIA, QDAY_TESTNET, SOLANA_DEVNET, SOLANA_MAINNET].map((n) => [n.caip2, n]))
 );
 
 export function getNetwork(caip2: string): NetworkConfig {

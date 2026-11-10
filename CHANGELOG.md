@@ -3,7 +3,30 @@
 All notable changes to MoneySwitch are documented here. Dates are the day
 each spec increment was implemented, per `SPEC.md` (earlier specs: `docs/archive/`).
 
-## Unreleased — 2026-10-25
+## Unreleased — 2026-11-10
+
+- **QDay Aevum testnet (chain 44005) is a supported payment network, with tUSD8 as the x402 asset.** Every fact in the new
+  `QDAY_TESTNET` config was read from the chain, not copied from the docs: `eth_chainId` = 44005, tUSD8 at
+  `0x4565…3483` answers `name()`/`decimals()`, its implementation carries EIP-3009 `transferWithAuthorization` /
+  `authorizationState`, and the EIP-712 domain the config quotes (`tUSD8`/`2`) hashes to the token's own
+  `DOMAIN_SEPARATOR()` — pinned by `packages/x402/test/qday-network.test.ts`, so a config edit can never silently produce
+  signatures the token rejects. QDay publishes no x402 facilitator (its payment SDK is announced for Q1 2027), so this
+  release also adds one.
+- **`apps/qday-facilitator`: a real, self-hosted x402 facilitator for QDay.** It verifies EIP-3009 signatures against the
+  token's own domain (if the seller quotes a wrong `extra.name`/`version`, the payer is not blamed), refuses replayed
+  authorizations by reading `authorizationState`, treats an unreachable RPC as "unknown" rather than "invalid", and settles
+  by broadcasting from a tQDAY-funded relayer — deployments are idempotent per nonce. When a quote's `payTo` is a
+  `QDayPayReceiver` contract it calls `pay(orderId, …)` instead of a bare token transfer, so the transfer, the merchant
+  payout and the order record are one transaction. `GET /health` reports the relayer address and its gas balance.
+- **`contracts/` holds the receiver contract** (`QDayPayReceiver`): a tUSD8 payee that pulls an authorized EIP-3009
+  payment, forwards it to its beneficiary and records the order id atomically, with a Foundry test suite and a fork
+  end-to-end script. `apps/demo-seller` gains `DEMO_SELLER_NETWORK`, so the same seller can quote QDay/tUSD8 instead of
+  Monad/USDC.
+- Verification is layered: offline unit tests (config facts + 12 facilitator refusals), an anvil fork of the real chain
+  running the whole loop without a faucet (`packages/x402/scripts/qday-x402-fork.mjs`), the contract suite on a fork, and a
+  live testnet run whose preflight names exactly which faucet claim is missing
+  (`packages/x402/scripts/qday-live-payment.mjs`). Notes, evidence and the human-only steps: `docs/qday/`.
+
 
 - **Solana mainnet is available as an explicit opt-in, next to Solana Devnet.** The same exact-SVM path now supports two clusters: Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`, test USDC) and mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`, real USDC — enabled only by listing it in `MONEYSWITCH_NETWORKS`, like every other mainnet). Both use the wallet's one derived Ed25519 address, with a separate USDC balance and token account per cluster; a mainnet key still cannot pay Devnet and a testnet key cannot pay mainnet. Explorer links now follow the cluster (`?cluster=devnet` only for Devnet; mainnet is the explorer's default) on the wallet, approvals and bills pages. A read-only probe of the public mainnet RPC verified the genesis hash and Circle's USDC mint (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, 82 bytes, owner Tokenkeg, 6 decimals). SDK, policy, wallet, approval-screen and reconciliation tests cover both clusters, and a live verification on 2026-10-25 settled a real `0.005` USDC mainnet payment through the human-approval flow plus a `0.01` test-USDC Devnet payment on the project's US deployment (`docs/updates/2026-10-25-solana-live-payments.md`). No default changes.
 

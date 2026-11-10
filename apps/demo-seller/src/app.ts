@@ -4,7 +4,7 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { paymentMiddleware } from "@x402/express";
 import type { RoutesConfig } from "@x402/core/server";
-import { TESTNET } from "@moneyswitch/x402";
+import { TESTNET, type NetworkConfig } from "@moneyswitch/x402";
 import { parseUsdcToMicros } from "@moneyswitch/core";
 
 export interface DemoSellerOptions {
@@ -12,6 +12,11 @@ export interface DemoSellerOptions {
   payTo: string;
   /** x402 facilitator (the offline mock-facilitator in tests). */
   facilitatorUrl?: string;
+  /**
+   * Chain the seller quotes. Defaults to Monad testnet (hard-coded here since before multiple testnets existed);
+   * `DEMO_SELLER_NETWORK=eip155:44005` switches it to QDay Aevum and quotes tUSD8 instead of USDC.
+   */
+  network?: NetworkConfig;
   /** Registers test-only routes (GET /always-rejected). Off unless DEMO_SELLER_TEST_ROUTES=1 — e2e tests only. */
   testRoutes?: boolean;
 }
@@ -23,7 +28,8 @@ export interface DemoSellerOptions {
  */
 export function createDemoSellerApp(opts: DemoSellerOptions): express.Express {
   const PAY_TO = opts.payTo;
-  const FACILITATOR_URL = opts.facilitatorUrl || TESTNET.facilitatorUrl;
+  const NETWORK = opts.network ?? TESTNET;
+  const FACILITATOR_URL = opts.facilitatorUrl || NETWORK.facilitatorUrl;
 
   const scheme = new ExactEvmScheme();
   // Testnet USDC is not in the SDK's default asset table (SPEC §1 / PR #3570
@@ -33,33 +39,33 @@ export function createDemoSellerApp(opts: DemoSellerOptions): express.Express {
   scheme.registerMoneyParser(async (amount) => {
     return {
       amount: parseUsdcToMicros(String(amount)).toString(),
-      asset: TESTNET.usdcAddress,
-      extra: { name: TESTNET.usdcDomainName, version: TESTNET.usdcDomainVersion },
+      asset: NETWORK.usdcAddress,
+      extra: { name: NETWORK.usdcDomainName, version: NETWORK.usdcDomainVersion },
     };
   });
 
   const facilitatorClient = new HTTPFacilitatorClient({ url: FACILITATOR_URL });
   const resourceServer = new x402ResourceServer(facilitatorClient).register(
-    TESTNET.caip2 as `${string}:${string}`,
+    NETWORK.caip2 as `${string}:${string}`,
     scheme
   );
 
   const routes: RoutesConfig = {
     "GET /premium-report": {
-      accepts: { scheme: "exact", payTo: PAY_TO, price: "0.01", network: TESTNET.caip2 as `${string}:${string}` },
+      accepts: { scheme: "exact", payTo: PAY_TO, price: "0.01", network: NETWORK.caip2 as `${string}:${string}` },
       description: "Premium report — normal payment",
     },
     "GET /deep-report": {
-      accepts: { scheme: "exact", payTo: PAY_TO, price: "0.15", network: TESTNET.caip2 as `${string}:${string}` },
+      accepts: { scheme: "exact", payTo: PAY_TO, price: "0.15", network: NETWORK.caip2 as `${string}:${string}` },
       description: "Deep report — priced above a typical approval_threshold to trigger APPROVAL_REQUIRED",
     },
     "GET /greedy": {
-      accepts: { scheme: "exact", payTo: PAY_TO, price: "5.00", network: TESTNET.caip2 as `${string}:${string}` },
+      accepts: { scheme: "exact", payTo: PAY_TO, price: "5.00", network: NETWORK.caip2 as `${string}:${string}` },
       description: "Greedy endpoint — priced above a typical per_request_limit",
     },
     // A priced POST with a JSON body (the approval flow hashes the request body, so tests need one).
     "POST /echo": {
-      accepts: { scheme: "exact", payTo: PAY_TO, price: "0.01", network: TESTNET.caip2 as `${string}:${string}` },
+      accepts: { scheme: "exact", payTo: PAY_TO, price: "0.01", network: NETWORK.caip2 as `${string}:${string}` },
       description: "Echo — 0.01 USDC per call, returns the JSON body it was sent",
     },
     // v0.5.2 test-only: amount "13" (0.000013 USDC) is a sentinel the
@@ -71,7 +77,7 @@ export function createDemoSellerApp(opts: DemoSellerOptions): express.Express {
     ...(opts.testRoutes
       ? {
           "GET /always-rejected": {
-            accepts: { scheme: "exact" as const, payTo: PAY_TO, price: "0.000013", network: TESTNET.caip2 as `${string}:${string}` },
+            accepts: { scheme: "exact" as const, payTo: PAY_TO, price: "0.000013", network: NETWORK.caip2 as `${string}:${string}` },
             description: "Test-only: facilitator /verify always rejects this payment (400 insufficient_funds)",
           },
         }

@@ -12,6 +12,29 @@ Your agents run across laptops, desktops and cloud servers. Give each one a **Mo
 - **Human control:** payments at or above a configured approval threshold wait for approval; hard spending limits still apply.
 - **Traceable payments:** per-key bills, payment outcomes and transaction links for compatible x402 services, using USDC on Monad or Base.
 
+## QDay Aevum testnet — paying an API in tUSD8 (Aevum Builder Challenge #1)
+
+QDay Aevum (`eip155:44005`) is a supported network, settling in **tUSD8**. QDay publishes no x402 facilitator, so this
+repo ships one (`apps/qday-facilitator`) plus the receiving contract the settlement runs through
+(`contracts/src/QDayPayReceiver.sol`). Live on the testnet:
+
+- Receiver contract: [`0xb4ef0d4028770f9851051f56c0d109864f2ec83c`](https://explorer-test.qday.info/address/0xb4ef0d4028770f9851051f56c0d109864f2ec83c)
+- A payment settled through it: [`0x7d606c…27bed`](https://explorer-test.qday.info/tx/0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed)
+- The same money path through the product (`/v1/fetch`): [`0x51f599…0052`](https://explorer-test.qday.info/tx/0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052)
+- A product-level payment from the **persistent** MoneySwitch wallet, with the dashboard showing that very transaction:
+  [`0xee39a7…46cc`](https://explorer-test.qday.info/tx/0xee39a716c29c14290ec064968d7e2e76e012de45ac542bae783945b0cba946cc)
+  (`docs/qday/media/dashboard-*-live.png`, 35 s video `docs/qday/media/demo-qday-final.mp4`)
+
+```bash
+pnpm install && pnpm build                       # then, with a funded QDay testnet wallet:
+bash packages/x402/scripts/qday-run-all.sh       # deploy → pay → screenshot → protocol demo video
+bash packages/x402/scripts/qday-ui-shots.sh      # product pays through /v1/fetch → dashboard screenshots (real testnet)
+node packages/x402/scripts/qday-x402-fork.mjs    # or the whole loop offline on an anvil fork of the real chain
+```
+
+On-chain facts, the four test layers, the two human-only faucet steps and the evidence ledger: [`docs/qday/`](docs/qday/README.md).
+The submission write-up (problem, architecture, flows, tech, judging-criteria map): [`docs/qday/submission.md`](docs/qday/submission.md).
+
 ## Watch it work
 
 Click either preview to watch in your browser. No sign-in is needed.
@@ -114,7 +137,12 @@ When the instance enables Monad testnet (a mainnet enabled next to it does not m
 
 ## Networks and payment outcomes
 
-Monad testnet (`eip155:10143`), Base Sepolia (`eip155:84532`), Solana Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`), Monad mainnet (`eip155:143`), Base mainnet (`eip155:8453`), Solana mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own USDC. No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK.
+Monad testnet (`eip155:10143`), Base Sepolia (`eip155:84532`), QDay Aevum testnet (`eip155:44005`, tUSD8), Solana Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`), Monad mainnet (`eip155:143`), Base mainnet (`eip155:8453`), Solana mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own stablecoin (QDay settles in tUSD8). No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK. Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own USDC. No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK.
+
+QDay Aevum publishes no x402 facilitator of its own, so paying there needs the self-hosted one in this repo
+(`apps/qday-facilitator`, default `MONEYSWITCH_QDAY_FACILITATOR_URL=http://127.0.0.1:4098`); it verifies the tUSD8
+EIP-3009 signature and settles it from a relayer that holds tQDAY for gas. Facts, layered tests and the faucet steps that
+need a human: [docs/qday/](docs/qday/README.md).
 
 To enable Solana Devnet alongside the existing testnets:
 

@@ -97,6 +97,28 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
+  apps/qday-facilitator:
+    dependencies:
+      '@moneyswitch/x402':
+        specifier: workspace:*
+        version: link:../../packages/x402
+      fastify:
+        specifier: 5.12.5
+        version: 5.12.5
+      viem:
+        specifier: 2.56.9
+        version: 2.56.9(typescript@5.7.3)(zod@3.25.76)
+    devDependencies:
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 5.0.2
+        version: 5.0.2(@types/node@26.6.2)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(tsx@4.23.15))
+
   apps/qwen-agent:
     dependencies:
       openai:

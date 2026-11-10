@@ -23,8 +23,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter @moneyswitch/skill build && pnpm --filter @moneyswitch/net build && pnpm --filter @moneyswitch/db build && pnpm --filter @moneyswitch/core build && pnpm --filter @moneyswitch/wallet build && pnpm --filter @moneyswitch/x402 build && pnpm --filter @moneyswitch/mock-facilitator build && pnpm --filter @moneyswitch/demo-seller build && pnpm --filter @moneyswitch/dashboard build && pnpm --filter @moneyswitch/server build && pnpm --filter @moneyswitch/qwen-agent build && pnpm --filter moneyswitch-server build",
-    "test": "pnpm --filter @moneyswitch/skill test && pnpm --filter @moneyswitch/dashboard test && pnpm --filter @moneyswitch/net test && pnpm --filter @moneyswitch/db test && pnpm --filter @moneyswitch/core test && pnpm --filter @moneyswitch/wallet test && pnpm --filter @moneyswitch/x402 test && pnpm --filter @moneyswitch/mock-facilitator test && pnpm --filter @moneyswitch/demo-seller test && pnpm --filter @moneyswitch/server test && pnpm --filter @moneyswitch/qwen-agent test && pnpm --filter moneyswitch-server test",
+    "build": "pnpm --filter @moneyswitch/skill build && pnpm --filter @moneyswitch/net build && pnpm --filter @moneyswitch/db build && pnpm --filter @moneyswitch/core build && pnpm --filter @moneyswitch/wallet build && pnpm --filter @moneyswitch/x402 build && pnpm --filter @moneyswitch/mock-facilitator build && pnpm --filter @moneyswitch/demo-seller build && pnpm --filter @moneyswitch/qday-facilitator build && pnpm --filter @moneyswitch/dashboard build && pnpm --filter @moneyswitch/server build && pnpm --filter @moneyswitch/qwen-agent build && pnpm --filter moneyswitch-server build",
+    "test": "pnpm --filter @moneyswitch/skill test && pnpm --filter @moneyswitch/dashboard test && pnpm --filter @moneyswitch/net test && pnpm --filter @moneyswitch/db test && pnpm --filter @moneyswitch/core test && pnpm --filter @moneyswitch/wallet test && pnpm --filter @moneyswitch/x402 test && pnpm --filter @moneyswitch/mock-facilitator test && pnpm --filter @moneyswitch/demo-seller test && pnpm --filter @moneyswitch/qday-facilitator test && pnpm --filter @moneyswitch/server test && pnpm --filter @moneyswitch/qwen-agent test && pnpm --filter moneyswitch-server test",
     "test:e2e": "pnpm --filter @moneyswitch/server test:e2e && pnpm --filter moneyswitch-server test:e2e",
     "test:testnet": "pnpm --filter @moneyswitch/x402 test:testnet",
     "test:incident": "pnpm --filter @moneyswitch/x402 test:incident",
@@ -33,7 +33,10 @@
     "demo:testnet": "node scripts/demo-testnet.mjs",
     "admin:reset-token": "node scripts/admin-reset-token.mjs",
     "nansen:mainnet": "node scripts/nansen-mainnet.mjs",
-    "agent:qwen": "node apps/qwen-agent/dist/cli.js"
+    "agent:qwen": "node apps/qwen-agent/dist/cli.js",
+    "qday:fork": "node packages/x402/scripts/qday-x402-fork.mjs",
+    "qday:live": "node packages/x402/scripts/qday-live-payment.mjs",
+    "qday:facilitator": "node apps/qday-facilitator/dist/index.js"
   },
   "devDependencies": {
     "@moneyswitch/core": "workspace:*",
