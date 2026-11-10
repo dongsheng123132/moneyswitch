@@ -79,6 +79,19 @@ on-chain       : block 2795285, status success, logs 2
 ✔ L1 PASS
 ```
 
+## 3.4 产品界面（dashboard）怎么截图
+
+产品自带 WebUI（`apps/dashboard`，就是 Monad/Solana 演示用的那个，官网 <https://moneyswitch.dev> 是 `site/` 里的静态站）。
+QDay 下的界面证据用 fork 跑，不花测试网的钱：
+
+```bash
+bash packages/x402/scripts/qday-fork-ui-shots.sh   # → docs/qday/media/dashboard-{wallet,keys,bills}.png
+```
+
+它起 anvil fork → 部署收款合约 → 用 fork 上的真实大户给 MoneySwitch 钱包打 50 tUSD8 → 发一把带额度的 Key →
+真正付一笔 0.01 tUSD8 → 用 DevTools Protocol 在**同一个标签页**里截图（dashboard 的 admin token 存在
+`sessionStorage`，每次新开 chrome 的 `--screenshot` 都会掉回登录页）。
+
 ## 3.5 demo 视频怎么产出
 
 不需要录屏权限：`qday-capture-fork.sh` 把一次真实运行捕获成文本（`#> ` 行是命令），`render-demo-video.py` 渲染成 MP4。
