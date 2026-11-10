@@ -27,9 +27,10 @@ QDay：
 | 网络接入（含 domain 与链上 `DOMAIN_SEPARATOR` 的回归测试） | `packages/x402/src/networks.ts`、`packages/x402/test/qday-network.test.ts` | ✅ |
 | 自建 facilitator（真结算） | `apps/qday-facilitator`（12 条离线用例） | ✅ |
 | 收款合约 + Foundry 测试 + fork e2e | `contracts/`（28/28 用例，fork e2e 两次通过） | ✅ |
+| **真测试网合约** | `0xb4ef0d4028770f9851051f56c0d109864f2ec83c`（tx `0x5b3e4bea…16b9`，block 2797472） | ✅ 2026-11-10 已部署 |
 | 一条命令跑通的脚本（fork，不需要领水） | `packages/x402/scripts/qday-x402-fork.mjs` | ✅ L1 PASS |
 | 真测试网脚本（含领水 preflight） | `packages/x402/scripts/qday-live-payment.mjs` | 待领水 |
-| 真网 tx hash | — | 待领水后产出 |
+| 真网 tx hash | — | 待收到 tUSD8 后产出 |
 | demo 视频（60–90s） | `docs/qday/media/demo-l1-fork.mp4`（L1 草稿，21.5s） | 🟡 待真网 tx 后出正式版 |
 | 说明文档（事实/测试分层/人要做的事） | `docs/qday/` | ✅ |
 
