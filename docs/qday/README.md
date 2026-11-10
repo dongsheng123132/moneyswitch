@@ -53,7 +53,22 @@ AI / 脚本 ──(1) GET 收费接口──▶ demo-seller（@x402/express，�
 | L2 合约 | `cd contracts && ~/.foundry/bin/forge test -vv`、`bash contracts/script/e2e-fork.sh` | 收款合约语义 + 在 fork 上部署并使用 | anvil |
 | L3 真测试网 | `node packages/x402/scripts/qday-live-payment.mjs` | 真链上的一笔 tUSD8 付款 + 浏览器可查的 tx | **faucet 领水（要人操作）** |
 
-L1 的实测输出（2026-11-10）：
+合约层（`contracts/`）已独立验证：`forge test` **28/28 通过**；`bash contracts/script/e2e-fork.sh` 在 fork 上连跑两次都过
+（impersonate 真大户 → 转 0.01 tUSD8 给 payer → `cast` 签 EIP-3009 → 卖家账户代提交 `pay` → 商户 `0→10000`、
+payer `10000→0`、合约 `0→0`、事件 topic1 == orderId；同 orderId 换新 nonce 重放被 `OrderAlreadyPaid` 拦住）。
+
+把收款合约接进 x402 全链路也实测过（fork，合约 `0xDc64…6C9`）：
+
+```
+receipt.extra  : {"receiver":"0xDc64…6C9","orderId":"0x6e38…6b90", …}
+payer delta    : 0.01 tUSD8 paid
+merchant delta : 0.01 tUSD8
+on-chain       : block 2796034, status success, logs 4
+receiver       : 0xDc64…6C9 (balance 0, PaymentReceived emitted)
+✔ L1 PASS
+```
+
+L1 直付（不经合约）的实测输出（2026-11-10）：
 
 ```
 ✔ HTTP 200 {"report":"premium content","price":"0.01"}

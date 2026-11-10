@@ -1,0 +1,19 @@
+[profile.default]
+solc = "0.8.24"
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+fs_permissions = [{ access = "read", path = "./" }]
+
+[rpc_endpoints]
+qday = "https://rpc-test.qday.info"
+localhost = "http://127.0.0.1:8547"
+
+[fmt]
+line_length = 110
+tab_width = 4

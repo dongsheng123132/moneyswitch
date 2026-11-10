@@ -42,6 +42,8 @@ const QDAY = {
 };
 const TUSD8 = getAddress("0x456569838f1d43009A91ebA4263147Afd7233483");
 const REAL_HOLDER = getAddress("0x94ef5db164e7bbf4149e298c5588c035ea8e9c05"); // top tUSD8 holder on the real chain
+// Optional: pay THROUGH the QDayPayReceiver contract (deploy it on this fork first, see contracts/README.md).
+const RECEIVER = process.env.QDAY_RECEIVER ? getAddress(process.env.QDAY_RECEIVER) : null;
 
 // The standard anvil accounts. Test keys only; they exist because anvil prints them, never in a deployed system.
 const ANVIL_KEYS = {
@@ -160,16 +162,20 @@ async function main() {
     QDAY_FACILITATOR_PORT: String(PORT.facilitator),
     QDAY_RPC_URL: RPC,
     QDAY_RELAYER_KEY: ANVIL_KEYS.relayer,
+    ...(RECEIVER ? { QDAY_RECEIVER_ADDRESS: RECEIVER } : {}),
   });
   await waitFor("facilitator", `http://127.0.0.1:${PORT.facilitator}/health`);
   const health = await (await fetch(`http://127.0.0.1:${PORT.facilitator}/health`)).json();
   line(`✔ facilitator up: settling=${health.settling}, relayer tQDAY=${health.relayerTQDAY}`);
 
-  // 3. A seller that quotes tUSD8 on QDay (the same demo-seller, one env var away from Monad).
-  line(`▶ starting demo-seller on :${PORT.seller} charging 0.01 tUSD8 to ${merchant.address}`);
+  // 3. A seller that quotes tUSD8 on QDay (the same demo-seller, one env var away from Monad). With QDAY_RECEIVER set,
+  // the quote's payTo is the receiver contract, so the facilitator settles through pay() — one atomic transaction that
+  // moves the money, pays the merchant and records the order.
+  const payTo = RECEIVER ?? merchant.address;
+  line(`▶ starting demo-seller on :${PORT.seller} charging 0.01 tUSD8 to ${payTo}${RECEIVER ? " (QDayPayReceiver)" : ""}`);
   spawnChild("seller", process.execPath, ["apps/demo-seller/dist/index.js"], {
     DEMO_SELLER_PORT: String(PORT.seller),
-    DEMO_SELLER_PAY_TO: merchant.address,
+    DEMO_SELLER_PAY_TO: payTo,
     DEMO_SELLER_NETWORK: NETWORK,
     DEMO_SELLER_FACILITATOR_URL: `http://127.0.0.1:${PORT.facilitator}`,
   });
@@ -205,6 +211,9 @@ async function main() {
   };
   const paid = after.payer - before.payer;
   const received = after.merchant - before.merchant;
+  const receiverBalance = RECEIVER
+    ? await publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [RECEIVER] })
+    : null;
   line("");
   line("─── result ───────────────────────────────────────────────");
   line(`receipt        : ${receipt ? JSON.stringify(receipt) : "(seller sent no PAYMENT-RESPONSE header)"}`);
@@ -218,6 +227,14 @@ async function main() {
   const onchain = await publicClient.getTransactionReceipt({ hash: tx });
   line(`settle tx      : ${tx}`);
   line(`on-chain       : block ${onchain.blockNumber}, status ${onchain.status}, logs ${onchain.logs.length}`);
+  if (RECEIVER) {
+    if (receipt?.extra?.receiver !== RECEIVER) throw new Error(`receipt does not name the receiver: ${JSON.stringify(receipt?.extra)}`);
+    if (receiverBalance !== 0n) throw new Error(`receiver kept ${receiverBalance} atomic tUSD8 — funds stranded in the contract`);
+    // The receipt must come from the contract's own PaymentReceived event, not from the token's Transfer.
+    const fromReceiver = onchain.logs.some((l) => l.address.toLowerCase() === RECEIVER.toLowerCase());
+    if (!fromReceiver) throw new Error(`no log emitted by the receiver in ${tx}`);
+    line(`receiver       : ${RECEIVER} (orderId ${receipt.extra.orderId}, balance 0, PaymentReceived emitted)`);
+  }
   line("✔ L1 PASS: a tUSD8 x402 payment settled through the self-hosted QDay facilitator");
   line("──────────────────────────────────────────────────────────");
 }
