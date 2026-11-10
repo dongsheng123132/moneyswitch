@@ -35,6 +35,7 @@ cast receipt 0x5b3e4bea2a6b2119a169cd881a294728b6dd5578eea6e0f02653d98c329e16b9 
 | 1 | 直接经 `QDayPayReceiver.pay()` 收款 | `0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed` | 2797726 | status 1，4 条日志 |
 | 2 | MoneySwitch `/v1/fetch` 产品级付款（第一次） | `0xe0f27c3f4a712975f17ac53910b7a9eb6c0f2013542577652fb1d6c28f664411` | 2797862 | status 1，4 条日志 |
 | 3 | MoneySwitch `/v1/fetch` 产品级付款（验收跑） | `0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052` | 2797911 | status 1，4 条日志，key history `status=settled` |
+| 4 | 产品级 demo（录制用） | `0x29b38080d09448a46475e1bd8c9e28994572492f11e4c05facb0d151da5ae17f` | — | status 1，key history `status=settled`，`amount=0.01` |
 
 每笔交易的四条日志顺序固定：tUSD8 `AuthorizationUsed` → tUSD8 Transfer(付款方→合约) →
 tUSD8 Transfer(合约→beneficiary) → `QDayPayReceiver.PaymentReceived`。**合约余额恒为 0**（钱不滞留），
@@ -50,7 +51,7 @@ cast logs --address 0xb4ef0d4028770f9851051f56c0d109864f2ec83c --from-block 2797
 ```
 
 浏览器：<https://explorer-test.qday.info/tx/0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052>
-（截图：`docs/qday/media/live-tx.png`；视频：`docs/qday/media/demo-qday-live.mp4`）
+（截图：`docs/qday/media/live-tx.png`；视频：`docs/qday/media/demo-qday-final.mp4` —— 36.8 秒，含产品级 + 合约级两幕 + explorer 截图）
 
 产品级那两笔是**真的走了 MoneySwitch**：临时实例 → 生成钱包 → 发一把 per-request 上限 0.01 的 MoneyKey →
 `POST /v1/fetch` → 402 → 签名 → 结算 → `/v1/history` 出现 `status=settled` + tx hash，

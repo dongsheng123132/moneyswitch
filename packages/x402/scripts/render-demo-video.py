@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -44,13 +45,17 @@ DIM = (139, 148, 158)
 WHITE = (255, 255, 255)
 
 FONT_PATH = "/System/Library/Fonts/Menlo.ttc"
+# Menlo has no CJK glyphs (they render as tofu); Hiragino Sans GB covers them, so text picks its font by content.
+CJK_FONT_PATH = "/System/Library/Fonts/Hiragino Sans GB.ttc"
+CJK = re.compile(r"[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uff00-\uffef]")
 
 
-def font(size: int) -> ImageFont.FreeTypeFont:
-    for path in (FONT_PATH, "/System/Library/Fonts/SFNSMono.ttf"):
+def font(size: int, text: str = "") -> ImageFont.FreeTypeFont:
+    wants_cjk = bool(CJK.search(text))
+    for path in ((CJK_FONT_PATH,) if wants_cjk else ()) + (FONT_PATH, "/System/Library/Fonts/SFNSMono.ttf"):
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
-    raise SystemExit("no monospace font found (looked for Menlo/SF Mono)")
+    raise SystemExit("no font found (looked for Menlo / SF Mono / Hiragino Sans GB)")
 
 
 def _chunks(draw: ImageDraw.ImageDraw, word: str, f: ImageFont.FreeTypeFont, width: int) -> list[str]:
@@ -112,17 +117,18 @@ def terminal_frame(lines: list[str], cursor: bool, f: ImageFont.FreeTypeFont, fb
     d.text((100, 8), "MoneySwitch · QDay Aevum testnet", font=f, fill=DIM)
 
     # Wrap everything first, then keep the newest lines that fit — a terminal scrolls, it never drops the tail.
-    rendered: list[tuple[str, Style, bool]] = []
+    rendered: list[tuple[str, Style, ImageFont.FreeTypeFont]] = []
     for line in lines:
         style = style_for(line)
-        for piece in wrap(d, line, fb if style.bold else f, W - 2 * MARGIN):
-            rendered.append((piece, style, style.bold))
+        chosen = font(19, line)  # font() already switches to the CJK face when the text needs it
+        for piece in wrap(d, line, chosen, W - 2 * MARGIN):
+            rendered.append((piece, style, chosen))
     capacity = (H - 56 - MARGIN) // LINE_H
     visible = rendered[-capacity:]
 
     y = 56
-    for piece, style, bold in visible:
-        d.text((MARGIN, y), piece, font=fb if bold else f, fill=style.color)
+    for piece, style, chosen in visible:
+        d.text((MARGIN, y), piece, font=chosen, fill=style.color)
         y += LINE_H
     if cursor:
         d.rectangle([MARGIN, y + 2, MARGIN + 11, y + LINE_H - 4], fill=PROMPT)
@@ -132,7 +138,7 @@ def terminal_frame(lines: list[str], cursor: bool, f: ImageFont.FreeTypeFont, fb
 def card(title: str, subtitle: str, footer: str = "") -> Image.Image:
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
-    ft, fs, ff = font(40), font(21), font(16)
+    ft, fs, ff = font(40, title), font(21, subtitle), font(16, footer)
     y = H // 2 - 90
     for line in wrap(d, title, ft, W - 2 * MARGIN):
         d.text((MARGIN, y), line, font=ft, fill=WHITE)
