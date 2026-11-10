@@ -67,6 +67,18 @@ QDAY_RECEIVER=$RECEIVER node packages/x402/scripts/qday-live-payment.mjs
 跑通的标准：`receipt.extra` 里带 `receiver` 与 `orderId`，商户 +0.01，合约余额为 0（钱没有滞留），
 浏览器里能看到 `PaymentReceived` 事件。
 
+## 血的教训：钱包数据目录必须持久
+
+第一次跑产品级 demo 时用了 `mktemp -d` 做 MoneySwitch 数据目录，跑完目录被删——**钱包私钥跟着没了，充进去的
+0.02 tUSD8 就永久锁死**（本次实测丢了两笔 0.02，测试网无价值但流程是错的）。现在两个脚本都改用持久目录
+`.data/qday-demo/moneyswitch`，并且**复用同一个钱包**、只在余额不足时才充：
+
+```bash
+# 当前这台持久钱包（也可以直接把 tUSD8 打进这个地址，省一次转账）
+cat .data/qday-demo/moneyswitch-wallet.json
+# {"address":"0x739af5E56DFC7549CCa9948000A7d2dE5E7B32DB", ...}
+```
+
 ## 第 3 步 录 demo（60–90 秒）
 
 一条命令能跑完全流程，录屏只需要录：终端打印（402 → 签名 → 结算）＋ 浏览器打开 tx 页。

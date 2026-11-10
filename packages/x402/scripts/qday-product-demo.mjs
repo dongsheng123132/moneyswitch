@@ -16,8 +16,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -114,8 +113,10 @@ async function main() {
     return;
   }
 
-  // 1. A throwaway MoneySwitch instance, so the demo never touches a real deployment.
-  const dataDir = mkdtempSync(join(tmpdir(), "moneyswitch-qday-"));
+  // 1. A MoneySwitch instance pointed at its own data dir. PERSISTENT on purpose: a temp dir takes the wallet key with
+  // it, and the tUSD8 topped up into that wallet is then unrecoverable (learned the hard way: 0.04 tUSD8 stranded).
+  const dataDir = process.env.QDAY_MS_DATA_DIR || `${REPO}/.data/qday-demo/moneyswitch`;
+  mkdirSync(dataDir, { recursive: true });
   say(`▶ MoneySwitch server on :${MS_PORT} (data dir ${dataDir})`);
   const server = start("server", ["apps/server/dist/index.js"], {
     MONEYSWITCH_DATA_DIR: dataDir,
@@ -134,11 +135,18 @@ async function main() {
   if (!adminToken) throw new Error("the server never printed an admin token");
   const admin = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
 
-  // 2. MoneySwitch's own wallet, then top it up with tUSD8 from the demo wallet.
-  const created = await jsonCall(`http://127.0.0.1:${MS_PORT}/v1/admin/wallet/create`, { method: "POST", headers: admin });
-  if (created.status !== 200) throw new Error(`wallet create failed: ${created.status} ${JSON.stringify(created.body)}`);
-  const walletAddress = getAddress(created.body.address);
-  say(`✔ MoneySwitch wallet: ${walletAddress}`);
+  // 2. MoneySwitch's own wallet (reused when the data dir already has one), then top it up with tUSD8.
+  const existing = await jsonCall(`http://127.0.0.1:${MS_PORT}/v1/admin/wallet`, { headers: admin });
+  let walletAddress;
+  if (existing.status === 200 && existing.body?.address) {
+    walletAddress = getAddress(existing.body.address);
+    say(`✔ reusing MoneySwitch wallet: ${walletAddress}`);
+  } else {
+    const created = await jsonCall(`http://127.0.0.1:${MS_PORT}/v1/admin/wallet/create`, { method: "POST", headers: admin });
+    if (created.status !== 200) throw new Error(`wallet create failed: ${created.status} ${JSON.stringify(created.body)}`);
+    walletAddress = getAddress(created.body.address);
+    say(`✔ MoneySwitch wallet: ${walletAddress} (data dir ${dataDir})`);
+  }
 
   const funderWallet = createWalletClient({ account: funder, chain: QDAY, transport: http(RPC) });
   const topUp = await funderWallet.writeContract({
