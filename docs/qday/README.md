@@ -79,6 +79,23 @@ on-chain       : block 2795285, status success, logs 2
 ✔ L1 PASS
 ```
 
+## 3.5 demo 视频怎么产出
+
+不需要录屏权限：`qday-capture-fork.sh` 把一次真实运行捕获成文本（`#> ` 行是命令），`render-demo-video.py` 渲染成 MP4。
+
+```bash
+bash packages/x402/scripts/qday-capture-fork.sh                 # → docs/qday/media/l1-fork-capture.txt
+python3 packages/x402/scripts/render-demo-video.py \
+  --input docs/qday/media/l1-fork-capture.txt \
+  --title "MoneySwitch × QDay Aevum — paying an API in tUSD8" \
+  --subtitle "L1: the whole x402 loop on an anvil fork of the real chain (no faucet)" \
+  --endcard "tUSD8 EIP-3009 settled · merchant +0.01 · receiver 0 · PaymentReceived" \
+  --out docs/qday/media/demo-l1-fork.mp4
+```
+
+现在的 `docs/qday/media/demo-l1-fork.mp4`（21.5 s）是 **L1（fork）版草稿**；真网跑通后把 L3 的捕获喂给同一命令，
+并加 `--still <浏览器 tx 页截图>` 就能出正式版（`chrome --headless --screenshot` 可截，无需人工录屏）。
+
 ## 4. 必须由人做的两件事
 
 1. **faucet 领水**（浏览器，30 秒）：

@@ -26,12 +26,18 @@ QDay：
 |---|---|---|
 | 网络接入（含 domain 与链上 `DOMAIN_SEPARATOR` 的回归测试） | `packages/x402/src/networks.ts`、`packages/x402/test/qday-network.test.ts` | ✅ |
 | 自建 facilitator（真结算） | `apps/qday-facilitator`（12 条离线用例） | ✅ |
-| 收款合约 + Foundry 测试 + fork e2e | `contracts/` | 进行中 |
+| 收款合约 + Foundry 测试 + fork e2e | `contracts/`（28/28 用例，fork e2e 两次通过） | ✅ |
 | 一条命令跑通的脚本（fork，不需要领水） | `packages/x402/scripts/qday-x402-fork.mjs` | ✅ L1 PASS |
 | 真测试网脚本（含领水 preflight） | `packages/x402/scripts/qday-live-payment.mjs` | 待领水 |
 | 真网 tx hash | — | 待领水后产出 |
-| demo 视频（60–90s） | — | 待真网跑通后录 |
+| demo 视频（60–90s） | `docs/qday/media/demo-l1-fork.mp4`（L1 草稿，21.5s） | 🟡 待真网 tx 后出正式版 |
 | 说明文档（事实/测试分层/人要做的事） | `docs/qday/` | ✅ |
+
+## 视频怎么产（不靠人工录屏）
+
+`bash packages/x402/scripts/qday-capture-fork.sh` 捕获真实运行 → `render-demo-video.py` 渲染 MP4（标题卡 + 终端逐行
+出现 + 结尾卡，可插入浏览器截图）。真网跑通后把 L3 的捕获喂给同一命令，并加 `--still <explorer tx 页截图>`
+（`chrome --headless --virtual-time-budget=12000 --screenshot=…` 已实测可截 QDay 浏览器页面）。
 
 ## 视频脚本（60–90 秒，待录）
 
