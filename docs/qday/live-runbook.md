@@ -20,6 +20,26 @@ cast call 0x456569838f1d43009A91ebA4263147Afd7233483 "balanceOf(address)(uint256
 cast balance 0x3252DE0a8104d70e4BB63e0C61109f1180e85EbD --rpc-url https://rpc-test.qday.info
 ```
 
+### faucet 的实际情况（2026-11-10 从页面配置读出来的）
+
+| tab | 怎么领 | 门槛 |
+|---|---|---|
+| **tQDAY** | 填地址 + Cloudflare Turnstile 人机验证，faucet 合约 `0x33d19Bde2e1798c13808f17BfBa1780b28e4bACC` 代发 | 5 tQDAY / 地址 / 24h；**要求该地址在以太坊主网持有 ETH/USDT/USDC 之一**（反女巫） |
+| **tUSD8** | Trellis 账号邮箱 + 8 位验证码登录，只能发到 Trellis 主钱包 | 1 tUSD8 / 24h；领完要从 Trellis 转到演示地址 |
+| Airdrop | 页面配置里 `NEXT_PUBLIC_AIRDROP_ENABLED=false`，**已关闭** | — |
+
+也就是说 tQDAY 只要地址 + 点一次人机验证；tUSD8 必须注册 Trellis。**如果 tQDAY 提示地址不合格**（主网持仓门槛），
+最省事的是让主办方直接打币（邮件草稿在会话里，一句话就能发）：0.05 tUSD8 + 少量 tQDAY 到演示地址。
+
+## 一条命令跑完全部（领水之后）
+
+```bash
+bash packages/x402/scripts/qday-run-all.sh
+```
+
+它做四件事：部署 `QDayPayReceiver` 到真网（已部署过就复用）→ 跑一笔真 tUSD8 支付 → headless Chrome 截真网 tx 页 →
+渲染 `docs/qday/media/demo-qday-live.mp4`（含终端过程 + 浏览器截图）。任何一步缺钱都会在 preflight 直接说清楚缺什么。
+
 ## 第 1 步 M1：真网直付（不需要合约）
 
 ```bash
