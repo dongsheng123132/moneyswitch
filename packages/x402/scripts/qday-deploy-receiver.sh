@@ -15,7 +15,7 @@ FORGE="${FORGE:-$HOME/.foundry/bin/forge}"
 
 [ -f "$WALLET" ] || { echo "missing $WALLET (see docs/qday/live-runbook.md)"; exit 2; }
 
-read -r RELAYER PRIVATE_KEY BENEFICIARY < <(python3 - "$WALLET" <<'PY'
+read -r RELAYER PRIVATE_KEY DEF_BENEFICIARY < <(python3 - "$WALLET" <<'PY'
 import json,sys
 w=json.load(open(sys.argv[1]))
 print(w["payerAndRelayer"]["address"], w["payerAndRelayer"]["privateKey"], w["merchant"]["address"])
@@ -30,6 +30,8 @@ if [ "$GAS" -eq 0 ]; then
   echo "no tQDAY: claim it at https://faucet.qday.info (tQDAY tab) for $RELAYER — gas cannot be paid by the facilitator here"
   exit 2
 fi
+
+BENEFICIARY="${QDAY_BENEFICIARY:-$DEF_BENEFICIARY}"
 
 cd "$REPO/contracts"
 PRIVATE_KEY="$PRIVATE_KEY" OWNER="$RELAYER" BENEFICIARY="$BENEFICIARY" \

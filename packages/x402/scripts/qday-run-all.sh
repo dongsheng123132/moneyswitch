@@ -21,6 +21,9 @@ say() { printf '%s\n' "$*"; }
 mkdir -p "$MEDIA"
 [ -f "$WALLET" ] || { say "missing $WALLET — see docs/qday/live-runbook.md"; exit 2; }
 
+# 0. where the money ends up: the generated merchant by default, or QDAY_BENEFICIARY=0x… if set
+if [ -n "${QDAY_BENEFICIARY:-}" ]; then say "merchant (beneficiary): ${QDAY_BENEFICIARY}"; fi
+
 # 1. deploy (idempotent: reuse the address we already deployed)
 if [ -f "$RECEIVER_FILE" ]; then
   RECEIVER="$(python3 -c "import json,sys;print(json.load(open('$RECEIVER_FILE'))['address'])")"
