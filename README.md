@@ -12,6 +12,25 @@ Your agents run across laptops, desktops and cloud servers. Give each one a **Mo
 - **Human control:** payments at or above a configured approval threshold wait for approval; hard spending limits still apply.
 - **Traceable payments:** per-key bills, payment outcomes and transaction links for compatible x402 services, using USDC on Monad or Base.
 
+## QDay Aevum testnet — paying an API in tUSD8 (Aevum Builder Challenge #1)
+
+QDay Aevum (`eip155:44005`) is a supported network, settling in **tUSD8**. QDay publishes no x402 facilitator, so this
+repo ships one (`apps/qday-facilitator`) plus the receiving contract the settlement runs through
+(`contracts/src/QDayPayReceiver.sol`). Live on the testnet:
+
+- Receiver contract: [`0xb4ef0d4028770f9851051f56c0d109864f2ec83c`](https://explorer-test.qday.info/address/0xb4ef0d4028770f9851051f56c0d109864f2ec83c)
+- A payment settled through it: [`0x7d606c…27bed`](https://explorer-test.qday.info/tx/0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed)
+- The same money path through the product (`/v1/fetch`): [`0x51f599…0052`](https://explorer-test.qday.info/tx/0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052)
+
+```bash
+pnpm install && pnpm build                       # then, with a funded QDay testnet wallet:
+bash packages/x402/scripts/qday-run-all.sh       # deploy → pay → screenshot → demo video
+node packages/x402/scripts/qday-x402-fork.mjs    # or the whole loop offline on an anvil fork of the real chain
+```
+
+On-chain facts, the four test layers, the two human-only faucet steps and the evidence ledger: [`docs/qday/`](docs/qday/README.md).
+The submission write-up (problem, architecture, flows, tech, judging-criteria map): [`docs/qday/submission.md`](docs/qday/submission.md).
+
 ## Watch it work
 
 Click either preview to watch in your browser. No sign-in is needed.
