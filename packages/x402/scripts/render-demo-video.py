@@ -15,6 +15,13 @@ Usage:
       --out docs/qday/media/demo-l1-fork.mp4 \
       [--still path/to/explorer.png --still-caption "explorer-test.qday.info/tx/0x…"]
 
+`--still` / `--still-caption` are repeatable PAIRS, shown in the order given, each held for `--still-hold` seconds
+(default 4). One still behaves exactly as before; a missing/unreadable still is warned about and skipped:
+
+  ... --still bills.png --still-caption "dashboard · bills" \
+      --still keys.png  --still-caption "dashboard · API keys" \
+      --still tx.png    --still-caption "explorer · the settlement tx"
+
 Lines starting with `#> ` are drawn as typed commands (green); lines containing `✔` are highlighted amber.
 """
 
@@ -25,6 +32,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -173,8 +181,21 @@ def main() -> None:
     ap.add_argument("--subtitle", default="")
     ap.add_argument("--endcard", default="")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--still", default="", help="optional screenshot inserted before the end card")
-    ap.add_argument("--still-caption", default="")
+    ap.add_argument(
+        "--still",
+        action="append",
+        default=None,
+        metavar="PATH",
+        help="screenshot inserted before the end card; repeat for several (paired with --still-caption)",
+    )
+    ap.add_argument(
+        "--still-caption",
+        action="append",
+        default=None,
+        metavar="TEXT",
+        help="caption for the preceding --still; repeat in the same order",
+    )
+    ap.add_argument("--still-hold", type=float, default=4.0, help="seconds each still is held")
     ap.add_argument("--line-hold", type=float, default=0.42, help="seconds each new line waits")
     args = ap.parse_args()
 
@@ -194,8 +215,22 @@ def main() -> None:
     for n in range(1, len(lines) + 1):
         emit(terminal_frame(lines[:n], cursor=n < len(lines), f=f, fb=fb), max(1, round(args.line_hold * FPS)))
     emit(terminal_frame(lines, cursor=False, f=f, fb=fb), FPS * 3)
-    if args.still:
-        emit(still(Path(args.still), args.still_caption or args.still), FPS * 4)
+    stills = args.still or []
+    captions = args.still_caption or []
+    still_frames = max(1, round(args.still_hold * FPS))
+    for i, raw in enumerate(stills):
+        path = Path(raw)
+        # A still is decoration: a missing file must never kill a render that already has real captured output.
+        if not path.is_file():
+            print(f"warning: skipping still (not found): {raw}", file=sys.stderr)
+            continue
+        caption = captions[i] if i < len(captions) and captions[i] else raw
+        try:
+            img = still(path, caption)
+        except Exception as exc:  # unreadable / not an image / truncated download
+            print(f"warning: skipping still {raw} ({exc})", file=sys.stderr)
+            continue
+        emit(img, still_frames)
     emit(card("Done", args.endcard or "every layer verified", "docs/qday/README.md"), FPS * 3)
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
