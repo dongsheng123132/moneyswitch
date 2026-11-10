@@ -9,6 +9,11 @@
  *   node packages/x402/scripts/qday-dashboard-shots.mjs --port 9223 --base http://127.0.0.1:4030 \
  *        --login 'http://127.0.0.1:4030/login#ms_setup_…' --out docs/qday/media
  *
+ * When the data directory is no longer on its first boot there is no one-time link any more (the server prints the admin
+ * token exactly once, ever), so pass the token in instead and let this script write it into sessionStorage:
+ *
+ *   ... --token ms_admin_… --suffix -live     # → docs/qday/media/dashboard-bills-live.png, …
+ *
  * Requires a Chrome started with `--remote-debugging-port=<port>` (the caller does that).
  */
 
@@ -28,6 +33,17 @@ const OUT = args.out ?? ".";
 const PAGES = (args.pages ?? "/wallet,/keys,/bills").split(",").map((p) => p.trim()).filter(Boolean);
 const WIDTH = Number(args.width ?? 1440);
 const HEIGHT = Number(args.height ?? 1000);
+// The one-time sign-in link only exists on the very first boot of a data directory. On every later boot the server prints
+// nothing, so the admin token has to be handed in (and written into sessionStorage by hand) instead.
+const TOKEN = args.token ?? "";
+// Appended to the file name, e.g. "-live", so screenshots of the real testnet don't overwrite the fork ones.
+const SUFFIX = args.suffix ?? "";
+// A CSS selector clicked on every page after it loads (e.g. ".bills-detail-button", so the bill's on-chain transaction
+// hash is visible in the screenshot instead of hidden behind "view details"). Pages without a match are untouched.
+const CLICK = args.click ?? "";
+// Scrolled to the centre after the click, so the part that expands below the fold lands inside the screenshot
+// (e.g. ".bills-detail-row" — the bill's transaction hash lives down there).
+const SCROLL = args.scroll ?? "";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,11 +129,26 @@ async function main() {
     console.log(`  ${path}`);
   }
 
-  // 1. the one-time sign-in link writes the admin token into sessionStorage for this origin
-  await navigate(LOGIN, 2500);
+  // 1. the admin token must be in sessionStorage for this origin before the first page load
+  if (TOKEN) {
+    // Land on the origin once (the login page or the app — either way the origin is right), write the token, then reload.
+    await navigate(BASE, 1200);
+    await cdp.send(
+      "Runtime.evaluate",
+      { expression: `sessionStorage.setItem("moneyswitch_admin_token", ${JSON.stringify(TOKEN)}); sessionStorage.length`, returnByValue: true },
+      sessionId
+    );
+  } else {
+    // The one-time sign-in link (first boot only) writes the admin token into sessionStorage by itself.
+    await navigate(LOGIN, 2500);
+  }
   const state = await cdp.send(
     "Runtime.evaluate",
-    { expression: "JSON.stringify({ token: !!sessionStorage.length, url: location.hash.length > 0 ? 'hash' : '' })", returnByValue: true },
+    {
+      expression:
+        "JSON.stringify({ token: !!sessionStorage.getItem('moneyswitch_admin_token'), url: location.hash.length > 0 ? 'hash' : '' })",
+      returnByValue: true,
+    },
     sessionId
   );
   console.log(`  signed in: ${state.result?.value ?? "unknown"}`);
@@ -125,7 +156,27 @@ async function main() {
   // 2. each page in the same tab, so the session survives
   for (const page of PAGES) {
     await navigate(`${BASE}${page}`, 2200);
-    const name = `dashboard-${page.replace(/^\//, "").replace(/\//g, "-")}.png`;
+    if (CLICK) {
+      const clicked = await cdp.send(
+        "Runtime.evaluate",
+        {
+          expression: `(() => { const el = document.querySelector(${JSON.stringify(CLICK)}); if (!el) return "no match"; el.click(); return "clicked"; })()`,
+          returnByValue: true,
+        },
+        sessionId
+      );
+      console.log(`  ${page} · click ${CLICK}: ${clicked.result?.value ?? "unknown"}`);
+      await sleep(1200); // let the expanded row render
+      if (SCROLL) {
+        await cdp.send(
+          "Runtime.evaluate",
+          { expression: `(() => { const el = document.querySelector(${JSON.stringify(SCROLL)}); if (!el) return "no match"; el.scrollIntoView({ block: "nearest" }); return "scrolled"; })()`, returnByValue: true },
+          sessionId
+        );
+        await sleep(700);
+      }
+    }
+    const name = `dashboard-${page.replace(/^\//, "").replace(/\//g, "-")}${SUFFIX}.png`;
     await shot(name);
   }
 

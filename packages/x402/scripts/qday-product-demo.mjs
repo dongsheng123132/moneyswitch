@@ -15,8 +15,8 @@
  *        MONEYSWITCH_PORT (default 4020), DEMO_SELLER_PORT (4021), QDAY_FACILITATOR_PORT (4098)
  */
 
-import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -102,22 +102,27 @@ async function main() {
   const funderTusd8 = await publicClient.readContract({
     address: TUSD8, abi: erc20Abi, functionName: "balanceOf", args: [funder.address],
   });
-  say(`funder        : ${funder.address} (${formatUnits(funderTusd8, 6)} tUSD8)`);
-  if (funderTusd8 < parseUnits("0.02", 6)) {
-    say("");
-    say("✗ NOT FUNDED YET — the demo wallet needs ≥0.02 tUSD8 (0.01 to top up the MoneySwitch wallet, 0.01 to pay).");
-    say("  Claim 1 tUSD8 at https://faucet.qday.info (tUSD8 tab, Trellis email sign-in) and send it to:");
-    say(`    ${funder.address}`);
-    say("  Details: docs/qday/README.md §4");
-    process.exitCode = 2;
-    return;
-  }
+  const funderGas = await publicClient.getBalance({ address: funder.address });
+  say(`funder        : ${funder.address} (${formatUnits(funderTusd8, 6)} tUSD8 · ${formatUnits(funderGas, 18)} tQDAY gas)`);
+  // The funder only pays the MoneySwitch wallet's top-up and the settlement gas. Whether that top-up is needed at all is
+  // decided below, after the wallet is known: a persistent wallet that is already funded needs nothing from the funder.
 
   // 1. A MoneySwitch instance pointed at its own data dir. PERSISTENT on purpose: a temp dir takes the wallet key with
   // it, and the tUSD8 topped up into that wallet is then unrecoverable (learned the hard way: 0.04 tUSD8 stranded).
   const dataDir = process.env.QDAY_MS_DATA_DIR || `${REPO}/.data/qday-demo/moneyswitch`;
   mkdirSync(dataDir, { recursive: true });
   say(`▶ MoneySwitch server on :${MS_PORT} (data dir ${dataDir})`);
+  // The admin token is printed exactly once, ever, on a data dir's first boot. Later boots print nothing, so for an
+  // existing data dir take one from the environment or rotate it with the documented recovery tool. The token never
+  // reaches the capture/log files either way.
+  let adminToken = process.env.QDAY_MS_ADMIN_TOKEN ?? null;
+  if (!adminToken && existsSync(join(dataDir, "moneyswitch.sqlite"))) {
+    const rotated = execFileSync(process.execPath, [`${REPO}/scripts/admin-reset-token.mjs`, "--data-dir", dataDir], {
+      encoding: "utf8",
+    });
+    adminToken = /(ms_admin_[A-Za-z0-9_-]+)/.exec(rotated)?.[1] ?? null;
+  }
+
   const server = start("server", ["apps/server/dist/index.js"], {
     MONEYSWITCH_DATA_DIR: dataDir,
     MONEYSWITCH_PORT: String(MS_PORT),
@@ -125,14 +130,14 @@ async function main() {
     MONEYSWITCH_DEFAULT_NETWORK: "eip155:44005",
     MONEYSWITCH_PUBLIC_URL: `http://127.0.0.1:${MS_PORT}`,
   });
-  let adminToken = null;
+  // First boot prints the token + a one-time sign-in link; that is the only time the token exists in the log.
   server.stdout.on("data", (chunk) => {
     const match = /(ms_admin_[A-Za-z0-9_-]+)/.exec(chunk);
     if (match && !adminToken) adminToken = match[1];
   });
   await waitFor(`http://127.0.0.1:${MS_PORT}/v1/setup/status`);
   for (let i = 0; i < 80 && !adminToken; i++) await sleep(250);
-  if (!adminToken) throw new Error("the server never printed an admin token");
+  if (!adminToken) throw new Error(`could not obtain an admin token for ${dataDir}`);
   const admin = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
 
   // 2. MoneySwitch's own wallet (reused when the data dir already has one), then top it up with tUSD8.
@@ -148,12 +153,31 @@ async function main() {
     say(`✔ MoneySwitch wallet: ${walletAddress} (data dir ${dataDir})`);
   }
 
-  const funderWallet = createWalletClient({ account: funder, chain: QDAY, transport: http(RPC) });
-  const topUp = await funderWallet.writeContract({
-    address: TUSD8, abi: erc20Abi, functionName: "transfer", args: [walletAddress, parseUnits("0.01", 6)], chain: QDAY,
+  const need = parseUnits("0.02", 6); // 0.01 to pay with, 0.01 of head-room
+  const walletTusd8 = await publicClient.readContract({
+    address: TUSD8, abi: erc20Abi, functionName: "balanceOf", args: [walletAddress],
   });
-  await publicClient.waitForTransactionReceipt({ hash: topUp });
-  say(`✔ topped up 0.01 tUSD8 → ${EXPLORER}/tx/${topUp}`);
+  say(`  wallet tUSD8  : ${formatUnits(walletTusd8, 6)}`);
+  if (walletTusd8 < need) {
+    if (funderTusd8 < parseUnits("0.01", 6)) {
+      say("");
+      say("✗ NOT FUNDED — this wallet holds less than 0.02 tUSD8 and the funder has nothing to top it up with.");
+      say(`  Send tUSD8 to the MoneySwitch wallet (or the funder) and run this again:`);
+      say(`    wallet ${walletAddress}`);
+      say(`    funder ${funder.address}`);
+      say("  Details: docs/qday/README.md §4");
+      process.exitCode = 2;
+      return;
+    }
+    const funderWallet = createWalletClient({ account: funder, chain: QDAY, transport: http(RPC) });
+    const topUp = await funderWallet.writeContract({
+      address: TUSD8, abi: erc20Abi, functionName: "transfer", args: [walletAddress, parseUnits("0.02", 6)], chain: QDAY,
+    });
+    await publicClient.waitForTransactionReceipt({ hash: topUp });
+    say(`✔ topped up 0.02 tUSD8 → ${EXPLORER}/tx/${topUp}`);
+  } else {
+    say("✔ wallet already funded, no top-up needed");
+  }
 
   // 3. A MoneyKey with a hard per-request limit — the thing that makes this different from "a script with a key".
   const keyRes = await jsonCall(`http://127.0.0.1:${MS_PORT}/v1/keys`, {
@@ -216,7 +240,7 @@ async function main() {
   });
   say("");
   say("─── result ───────────────────────────────────────────────");
-  say(`MoneySwitch wallet tUSD8 after payment: ${formatUnits(walletAfter, 6)} (was 0.01)`);
+  say(`MoneySwitch wallet tUSD8 after payment: ${formatUnits(walletAfter, 6)}`);
   say(`key history rows                      : ${rows.length}`);
   if (txHash) say(`settlement tx                         : ${EXPLORER}/tx/${txHash}`);
   say(JSON.stringify(rows.slice(0, 2), null, 2).slice(0, 1200));
