@@ -21,10 +21,14 @@ repo ships one (`apps/qday-facilitator`) plus the receiving contract the settlem
 - Receiver contract: [`0xb4ef0d4028770f9851051f56c0d109864f2ec83c`](https://explorer-test.qday.info/address/0xb4ef0d4028770f9851051f56c0d109864f2ec83c)
 - A payment settled through it: [`0x7d606c…27bed`](https://explorer-test.qday.info/tx/0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed)
 - The same money path through the product (`/v1/fetch`): [`0x51f599…0052`](https://explorer-test.qday.info/tx/0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052)
+- A product-level payment from the **persistent** MoneySwitch wallet, with the dashboard showing that very transaction:
+  [`0xee39a7…46cc`](https://explorer-test.qday.info/tx/0xee39a716c29c14290ec064968d7e2e76e012de45ac542bae783945b0cba946cc)
+  (`docs/qday/media/dashboard-*-live.png`, 35 s video `docs/qday/media/demo-qday-final.mp4`)
 
 ```bash
 pnpm install && pnpm build                       # then, with a funded QDay testnet wallet:
-bash packages/x402/scripts/qday-run-all.sh       # deploy → pay → screenshot → demo video
+bash packages/x402/scripts/qday-run-all.sh       # deploy → pay → screenshot → protocol demo video
+bash packages/x402/scripts/qday-ui-shots.sh      # product pays through /v1/fetch → dashboard screenshots (real testnet)
 node packages/x402/scripts/qday-x402-fork.mjs    # or the whole loop offline on an anvil fork of the real chain
 ```
 

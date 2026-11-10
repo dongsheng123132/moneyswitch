@@ -51,11 +51,17 @@ Repo map: `packages/x402` (network registry + the paying client), `apps/qday-fac
 | Deployment tx | `0x5b3e4bea2a6b2119a169cd881a294728b6dd5578eea6e0f02653d98c329e16b9` |
 | Payment through the contract | `0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed` |
 | Payment through the product (`/v1/fetch`) | `0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052` |
+| **Product-level payment, persistent wallet + dashboard** | `0xee39a716c29c14290ec064968d7e2e76e012de45ac542bae783945b0cba946cc` (block 2814404; wallet `0x739af5…32DB` 0.1 → 0.09 tUSD8) |
 
 Every payment transaction carries the same four logs: tUSD8 `AuthorizationUsed` → tUSD8 transfer payer→contract →
 tUSD8 transfer contract→beneficiary → `QDayPayReceiver.PaymentReceived(orderId, from, value, nonce, beneficiary)`. The
 contract holds nothing between calls (balance 0 after each), and the beneficiary — the wallet that claimed the faucet —
 went 0.90 → 0.93 tUSD8 across the three demo payments.
+
+The last row is the one the screenshots and the video come from: a **persistent** MoneySwitch wallet
+(`0x739af5…32DB`, funded with 0.1 tUSD8 by a plain transfer, tx `0x2f371aad…5741`) paid a seller through
+`/v1/fetch` with a budgeted `qday-demo-agent` key, and the dashboard was screenshotted **in the same run**, so the bill
+shows that very transaction hash. Reproduce with `bash packages/x402/scripts/qday-ui-shots.sh`.
 
 Machine-checkable ledger with the read-only command for each claim: [`docs/qday/evidence.md`](evidence.md).
 
@@ -63,8 +69,8 @@ Machine-checkable ledger with the read-only command for each claim: [`docs/qday/
 
 | Criterion (weight) | Evidence |
 |---|---|
-| User experience & presentation (15) | The product has a real dashboard — the same one used for the Monad/Solana demos (`apps/dashboard`, served by the server, marketing site at moneyswitch.dev). With QDay enabled it shows the chain badge, the wallet's tUSD8, the key's daily/cumulative usage and the bill with its on-chain transaction: [`media/dashboard-keys.png`](media/dashboard-keys.png), [`media/dashboard-bills.png`](media/dashboard-bills.png), [`media/dashboard-wallet.png`](media/dashboard-wallet.png). The 36.8 s video walks the same flow from the terminal side. |
-| Demo clear & well structured (10) | [`media/demo-qday-final.mp4`](media/demo-qday-final.mp4) — act 1 product (`/v1/fetch`), act 2 straight x402 through the contract, plus a screenshot of the real transaction page. Reproduce with `bash packages/x402/scripts/qday-run-all.sh`. |
+| User experience & presentation (15) | The product has a real dashboard — the same one used for the Monad/Solana demos (`apps/dashboard`, served by the server, marketing site at moneyswitch.dev). These three screenshots are **real testnet data from the same run as the payment**: the bill with its on-chain transaction hash and "settled" status, the key's daily/cumulative budget and per-request cap, and the wallet's tUSD8 on QDay — [`media/dashboard-bills-live.png`](media/dashboard-bills-live.png), [`media/dashboard-keys-live.png`](media/dashboard-keys-live.png), [`media/dashboard-wallet-live.png`](media/dashboard-wallet-live.png). (The fork versions without the `-live` suffix are the same UI reproducible without spending testnet tUSD8.) |
+| Demo clear & well structured (10) | [`media/demo-qday-final.mp4`](media/demo-qday-final.mp4) — 35 s: the terminal run of the real payment, then the dashboard (bill → key → wallet) and the explorer page for that same transaction. [`media/demo-qday-protocol.mp4`](media/demo-qday-protocol.mp4) adds the protocol view (straight x402 through `QDayPayReceiver`). Reproduce with `bash packages/x402/scripts/qday-ui-shots.sh` and `bash packages/x402/scripts/qday-run-all.sh`. |
 | Comprehensive documentation (10) | [`README.md`](README.md) (on-chain facts, four test layers, human-only faucet steps), [`live-runbook.md`](live-runbook.md), [`evidence.md`](evidence.md), [`contracts/README.md`](../../contracts/README.md) (bytecode-check recipe, 9 gotchas). |
 | Innovation & originality (20) | Budgeted agent key + human approval line + on-chain atomic receiver are combined: the agent never holds a key, the owner keeps revocation, and the replay/business-double-charge case is handled on-chain (`OrderAlreadyPaid`). |
 | Technical quality & integration (15) | EIP-3009 verified against the token's own EIP-712 domain (not the seller's quote), replay refused via `authorizationState`, relay settlement idempotent per nonce, `pnpm test` 1244 passed / `pnpm test:e2e` 144 passed / `forge test` 28 passed. |
@@ -83,8 +89,11 @@ node packages/x402/scripts/qday-x402-fork.mjs
 # contracts
 cd contracts && forge test && bash script/e2e-fork.sh
 
-# with a funded testnet wallet (tQDAY + tUSD8): deploy, pay, screenshot, render the video
+# with a funded demo wallet (tQDAY + tUSD8): deploy, pay, screenshot, render the protocol video
 bash packages/x402/scripts/qday-run-all.sh
+
+# with the product's persistent wallet (already holds tUSD8): pay through /v1/fetch and screenshot the dashboard
+bash packages/x402/scripts/qday-ui-shots.sh
 ```
 
 ## 6. Assumptions, limitations, roadmap

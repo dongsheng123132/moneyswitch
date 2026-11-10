@@ -51,11 +51,53 @@ cast logs --address 0xb4ef0d4028770f9851051f56c0d109864f2ec83c --from-block 2797
 ```
 
 浏览器：<https://explorer-test.qday.info/tx/0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052>
-（截图：`docs/qday/media/live-tx.png`；视频：`docs/qday/media/demo-qday-final.mp4` —— 36.8 秒，含产品级 + 合约级两幕 + explorer 截图）
+（截图：`docs/qday/media/live-tx.png`；视频：`docs/qday/media/demo-qday-protocol.mp4` —— 36.8 秒，含产品级 + 合约级两幕 + explorer 截图）
+
+⚠️ 上面第 2/3/4 笔用的是**临时数据目录**里的钱包，跑完目录删掉，充进去的 tUSD8 跟着私钥一起没了（教训写在
+`live-runbook.md`）。下面的 2.1 是**持久钱包**版本，也是提交里引用的那一笔。
 
 产品级那两笔是**真的走了 MoneySwitch**：临时实例 → 生成钱包 → 发一把 per-request 上限 0.01 的 MoneyKey →
 `POST /v1/fetch` → 402 → 签名 → 结算 → `/v1/history` 出现 `status=settled` + tx hash，
 钱包余额 0.01 → 0。
+
+## 2.1 真网产品级付款 —— 持久钱包、真界面（2026-11-10 22:04）
+
+这一笔才是提交里用的"产品自己付钱"：钱包 `0x739af5…32DB` 是固定的（`.data/qday-demo/moneyswitch`），
+钱是真人打进这个地址的，付款后余额还在、还能再跑。
+
+| 项 | 值 |
+|---|---|
+| 充值 tx（`0x5C58…01aF` → 钱包，0.1 tUSD8） | `0x2f371aad96a1ceccf260b1e1a6bfc343a7766fcec3bc16e5b374db45277a5741`（block 2813937） |
+| 付款 tx | `0xee39a716c29c14290ec064968d7e2e76e012de45ac542bae783945b0cba946cc` |
+| 区块 / 结果 | 2814404 · status success · 4 条日志（`AuthorizationUsed` → 钱包→合约 → 合约→收款方 → `PaymentReceived`） |
+| 付款方（只签名，不付 gas） | MoneySwitch 钱包 `0x739af5…32DB`：0.1 → 0.09 tUSD8 |
+| relayer（付 gas） | `0x3252…85EbD`，本笔 gas 0.000131667 tQDAY |
+| 收款合约 | `0xb4EF0d4028770f9851051f56C0D109864f2eC83c`，收完即转出，余额 0 |
+| 收款方增量 | `0x5C58…01aF` +0.01 tUSD8 |
+| Key 的账 | `qday-demo-agent`，`/v1/history` 首行 `status=settled`、`amount=0.01`、tx 同上 |
+
+一条命令复现（钱包已充值；不会重建钱包）：
+
+```bash
+bash packages/x402/scripts/qday-ui-shots.sh
+```
+
+同一趟截出的产品界面（真网数据，右上角网络徽章 = `QDay Aevum testnet`）：
+
+- `docs/qday/media/dashboard-bills-live.png` —— 账单：0.01 USDC 已付款、展开详情里有 tx 与"已确认"
+- `docs/qday/media/dashboard-keys-live.png` —— Key：今日 0.01/0.05、单次上限 0.02、超 0.015 要人工批准、最近使用
+- `docs/qday/media/dashboard-wallet-live.png` —— 钱包：`0x739af5…32DB` 在 QDay 上 0.09 tUSD8
+
+视频 `docs/qday/media/demo-qday-final.mp4`（35.2 s）= 终端里的这一笔 + 上面三张界面 + explorer 同一笔交易。
+
+只读复核：
+
+```bash
+RPC=https://rpc-test.qday.info
+cast receipt 0xee39a716c29c14290ec064968d7e2e76e012de45ac542bae783945b0cba946cc --rpc-url $RPC | head -3
+cast call 0x456569838f1d43009a91eba4263147afd7233483 "balanceOf(address)(uint256)" 0x739af5E56DFC7549CCa9948000A7d2dE5E7B32DB --rpc-url $RPC   # 90000 = 0.09
+cast call 0xb4EF0d4028770f9851051f56C0D109864f2eC83c "beneficiary()(address)" --rpc-url $RPC                                        # 0x5C58…01aF
+```
 
 ## 3. fork 上的完整链路（不需要任何测试币，任何人可复现）
 

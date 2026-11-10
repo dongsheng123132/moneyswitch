@@ -31,6 +31,18 @@ cast balance 0x3252DE0a8104d70e4BB63e0C61109f1180e85EbD --rpc-url https://rpc-te
 也就是说 tQDAY 只要地址 + 点一次人机验证；tUSD8 必须注册 Trellis。**如果 tQDAY 提示地址不合格**（主网持仓门槛），
 最省事的是让主办方直接打币（邮件草稿在会话里，一句话就能发）：0.05 tUSD8 + 少量 tQDAY 到演示地址。
 
+## 产品级 demo 用的持久钱包（已充值，2026-11-10）
+
+产品级那一支（`qday-ui-shots.sh` / `qday-product-demo.mjs`）用的不是上面这两个地址，而是 MoneySwitch 自己的钱包：
+
+| 项 | 值 |
+|---|---|
+| 地址 | `0x739af5E56DFC7549CCa9948000A7d2dE5E7B32DB`（数据目录 `.data/qday-demo/moneyswitch`，**别删这个目录**） |
+| tUSD8 | 0.1（2026-11-10 由 `0x5C58…01aF` 转入，tx `0x2f371aad96a1ceccf260b1e1a6bfc343a7766fcec3bc16e5b374db45277a5741`） |
+| tQDAY | 不需要——买家只签 EIP-3009，gas 由 relayer `0x3252…85EbD` 付 |
+| 助记词 | 已抄到 `.data/qday-demo/recovery-phrase-0x739af5….txt`（`.data/` 已 gitignore），并已在产品里确认备份，所以钱包页会显示地址和余额 |
+| admin token | 只在该目录**第一次**启动时打印；之后再启动请用 `node scripts/admin-reset-token.mjs --data-dir .data/qday-demo/moneyswitch` 轮换一把（脚本里已自动处理，且不会写进任何提交文件） |
+
 ## 一条命令跑完全部（领水之后）
 
 ```bash
@@ -79,9 +91,26 @@ cat .data/qday-demo/moneyswitch-wallet.json
 # {"address":"0x739af5E56DFC7549CCa9948000A7d2dE5E7B32DB", ...}
 ```
 
-## 第 3 步 录 demo（60–90 秒）
+## 第 3 步 出界面证据 + 录 demo
 
-一条命令能跑完全流程，录屏只需要录：终端打印（402 → 签名 → 结算）＋ 浏览器打开 tx 页。
+```bash
+# 真网：付款 + 同一趟截图（dashboard 账单/Key/钱包），并把终端记录写进 live-product-capture.txt
+bash packages/x402/scripts/qday-ui-shots.sh
+# 只想重拍界面、不再花钱：
+QDAY_SKIP_PAYMENT=1 bash packages/x402/scripts/qday-ui-shots.sh
+# 渲染视频（终端实测 + 三张界面 + explorer 交易页）
+python3 packages/x402/scripts/render-demo-video.py --input docs/qday/media/live-product-capture.txt \
+  --title "MoneySwitch × QDay Aevum — 让 AI 按次付费，真网 tUSD8" \
+  --subtitle "真测试网（chainId 44005）· 产品级 /v1/fetch · EIP-3009 结算 · 仪表盘与链上收据" \
+  --endcard "tx 0xee39a7…46cc · 钱包 0.1 → 0.09 tUSD8 · 收款方 +0.01 · 收款合约余额 0" \
+  --still docs/qday/media/dashboard-bills-live.png  --still-caption "dashboard · 账单：这笔支出带链上 tx 与「已确认」" \
+  --still docs/qday/media/dashboard-keys-live.png   --still-caption "dashboard · Key：今日 0.01/0.05 · 单次上限 0.02" \
+  --still docs/qday/media/dashboard-wallet-live.png --still-caption "dashboard · 钱包：QDay Aevum 测试网 0.09 tUSD8" \
+  --still docs/qday/media/live-tx-product.png       --still-caption "explorer-test.qday.info · 钱包 → 收款合约 → 收款方" \
+  --line-hold 0.55 --still-hold 4.5 --out docs/qday/media/demo-qday-final.mp4
+```
+
+完整命令（含每张截图的说明文字）在 `docs/qday/README.md §3.5`。
 
 ## 👤 DoraHacks 报名（11-16 起可提交）
 

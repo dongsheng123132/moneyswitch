@@ -1,5 +1,7 @@
 # Aevum Builder Challenge #1 提交稿（草稿 v1）
 
+> ⚠️ **已被 [`submission.md`](submission.md) 取代**（正式稿，含真网持久钱包那一笔与真网 dashboard 截图）。本文留作过程记录。
+
 > 赛事要求：在 QDay 测试网用 tUSD8 做一个能跑通的支付流程（一份合约 + 一个简单前端或脚本 + 一段短 demo）。
 > 全程线上，2026-11-16 ~ 12-11 提交，总奖金 1,500 USDT，前 5 名 12-15 路演。
 
