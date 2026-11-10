@@ -39,9 +39,13 @@ MONEYSWITCH_DATA_DIR="$DATA" MONEYSWITCH_PORT="$MS_PORT" MONEYSWITCH_NETWORKS=ei
   node "$REPO/apps/server/dist/index.js" >"$DATA/server.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 1 100); do curl -sf "http://127.0.0.1:$MS_PORT/v1/setup/status" >/dev/null 2>&1 && break; sleep 0.25; done
-ADMIN="$(grep -oE 'ms_admin_[A-Za-z0-9_-]+' "$DATA/server.log" | head -1)"
-LOGIN="$(grep -oE 'http://127\.0\.0\.1:[0-9]+/login#ms_setup_[A-Za-z0-9_-]+' "$DATA/server.log" | head -1)"
-[ -n "$ADMIN" ] && [ -n "$LOGIN" ] || { say "server did not print token/link"; tail -5 "$DATA/server.log"; exit 1; }
+# The admin token is printed exactly once, ever, on a data dir's first boot. This dir is persistent (the wallet must
+# survive), so on every later run rotate one with the documented recovery tool and hand it to the screenshot script.
+ADMIN="$(grep -oE 'ms_admin_[A-Za-z0-9_-]+' "$DATA/server.log" | head -1 || true)"
+if [ -z "$ADMIN" ]; then
+  ADMIN="$(node "$REPO/scripts/admin-reset-token.mjs" --data-dir "$DATA" | grep -oE 'ms_admin_[A-Za-z0-9_-]+' | head -1 || true)"
+fi
+[ -n "$ADMIN" ] || { say "no admin token (log on first boot prints one, later boots need the reset tool)"; tail -5 "$DATA/server.log"; exit 1; }
 
 WALLET_ADDR="$(curl -s "http://127.0.0.1:$MS_PORT/v1/admin/wallet" -H "authorization: Bearer $ADMIN" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("address") or "")')"
 if [ -z "$WALLET_ADDR" ]; then
@@ -94,5 +98,5 @@ say "▶ screenshots through the DevTools Protocol"
 PIDS+=($!)
 for _ in $(seq 1 80); do curl -sf http://127.0.0.1:9224/json/version >/dev/null 2>&1 && break; sleep 0.25; done
 node "$REPO/packages/x402/scripts/qday-dashboard-shots.mjs" --port 9224 --base "http://127.0.0.1:$MS_PORT" \
-  --login "$LOGIN" --out "$MEDIA" --pages /wallet,/keys,/bills
+  --token "$ADMIN" --out "$MEDIA" --pages /wallet,/keys,/bills
 say "done"
