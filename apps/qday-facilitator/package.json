@@ -1,0 +1,30 @@
+{
+  "name": "@moneyswitch/qday-facilitator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "description": "An x402 facilitator for QDay Aevum testnet: verifies tUSD8 EIP-3009 signatures and settles them on-chain with a tQDAY-funded relayer.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run test",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@moneyswitch/x402": "workspace:*",
+    "fastify": "5.12.5",
+    "viem": "2.56.9"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "5.0.2",
+    "tsx": "4.23.15"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dongsheng123132/moneyswitch.git",
+    "directory": "apps/qday-facilitator"
+  }
+}

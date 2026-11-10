@@ -114,7 +114,12 @@ When the instance enables Monad testnet (a mainnet enabled next to it does not m
 
 ## Networks and payment outcomes
 
-Monad testnet (`eip155:10143`), Base Sepolia (`eip155:84532`), Solana Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`), Monad mainnet (`eip155:143`), Base mainnet (`eip155:8453`), Solana mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own USDC. No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK.
+Monad testnet (`eip155:10143`), Base Sepolia (`eip155:84532`), QDay Aevum testnet (`eip155:44005`, tUSD8), Solana Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`), Monad mainnet (`eip155:143`), Base mainnet (`eip155:8453`), Solana mainnet (`solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`). Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own stablecoin (QDay settles in tUSD8). No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK. Testnets only by default: set `MONEYSWITCH_NETWORKS` to an explicit list and `MONEYSWITCH_DEFAULT_NETWORK` to a member of it; choosing a mainnet means real USDC. Each chain accepts only its own USDC. No swaps, no bridges. EVM payments use EIP-3009, never Permit2; Solana uses the official x402 exact-SVM SPL transfer SDK.
+
+QDay Aevum publishes no x402 facilitator of its own, so paying there needs the self-hosted one in this repo
+(`apps/qday-facilitator`, default `MONEYSWITCH_QDAY_FACILITATOR_URL=http://127.0.0.1:4098`); it verifies the tUSD8
+EIP-3009 signature and settles it from a relayer that holds tQDAY for gas. Facts, layered tests and the faucet steps that
+need a human: [docs/qday/](docs/qday/README.md).
 
 To enable Solana Devnet alongside the existing testnets:
 

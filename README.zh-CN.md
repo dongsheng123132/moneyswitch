@@ -118,10 +118,16 @@ AI 用 `POST /v1/fetch` 付款。超过审批线时返回 `approval_required`，
 |---|---|
 | Monad 测试网 | eip155:10143 |
 | Base Sepolia | eip155:84532 |
+| QDay Aevum 测试网（tUSD8） | eip155:44005 |
 | Solana Devnet | solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 |
 | Monad 主网 | eip155:143 |
 | Base 主网 | eip155:8453 |
 | Solana 主网 | solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp |
+
+QDay Aevum 没有官方 x402 facilitator（官方 Payment SDK 计划 2027 Q1 才发），所以付款要配本仓的
+`apps/qday-facilitator`（默认 `MONEYSWITCH_QDAY_FACILITATOR_URL=http://127.0.0.1:4098`）：它验 tUSD8 的 EIP-3009 签名，
+再由持有 tQDAY 的 relayer 代付 gas 上链结算。链上事实、四层测试与需要人操作的领水步骤见
+[docs/qday/](docs/qday/README.md)。
 
 默认只开测试网：`MONEYSWITCH_NETWORKS` 给出允许列表，`MONEYSWITCH_DEFAULT_NETWORK` 必须在其中；启用主网就是真实 USDC。每条链只认自己的 USDC，同一地址在各链的余额独立。不换币、不跨链。EVM 只签 EIP-3009，不签 Permit2；Solana 用官方 x402 exact-SVM 的 SPL 转账 SDK。
 
