@@ -88,6 +88,16 @@ async function main() {
   const merchant = getAddress(wallets.merchant.address);
   const receiver = process.env.QDAY_RECEIVER ? getAddress(process.env.QDAY_RECEIVER) : null;
   const payTo = receiver ?? merchant;
+  // Through the receiver contract the money lands on its on-chain beneficiary, not on this script's merchant key.
+  let beneficiary = merchant;
+  if (receiver) {
+    try {
+      const recorded = JSON.parse(readFileSync(`${REPO}/.data/qday-demo/receiver.json`, "utf8"));
+      if (recorded?.beneficiary) beneficiary = getAddress(recorded.beneficiary);
+    } catch {
+      /* no local record: fall back to the merchant address for the balance assertion */
+    }
+  }
 
   const publicClient = createPublicClient({ chain: QDAY, transport: http(RPC) });
   const [chainId, gas, balance] = await Promise.all([
@@ -95,14 +105,17 @@ async function main() {
     publicClient.getBalance({ address: payer.address }),
     publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [payer.address] }),
   ]);
-  const merchantBefore = await publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [merchant] });
+  const merchantBefore = await publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [beneficiary] });
+  const receiverBefore = receiver
+    ? await publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [receiver] })
+    : 0n;
 
   say(`network         : chainId ${chainId} (${chainId === 44005 ? "QDay Aevum ✓" : "UNEXPECTED"}) @ ${RPC}`);
   say(`payer/relayer   : ${payer.address}`);
   say(`  tQDAY (gas)   : ${formatUnits(gas, 18)}`);
   say(`  tUSD8         : ${formatUnits(balance, 6)}`);
   say(`payTo           : ${payTo}${receiver ? " (QDayPayReceiver)" : " (merchant, direct)"}`);
-  say(`merchant        : ${merchant} (balance ${formatUnits(merchantBefore, 6)} tUSD8)`);
+  say(`beneficiary     : ${beneficiary} (balance ${formatUnits(merchantBefore, 6)} tUSD8)`);
 
   // Preflight: say exactly what is missing instead of failing inside a signed payment.
   const problems = [];
@@ -151,10 +164,13 @@ async function main() {
   const tx = receipt?.transaction;
   if (!tx) throw new Error(`no transaction hash in the receipt: ${JSON.stringify(receipt)}`);
 
-  const [onchain, merchantAfter, payerAfter] = await Promise.all([
+  const [onchain, merchantAfter, payerAfter, receiverAfter] = await Promise.all([
     publicClient.getTransactionReceipt({ hash: tx }),
-    publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [merchant] }),
+    publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [beneficiary] }),
     publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [payer.address] }),
+    receiver
+      ? publicClient.readContract({ address: TUSD8, abi: ERC20_ABI, functionName: "balanceOf", args: [receiver] })
+      : Promise.resolve(0n),
   ]);
 
   say("");
@@ -165,9 +181,15 @@ async function main() {
   say(`explorer        : ${EXPLORER}/tx/${tx}`);
   say(`on-chain        : block ${onchain.blockNumber}, status ${onchain.status}, logs ${onchain.logs.length}`);
   say(`payer delta     : ${formatUnits(balance - payerAfter, 6)} tUSD8`);
-  say(`merchant delta  : ${formatUnits(merchantAfter - merchantBefore, 6)} tUSD8`);
+  say(`beneficiary +   : ${formatUnits(merchantAfter - merchantBefore, 6)} tUSD8`);
+  if (receiver) {
+    say(`receiver balance: ${formatUnits(receiverAfter, 6)} tUSD8 (must be 0 — nothing stranded)`);
+    if (receiverAfter !== receiverBefore) throw new Error(`receiver kept tUSD8 — inspect ${EXPLORER}/tx/${tx}`);
+    const emitted = onchain.logs.some((l) => l.address.toLowerCase() === receiver.toLowerCase());
+    if (!emitted) throw new Error(`no PaymentReceived log from the receiver in ${tx}`);
+  }
   if (merchantAfter - merchantBefore !== PRICE) {
-    throw new Error(`merchant did not receive ${formatUnits(PRICE, 6)} tUSD8 — inspect ${EXPLORER}/tx/${tx}`);
+    throw new Error(`beneficiary did not receive ${formatUnits(PRICE, 6)} tUSD8 — inspect ${EXPLORER}/tx/${tx}`);
   }
   say("✔ L3 PASS: a real tUSD8 payment settled on QDay Aevum");
   say("──────────────────────────────────────────────────────────");

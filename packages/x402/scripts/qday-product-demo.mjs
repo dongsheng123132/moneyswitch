@@ -194,9 +194,14 @@ async function main() {
   const history = await jsonCall(`http://127.0.0.1:${MS_PORT}/v1/history`, {
     headers: { authorization: `Bearer ${moneyKey}` },
   });
-  const rows = Array.isArray(history.body) ? history.body : history.body?.payments ?? history.body?.data ?? [];
-  const tx = rows.find?.((r) => /^0x[0-9a-fA-F]{64}$/.test(r.tx_hash ?? r.txHash ?? r.transaction ?? "")) ;
-  const txHash = tx ? (tx.tx_hash ?? tx.txHash ?? tx.transaction) : null;
+  // GET /v1/history answers { history: [...] }; the /v1/fetch body already carries the settlement hash.
+  const rows = Array.isArray(history.body)
+    ? history.body
+    : history.body?.history ?? history.body?.payments ?? history.body?.data ?? [];
+  const fromHistory = rows.find?.((r) => /^0x[0-9a-fA-F]{64}$/.test(r.tx_hash ?? r.txHash ?? r.transaction ?? ""));
+  const txHash = fromHistory
+    ? (fromHistory.tx_hash ?? fromHistory.txHash ?? fromHistory.transaction)
+    : (paid.body?.payment?.tx_hash ?? null);
 
   const walletAfter = await publicClient.readContract({
     address: TUSD8, abi: erc20Abi, functionName: "balanceOf", args: [walletAddress],

@@ -28,18 +28,33 @@ cast receipt 0x5b3e4bea2a6b2119a169cd881a294728b6dd5578eea6e0f02653d98c329e16b9 
 浏览器：<https://explorer-test.qday.info/address/0xb4ef0d4028770f9851051f56c0d109864f2ec83c>
 （截图：`docs/qday/media/live-contract.png`）
 
-## 2. 真测试网 tUSD8 支付
+## 2. 真测试网 tUSD8 支付（2026-11-10，三笔全部上链成功）
 
-待第一笔真网付款跑通后填入：
+| # | 用途 | tx | 区块 | 结果 |
+|---|---|---|---|---|
+| 1 | 直接经 `QDayPayReceiver.pay()` 收款 | `0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed` | 2797726 | status 1，4 条日志 |
+| 2 | MoneySwitch `/v1/fetch` 产品级付款（第一次） | `0xe0f27c3f4a712975f17ac53910b7a9eb6c0f2013542577652fb1d6c28f664411` | 2797862 | status 1，4 条日志 |
+| 3 | MoneySwitch `/v1/fetch` 产品级付款（验收跑） | `0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052` | 2797911 | status 1，4 条日志，key history `status=settled` |
 
-| 项 | 值 |
-|---|---|
-| tx | _待填_ |
-| 金额 | 0.01 tUSD8（10000 原子单位） |
-| payer | _待填_ |
-| 商户到账 | _待填_ |
-| receiver 合约余额 | 0（钱不滞留） |
-| `PaymentReceived(orderId,…)` | _待填_ |
+每笔交易的四条日志顺序固定：tUSD8 `AuthorizationUsed` → tUSD8 Transfer(付款方→合约) →
+tUSD8 Transfer(合约→beneficiary) → `QDayPayReceiver.PaymentReceived`。**合约余额恒为 0**（钱不滞留），
+收款方 `0x5C58…01aF` 余额 0.90 → **0.93 tUSD8**（三笔 0.01 全部到账）。
+
+复核：
+
+```bash
+RPC=https://rpc-test.qday.info
+TX=0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052
+cast receipt $TX --rpc-url $RPC                     # status 1, 4 logs
+cast logs --address 0xb4ef0d4028770f9851051f56c0d109864f2ec83c --from-block 2797911 --to-block 2797911 --rpc-url $RPC
+```
+
+浏览器：<https://explorer-test.qday.info/tx/0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052>
+（截图：`docs/qday/media/live-tx.png`；视频：`docs/qday/media/demo-qday-live.mp4`）
+
+产品级那两笔是**真的走了 MoneySwitch**：临时实例 → 生成钱包 → 发一把 per-request 上限 0.01 的 MoneyKey →
+`POST /v1/fetch` → 402 → 签名 → 结算 → `/v1/history` 出现 `status=settled` + tx hash，
+钱包余额 0.01 → 0。
 
 ## 3. fork 上的完整链路（不需要任何测试币，任何人可复现）
 

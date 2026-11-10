@@ -30,8 +30,8 @@ QDay：
 | **真测试网合约** | `0xb4ef0d4028770f9851051f56c0d109864f2ec83c`（tx `0x5b3e4bea…16b9`，block 2797472） | ✅ 2026-11-10 已部署 |
 | 一条命令跑通的脚本（fork，不需要领水） | `packages/x402/scripts/qday-x402-fork.mjs` | ✅ L1 PASS |
 | 真测试网脚本（含领水 preflight） | `packages/x402/scripts/qday-live-payment.mjs` | 待领水 |
-| 真网 tx hash | — | 待收到 tUSD8 后产出 |
-| demo 视频（60–90s） | `docs/qday/media/demo-l1-fork.mp4`（L1 草稿，21.5s） | 🟡 待真网 tx 后出正式版 |
+| 真网 tx hash | `0x7d606cd9…27bed`（直付）、`0x51f59908…0052`（MoneySwitch 产品级） | ✅ |
+| demo 视频（60–90s） | `docs/qday/media/demo-qday-live.mp4`（真网版，24.5s，含 explorer tx 截图） | ✅ |
 | 说明文档（事实/测试分层/人要做的事） | `docs/qday/` | ✅ |
 
 ## 视频怎么产（不靠人工录屏）
