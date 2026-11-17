@@ -16,7 +16,7 @@ const ARTICLES = [
   {
     slug: 'metropolis-2026-11',
     date: '2026-11-17',
-    shareImage: { en: '/assets/img/metropolis-2026-11/cover-zh.png', zh: '/assets/img/metropolis-2026-11/cover-zh.png' },
+    shareImage: { en: '/assets/img/cloud-wallet-2026-10/cover-en.png', zh: '/assets/img/metropolis-2026-11/cover-zh.png' },
     description: {
       en: 'MoneySwitch is on Alibaba Cloud\'s “Best Qwen 3.8 Max application” list at Monad Metropolis: what we submitted, what actually ran on Monad, and what comes next.',
       zh: 'Monad Metropolis 公布结果，MoneySwitch 入选 Alibaba Cloud「最佳 Qwen 3.8 Max 技术应用」专项。我们交了什么、在 Monad 上真跑了什么、接下来做什么。',

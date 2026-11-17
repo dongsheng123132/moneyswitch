@@ -1,6 +1,6 @@
 # Monad Metropolis results: MoneySwitch selected in Alibaba Cloud's Qwen 3.8 Max bounty
 
-![MoneySwitch: a programmable Web3 cloud wallet for AI bots. The campaign card we used for our Monad Metropolis submission (Chinese text).](https://moneyswitch.dev/assets/img/metropolis-2026-11/cover-zh.webp)
+![MoneySwitch: a programmable Web3 cloud wallet for AI bots.](https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.webp)
 
 *The results of Monad's flagship hackathon Metropolis are out. MoneySwitch is on Alibaba Cloud's "Best Qwen 3.8 Max application" list.*
 
@@ -16,7 +16,7 @@ Two halves that meet in the middle.
 
 **A self-hosted cloud wallet.** MoneySwitch never gives an agent a private key. It issues a **MoneyKey** instead: an API key for money, with a total budget, a per-request cap, a host allowlist, a human-approval line and one-click revocation. The agent calls `POST /v1/fetch`; the wallet **checks policy before it signs**, then pays the seller's x402 invoice in USDC from a local, low-balance vault. The agent never touches the private key.
 
-**An agent that actually spends.** Qwen 3.8 Max got a key with a $0.09 budget and a price list, and decided by itself what to buy: three $0.01 queries on Monad mainnet to narrow the question, then one $0.05 query to settle whether smart money had shown up at all. Five real USDC payments, each one traceable on chain. The full run is written up in [the previous post](https://moneyswitch.dev/blog/qwen-agent-pays-nansen/).
+**An agent that actually spends.** Qwen 3.8 Max got a key with a $0.09 budget and a price list, and decided by itself what to buy: four $0.01 queries on Monad mainnet to narrow the question, then one $0.05 query to settle whether smart money had shown up at all. Five real USDC payments, each one traceable on chain. The full run is written up in [the previous post](https://moneyswitch.dev/blog/qwen-agent-pays-nansen/).
 
 ## Why this route is worth picking
 
@@ -39,7 +39,7 @@ Qwen 3.8 Max proved the other half: give it a budget and a price list, and a cap
 | Payments | 5 real USDC payments, $0.09 total, all verifiable on monadvision.com |
 | Testnet demo | Two independent MoneyKeys, a direct payment, an approved payment, bills and key revocation — 2 min 02 s screen recording |
 
-The cover image above is the card we submitted with: **deploy it on your cloud, let the bot spend by your rules.** That sentence is still the whole product definition.
+The cover illustrates the idea behind MoneySwitch: **your cloud, your wallet, your rules.**
 
 ## What comes next
 
