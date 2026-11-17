@@ -17,13 +17,13 @@
 <meta property="og:title" content="Monad Metropolis results: MoneySwitch selected in Alibaba Cloud&#39;s Qwen 3.8 Max bounty">
 <meta property="og:description" content="MoneySwitch is on Alibaba Cloud&#39;s “Best Qwen 3.8 Max application” list at Monad Metropolis: what we submitted, what actually ran on Monad, and what comes next.">
 <meta property="og:url" content="https://moneyswitch.dev/blog/metropolis-2026-11/">
-<meta property="og:image" content="https://moneyswitch.dev/assets/img/metropolis-2026-11/cover-zh.png">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.png">
 <meta property="og:image:width" content="1672">
 <meta property="og:image:height" content="941">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Monad Metropolis results: MoneySwitch selected in Alibaba Cloud&#39;s Qwen 3.8 Max bounty">
 <meta name="twitter:description" content="MoneySwitch is on Alibaba Cloud&#39;s “Best Qwen 3.8 Max application” list at Monad Metropolis: what we submitted, what actually ran on Monad, and what comes next.">
-<meta name="twitter:image" content="https://moneyswitch.dev/assets/img/metropolis-2026-11/cover-zh.png">
+<meta name="twitter:image" content="https://moneyswitch.dev/assets/img/cloud-wallet-2026-10/cover-en.png">
 <link rel="stylesheet" href="/assets/css/site.css">
 <link rel="stylesheet" href="/assets/css/blog.css">
 </head>
@@ -45,7 +45,7 @@
 <article class="section blog-article"><div class="wrap narrow">
 <p class="eyebrow">Published <time datetime="2026-11-17">2026-11-17</time></p>
 <h1>Monad Metropolis results: MoneySwitch selected in Alibaba Cloud&#39;s Qwen 3.8 Max bounty</h1>
-<figure class="article-figure"><img src="/assets/img/metropolis-2026-11/cover-zh.webp" alt="MoneySwitch: a programmable Web3 cloud wallet for AI bots. The campaign card we used for our Monad Metropolis submission (Chinese text)." loading="lazy" decoding="async"><figcaption>MoneySwitch: a programmable Web3 cloud wallet for AI bots. The campaign card we used for our Monad Metropolis submission (Chinese text).</figcaption></figure>
+<figure class="article-figure"><img src="/assets/img/cloud-wallet-2026-10/cover-en.webp" alt="MoneySwitch: a programmable Web3 cloud wallet for AI bots." loading="lazy" decoding="async"><figcaption>MoneySwitch: a programmable Web3 cloud wallet for AI bots.</figcaption></figure>
 <p><em>The results of Monad&#39;s flagship hackathon Metropolis are out. MoneySwitch is on Alibaba Cloud&#39;s &quot;Best Qwen 3.8 Max application&quot; list.</em></p>
 <h2>What happened</h2>
 <p>Metropolis ran from September 1 to mid-October: 885 teams and 1,256 builders from 76 countries and regions. Beyond the four main tracks, ecosystem partners ran their own bounties. Alibaba Cloud&#39;s was &quot;Best Qwen 3.8 Max application&quot;, and its list has three projects: Sandworm, Red Sentinel, and MoneySwitch (submitted under <code>@bitpus888</code>).</p>
@@ -53,7 +53,7 @@
 <h2>What we submitted</h2>
 <p>Two halves that meet in the middle.</p>
 <p><strong>A self-hosted cloud wallet.</strong> MoneySwitch never gives an agent a private key. It issues a <strong>MoneyKey</strong> instead: an API key for money, with a total budget, a per-request cap, a host allowlist, a human-approval line and one-click revocation. The agent calls <code>POST /v1/fetch</code>; the wallet <strong>checks policy before it signs</strong>, then pays the seller&#39;s x402 invoice in USDC from a local, low-balance vault. The agent never touches the private key.</p>
-<p><strong>An agent that actually spends.</strong> Qwen 3.8 Max got a key with a $0.09 budget and a price list, and decided by itself what to buy: three $0.01 queries on Monad mainnet to narrow the question, then one $0.05 query to settle whether smart money had shown up at all. Five real USDC payments, each one traceable on chain. The full run is written up in <a href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/" rel="noopener">the previous post</a>.</p>
+<p><strong>An agent that actually spends.</strong> Qwen 3.8 Max got a key with a $0.09 budget and a price list, and decided by itself what to buy: four $0.01 queries on Monad mainnet to narrow the question, then one $0.05 query to settle whether smart money had shown up at all. Five real USDC payments, each one traceable on chain. The full run is written up in <a href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/" rel="noopener">the previous post</a>.</p>
 <h2>Why this route is worth picking</h2>
 <p>x402 already made <em>paying</em> easy: no sign-up, no API key, just a <code>402 Payment Required</code>, one EIP-3009 authorization, and a cent moves. The hard half is <strong>authorization</strong>: how much this agent may spend, where it may spend it, and when it has to stop and ask a human.</p>
 <p>Our four boundaries are not things a smarter model can replace:</p>
@@ -72,7 +72,7 @@
 <tr><td>Payments</td><td>5 real USDC payments, $0.09 total, all verifiable on monadvision.com</td></tr>
 <tr><td>Testnet demo</td><td>Two independent MoneyKeys, a direct payment, an approved payment, bills and key revocation — 2 min 02 s screen recording</td></tr>
 </tbody></table></div>
-<p>The cover image above is the card we submitted with: <strong>deploy it on your cloud, let the bot spend by your rules.</strong> That sentence is still the whole product definition.</p>
+<p>The cover illustrates the idea behind MoneySwitch: <strong>your cloud, your wallet, your rules.</strong></p>
 <h2>What comes next</h2>
 <p>The result is not a finish line; it is a confirmation that someone else reads the problem the same way. Three things follow:</p>
 <ol>

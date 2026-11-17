@@ -16,7 +16,7 @@
 
 **一个自己托管的云钱包。** MoneySwitch 不把私钥交给 Agent，而是发一把 **MoneyKey**：一把「能花钱的 API Key」。它有总额度、单次上限、允许访问的域名白名单、人工审批线和一键吊销。Agent 调 `POST /v1/fetch`，钱包**先检查策略再签名**，然后从只放小钱的本地钱包里用 USDC 付掉卖方的 x402 账单。Agent 自始至终碰不到私钥。
 
-**一个真的会花钱的 Agent。** Qwen 3.8 Max 拿到一把 0.09 美元预算的 key 和一张价目表，自己决定买什么：先在 Monad 主网上用三次 0.01 美元的查询把问题缩小，最后花 0.05 美元确认聪明钱到底有没有进场。五笔真实的 USDC 付款，每一笔都能在链上查到。完整实验记录在[上一篇文章](https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/)里。
+**一个真的会花钱的 Agent。** Qwen 3.8 Max 拿到一把 0.09 美元预算的 key 和一张价目表，自己决定买什么：先在 Monad 主网上用四次 0.01 美元的查询把问题缩小，最后花 0.05 美元确认聪明钱到底有没有进场。五笔真实的 USDC 付款，每一笔都能在链上查到。完整实验记录在[上一篇文章](https://moneyswitch.dev/blog/qwen-agent-pays-nansen/zh/)里。
 
 ## 为什么这条路值得被选中
 
