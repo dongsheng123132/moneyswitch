@@ -1,0 +1,39 @@
+{
+  "remotes": [
+    {
+      "name": "gitee",
+      "host": "gitee.com",
+      "repo": "YOUR_GITEE_USERNAME/moneyswitch",
+      "cn": true,
+      "tokenEnv": "GITEE_TOKEN"
+    },
+    {
+      "name": "gitcode",
+      "host": "gitcode.com",
+      "repo": "YOUR_GITCODE_USERNAME/moneyswitch",
+      "cn": true,
+      "tokenEnv": "GITCODE_TOKEN"
+    },
+    {
+      "name": "cnb",
+      "host": "cnb.cool",
+      "repo": "YOUR_CNB_ORG/moneyswitch",
+      "cn": true,
+      "tokenEnv": "CNB_TOKEN"
+    },
+    {
+      "name": "gitlab",
+      "host": "gitlab.com",
+      "repo": "YOUR_GITLAB_USERNAME/moneyswitch",
+      "cn": false,
+      "tokenEnv": "GITLAB_TOKEN"
+    },
+    {
+      "name": "codeberg",
+      "host": "codeberg.org",
+      "repo": "YOUR_CODEBERG_USERNAME/moneyswitch",
+      "cn": false,
+      "tokenEnv": "CODEBERG_TOKEN"
+    }
+  ]
+}

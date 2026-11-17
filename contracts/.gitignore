@@ -1,0 +1,12 @@
+# Foundry build artifacts / caches
+out/
+cache/
+broadcast/
+
+# Dependencies (none vendored - this project is dependency-free)
+lib/
+
+# Local env files: never commit private keys
+.env
+.env.*
+!.env.example
