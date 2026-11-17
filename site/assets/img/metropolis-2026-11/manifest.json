@@ -1,0 +1,16 @@
+{
+  "created": "2026-11-17",
+  "type": "Campaign card supplied by the team for the Monad Metropolis results post, not a product screenshot",
+  "note": "The same card is used for both locales; its headline text is Chinese.",
+  "images": [
+    {
+      "id": "cover-zh",
+      "width": 1672,
+      "height": 941,
+      "pngBytes": 846727,
+      "webpBytes": 82698,
+      "sha256": "1a878dbf58d72b9faa724f399ff996489f90e8dfad13521d47f5b1be5b86f96b",
+      "webpSha256": "2601c0f748eb6ea7e7d4676cd89d941ba25a3f2f4005fac3339bf3a98226b334"
+    }
+  ]
+}

@@ -114,6 +114,9 @@ html[data-lang="zh"] .hero-title { max-width: 22ch; line-height: 1.2; letter-spa
 .hero-compare { margin-top: 14px; font-size: 16px; font-weight: 600; color: var(--text); display: flex; flex-wrap: wrap; gap: 4px 8px; }
 .hero-source { align-self: center; padding: 8px 4px; font-size: 14px; }
 .hero-read { margin-top: 18px; color: var(--dim); font-size: 14px; }
+/* Metropolis 2026 award line: same size as hero-read, tightened spacing. */
+.hero-award { margin-top: 6px; }
+.hero-award a { color: var(--lime); }
 .hero-contribute-note { margin-top: 16px; max-width: 780px; color: var(--dim); font-size: 14px; }
 
 /* Multi-device wallet architecture; all text is real, selectable HTML. */
