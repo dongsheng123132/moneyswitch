@@ -7,7 +7,7 @@ window.MS_I18N_ZH = {
   'hero.contribute': "发现文档或 Agent 接入问题？从贡献指南开始，把你的改进变成一个 PR。",
   'cta.source': "查看源码 ↗",
   'hero.read': "为什么做这个：<a href=\"blog/cloud-wallet-for-ai-bots/zh/\">给 AI Bot 用的 Web3 云钱包 →</a>",
-  'hero.award': "Monad Metropolis 2026：入选 Alibaba Cloud「最佳 Qwen 3.8 Max 技术应用」专项 — <a href=\"blog/metropolis-2026-11/zh/\">看看我们交了什么 →</a>",
+  'hero.awardPill': "Monad Metropolis 2026 · 入选 Alibaba Cloud「最佳 Qwen 3.8 Max 技术应用」专项",
   'map.h': "多台设备，共用一个你掌控的钱包。",
   'map.tag': "架构示意",
   'map.local': "你的电脑",
