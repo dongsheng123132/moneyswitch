@@ -419,7 +419,10 @@ describe("reconcile: backfill of the tx hash for rows already settled as SETTLED
     const lim = await reconcileUnknownPayments({ db, reader: limited, now: NOW, backfillTxLimit: 1 });
     expect(lim.backfillScanned).toBe(1);
 
-    const farFuture = new Date(NOW.getTime() + 60 * 86_400_000); // both rows are now ~60 days old
+    // Both rows are now ~60 days old. Rows carry the real clock (the fixed NOW above is
+    // only passed in by the test), so the age window has to be measured from that same clock;
+    // anchoring it to NOW made the cutoff drift past the rows after 2026-11-11.
+    const farFuture = new Date(Date.now() + 60 * 86_400_000);
     const old = fakeReader({ findAuthorizationUsedTx: vi.fn(async () => "0xlate") });
     const res = await reconcileUnknownPayments({
       db,
