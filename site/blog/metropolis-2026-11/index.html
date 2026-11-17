@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monad Metropolis results: MoneySwitch selected in Alibaba Cloud&#39;s Qwen 3.8 Max bounty — MoneySwitch</title>
+<meta name="description" content="MoneySwitch is on Alibaba Cloud&#39;s “Best Qwen 3.8 Max application” list at Monad Metropolis: what we submitted, what actually ran on Monad, and what comes next.">
+<meta name="theme-color" content="#07060d">
+<link rel="canonical" href="https://moneyswitch.dev/blog/metropolis-2026-11/">
+<link rel="alternate" hreflang="en" href="https://moneyswitch.dev/blog/metropolis-2026-11/">
+<link rel="alternate" hreflang="zh" href="https://moneyswitch.dev/blog/metropolis-2026-11/zh/">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="MoneySwitch">
+<meta property="og:title" content="Monad Metropolis results: MoneySwitch selected in Alibaba Cloud&#39;s Qwen 3.8 Max bounty">
+<meta property="og:description" content="MoneySwitch is on Alibaba Cloud&#39;s “Best Qwen 3.8 Max application” list at Monad Metropolis: what we submitted, what actually ran on Monad, and what comes next.">
+<meta property="og:url" content="https://moneyswitch.dev/blog/metropolis-2026-11/">
+<meta property="og:image" content="https://moneyswitch.dev/assets/img/metropolis-2026-11/cover-zh.png">
+<meta property="og:image:width" content="1672">
+<meta property="og:image:height" content="941">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Monad Metropolis results: MoneySwitch selected in Alibaba Cloud&#39;s Qwen 3.8 Max bounty">
+<meta name="twitter:description" content="MoneySwitch is on Alibaba Cloud&#39;s “Best Qwen 3.8 Max application” list at Monad Metropolis: what we submitted, what actually ran on Monad, and what comes next.">
+<meta name="twitter:image" content="https://moneyswitch.dev/assets/img/metropolis-2026-11/cover-zh.png">
+<link rel="stylesheet" href="/assets/css/site.css">
+<link rel="stylesheet" href="/assets/css/blog.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/" aria-label="MoneySwitch home">
+      <span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span>
+    </a>
+    <nav class="nav-links" aria-label="Blog">
+      <a href="/blog/">← Blog</a>
+      <a href="/pilot/">Try with two agents</a>
+    </nav>
+    <div class="nav-actions"><div class="lang" role="group" aria-label="Language"><a href="/blog/metropolis-2026-11/zh/" lang="zh-CN">中文</a></div></div>
+  </div>
+</header>
+<main id="main">
+<article class="section blog-article"><div class="wrap narrow">
+<p class="eyebrow">Published <time datetime="2026-11-17">2026-11-17</time></p>
+<h1>Monad Metropolis results: MoneySwitch selected in Alibaba Cloud&#39;s Qwen 3.8 Max bounty</h1>
+<figure class="article-figure"><img src="/assets/img/metropolis-2026-11/cover-zh.webp" alt="MoneySwitch: a programmable Web3 cloud wallet for AI bots. The campaign card we used for our Monad Metropolis submission (Chinese text)." loading="lazy" decoding="async"><figcaption>MoneySwitch: a programmable Web3 cloud wallet for AI bots. The campaign card we used for our Monad Metropolis submission (Chinese text).</figcaption></figure>
+<p><em>The results of Monad&#39;s flagship hackathon Metropolis are out. MoneySwitch is on Alibaba Cloud&#39;s &quot;Best Qwen 3.8 Max application&quot; list.</em></p>
+<h2>What happened</h2>
+<p>Metropolis ran from September 1 to mid-October: 885 teams and 1,256 builders from 76 countries and regions. Beyond the four main tracks, ecosystem partners ran their own bounties. Alibaba Cloud&#39;s was &quot;Best Qwen 3.8 Max application&quot;, and its list has three projects: Sandworm, Red Sentinel, and MoneySwitch (submitted under <code>@bitpus888</code>).</p>
+<p>Let&#39;s be exact about what that is. It is not one of the four main-track prizes (those are three $10,000 places per track). It is a sponsor picking the projects it cares about on its own stack. What got picked was not another demo, but the chain of three things: a large model, a set of pay-per-call APIs, and a wallet whose limits were set by a human — and whether they actually work end to end.</p>
+<h2>What we submitted</h2>
+<p>Two halves that meet in the middle.</p>
+<p><strong>A self-hosted cloud wallet.</strong> MoneySwitch never gives an agent a private key. It issues a <strong>MoneyKey</strong> instead: an API key for money, with a total budget, a per-request cap, a host allowlist, a human-approval line and one-click revocation. The agent calls <code>POST /v1/fetch</code>; the wallet <strong>checks policy before it signs</strong>, then pays the seller&#39;s x402 invoice in USDC from a local, low-balance vault. The agent never touches the private key.</p>
+<p><strong>An agent that actually spends.</strong> Qwen 3.8 Max got a key with a $0.09 budget and a price list, and decided by itself what to buy: three $0.01 queries on Monad mainnet to narrow the question, then one $0.05 query to settle whether smart money had shown up at all. Five real USDC payments, each one traceable on chain. The full run is written up in <a href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/" rel="noopener">the previous post</a>.</p>
+<h2>Why this route is worth picking</h2>
+<p>x402 already made <em>paying</em> easy: no sign-up, no API key, just a <code>402 Payment Required</code>, one EIP-3009 authorization, and a cent moves. The hard half is <strong>authorization</strong>: how much this agent may spend, where it may spend it, and when it has to stop and ask a human.</p>
+<p>Our four boundaries are not things a smarter model can replace:</p>
+<ul>
+<li><strong>Policy runs before the signature.</strong> Budgets, allowlists and approval lines are pre-signature checks, not after-the-fact reconciliation.</li>
+<li><strong>The human keeps a veto.</strong> Payments above the approval line are held until someone approves them in the dashboard.</li>
+<li><strong>Every key keeps its own ledger.</strong> Who spent what, and which on-chain transaction it maps to, in one view.</li>
+<li><strong>Failures are not guessed at.</strong> When a seller answers 422 and never settles, the signed authorization is frozen rather than refunded; once it expires we ask the USDC contract whether it was ever used, and only then release the budget.</li>
+</ul>
+<p>Qwen 3.8 Max proved the other half: give it a budget and a price list, and a capable model spends like an analyst, not like a retry loop.</p>
+<h2>What actually ran on Monad</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>Layer</th><th>Reality</th></tr></thead>
+<tbody>
+<tr><td>Chain</td><td>Monad mainnet USDC over x402 (<code>eip155:143</code>), settled by the Molandak facilitator</td></tr>
+<tr><td>Payments</td><td>5 real USDC payments, $0.09 total, all verifiable on monadvision.com</td></tr>
+<tr><td>Testnet demo</td><td>Two independent MoneyKeys, a direct payment, an approved payment, bills and key revocation — 2 min 02 s screen recording</td></tr>
+</tbody></table></div>
+<p>The cover image above is the card we submitted with: <strong>deploy it on your cloud, let the bot spend by your rules.</strong> That sentence is still the whole product definition.</p>
+<h2>What comes next</h2>
+<p>The result is not a finish line; it is a confirmation that someone else reads the problem the same way. Three things follow:</p>
+<ol>
+<li><strong>Try it.</strong> Follow the <a href="https://moneyswitch.dev/pilot/" rel="noopener">self-hosting and testnet guide</a> and make your first testnet payment in about half an hour.</li>
+<li><strong>Open an issue or a PR.</strong> Docs, integration notes and small fixes are all welcome; the <a href="https://moneyswitch.dev/contribute/" rel="noopener">first-PR guide</a> has the steps.</li>
+<li><strong>Bring a real use case.</strong> If your agent reads paid data or calls paid APIs, tell us the scenario — we will change the product to fit it rather than to fit our imagination.</li>
+</ol>
+<p>Thanks to the Monad and Alibaba Cloud reviewers, and to Sandworm and Red Sentinel for good company on the same list.</p>
+<p><strong>Try it:</strong> <a href="https://moneyswitch.dev/pilot/" rel="noopener">self-hosting and testnet guide</a> · <a href="https://github.com/dongsheng123132/moneyswitch" rel="noopener">source code</a> · <a href="https://moneyswitch.dev/blog/qwen-agent-pays-nansen/" rel="noopener">the Qwen run</a> · <a href="https://moneyswitch.dev/videos/technical-demo/" rel="noopener">product demo</a></p>
+</div></article>
+</main>
+<footer class="footer">
+  <div class="wrap foot">
+    <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i></span><span class="brand-name">Money<b>Switch</b></span></a><p class="dim small"><a href="https://moneyswitch.dev/">moneyswitch.dev</a></p></div>
+    <nav class="blog-footer-links" aria-label="Blog"><a href="/blog/">← Blog</a><a href="/pilot/">Try with two agents</a></nav>
+  </div>
+</footer>
+</body>
+</html>
