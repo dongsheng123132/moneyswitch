@@ -1,0 +1,29 @@
+MoneySwitch × QDay Aevum testnet (chainId 44005) — tUSD8 x402 payment
+L1: the whole loop on an anvil fork of the real chain (no faucet needed)
+
+#> anvil --fork-url https://rpc-test.qday.info --chain-id 44005 --port 8546
+fork ready: chainId 44005, block 2796242
+
+#> forge script contracts/script/Deploy.s.sol --rpc-url http://127.0.0.1:8546 --broadcast
+QDayPayReceiver deployed at 0xdc64a140aa3e981100a9beca4e685f962f0cf6c9 (beneficiary 0x7099…79C8)
+
+#> QDAY_RECEIVER=0xdc64a140aa3e981100a9beca4e685f962f0cf6c9 node packages/x402/scripts/qday-x402-fork.mjs
+✔ fork ready: chainId 44005, block 2796243
+▶ funding payer 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC with 50 tUSD8 from 0x94ef5dB164e7BBf4149e298c5588C035Ea8E9C05
+✔ payer tUSD8 balance: 50
+▶ starting qday-facilitator on :4098 (relayer 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
+✔ facilitator up: settling=true, relayer tQDAY=9999999999999993891648
+▶ starting demo-seller on :4021 charging 0.01 tUSD8 to 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 (QDayPayReceiver)
+✔ seller up
+▶ GET /premium-report (pays 0.01 tUSD8 on eip155:44005)
+✔ HTTP 200 {"report":"premium content","price":"0.01"}
+
+─── result ───────────────────────────────────────────────
+receipt        : {"success":true,"payer":"0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC","transaction":"0x3639b85ab1d6887646a2377ada2981d43132a50ee5d3b874f17a156760e3e32f","network":"eip155:44005","amount":"10000","extra":{"chainId":44005,"asset":"0x456569838f1d43009A91ebA4263147Afd7233483","payTo":"0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9","receiver":"0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9","orderId":"0x53b7166a631e428459ca1ac9b3e00025c57dfbaf14dd517f124ea53045776704","explorer":"https://explorer-test.qday.info/tx/0x3639b85ab1d6887646a2377ada2981d43132a50ee5d3b874f17a156760e3e32f","blockNumber":"2796245"}}
+payer delta    : 0.01 tUSD8 paid
+merchant delta : 0.01 tUSD8
+settle tx      : 0x3639b85ab1d6887646a2377ada2981d43132a50ee5d3b874f17a156760e3e32f
+on-chain       : block 2796245, status success, logs 4
+receiver       : 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 (orderId 0x53b7166a631e428459ca1ac9b3e00025c57dfbaf14dd517f124ea53045776704, balance 0, PaymentReceived emitted)
+✔ L1 PASS: a tUSD8 x402 payment settled through the self-hosted QDay facilitator
+──────────────────────────────────────────────────────────

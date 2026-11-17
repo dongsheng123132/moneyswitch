@@ -1,0 +1,26 @@
+MoneySwitch × QDay Aevum testnet (chainId 44005) — a real tUSD8 payment
+payTo = QDayPayReceiver 0xb4ef0d4028770f9851051f56c0d109864f2ec83c (atomic: receive → pay merchant → record order)
+
+#> QDAY_RECEIVER=0xb4ef0d4028770f9851051f56c0d109864f2ec83c node packages/x402/scripts/qday-live-payment.mjs
+network         : chainId 44005 (QDay Aevum ✓) @ https://rpc-test.qday.info
+payer/relayer   : 0x3252DE0a8104d70e4BB63e0C61109f1180e85EbD
+  tQDAY (gas)   : 0.999236456
+  tUSD8         : 0.1
+payTo           : 0xb4EF0d4028770f9851051f56C0D109864f2eC83c (QDayPayReceiver)
+beneficiary     : 0x5C5869bceB4C4eb3fA1DCDEeBd84e9890DbC01aF (balance 0.9 tUSD8)
+
+▶ starting qday-facilitator on :4098
+▶ starting demo-seller on :4021 charging 0.01 tUSD8
+▶ GET /premium-report — paying 0.01 tUSD8 on eip155:44005
+
+─── result ───────────────────────────────────────────────
+HTTP            : 200 {"report":"premium content","price":"0.01"}
+receipt         : {"success":true,"payer":"0x3252DE0a8104d70e4BB63e0C61109f1180e85EbD","transaction":"0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed","network":"eip155:44005","amount":"10000","extra":{"chainId":44005,"asset":"0x456569838f1d43009A91ebA4263147Afd7233483","payTo":"0xb4EF0d4028770f9851051f56C0D109864f2eC83c","receiver":"0xb4EF0d4028770f9851051f56C0D109864f2eC83c","orderId":"0xae6f9b6e08caf7cc3ae7d2c1003038045f993e8b8f4c3d4854199b96b8705ad1","explorer":"https://explorer-test.qday.info/tx/0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed","blockNumber":"2797726"}}
+tx              : 0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed
+explorer        : https://explorer-test.qday.info/tx/0x7d606cd9fae10dd47440e36734ed9018c4d8249800e38cefc4f1cf78f1727bed
+on-chain        : block 2797726, status success, logs 4
+payer delta     : 0.01 tUSD8
+beneficiary +   : 0.01 tUSD8
+receiver balance: 0 tUSD8 (must be 0 — nothing stranded)
+✔ L3 PASS: a real tUSD8 payment settled on QDay Aevum
+──────────────────────────────────────────────────────────

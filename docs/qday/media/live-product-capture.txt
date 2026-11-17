@@ -1,0 +1,20 @@
+MoneySwitch × QDay Aevum testnet (chainId 44005) — 产品级：AI 拿一把有额度的 MoneyKey 调收费接口，钱包在真网付出 tUSD8
+
+#> bash packages/x402/scripts/qday-ui-shots.sh
+
+MoneySwitch wallet : 0x739af5E56DFC7549CCa9948000A7d2dE5E7B32DB  (tUSD8 0.1 · the buyer only signs, the relayer pays the gas)
+relayer (facilitator): 0x3252DE0a8104d70e4BB63e0C61109f1180e85EbD
+
+MoneyKey           : qday-demo-agent  (daily 0.05 · per-request limit 0.02 · 超过 0.015 要人工批准 · host allow-list 127.0.0.1:4022)
+
+#> curl -X POST http://127.0.0.1:4030/v1/fetch   # AI 说：我要这个接口，最多 0.01
+▶ POST /v1/fetch  → the AI asks, the wallet pays
+  → 200 in 9207 ms · charged=yes · network eip155:44005
+
+  wallet tUSD8   : 0.1 → 0.09
+  on-chain       : {"block":2814404,"status":"success","logs":4}
+  key history    : settled 0.01 0xee39a716c29c14290ec064968d7e2e76e012de45ac542bae783945b0cba946cc
+  receiver bal   : 0 tUSD8 (nothing stranded in the contract)
+  tx             : https://explorer-test.qday.info/tx/0xee39a716c29c14290ec064968d7e2e76e012de45ac542bae783945b0cba946cc
+
+✔ 真网付款成功：进 MoneySwitch /v1/history 的是一笔 status=settled 的链上结算，tx 可在 explorer-test.qday.info 查

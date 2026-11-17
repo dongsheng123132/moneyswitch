@@ -1,0 +1,37 @@
+MoneySwitch × QDay Aevum — 产品级：AI 用 MoneyKey 按次付费调 API（真测试网 tUSD8）
+
+#> QDAY_RECEIVER=0xb4ef0d4028770f9851051f56c0d109864f2ec83c node packages/x402/scripts/qday-product-demo.mjs
+funder        : 0x3252DE0a8104d70e4BB63e0C61109f1180e85EbD (0.07 tUSD8)
+▶ MoneySwitch server on :4020 (data dir /var/folders/m4/bkw01zbj5j31s4_jc1pxtq9w0000gn/T/moneyswitch-qday-nOnfRM)
+✔ MoneySwitch wallet: 0x89A86c4AdE45c29997EbED78781b476832D5A814
+✔ topped up 0.01 tUSD8 → https://explorer-test.qday.info/tx/0x6dbf9c324e8eae69f254237a9afc2e33a4937be4ba2b33cb74f104bcadb08f7e
+✔ MoneyKey issued (per-request limit 0.01 tUSD8)
+▶ facilitator :4098, seller :4021 (payTo 0xb4EF0d4028770f9851051f56C0D109864f2eC83c)
+▶ POST /v1/fetch (the AI asks; the wallet pays)
+  → 200 in 8203 ms: {"status":"ok","code":null,"charged":"yes","http_status":200,"headers":{"content-length":"43","content-type":"application/json; charset=utf-8"},"body":"{\"report\":\"premium content\",\"price\":\"0.01\"}","payment":{"amount":"0.01","tx_hash":"0x29b38080d09448a46475e1bd8c9e28994572492f11e4c05facb0d151da5ae17f","network":"eip155:44005","mock":false},"approval_id":null,"remaining_today":"0.04","remai
+
+─── result ───────────────────────────────────────────────
+MoneySwitch wallet tUSD8 after payment: 0 (was 0.01)
+key history rows                      : 1
+settlement tx                         : https://explorer-test.qday.info/tx/0x29b38080d09448a46475e1bd8c9e28994572492f11e4c05facb0d151da5ae17f
+[
+  {
+    "id": "f276f963-f488-45b5-bc2d-6dc2b2d5eeab",
+    "url": "http://127.0.0.1:4021/premium-report",
+    "method": "GET",
+    "network": "eip155:44005",
+    "purpose": null,
+    "asset": "0x456569838f1d43009A91ebA4263147Afd7233483",
+    "pay_to": "0xb4EF0d4028770f9851051f56C0D109864f2eC83c",
+    "amount": "0.01",
+    "status": "settled",
+    "tx_hash": "0x29b38080d09448a46475e1bd8c9e28994572492f11e4c05facb0d151da5ae17f",
+    "error_code": null,
+    "created_at": "2026-11-10T09:28:10.517Z",
+    "kind": "fetch"
+  }
+]
+
+tx: https://explorer-test.qday.info/tx/0x29b38080d09448a46475e1bd8c9e28994572492f11e4c05facb0d151da5ae17f
+✔ PRODUCT DEMO PASS: MoneySwitch paid a QDay tUSD8 API and recorded the on-chain receipt
+──────────────────────────────────────────────────────────
