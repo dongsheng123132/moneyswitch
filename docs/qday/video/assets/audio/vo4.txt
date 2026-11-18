@@ -1,0 +1,1 @@
+Five payments on the testnet. Nine cents. Every hash on chain, and a payee contract that holds nothing after the call.

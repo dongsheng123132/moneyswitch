@@ -1,0 +1,1 @@
+MoneySwitch gives it a spending key: a budget, a host allowlist, and a line only a human can cross.

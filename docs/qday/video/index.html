@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>MoneySwitch on QDay Aevum — English pitch</title>
+    <style>
+      :root {
+        --bg: #07060d;
+        --bg2: #0d0b18;
+        --purple: #836ef9;
+        --purple-dim: #4c3fa0;
+        --lime: #b4ff4a;
+        --text: #f3f1ff;
+        --dim: #aba5c9;
+        --mono: "JetBrains Mono", Menlo, Consolas, monospace;
+        --sans: Inter, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+      .glow {
+        position: absolute;
+        inset: -20% -10%;
+        background:
+          radial-gradient(720px 520px at 22% 18%, rgba(131, 110, 249, 0.28), transparent 62%),
+          radial-gradient(620px 440px at 82% 78%, rgba(180, 255, 74, 0.12), transparent 64%);
+        pointer-events: none;
+      }
+      .grid-lines {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+        background-size: 96px 96px;
+        mask-image: radial-gradient(circle at 50% 45%, #000 42%, transparent 78%);
+        pointer-events: none;
+      }
+      .mono {
+        font-family: var(--mono);
+      }
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 26px;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+
+      /* ---------- S1 ---------- */
+      #s1-hint {
+        position: absolute;
+        left: 148px;
+        top: 300px;
+        width: 1624px;
+        font-family: var(--mono);
+        font-size: 30px;
+        color: var(--dim);
+        letter-spacing: 0.05em;
+      }
+      #s1-line {
+        position: absolute;
+        left: 148px;
+        top: 372px;
+        width: 1624px;
+        font-family: var(--mono);
+        font-size: 112px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #ff5c7a;
+        white-space: pre;
+      }
+      #s1-paid {
+        position: absolute;
+        left: 148px;
+        top: 372px;
+        width: 1624px;
+        font-family: var(--mono);
+        font-size: 112px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--lime);
+        white-space: pre;
+      }
+      #s1-agent {
+        position: absolute;
+        right: 150px;
+        top: 150px;
+        width: 250px;
+        padding: 24px 26px;
+        border: 1px solid rgba(131, 110, 249, 0.5);
+        border-radius: 20px;
+        background: rgba(13, 11, 24, 0.9);
+        font-family: var(--mono);
+        font-size: 22px;
+        line-height: 1.6;
+        color: var(--dim);
+      }
+      #s1-agent b {
+        color: var(--text);
+        font-weight: 700;
+      }
+      #s1-receipt {
+        position: absolute;
+        left: 148px;
+        top: 560px;
+        width: 900px;
+        padding: 26px 30px;
+        border: 1px solid rgba(180, 255, 74, 0.55);
+        border-radius: 20px;
+        background: rgba(180, 255, 74, 0.08);
+        font-family: var(--mono);
+        font-size: 24px;
+        line-height: 1.7;
+        color: var(--text);
+      }
+
+      /* ---------- S2 ---------- */
+      #s2-brand {
+        position: absolute;
+        left: 148px;
+        top: 196px;
+        display: flex;
+        align-items: center;
+        gap: 26px;
+      }
+      #s2-brand img {
+        width: 108px;
+        height: 108px;
+        border-radius: 26px;
+      }
+      #s2-name {
+        font-size: 84px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1;
+      }
+      #s2-name span {
+        color: var(--purple);
+      }
+      #s2-sub {
+        position: absolute;
+        left: 152px;
+        top: 344px;
+        font-size: 40px;
+        color: var(--dim);
+      }
+      #s2-key {
+        position: absolute;
+        left: 148px;
+        top: 452px;
+        width: 940px;
+        padding: 34px 38px;
+        border: 1px solid rgba(131, 110, 249, 0.55);
+        border-radius: 24px;
+        background: linear-gradient(135deg, rgba(131, 110, 249, 0.16), rgba(255, 255, 255, 0.02));
+        font-family: var(--mono);
+      }
+      #s2-key .k-label {
+        font-size: 22px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      #s2-key .k-value {
+        margin-top: 12px;
+        font-size: 52px;
+        font-weight: 700;
+        color: #ffffff;
+      }
+      #s2-rules {
+        position: absolute;
+        right: 148px;
+        top: 452px;
+        width: 640px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .rule {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 22px 26px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        font-family: var(--mono);
+        font-size: 26px;
+        color: var(--dim);
+      }
+      .rule .tick {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        border-radius: 50%;
+        background: var(--lime);
+        color: #0b1200;
+        font-size: 24px;
+        font-weight: 800;
+        display: grid;
+        place-items: center;
+      }
+      .rule.on {
+        color: var(--text);
+        border-color: rgba(180, 255, 74, 0.45);
+      }
+
+      /* ---------- S3 ---------- */
+      #s3-title {
+        position: absolute;
+        left: 148px;
+        top: 132px;
+        font-size: 62px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      #s3-title em {
+        font-style: normal;
+        color: var(--purple);
+      }
+      #s3-track {
+        position: absolute;
+        left: 148px;
+        right: 148px;
+        top: 300px;
+        height: 300px;
+      }
+      #s3-line {
+        position: absolute;
+        left: 60px;
+        right: 60px;
+        top: 96px;
+        height: 3px;
+        background: linear-gradient(90deg, var(--purple), var(--lime));
+        transform-origin: left center;
+      }
+      .node {
+        position: absolute;
+        top: 40px;
+        width: 240px;
+        padding: 20px 22px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 18px;
+        background: rgba(13, 11, 24, 0.94);
+        text-align: left;
+      }
+      .node .n-k {
+        font-family: var(--mono);
+        font-size: 19px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--purple);
+      }
+      .node .n-v {
+        margin-top: 8px;
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .node .n-d {
+        margin-top: 8px;
+        font-family: var(--mono);
+        font-size: 19px;
+        color: var(--dim);
+        line-height: 1.4;
+      }
+      #s3-checks {
+        position: absolute;
+        left: 148px;
+        top: 660px;
+        display: flex;
+        gap: 16px;
+      }
+      #s3-checks .chk {
+        padding: 16px 22px;
+        border: 1px solid rgba(180, 255, 74, 0.45);
+        border-radius: 999px;
+        background: rgba(180, 255, 74, 0.08);
+        font-family: var(--mono);
+        font-size: 24px;
+        color: var(--text);
+      }
+      #s3-counter {
+        position: absolute;
+        right: 148px;
+        top: 640px;
+        font-family: var(--mono);
+        font-size: 96px;
+        font-weight: 700;
+        color: var(--lime);
+      }
+      #s3-counter span {
+        font-size: 30px;
+        color: var(--dim);
+        display: block;
+        margin-top: 6px;
+        font-weight: 400;
+      }
+
+      /* ---------- S4 ---------- */
+      #s4-bg {
+        position: absolute;
+        inset: 0;
+        background-image: url("assets/img/brand-art.png");
+        background-size: cover;
+        background-position: right center;
+        opacity: 0.55;
+      }
+      #s4-veil {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, #07060d 0%, rgba(7, 6, 13, 0.94) 42%, rgba(7, 6, 13, 0.62) 72%, rgba(7, 6, 13, 0.8) 100%);
+      }
+      #s4-title {
+        position: absolute;
+        left: 148px;
+        top: 132px;
+        font-size: 60px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      #s4-stats {
+        position: absolute;
+        left: 148px;
+        top: 260px;
+        display: flex;
+        gap: 28px;
+      }
+      .stat {
+        width: 262px;
+        padding: 26px 28px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 20px;
+        background: rgba(13, 11, 24, 0.86);
+      }
+      .stat .s-v {
+        font-family: var(--mono);
+        font-size: 54px;
+        font-weight: 700;
+        color: var(--lime);
+      }
+      .stat .s-k {
+        margin-top: 6px;
+        font-size: 24px;
+        color: var(--dim);
+      }
+      #s4-shot {
+        position: absolute;
+        right: 96px;
+        top: 214px;
+        width: 620px;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: 0 40px 120px rgba(0, 0, 0, 0.65);
+      }
+      #s4-hash {
+        position: absolute;
+        left: 148px;
+        bottom: 132px;
+        width: 1180px;
+        padding: 22px 26px;
+        border-left: 4px solid var(--purple);
+        background: rgba(131, 110, 249, 0.1);
+        font-family: var(--mono);
+        font-size: 24px;
+        line-height: 1.6;
+        color: var(--text);
+      }
+
+      /* ---------- S5 ---------- */
+      #s5-bg {
+        position: absolute;
+        inset: 0;
+        background-image: url("assets/img/brand-art.png");
+        background-size: cover;
+        background-position: right center;
+      }
+      #s5-veil {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(7, 6, 13, 0.97) 0%, rgba(7, 6, 13, 0.88) 38%, rgba(7, 6, 13, 0.45) 68%, rgba(7, 6, 13, 0.72) 100%);
+      }
+      #s5-copy {
+        position: absolute;
+        left: 148px;
+        top: 300px;
+        width: 1200px;
+      }
+      #s5-copy h1 {
+        margin: 0;
+        font-size: 92px;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        line-height: 1.06;
+      }
+      #s5-copy h1 span {
+        color: var(--lime);
+      }
+      #s5-copy p {
+        margin: 28px 0 0;
+        font-size: 36px;
+        color: var(--dim);
+      }
+      #s5-url {
+        position: absolute;
+        left: 148px;
+        bottom: 150px;
+        font-family: var(--mono);
+        font-size: 40px;
+        color: var(--text);
+        letter-spacing: 0.02em;
+      }
+      #s5-badge {
+        position: absolute;
+        right: 148px;
+        bottom: 150px;
+        padding: 16px 26px;
+        border: 1px solid rgba(180, 255, 74, 0.5);
+        border-radius: 999px;
+        background: rgba(180, 255, 74, 0.1);
+        font-family: var(--mono);
+        font-size: 26px;
+        color: var(--lime);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-width="1920"
+      data-height="1080"
+      data-duration="56"
+    >
+      <!-- S1: hook -->
+      <section id="s1" class="clip" data-start="0" data-duration="7" data-track-index="1">
+        <div class="glow"></div>
+        <div class="grid-lines"></div>
+        <div id="s1-hint" class="mono">an AI agent just called a paid API</div>
+        <div id="s1-line">402 PAYMENT REQUIRED</div>
+        <div id="s1-paid">PAID · 0.01 tUSD8</div>
+        <div id="s1-agent" class="mono">
+          <b>agent</b><br />budget 0.05<br />key mk_live_•••<br />private key: <b>no</b>
+        </div>
+        <div id="s1-receipt" class="mono">
+          settled on QDay Aevum · chain 44005<br />
+          tx 0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052
+        </div>
+      </section>
+
+      <!-- S2: reveal -->
+      <section id="s2" class="clip" data-start="7" data-duration="9" data-track-index="1">
+        <div class="glow"></div>
+        <div class="grid-lines"></div>
+        <div id="s2-brand">
+          <img src="assets/img/logo.png" alt="MoneySwitch logo" />
+          <div id="s2-name">Money<span>Switch</span></div>
+        </div>
+        <div id="s2-sub">Give the agent a key that spends. Not a key that owns.</div>
+        <div id="s2-key">
+          <div class="k-label">agent spending key</div>
+          <div class="k-value">mk_live_••••••••••••</div>
+        </div>
+        <div id="s2-rules">
+          <div class="rule" id="r1"><span class="tick">✓</span><span>budget: 0.05 tUSD8</span></div>
+          <div class="rule" id="r2"><span class="tick">✓</span><span>host allowlist</span></div>
+          <div class="rule" id="r3"><span class="tick">✓</span><span>human approval line</span></div>
+        </div>
+      </section>
+
+      <!-- S3: flow -->
+      <section id="s3" class="clip" data-start="16" data-duration="16" data-track-index="1">
+        <div class="glow"></div>
+        <div class="grid-lines"></div>
+        <div id="s3-title">One call, <em>six</em> checkpoints, one cent</div>
+        <div id="s3-track">
+          <div id="s3-line"></div>
+          <div class="node" id="n1" style="left: 0px">
+            <div class="n-k">01 agent</div>
+            <div class="n-v">POST /v1/fetch</div>
+            <div class="n-d">url + max price</div>
+          </div>
+          <div class="node" id="n2" style="left: 268px">
+            <div class="n-k">02 policy</div>
+            <div class="n-v">check first</div>
+            <div class="n-d">budget · host · cap</div>
+          </div>
+          <div class="node" id="n3" style="left: 536px">
+            <div class="n-k">03 quote</div>
+            <div class="n-v">402 + price</div>
+            <div class="n-d">0.01 tUSD8</div>
+          </div>
+          <div class="node" id="n4" style="left: 804px">
+            <div class="n-k">04 sign</div>
+            <div class="n-v">EIP-3009</div>
+            <div class="n-d">tUSD8 domain</div>
+          </div>
+          <div class="node" id="n5" style="left: 1072px">
+            <div class="n-k">05 settle</div>
+            <div class="n-v">QDay Aevum</div>
+            <div class="n-d">chain 44005</div>
+          </div>
+          <div class="node" id="n6" style="left: 1340px">
+            <div class="n-k">06 receipt</div>
+            <div class="n-v">on chain</div>
+            <div class="n-d">hash in bills</div>
+          </div>
+        </div>
+        <div id="s3-checks">
+          <div class="chk" id="c1">✓ budget</div>
+          <div class="chk" id="c2">✓ allowlist</div>
+          <div class="chk" id="c3">✓ approval line</div>
+        </div>
+        <div id="s3-counter">$0.01<span>per call · no private key</span></div>
+      </section>
+
+      <!-- S4: proof -->
+      <section id="s4" class="clip" data-start="32" data-duration="12" data-track-index="1">
+        <div id="s4-bg"></div>
+        <div id="s4-veil"></div>
+        <div id="s4-title">This is not a diagram. It settled.</div>
+        <div id="s4-stats">
+          <div class="stat"><div class="s-v">5</div><div class="s-k">payments on testnet</div></div>
+          <div class="stat"><div class="s-v">$0.09</div><div class="s-k">total spent</div></div>
+          <div class="stat"><div class="s-v">28</div><div class="s-k">contract tests</div></div>
+        </div>
+        <img id="s4-shot" src="assets/img/live-tx-product.png" alt="QDay explorer transaction" />
+        <div id="s4-hash" class="mono">
+          QDayPayReceiver 0xb4ef0d4028770f9851051f56c0d109864f2ec83c<br />
+          tx 0x51f5990866fcd05f42704cd9ef4941322f3ce747b219bc108e9006bffbc50052
+        </div>
+      </section>
+
+      <!-- S5: cta -->
+      <section id="s5" class="clip" data-start="44" data-duration="12" data-track-index="1">
+        <div id="s5-bg"></div>
+        <div id="s5-veil"></div>
+        <div id="s5-copy">
+          <h1>Your cloud.<br />Your wallet.<br /><span>Your rules.</span></h1>
+          <p>Self-hosted. Open source. Built for agents that pay their own way.</p>
+        </div>
+        <div id="s5-url" class="mono">moneyswitch.dev</div>
+        <div id="s5-badge" class="mono">QDay Aevum · chain 44005</div>
+      </section>
+
+      <audio id="bgm" src="assets/audio/bgm.mp3" data-start="0" data-duration="56" data-track-index="20" data-volume="0.32"></audio>
+      <audio id="vo1" src="assets/audio/vo1.mp3" data-start="0.6" data-duration="6" data-track-index="21" data-volume="1"></audio>
+      <audio id="vo2" src="assets/audio/vo2.mp3" data-start="7.6" data-duration="8" data-track-index="22" data-volume="1"></audio>
+      <audio id="vo3" src="assets/audio/vo3.mp3" data-start="16.8" data-duration="15" data-track-index="23" data-volume="1"></audio>
+      <audio id="vo4" src="assets/audio/vo4.mp3" data-start="32.6" data-duration="11" data-track-index="24" data-volume="1"></audio>
+      <audio id="vo5" src="assets/audio/vo5.mp3" data-start="44.8" data-duration="10" data-track-index="25" data-volume="1"></audio>
+    </div>
+
+    <script src="assets/vendor/gsap.min.js"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      /* S1 — the 402 flips into a paid receipt */
+      tl.from("#s1-hint", { x: -40, autoAlpha: 0, duration: 0.6, ease: "power2.out" }, 0.2);
+      tl.from("#s1-line", { x: -60, autoAlpha: 0, duration: 0.7, ease: "power3.out" }, 0.5);
+      tl.from("#s1-agent", { y: -30, autoAlpha: 0, duration: 0.7, ease: "power2.out" }, 0.9);
+      tl.to("#s1-line", { autoAlpha: 0, duration: 0.35, ease: "power1.in" }, 3.0);
+      tl.fromTo("#s1-paid", { autoAlpha: 0, scale: 0.94 }, { autoAlpha: 1, scale: 1, duration: 0.6, ease: "back.out(1.6)" }, 3.2);
+      tl.from("#s1-receipt", { y: 40, autoAlpha: 0, duration: 0.7, ease: "power2.out" }, 4.0);
+
+      /* S2 — brand + the spending key */
+      tl.from("#s2-brand", { y: -40, autoAlpha: 0, duration: 0.8, ease: "power3.out" }, 7.2);
+      tl.from("#s2-sub", { y: 24, autoAlpha: 0, duration: 0.7, ease: "power2.out" }, 7.7);
+      tl.from("#s2-key", { x: -60, autoAlpha: 0, duration: 0.8, ease: "power2.out" }, 8.3);
+      tl.fromTo("#r1", { x: 40, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.5, ease: "power2.out" }, 9.4);
+      tl.fromTo("#r2", { x: 40, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.5, ease: "power2.out" }, 10.2);
+      tl.fromTo("#r3", { x: 40, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.5, ease: "power2.out" }, 11.0);
+      tl.to("#r1", { borderColor: "rgba(180,255,74,0.45)", duration: 0.4 }, 9.6);
+      tl.to("#r2", { borderColor: "rgba(180,255,74,0.45)", duration: 0.4 }, 10.4);
+      tl.to("#r3", { borderColor: "rgba(180,255,74,0.45)", duration: 0.4 }, 11.2);
+
+      /* S3 — the six checkpoints */
+      tl.from("#s3-title", { y: -30, autoAlpha: 0, duration: 0.7, ease: "power3.out" }, 16.3);
+      tl.fromTo("#s3-line", { scaleX: 0 }, { scaleX: 1, duration: 2.0, ease: "power2.inOut" }, 17.0);
+      const nodes = ["#n1", "#n2", "#n3", "#n4", "#n5", "#n6"];
+      nodes.forEach((sel, i) => {
+        tl.fromTo(sel, { y: 46, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.55, ease: "power2.out" }, 17.1 + i * 1.55);
+      });
+      tl.fromTo("#c1", { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 0.45 }, 20.4);
+      tl.fromTo("#c2", { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 0.45 }, 21.2);
+      tl.fromTo("#c3", { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 0.45 }, 22.0);
+      tl.fromTo("#s3-counter", { autoAlpha: 0, scale: 0.9 }, { autoAlpha: 1, scale: 1, duration: 0.7, ease: "back.out(1.5)" }, 25.2);
+
+      /* S4 — proof */
+      tl.fromTo("#s4-bg", { scale: 1.08, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 2.4, ease: "power2.out" }, 32.0);
+      tl.from("#s4-title", { y: -30, autoAlpha: 0, duration: 0.7, ease: "power3.out" }, 32.4);
+      tl.fromTo("#s4-stats .stat", { y: 40, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.6, stagger: 0.25, ease: "power2.out" }, 33.2);
+      tl.fromTo("#s4-shot", { x: 60, autoAlpha: 0 }, { x: 0, autoAlpha: 1, duration: 0.9, ease: "power2.out" }, 34.4);
+      tl.from("#s4-hash", { y: 30, autoAlpha: 0, duration: 0.7, ease: "power2.out" }, 36.6);
+
+      /* S5 — cta */
+      tl.fromTo("#s5-bg", { scale: 1.06, autoAlpha: 0.4 }, { scale: 1, autoAlpha: 1, duration: 3.2, ease: "power2.out" }, 44.0);
+      tl.from("#s5-copy h1", { y: 50, autoAlpha: 0, duration: 0.9, ease: "power3.out" }, 44.6);
+      tl.from("#s5-copy p", { y: 26, autoAlpha: 0, duration: 0.8, ease: "power2.out" }, 45.8);
+      tl.from("#s5-url", { autoAlpha: 0, duration: 0.8 }, 47.0);
+      tl.from("#s5-badge", { autoAlpha: 0, x: 30, duration: 0.8, ease: "power2.out" }, 47.6);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

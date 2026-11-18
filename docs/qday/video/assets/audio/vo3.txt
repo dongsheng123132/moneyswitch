@@ -1,0 +1,1 @@
+The wallet checks the rules before it signs. Then one EIP-3009 authorization moves a cent of tUSD8 on QDay Aevum. The agent never touches a private key.
