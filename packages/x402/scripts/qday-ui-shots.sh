@@ -36,6 +36,8 @@ WALLET_FILE="$REPO/.data/qday-demo/demo-key.json"
 RECEIVER_FILE="$REPO/.data/qday-demo/receiver.json"
 CAP="$MEDIA/live-product-capture.txt"
 KEY_NAME="${QDAY_KEY_NAME:-qday-demo-agent}"
+SUFFIX="${QDAY_SUFFIX:--live}"
+SHOT_LANG="${QDAY_SHOT_LANG:-en}"
 SKIP_PAYMENT="${QDAY_SKIP_PAYMENT:-0}"
 PROFILE="$(mktemp -d)"
 PIDS=()
@@ -213,16 +215,16 @@ fi  # ← end of the paying part (QDAY_SKIP_PAYMENT=1 skips it)
 # ── 7. the same run's dashboard, so the UI evidence and the payment are one story ───────────────────────────────────
 say ""
 say "▶ screenshotting the dashboard (same run, same data dir, same tx)"
-"$CHROME" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --remote-debugging-port="$CDP_PORT" \
+"$CHROME" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --lang=en-US --remote-debugging-port="$CDP_PORT" \
   --user-data-dir="$PROFILE" about:blank >"$DATA/chrome.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 1 120); do curl -sf "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1 && break; sleep 0.25; done
 node "$REPO/packages/x402/scripts/qday-dashboard-shots.mjs" --port "$CDP_PORT" --base "http://127.0.0.1:$PORT" \
-  --token "$ADMIN" --suffix -live --out "$MEDIA" --pages /wallet,/keys,/bills --width 1440 --height 1240 \
+  --token "$ADMIN" --suffix "$SUFFIX" --lang "$SHOT_LANG" --out "$MEDIA" --pages /wallet,/keys,/bills --width 1440 --height 1240 \
   --click .bills-detail-button --scroll .bills-detail-row
 
 say ""
 say "done:"
 say "  $CAP"
-say "  $MEDIA/dashboard-{wallet,keys,bills}-live.png"
+say "  $MEDIA/dashboard-{wallet,keys,bills}$SUFFIX.png"
 [ -n "${TX:-}" ] && say "  tx $EXPLORER/tx/$TX"

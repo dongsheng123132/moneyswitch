@@ -38,6 +38,9 @@ const HEIGHT = Number(args.height ?? 1000);
 const TOKEN = args.token ?? "";
 // Appended to the file name, e.g. "-live", so screenshots of the real testnet don't overwrite the fork ones.
 const SUFFIX = args.suffix ?? "";
+// Force the dashboard UI language (the app follows navigator.languages unless the user picked one). Screenshots of an
+// English submission must not come out Chinese on a Chinese-locale machine.
+const LANG = args.lang ?? "";
 // A CSS selector clicked on every page after it loads (e.g. ".bills-detail-button", so the bill's on-chain transaction
 // hash is visible in the screenshot instead of hidden behind "view details"). Pages without a match are untouched.
 const CLICK = args.click ?? "";
@@ -103,6 +106,14 @@ async function main() {
   const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
   const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
   await cdp.send("Page.enable", {}, sessionId);
+  if (LANG) {
+    const locale = LANG === "en" ? "en-US" : LANG === "zh" ? "zh-CN" : LANG;
+    try { await cdp.send("Emulation.setLocaleOverride", { locale }, sessionId); } catch { /* older Chrome */ }
+    try {
+      await cdp.send("Network.enable", {}, sessionId);
+      await cdp.send("Network.setUserAgentOverride", { acceptLanguage: locale === "en-US" ? "en-US,en" : locale }, sessionId);
+    } catch { /* older Chrome */ }
+  }
   await cdp.send("Emulation.setDeviceMetricsOverride", { width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false }, sessionId);
 
   const loaded = () =>
